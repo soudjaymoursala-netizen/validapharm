@@ -1,0 +1,27 @@
+name: Quality gate (SDS §4 — répond à URS-REG-004)
+
+# Squelette de portail de qualité technique : bloque la fusion vers la branche
+# principale protégée tant que la suite de tests unitaires de la Couche Logique
+# métier échoue (SDS §4 — "Aucune procédure de contournement manuel de ce
+# blocage n'est prévue en Phase 1"). Les étapes réelles (install, run tests)
+# seront complétées lors du choix de framework/langage (SDS §10) ; ce fichier
+# fixe l'intention et le point d'ancrage de la branch protection, pas encore
+# l'implémentation.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  unit-tests-business-logic:
+    name: Tests unitaires — Couche Logique métier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder — à remplacer une fois le framework choisi (SDS §10)
+        run: |
+          echo "Portail de qualité en attente d'implémentation (choix de framework différé, SDS §10)."
+          echo "Périmètre couvert à terme : moteur de calcul, machine à états, grille de qualification,"
+          echo "détection de liens, résolution de conflit, anti-cycle Structure Système, dérivation de statut."

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Scan de secrets avant commit (répond à SDS §7 / URS-NF-044).
+# Stub Phase 1 : détection par motif, à remplacer/renforcer lors du choix de
+# framework (SDS §10) par un outil dédié (ex. gitleaks) si retenu.
+set -euo pipefail
+
+pattern='(api[_-]?key|secret|token|password|passwd|-----BEGIN [A-Z]+ PRIVATE KEY-----)[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9/+_.-]{12,}'
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+found=0
+
+for f in $staged_files; do
+  case "$f" in
+    config/secrets.local.json|*.env|*.env.*) continue ;;
+  esac
+  [ -f "$f" ] || continue
+  if git diff --cached -- "$f" | grep -E -i "$pattern" >/dev/null 2>&1; then
+    echo "pre-commit: motif ressemblant à un secret détecté dans '$f' — commit rejeté." >&2
+    found=1
+  fi
+done
+
+if [ "$found" -ne 0 ]; then
+  echo "Si c'est un faux positif, ajuste le motif dans scripts/hooks/pre-commit (SDS §7)." >&2
+  exit 1
+fi
+
+exit 0
