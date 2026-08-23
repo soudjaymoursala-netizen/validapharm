@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | SDS-VALIDAPHARM-2026-001 |
-| **Version** | 09 (dette explicitement acceptée résorbée : performance/capacité, lecteur d'écran, désinstallation/rollback — checklist §6ter) |
+| **Version** | 10 (résolution du choix de framework — TypeScript + Vue, `08-conventions-codage.md`) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v22, `02-analyse-de-risque-outil.md` v22, `03-specifications-fonctionnelles.md` v10, `16-FDS-outil.md` v12, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v22, `02-analyse-de-risque-outil.md` v22, `03-specifications-fonctionnelles.md` v10, `16-FDS-outil.md` v13, `08-conventions-codage.md` v01, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -127,7 +127,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 
 ## 7bis. Charte graphique — implémentation technique (ajouté v07, répond à URS-NF-054 à 054quinquies, FDS §2bis)
 
-- La palette, la typographie et les rayons/espacements de la FDS §2bis sont implémentés comme des **jetons de conception versionnés** (design tokens — variables centralisées, ex. variables CSS ou équivalent selon le framework retenu en implémentation), jamais des valeurs codées en dur dispersées dans les composants. Une modification de teinte ou de police se fait à un seul endroit.
+- La palette, la typographie et les rayons/espacements de la FDS §2bis sont implémentés comme des **jetons de conception versionnés** (design tokens — variables CSS (`:root` custom properties), consommées par les composants Vue (Single File Components), jamais des valeurs codées en dur dispersées dans les composants — *(v10 — framework résolu)*. Une modification de teinte ou de police se fait à un seul endroit.
 - Le mapping `qualification_status → {couleur, icône, libellé}` (FDS §2bis) est une **fonction pure isolée** (même principe que le moteur de calcul, §4) : `presenterStatut(qualification_status): { couleur, icone, libelle }` — testable indépendamment de l'UI, garantit qu'aucun statut n'est jamais rendu sans son icône/libellé associé (mitige AR-R-59).
 - Un test automatisé de contraste (calcul du ratio WCAG entre chaque couleur de statut et son fond associé, seuils définis en FDS §2bis) fait partie de la suite de tests de la Couche Logique métier (§9) — le portail de qualité (§4) bloque toute modification de palette qui ferait descendre un contraste sous le seuil requis.
 - Les deux registres visuels (écran vs export) ne partagent techniquement aucun jeton : le moteur de génération d'export (Word/PDF, §3) n'importe jamais les jetons de couleur/typographie de l'écran de travail — séparation physique, pas seulement une convention (répond à URS-NF-054bis).
@@ -146,7 +146,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 
 - Volume de référence Phase 1 : 500 projets / 5000 sections par client (URS-NF-052). Les listes (tableau de bord, inventaire d'un référentiel Structure Système, dossier vivant) sont **paginées ou virtualisées** au-delà d'un seuil d'affichage (ex. 100 lignes) — jamais un rendu intégral de la liste complète en mémoire du navigateur.
 - Recherche/filtrage (ex. recherche de nœud par code, filtrage du dossier vivant) s'appuie sur un **index en mémoire construit au chargement**, pas un balayage linéaire répété à chaque frappe — condition nécessaire pour tenir la cible de réactivité perçue (URS-NF-052bis) au volume de référence.
-- Le choix technique exact (bibliothèque de virtualisation, structure d'index) reste ouvert au framework retenu (§10) — cette section fixe la contrainte de conception (pas de rendu/balayage intégral au-delà du seuil), pas l'implémentation exacte.
+- Le framework est fixé (TypeScript + Vue 3, §10) ; le choix de bibliothèque de virtualisation exacte reste une décision d'implémentation locale, sans impact sur la contrainte de conception fixée ici (pas de rendu/balayage intégral au-delà du seuil).
 - Un test de performance (temps de chargement du tableau de bord et d'ouverture d'une section, mesuré au volume de référence) fait partie de la suite de tests avant mise en service (OQ/PQ de l'outil, URS-NF-052) — pas du portail de qualité en continu (mesure dépendante de la machine d'exécution, moins fiable en CI qu'un test fonctionnel).
 
 ## 9. Stratégie de test (implémentation du principe FDS §8bis)
@@ -157,12 +157,15 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 | Connecteur Git/Drive/IA/QMS tiers | Test d'intégration, mocké en CI, réel en OQ | Contrats d'interface (§5, §5bis, §6, §6bis) |
 | Couche Présentation | Test fonctionnel/exploratoire (candidats identifiés en FS §4.5, doctrine CSA) | Écrans à faible risque résiduel |
 | Charte graphique (`presenterStatut`, contraste) | Unitaire, exhaustif, automatisé | Fonction pure de mapping statut→couleur/icône/libellé, ratios de contraste WCAG (§7bis, mitige AR-R-59) |
-| Accessibilité lecteur d'écran (URS-NF-050bis) | Exploratoire (parcours manuel NVDA/VoiceOver) | Parcours critiques uniquement (navigation, saisie, export) — pas d'automatisation imposée, outil dépendant du framework retenu (§10) |
+| Accessibilité lecteur d'écran (URS-NF-050bis) | Exploratoire (parcours manuel NVDA/VoiceOver) | Parcours critiques uniquement (navigation, saisie, export) — choix délibéré, proportionné à la Phase 1 |
 | Performance/capacité (URS-NF-052bis) | Mesure au volume de référence, hors portail de qualité continu | Temps de chargement tableau de bord et ouverture de section (§8ter) |
 
-## 10. Hors périmètre de cette SDS
+## 10. Choix de framework/langage — résolu (ajouté v10, décision explicite du 23/08/2026)
 
-- Choix définitif de framework/langage (à trancher lors de l'implémentation, sans impact sur les contrats d'interface déjà fixés ici).
+**TypeScript (mode strict) + Vue 3 + Vitest + ESLint/Prettier.** Décision et justification détaillées dans `08-conventions-codage.md`, qui fixe également la structure de dossiers (miroir strict des couches §2), la règle de traçabilité code↔exigence (bloc TSDoc `@requirement`), et les règles de test — répond à la demande explicite de l'utilisateur du 23/08/2026 (code auditable, commenté, structuré pour la testabilité QA). Sans impact sur les contrats d'interface déjà fixés ici (§5, §5bis, §6, §6bis) : ce choix ne fait que les implémenter.
+
+## 10bis. Hors périmètre de cette SDS
+
 - HDS (pas de matériel dédié) et Data Migration Plan (dépôt vierge, décision du 22/08/2026).
 
 ## 11. Matrice de traçabilité FDS → SDS
@@ -185,4 +188,4 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 | FS §5.1/§5.2/§5.5 (perf/rollback/lecteur d'écran) | §8ter, §3, §9 |
 
 ---
-*Document vivant, version 09 — v02 revue multi-experts (REV-SDS-001). v03 audits Swissmedic/FDA (driver de fusion Git, horodatage). v04 cinq besoins Structure Système/connecteurs QMS. v05 revue multi-experts (REV-SDS-002) : index d'unicité de code, dérivation de statut à la lecture. v06 intègre 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-006`, `AUDIT-FDA-006`). v07 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). v08 ajoute le contrat d'interface du connecteur Drive (§5bis). **v09 résorbe les trois gaps mineurs actés comme dette explicitement acceptée au cadrage §6ter** : garde de compatibilité descendante contre la corruption au rollback (§3, mitige AR-R-60) ; virtualisation/pagination et index en mémoire pour tenir la cible de performance (§8ter) ; test exploratoire lecteur d'écran ajouté à la stratégie de test (§9). Cascade de conception URS→FS→FDS→SDS complète et cohérente avant le démarrage de la conception le 23/08/2026 — plus aucun gap connu.*
+*Document vivant, version 10 — v02 revue multi-experts (REV-SDS-001). v03 audits Swissmedic/FDA (driver de fusion Git, horodatage). v04 cinq besoins Structure Système/connecteurs QMS. v05 revue multi-experts (REV-SDS-002) : index d'unicité de code, dérivation de statut à la lecture. v06 intègre 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-006`, `AUDIT-FDA-006`). v07 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). v08 ajoute le contrat d'interface du connecteur Drive (§5bis). v09 résorbe les trois gaps mineurs actés comme dette explicitement acceptée au cadrage §6ter. **v10 : le choix de framework est résolu** (TypeScript + Vue 3 + Vitest + ESLint/Prettier, `08-conventions-codage.md`, décision explicite du 23/08/2026) — §10 réécrit, jetons de conception précisés (variables CSS + Vue SFC). Cascade de conception URS→FS→FDS→SDS complète et cohérente, framework fixé, avant le démarrage effectif de l'écriture du code le 23/08/2026 — plus aucun gap connu.*

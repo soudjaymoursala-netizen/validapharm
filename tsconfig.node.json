@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node", "vite/client"],
+    "composite": true,
+    "outDir": "node_modules/.tsbuild-node"
+  },
+  "include": ["vite.config.ts", "eslint.config.js"]
+}

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FDS-VALIDAPHARM-2026-001 |
-| **Version** | 12 (dette explicitement acceptée résorbée : performance/capacité, lecteur d'écran, désinstallation/rollback — checklist §6ter) |
+| **Version** | 13 (résolution du choix de framework — TypeScript + Vue, 08-conventions-codage.md) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
 | **Documents de référence** | `01-URS-outil.md` v22, `02-analyse-de-risque-outil.md` v22, `03-specifications-fonctionnelles.md` v10, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) |
@@ -79,10 +79,10 @@ Chaque statut porte **une couleur ET une icône ET un libellé texte** — jamai
 
 | Contexte | Police | Justification |
 |---|---|---|
-| Écran de travail | Police système sans-serif moderne (ex. Inter, ou pile `system-ui` selon le framework retenu en SDS) | Lisibilité écran, cohérente avec l'identité "premium/fluide" |
+| Écran de travail | Inter (chargée localement, pas de dépendance CDN), fallback `system-ui` | Lisibilité écran, cohérente avec l'identité "premium/fluide" |
 | Documents exportés (Word/PDF) | Police classique à empattements (ex. Times New Roman / Georgia) | Cohérence avec l'usage réglementaire et l'attente visuelle d'un document officiel |
 
-Le choix de police d'écran définitif reste ouvert au choix de framework (SDS §10) — cette FDS fixe l'intention (moderne, lisible, distincte de l'export), pas le fichier de police exact.
+*(v13 — framework résolu, `08-conventions-codage.md`)* Police confirmée ci-dessus, chargée en asset local du bundle Vue — jamais un appel réseau externe (cohérent avec le principe local-first, pas de dépendance à un CDN de polices).
 
 **Interactions (répond à URS-NF-054)**
 
@@ -381,7 +381,7 @@ Chaque message est stocké comme ressource multilingue (fr/en/de dès Phase 1), 
 
 - Navigation clavier : ordre de tabulation logique par écran (haut→bas, gauche→droite), raccourcis `Ctrl+S` (sauvegarde manuelle immédiate) et `Échap` (fermeture de modale) sur toutes les vues — répond à URS-NF-050.
 - RTL/CJK (URS-NF-040quater) : la mise en page utilise des propriétés logiques (`start`/`end` plutôt que `left`/`right`) dès la Phase 1, même si seuls FR/EN/DE sont livrés — pour ne pas nécessiter de refonte de layout à l'ajout de l'arabe/chinois.
-- **Lecteur d'écran (ajouté v12 — résorption de dette, URS-NF-050bis)** : tout composant interactif (bouton, champ, lien) porte un nom accessible explicite (jamais une icône seule sans libellé programmatique) ; les badges de statut de qualification (FDS §2bis) exposent leur libellé texte complet, pas seulement leur icône visuelle ; toute confirmation/erreur affichée via les messages §7 est annoncée (zone dynamique de type live region) au moment de son apparition, pas seulement visible ; navigation par landmarks (zone principale, navigation, panneau latéral) sur les écrans à plusieurs zones (ex. Éditeur de section + Panneau de suggestions). Vérification par parcours manuel au lecteur d'écran standard (NVDA/VoiceOver) sur les parcours critiques URS-NF-050/050bis (navigation, saisie, export) — pas d'outil automatisé imposé, le choix d'outil dépend du framework retenu (SDS §10).
+- **Lecteur d'écran (ajouté v12 — résorption de dette, URS-NF-050bis)** : tout composant interactif (bouton, champ, lien) porte un nom accessible explicite (jamais une icône seule sans libellé programmatique) ; les badges de statut de qualification (FDS §2bis) exposent leur libellé texte complet, pas seulement leur icône visuelle ; toute confirmation/erreur affichée via les messages §7 est annoncée (zone dynamique de type live region) au moment de son apparition, pas seulement visible ; navigation par landmarks (zone principale, navigation, panneau latéral) sur les écrans à plusieurs zones (ex. Éditeur de section + Panneau de suggestions). Vérification par parcours manuel au lecteur d'écran standard (NVDA/VoiceOver) sur les parcours critiques URS-NF-050/050bis (navigation, saisie, export) — choix délibéré de test exploratoire plutôt qu'automatisé (SDS §9), proportionné à la Phase 1.
 - **Performance perçue (ajouté v12 — résorption de dette, URS-NF-052bis)** : chargement du tableau de bord et ouverture d'une section restent sous 2 secondes perçues dans le volume de référence (500 projets/5000 sections, URS-NF-052) ; au-delà, chargement progressif ou pagination de la liste plutôt qu'un blocage — cohérent avec le principe "retour visuel immédiat" déjà posé en §2bis (aucune action sans feedback, même quand elle prend du temps).
 
 ## 8bis. Principe directeur pour la SDS (ajouté v04 — audit cabinet de conseil GxP, MAJ-01)
@@ -413,4 +413,4 @@ Cette FDS sert d'entrée à la **SDS** (architecture technique : choix de framew
 | URS-NF-052bis, 050bis, 055bis (perf/lecteur d'écran/rollback) | §8, §7 (U-12) |
 
 ---
-*Document vivant, version 12 — v02-v04 : voir historique dans le corps du document. v05 intégrait les cinq besoins Structure Système/connecteurs QMS. v06 intégrait 3 clarifications de la revue multi-experts (REV-FDS-002). v07-v10 intègrent 4 constats d'audits (`AUDIT-SWISSMEDIC-005`, `AUDIT-FDA-005`, `AUDIT-CABINET-GXP-002`, `AUDIT-QA-SPECIALISES-002`). v11 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). **v12 résorbe les trois gaps mineurs actés comme dette explicitement acceptée au cadrage §6ter** : performance perçue chiffrée et lecteur d'écran détaillés en §8 ; écran et message U-12 de blocage au démarrage sur incompatibilité de schéma de données (protection réelle contre la corruption au rollback, mitige AR-R-60). FDS complète, prête pour la mise à jour de la SDS.*
+*Document vivant, version 13 — v02-v04 : voir historique dans le corps du document. v05 intégrait les cinq besoins Structure Système/connecteurs QMS. v06 intégrait 3 clarifications de la revue multi-experts (REV-FDS-002). v07-v10 intègrent 4 constats d'audits (`AUDIT-SWISSMEDIC-005`, `AUDIT-FDA-005`, `AUDIT-CABINET-GXP-002`, `AUDIT-QA-SPECIALISES-002`). v11 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). v12 résorbe les trois gaps mineurs actés comme dette explicitement acceptée au cadrage §6ter. **v13 : le choix de framework est résolu** (TypeScript + Vue 3, `08-conventions-codage.md`, décision explicite du 23/08/2026) — police d'écran confirmée (Inter, chargée localement), quelques formulations laissées ouvertes au framework sont maintenant tranchées. FDS complète, prête pour la mise à jour de la SDS.*

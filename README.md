@@ -8,16 +8,17 @@ Dépôt Git dédié, séparé de tout autre projet, conformément à `docs/00-ca
 
 Documentation de conception complète et cohérente :
 
-| Document | Version |
-|---|---|
-| Cadrage | voir `docs/00-cadrage-projet.md` |
-| URS | v22 |
-| Analyse de risque (AR) | v22 — 60 entrées |
-| FS | v10 |
-| FDS | v12 |
-| SDS | v09 |
+| Document               | Version                              |
+| ---------------------- | ------------------------------------ |
+| Cadrage                | voir `docs/00-cadrage-projet.md`     |
+| URS                    | v22                                  |
+| Analyse de risque (AR) | v22 — 60 entrées                     |
+| FS                     | v10                                  |
+| FDS                    | v13                                  |
+| SDS                    | v10                                  |
+| Conventions de codage  | voir `docs/08-conventions-codage.md` |
 
-Conception (code) : démarre le 23/08/2026. Choix définitif de framework/langage différé à l'implémentation (SDS §10), sans impact sur les contrats d'interface déjà fixés (`ProviderAdapter`, `QMSConnectorAdapter`, moteur de calcul, machine à états, résolution de conflit).
+Conception (code) : démarre le 23/08/2026. Stack technique résolue (`08-conventions-codage.md`, décision explicite du 23/08/2026) : **TypeScript (strict) + Vue 3 + Vitest + ESLint/Prettier**, code auditable (bloc TSDoc `@requirement` sur chaque fonction métier, structure en couches strictes reflétant SDS §2, tests co-localisés) pour permettre au QA de tester correctement.
 
 Documents de qualification de l'outil lui-même (VMP, IQ/OQ/PQ — `docs/04` à `docs/07`) : à réécrire **après** la conception, contre la FS/FDS/SDS à jour (actuellement marqués "À REVOIR").
 
@@ -31,6 +32,7 @@ docs/                        documents vivants (état courant, seule source de v
   03-specifications-fonctionnelles.md   (FS)
   16-FDS-outil.md                        (FDS)
   22-SDS-outil.md                        (SDS)
+  08-conventions-codage.md               (choix de framework + charte de codage)
   04-plan-de-validation.md               (VMP — à revoir après conception)
   05-protocole-IQ-outil.md
   06-protocole-OQ-outil.md
@@ -56,7 +58,7 @@ Installe le hook `pre-commit` (scan de secrets) et configure le driver de fusion
 
 ## Portail de qualité (CI)
 
-`.github/workflows/quality-gate.yml` : squelette de pipeline (SDS §4) — bloque la fusion vers la branche principale tant que la suite de tests unitaires de la Couche Logique métier échoue. Le contenu réel des jobs sera complété une fois le framework choisi.
+`.github/workflows/quality-gate.yml` : pipeline (SDS §4) — bloque la fusion vers la branche principale tant que lint, typecheck ou tests échouent.
 
 ## Publication
 

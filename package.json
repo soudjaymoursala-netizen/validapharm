@@ -1,0 +1,32 @@
+{
+  "name": "validapharm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "typecheck": "vue-tsc -b --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --check .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "vue": "^3.5.41"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.10.0",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/tsconfig": "^0.9.1",
+    "eslint": "^10.9.0",
+    "eslint-plugin-vue": "^10.10.0",
+    "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^3.3.11"
+  }
+}
