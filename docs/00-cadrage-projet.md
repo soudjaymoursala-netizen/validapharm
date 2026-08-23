@@ -91,11 +91,11 @@ Chaque audit produit un rapport classé par sévérité (Majeur/Mineur/Observati
 | Domaine | Sous-thèmes typiques | Statut au 23/08/2026 |
 |---|---|---|
 | Fonctionnel métier | gabarits, workflows, calculs réglementaires | Couvert (cœur de l'URS/FS/FDS/SDS) |
-| UI/UX & charte graphique | couleurs, polices, composants, interactions, responsive | **Non couvert — en cours de traitement (23/08/2026)** |
+| UI/UX & charte graphique | couleurs, polices, composants, interactions, responsive | **Couvert (23/08/2026)** — URS-NF-054 à 054quinquies, FDS §2bis, SDS §7bis ; revue multi-experts + audit accessibilité dédiés |
 | Sécurité & accès | authentification, sessions, chiffrement, journalisation | Partiel : secrets/chiffrement couverts (URS-NF-044, SDS §7) ; authentification/sessions explicitement hors Phase 1 (cadrage §5) |
 | Performance & capacité | temps de réponse, volumétrie, dégradation | Non couvert explicitement — à traiter avant/pendant la SDS d'implémentation détaillée |
 | Internationalisation | langues, formats date/nombre/devise, RTL | Couvert (URS-NF-040 et suivants, FDS §8) |
-| Accessibilité | contraste, clavier, lecteurs d'écran | Partiel : clavier couvert (URS-NF-050) ; contraste/lecteur d'écran non normés |
+| Accessibilité | contraste, clavier, lecteurs d'écran | **Couvert pour le contraste des statuts** (URS-NF-054quater, audit accessibilité dédié) ; clavier couvert (URS-NF-050) ; lecteur d'écran toujours non normé |
 | Conformité réglementaire | GAMP5, ALCOA+, Part 11, predicate rules | Couvert (cœur du projet) |
 | Opérations & support | sauvegarde, restauration, montée de version, désinstallation | Partiel : sauvegarde/migration couvertes (SDS §3) ; désinstallation/rollback applicatif non traités |
 | Données & interopérabilité | QMS tiers, export, formats | Couvert (URS §4.9, FS/FDS/SDS §6bis) |

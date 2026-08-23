@@ -16,6 +16,7 @@ archive/
     besoins-nouveaux/  revues dédiées aux 5 besoins ajoutés après clôture initiale
                         (connecteurs QMS, Structure Système, dossier vivant,
                         export historique, statut de qualification)
+    charte-graphique/  revue + audit accessibilité dédiés à la charte graphique
   autres/              supports annexes (ex. préparation présentation dirigeants)
 ```
 
@@ -28,6 +29,7 @@ archive/
 | `revues-audits/FDS/` | 7 | Revue + 4 audits (Swissmedic/FDA/cabinet GxP/QA) (FDS initiale et FDS v05→v10) |
 | `revues-audits/SDS/` | 6 | Revue + audits Swissmedic/FDA (SDS initiale et SDS v04→v06) |
 | `revues-audits/besoins-nouveaux/` | 5 | Revues des 5 besoins (connecteurs QMS, Structure Système, dossier vivant, export PDF, statut de qualification) |
+| `revues-audits/charte-graphique/` | 2 | Revue multi-experts + audit accessibilité (contraste WCAG) de la charte graphique |
 | `autres/` | 1 | Préparation présentation dirigeants |
 
-**Total : 29 documents archivés.**
+**Total : 31 documents archivés.**

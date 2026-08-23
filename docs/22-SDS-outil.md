@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | SDS-VALIDAPHARM-2026-001 |
-| **Version** | 06 (constats des audits Swissmedic/FDA simulés — AUDIT-SWISSMEDIC-006/AUDIT-FDA-006) |
+| **Version** | 07 (charte graphique et identité visuelle — REV-URS-VALIDAPHARM-2026-010) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v20, `02-analyse-de-risque-outil.md` v20, `03-specifications-fonctionnelles.md` v08, `16-FDS-outil.md` v10, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v21, `02-analyse-de-risque-outil.md` v21, `03-specifications-fonctionnelles.md` v09, `16-FDS-outil.md` v11, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -116,6 +116,13 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 - `/data/anomalies/{id}.json` : `{ id, description, contexte, statut, created_at, updated_at }`.
 - Écran Journal d'anomalies (FDS §3.7) lit directement ce répertoire, sans dépendance au moteur de calcul ni au connecteur Git au-delà de la persistance standard.
 
+## 7bis. Charte graphique — implémentation technique (ajouté v07, répond à URS-NF-054 à 054quinquies, FDS §2bis)
+
+- La palette, la typographie et les rayons/espacements de la FDS §2bis sont implémentés comme des **jetons de conception versionnés** (design tokens — variables centralisées, ex. variables CSS ou équivalent selon le framework retenu en implémentation), jamais des valeurs codées en dur dispersées dans les composants. Une modification de teinte ou de police se fait à un seul endroit.
+- Le mapping `qualification_status → {couleur, icône, libellé}` (FDS §2bis) est une **fonction pure isolée** (même principe que le moteur de calcul, §4) : `presenterStatut(qualification_status): { couleur, icone, libelle }` — testable indépendamment de l'UI, garantit qu'aucun statut n'est jamais rendu sans son icône/libellé associé (mitige AR-R-59).
+- Un test automatisé de contraste (calcul du ratio WCAG entre chaque couleur de statut et son fond associé, seuils définis en FDS §2bis) fait partie de la suite de tests de la Couche Logique métier (§9) — le portail de qualité (§4) bloque toute modification de palette qui ferait descendre un contraste sous le seuil requis.
+- Les deux registres visuels (écran vs export) ne partagent techniquement aucun jeton : le moteur de génération d'export (Word/PDF, §3) n'importe jamais les jetons de couleur/typographie de l'écran de travail — séparation physique, pas seulement une convention (répond à URS-NF-054bis).
+
 ## 8bis. Structure Système — implémentation technique (ajouté v04, répond à URS-F-100 à 102quinquies)
 
 - `asset_node.parent_id` (lien hiérarchique) : validation anti-cycle implémentée comme fonction pure isolée (`validerAbsenceDeCycle(nodeId, nouveauParentId): boolean`), appelée à la création **et** à tout reparentage — testable indépendamment de l'UI (§8bis FDS/principe cabinet GxP).
@@ -133,6 +140,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 | Logique métier (moteur de calcul, machine à états, grille, détection de liens, résolution de conflit, anti-cycle Structure Système, dérivation de statut) | Unitaire, exhaustif, automatisé | Chaque fonction pure, tous les cas limites identifiés en FDS §5/§6/§3.9 |
 | Connecteur Git/Drive/IA/QMS tiers | Test d'intégration, mocké en CI, réel en OQ | Contrats d'interface (§5, §6, §6bis) |
 | Couche Présentation | Test fonctionnel/exploratoire (candidats identifiés en FS §4.5, doctrine CSA) | Écrans à faible risque résiduel |
+| Charte graphique (`presenterStatut`, contraste) | Unitaire, exhaustif, automatisé | Fonction pure de mapping statut→couleur/icône/libellé, ratios de contraste WCAG (§7bis, mitige AR-R-59) |
 
 ## 10. Hors périmètre de cette SDS
 
@@ -154,6 +162,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 | URS-REG-004 (portail de qualité) | §4 |
 | §3.8 FDS (connecteurs QMS) | §3, §6bis |
 | §3.9 FDS (Structure Système) | §3, §8bis |
+| §2bis FDS (charte graphique) | §7bis |
 
 ---
-*Document vivant, version 06 — v02 revue multi-experts (REV-SDS-001). v03 audits Swissmedic/FDA (driver de fusion Git, horodatage). v04 cinq besoins Structure Système/connecteurs QMS. v05 revue multi-experts (REV-SDS-002) : index d'unicité de code, dérivation de statut à la lecture. **v06 intègre 2 constats d'audits Swissmedic et FDA simulés** (`AUDIT-SWISSMEDIC-006`, `AUDIT-FDA-006`, closes le 22/08/2026) : écriture atomique nœud+index dans le même commit Git, vérification de cohérence au démarrage (Swissmedic) ; persistance du `transaction_id` avant le premier appel réseau pour garantir une idempotence réelle du retry de push (FDA). Aucun nouvel ID URS. Cascade de conception URS→FS→FDS→SDS complète et intégralement auditée pour les cinq besoins Structure Système/connecteurs QMS, même rigueur que pour la cascade initiale.*
+*Document vivant, version 07 — v02 revue multi-experts (REV-SDS-001). v03 audits Swissmedic/FDA (driver de fusion Git, horodatage). v04 cinq besoins Structure Système/connecteurs QMS. v05 revue multi-experts (REV-SDS-002) : index d'unicité de code, dérivation de statut à la lecture. v06 intègre 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-006`, `AUDIT-FDA-006`). **v07 intègre la charte graphique et identité visuelle** (`REV-URS-VALIDAPHARM-2026-010`) : jetons de conception versionnés, fonction pure `presenterStatut` (mitige AR-R-59), test de contraste automatisé intégré au portail de qualité, séparation technique stricte écran/export. Cascade de conception URS→FS→FDS→SDS complète et cohérente, y compris la charte graphique, avant le démarrage de la conception le 23/08/2026.*

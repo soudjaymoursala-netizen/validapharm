@@ -4,18 +4,18 @@ Outil d'aide à la rédaction de la documentation de validation/qualification GA
 
 Dépôt Git dédié, séparé de tout autre projet, conformément à `docs/00-cadrage-projet.md` §4.
 
-## État au 22/08/2026
+## État au 23/08/2026
 
 Documentation de conception complète et cohérente :
 
 | Document | Version |
 |---|---|
 | Cadrage | voir `docs/00-cadrage-projet.md` |
-| URS | v20 |
-| Analyse de risque (AR) | v20 — 58 entrées |
-| FS | v08 |
-| FDS | v10 |
-| SDS | v06 |
+| URS | v21 |
+| Analyse de risque (AR) | v21 — 59 entrées |
+| FS | v09 |
+| FDS | v11 |
+| SDS | v07 |
 
 Conception (code) : démarre le 23/08/2026. Choix définitif de framework/langage différé à l'implémentation (SDS §10), sans impact sur les contrats d'interface déjà fixés (`ProviderAdapter`, `QMSConnectorAdapter`, moteur de calcul, machine à états, résolution de conflit).
 
@@ -58,6 +58,6 @@ Installe le hook `pre-commit` (scan de secrets) et configure le driver de fusion
 
 `.github/workflows/quality-gate.yml` : squelette de pipeline (SDS §4) — bloque la fusion vers la branche principale tant que la suite de tests unitaires de la Couche Logique métier échoue. Le contenu réel des jobs sera complété une fois le framework choisi.
 
-## Contrainte de publication
+## Publication
 
-Ce dépôt reste **local uniquement** jusqu'à instruction explicite contraire — aucun push vers un hébergeur distant sans autorisation.
+Dépôt GitHub privé dédié : `soudjaymoursala-netizen/validapharm`. Tout push reste soumis à autorisation explicite préalable (accordée le 23/08/2026 pour ce dépôt).

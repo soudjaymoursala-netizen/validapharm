@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | FDS-VALIDAPHARM-2026-001 |
-| **Version** | 10 (constats des audits Swissmedic/FDA/cabinet GxP/QA spécialisés — AUDIT-SWISSMEDIC-005/AUDIT-FDA-005/AUDIT-CABINET-GXP-002/AUDIT-QA-SPECIALISES-002) |
+| **Version** | 11 (charte graphique et identité visuelle — REV-URS-VALIDAPHARM-2026-010) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v20, `02-analyse-de-risque-outil.md` v20, `03-specifications-fonctionnelles.md` v08, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v21, `02-analyse-de-risque-outil.md` v21, `03-specifications-fonctionnelles.md` v08, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -37,6 +37,69 @@ Toute règle déjà énoncée en FS n'est pas reformulée ici sauf si elle néce
 | Configuration des connecteurs QMS *(ajouté v05)* | Liste des connecteurs par client (Veeva/SAP/TrackWise), activation, tenant | URS-F-090 à 090ter |
 | Structure Système *(ajouté v05)* | Arbre + graphe des `asset_node` d'un client, création/édition de nœud, vue graphique | URS-F-100 à 100quater |
 | Dossier vivant d'un actif *(ajouté v05)* | Liste des livrables liés à un nœud, filtrable, export PDF | URS-F-101 à 101septies |
+
+## 2bis. Charte graphique et identité visuelle *(ajouté v11 — répond à URS-NF-054 à 054quinquies, REV-URS-VALIDAPHARM-2026-010)*
+
+**Principe directeur** : l'écran de travail et les livrables exportés obéissent à deux registres visuels volontairement distincts et jamais mélangés.
+- **Écran de travail** : identité moderne, fluide, premium — c'est l'espace de rédaction quotidien, pas un document opposable.
+- **Livrables exportés (Word/PDF)** : sobriété stricte, aucune trace de la personnalité visuelle de l'écran — ce sont eux qui sont présentés en audit (répond à URS-NF-054bis).
+
+### Direction retenue : « Indigo premium + accents vifs »
+
+**Palette — écran de travail**
+
+| Rôle | Couleur | Usage |
+|---|---|---|
+| Fond principal (clair) | `#FFFFFF` / `#F7F7FB` | Fond de page, cartes |
+| Fond principal (sombre, Should — non prioritaire Phase 1) | `#0B0E14` / `#12141C` | Mode sombre si implémenté *(clarifié v11 — revue FDS-charte, E7 : classé Should explicitement, pas laissé "optionnel" non tranché)* |
+| Texte principal | `#0F1222` (clair) / `#EDEFF7` (sombre) | Corps de texte, titres — taille minimale équivalente 14px pour le corps *(ajouté v11 — revue FDS-charte, E4)* |
+| Texte secondaire | `#5B5F73` (clair) / `#9BA0B8` (sombre) | Libellés, méta-informations |
+| Marque (indigo) | `#4F46E5` | Actions primaires, liens, éléments actifs |
+| Marque — survol | `#4338CA` | États hover/pressed |
+| Marque — fond léger | `#EEF2FF` | Fonds de badges/sélections liés à la marque |
+| Bordures | `#E4E4EE` (clair) / `#262A3A` (sombre) | Séparateurs, cadres de champs |
+
+**Palette sémantique — `qualification_status` (répond à URS-NF-054ter/quater, mitige R-59)**
+
+Chaque statut porte **une couleur ET une icône ET un libellé texte** — jamais la couleur seule. Contraste calculé (pas seulement visé) ≥ 4.5:1 (WCAG AA) sur fond blanc — **3 teintes sur 8 ont été corrigées suite à l'audit accessibilité dédié** (ratio initial < 4.5:1 pour Qualifié, Qualifié avec écart(s), Requalification requise — voir `docs/archive/revues-audits/charte-graphique/40-audit-accessibilite-charte-graphique.md`).
+
+| Statut | Couleur | Icône (forme, pas seulement teinte) |
+|---|---|---|
+| Non qualifié | Gris `#6B7280` (ratio 4.83:1) | Cercle vide |
+| En cours de qualification initiale | Bleu `#2563EB` (ratio 5.17:1) | Horloge |
+| Qualifié | Vert `#15803D` (ratio 5.02:1 — *corrigé v11, audit accessibilité, initial `#16A34A` = 3.30:1*) | Coche |
+| Qualifié avec écart(s) ouvert(s) | Ambre `#B45309` (ratio 5.03:1 — *corrigé v11, initial `#D97706` = 3.18:1*) | Point d'exclamation dans triangle |
+| Requalification requise | Orange `#C2410C` (ratio 5.18:1 — *corrigé v11, initial `#EA580C` = 3.56:1*) | Flèche circulaire |
+| Requalification en retard | Rouge `#DC2626` (ratio 4.83:1) | Triangle d'alerte plein |
+| Suspendu — sous contrôle de changement | Violet `#7C3AED` (ratio 5.70:1) | Cadenas |
+| Déclassé — retiré | Gris foncé `#374151` (ratio 10.29:1) | Croix dans cercle |
+
+**Typographie (répond à URS-NF-054quinquies)**
+
+| Contexte | Police | Justification |
+|---|---|---|
+| Écran de travail | Police système sans-serif moderne (ex. Inter, ou pile `system-ui` selon le framework retenu en SDS) | Lisibilité écran, cohérente avec l'identité "premium/fluide" |
+| Documents exportés (Word/PDF) | Police classique à empattements (ex. Times New Roman / Georgia) | Cohérence avec l'usage réglementaire et l'attente visuelle d'un document officiel |
+
+Le choix de police d'écran définitif reste ouvert au choix de framework (SDS §10) — cette FDS fixe l'intention (moderne, lisible, distincte de l'export), pas le fichier de police exact.
+
+**Interactions (répond à URS-NF-054)**
+
+- Transitions courtes (150-200ms), easing standard — jamais de rebond/overshoot prononcé (reste "premium sobre", pas "ludique enfantin").
+- Retour visuel immédiat sur toute action (chargement, confirmation, erreur) — cohérent avec les messages système déjà spécifiés en §7.
+- États vides (aucun projet, aucun nœud Structure Système) accueillants et orientés action (ex. bouton d'action visible directement), sans détourner l'attention d'un contexte professionnel.
+- Densité d'information volontairement plus élevée qu'une application grand public (public professionnel expérimenté) — la fluidité vient de l'interaction, pas de l'espacement excessif.
+- Coins arrondis modérés (≈8px), cohérents sur tous les composants (boutons, cartes, champs) — ni angles vifs (trop austère), ni très arrondis (trop ludique/enfantin).
+
+**Accessibilité (répond à URS-NF-054ter/quater, R-59)**
+
+- Aucune information fonctionnelle (statut, criticité, erreur/succès) n'est **jamais** encodée par la couleur seule — icône ou libellé texte systématiquement associé.
+- Contraste texte/fond ≥ 4.5:1 pour le texte normal, ≥ 3:1 pour le texte large/les icônes porteuses de sens, sur les deux thèmes clair/sombre si le mode sombre est implémenté.
+- La palette de statut ci-dessus a été choisie en évitant les paires rouge/vert isolées adjacentes sans distinction de forme (confusion deutéranopie/protanopie la plus fréquente) — chaque paire de statuts visuellement proches (ex. Ambre/Orange, Rouge/Violet) reste distinguable par l'icône associée.
+
+**Clarifications de revue (v11 — revue multi-experts charte graphique)** :
+- **E5** : la séparation écran/export (URS-NF-054bis) est garantie techniquement, pas seulement documentairement — aucun jeton de couleur/typographie de l'écran n'est importé par le moteur de génération d'export (détail SDS §7bis).
+- **E3** : cette séparation ne couvre pas un contenu explicitement choisi par l'utilisateur (ex. capture d'écran insérée manuellement dans un livrable) — seule la génération automatique d'export est concernée par le principe de sobriété stricte.
 
 ## 3. Flux de navigation principaux
 
@@ -342,6 +405,7 @@ Cette FDS sert d'entrée à la **SDS** (architecture technique : choix de framew
 | URS-NF-053 (journal d'anomalies) | §2, §3.7 |
 | URS-F-090 à 092quater (connecteurs QMS) | §2, §3.8, §7 (U-11) |
 | URS-F-100 à 102quinquies (Structure Système) | §2, §3.9, §7 (U-09/U-10) |
+| URS-NF-054 à 054quinquies (charte graphique) | §2bis |
 
 ---
-*Document vivant, version 10 — v02-v04 : voir historique dans le corps du document. v05 intégrait les cinq besoins Structure Système/connecteurs QMS. v06 intégrait 3 clarifications de la revue multi-experts (REV-FDS-002). **v07-v10 intègrent 4 constats d'audits** (`AUDIT-SWISSMEDIC-005`, `AUDIT-FDA-005`, `AUDIT-CABINET-GXP-002`, `AUDIT-QA-SPECIALISES-002`, closes le 22/08/2026) : blocage de suppression d'un niveau de hiérarchie utilisé (Swissmedic) ; journalisation de l'acquittement d'un avertissement de statut dégradé (FDA) ; validation du schéma comme module isolé, cohérent avec §8bis (cabinet GxP) ; modèle de hiérarchie par défaut pour réduire la friction de démarrage (QA spécialisés). Aucun nouvel ID URS. FDS complète et intégralement auditée (panel + 4 audits), même niveau de rigueur que pour la première cascade. Prête pour la mise à jour de la SDS.*
+*Document vivant, version 11 — v02-v04 : voir historique dans le corps du document. v05 intégrait les cinq besoins Structure Système/connecteurs QMS. v06 intégrait 3 clarifications de la revue multi-experts (REV-FDS-002). v07-v10 intègrent 4 constats d'audits (`AUDIT-SWISSMEDIC-005`, `AUDIT-FDA-005`, `AUDIT-CABINET-GXP-002`, `AUDIT-QA-SPECIALISES-002`). **v11 intègre la charte graphique et identité visuelle** (`REV-URS-VALIDAPHARM-2026-010`) : direction "Indigo premium + accents vifs", palette sémantique de statut avec double codage couleur+icône (mitige AR-R-59), typographie écran/export distincte, principe de séparation stricte écran premium / export sobre — challengée par une revue multi-experts dédiée et un audit accessibilité ciblé (calibré : pas les 4 audits Swissmedic/FDA/cabinet GxP/QA complets, la palette n'étant pas un sujet réglementaire opposable) qui a corrigé 3 des 8 couleurs de statut, non conformes WCAG AA sur calcul réel (voir `docs/archive/revues-audits/charte-graphique/`). Aucun nouvel ID URS au-delà de la famille URS-NF-054. FDS complète, prête pour la mise à jour de la SDS.*

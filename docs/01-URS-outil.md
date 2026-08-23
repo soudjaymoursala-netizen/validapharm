@@ -3,11 +3,11 @@
 | | |
 |---|---|
 | **Référence** | URS-VALIDAPHARM-2026-001 |
-| **Version** | 20 (nouveau besoin : statut de qualification et périodicité — REV-URS-VALIDAPHARM-2026-009) |
+| **Version** | 21 (charte graphique et identité visuelle — REV-URS-VALIDAPHARM-2026-010) |
 | **Statut** | En rédaction |
 | **Système concerné** | ValidaPharm (assistant de rédaction qualité CQV/CSV/QA — pharma & dispositifs médicaux) |
 | **Catégorie GAMP 5 envisagée** | Catégorie 5 — Logiciel sur mesure (bespoke), avec composants de catégorie 3/4 (bibliothèques, éventuel LLM local) — confirmée par revue multi-experts |
-| **Document de référence** | `00-cadrage-projet.md`, `REV-URS-VALIDAPHARM-2026-001` à `009` v01 (closes), `AUDIT-SWISSMEDIC-VALIDAPHARM-2026-001/002/003` v01, `AUDIT-FDA-VALIDAPHARM-2026-001/002/003` v01, `AUDIT-CABINET-GXP-VALIDAPHARM-2026-001` v01, `AUDIT-QA-SPECIALISES-VALIDAPHARM-2026-001` v01 (closes), `AR-VALIDAPHARM-2026-001` v20, `03-specifications-fonctionnelles.md` v05 ⚠️ à mettre à jour, `16-FDS-outil.md` v04 ⚠️ à mettre à jour, `22-SDS-outil.md` v03 ⚠️ à mettre à jour |
+| **Document de référence** | `00-cadrage-projet.md`, `REV-URS-VALIDAPHARM-2026-001` à `010` v01 (closes), `AUDIT-SWISSMEDIC-VALIDAPHARM-2026-001/002/003` v01, `AUDIT-FDA-VALIDAPHARM-2026-001/002/003` v01, `AUDIT-CABINET-GXP-VALIDAPHARM-2026-001` v01, `AUDIT-QA-SPECIALISES-VALIDAPHARM-2026-001` v01 (closes), `AR-VALIDAPHARM-2026-001` v20, `03-specifications-fonctionnelles.md` v08, `16-FDS-outil.md` v10, `22-SDS-outil.md` v06 |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -291,6 +291,16 @@ L'utilisateur (professionnel qualité/validation en pharma et dispositifs médic
 | URS-NF-043 | *(nouveau)* La priorité de conception Phase 1 est la fiabilité et le caractère défendable GMP du contenu et du raisonnement produits, avant l'automatisation du workflow d'approbation (voir §2). | Must |
 | URS-NF-050 | *(nouveau v05 — revue technique E5)* Le système DOIT offrir une accessibilité clavier de base pour les fonctions critiques (navigation, saisie, export). | Should |
 
+### 5.6 Charte graphique et identité visuelle *(nouveau v21 — REV-URS-VALIDAPHARM-2026-010)*
+
+| ID | Exigence | Priorité |
+|---|---|---|
+| URS-NF-054 | L'écran de travail DOIT véhiculer une identité visuelle moderne, fluide et premium (micro-interactions soignées, retours visuels immédiats, transitions douces) — critère explicite de l'utilisateur, distinct du ton strictement documentaire des livrables exportés (voir URS-NF-054bis). | Must |
+| URS-NF-054bis | Les livrables exportés (Word/PDF, destinés à un usage réglementaire opposable) DOIVENT conserver une présentation sobre et strictement documentaire, indépendamment du style de l'écran de travail — l'identité visuelle "premium/ludique" de l'outil ne DOIT jamais se propager dans le contenu exporté. | Must |
+| URS-NF-054ter | Toute information fonctionnelle portée par une couleur (notamment `qualification_status`, criticité IPR/AMDEC) NE DOIT JAMAIS être encodée par la couleur seule — un second indicateur (icône, libellé texte, motif) DOIT toujours l'accompagner, pour rester lisible en cas de daltonisme. | Must |
+| URS-NF-054quater | Le contraste texte/fond de toute information porteuse de sens fonctionnel DOIT atteindre un niveau reconnu (référence : WCAG 2.1 niveau AA), y compris pour les couleurs de statut. | Should |
+| URS-NF-054quinquies | L'écran de travail et les documents exportés DOIVENT utiliser des familles de polices distinctes et intentionnelles : une police système moderne pour l'écran, une police classique à empattements pour les documents exportés, cohérente avec l'usage réglementaire de ces derniers. | Should |
+
 ## 6. Exigences réglementaires et de conformité
 
 | ID | Exigence | Priorité |
@@ -395,4 +405,4 @@ Restructuration des gabarits en familles ("outils") et sous-types ("mini-outils"
 *Ce tableau sera complété au fur et à mesure de la conception détaillée (FS) et du développement.*
 
 ---
-*Document vivant, version 20 — v06-v13 : voir historique complet dans le corps du document et les REV/AUDIT associés. v16 connecteurs QMS tiers. v17 Structure Système (référentiel d'actifs, arbre + graphe). v18 dossier vivant d'un actif. v19 export PDF de l'historique de qualification. **v20 intègre un cinquième nouveau besoin exprimé par l'utilisateur** (`REV-URS-VALIDAPHARM-2026-009`, close le 22/08/2026) : marquage "soumis à qualification périodique" avec date limite, et statut de qualification standardisé par nœud (URS-F-102 à 102quinquies). Statuts issus d'une recherche documentaire (convention de fait eQMS/plans de validation — aucun texte normatif unique ne l'impose, signalé explicitement dans l'exigence). Dérivation automatique du statut par date d'échéance (réutilise URS-F-072), avertissement non bloquant à la sélection d'un nœud à risque, journalisation systématique des changements de statut. **FS/FDS/SDS portent désormais cinq capacités en attente (connecteurs QMS, Structure Système, dossier vivant, export historique, statut de qualification) — à intégrer ensemble avant que ces documents puissent être considérés à jour.***
+*Document vivant, version 21 — v06-v13 : voir historique complet dans le corps du document et les REV/AUDIT associés. v16 connecteurs QMS tiers. v17 Structure Système (référentiel d'actifs, arbre + graphe). v18 dossier vivant d'un actif. v19 export PDF de l'historique de qualification. v20 intègre un cinquième nouveau besoin exprimé par l'utilisateur (`REV-URS-VALIDAPHARM-2026-009`, close le 22/08/2026) : marquage "soumis à qualification périodique" avec date limite, et statut de qualification standardisé par nœud (URS-F-102 à 102quinquies). **v21 (23/08/2026, `REV-URS-VALIDAPHARM-2026-010`) : charte graphique et identité visuelle** (URS-NF-054 à 054quinquies) — identifiée via la checklist de complétude par domaine ajoutée au cadrage §6ter, pas via une demande fonctionnelle classique. Direction retenue : indigo premium + accents vifs pour l'écran de travail (moderne/fluide/premium), sobriété stricte préservée pour les exports réglementaires, couleur de statut jamais seule porteuse de sens (accessibilité daltonisme), contraste WCAG AA. FS/FDS/SDS à mettre à jour en conséquence avant que la cascade puisse être considérée close pour la conception qui démarre le 23/08/2026.*

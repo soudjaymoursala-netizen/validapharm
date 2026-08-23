@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 08 (constats des audits Swissmedic/FDA simulés — AUDIT-SWISSMEDIC-004/AUDIT-FDA-004) |
+| **Version** | 09 (charte graphique et identité visuelle — REV-URS-VALIDAPHARM-2026-010) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
-| **Documents de référence** | `01-URS-outil.md` v20, `02-analyse-de-risque-outil.md` v20, `00-cadrage-projet.md` v2, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v21, `02-analyse-de-risque-outil.md` v21, `00-cadrage-projet.md` v2, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -351,6 +351,13 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - L'architecture d'interface supporte nativement RTL (arabe) et CJK (chinois) dès la conception, même si ces langues sont livrées en phase ultérieure — URS-NF-040quater.
 - Accessibilité clavier de base pour les fonctions critiques (navigation, saisie, export) — URS-NF-050.
 
+### 5.5bis Charte graphique et identité visuelle (répond à URS-NF-054 à 054quinquies) *(nouveau v09)*
+
+- L'écran de travail porte une identité visuelle moderne, fluide et premium, distincte et jamais mélangée avec le registre strictement sobre/documentaire des livrables exportés — URS-NF-054/054bis. Détail de conception (palette, typographie, composants) en FDS §2bis.
+- Toute information fonctionnelle portée par une couleur (statut de qualification, criticité) est systématiquement doublée d'un indicateur non-couleur (icône, libellé) — URS-NF-054ter, mitige AR-R-59.
+- Contraste conforme WCAG 2.1 AA sur toute information porteuse de sens — URS-NF-054quater.
+- Polices distinctes et intentionnelles entre écran (moderne) et export (classique à empattements) — URS-NF-054quinquies.
+
 ## 6. Règles métier transversales et garde-fous non négociables
 
 Ces règles s'appliquent à travers tous les modules ci-dessus ; elles sont listées ici pour visibilité et doivent chacune faire l'objet d'un cas de test OQ dédié (pas seulement d'une vérification incidente au sein d'un autre test) :
@@ -465,6 +472,7 @@ Le Plan de validation (VMP) et les protocoles IQ/OQ/PQ de l'outil devront être 
 | C-01 à 04 | §10 |
 | URS-F-090 à 092quater | §4.9 |
 | URS-F-100 à 102quinquies | §4.10 |
+| URS-NF-054 à 054quinquies | §5.5bis |
 
 ---
-*Document vivant, version 08 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS (REV-URS-005 à 009). v07 intégrait 3 clarifications de la revue multi-experts (REV-FS-002). **v08 intègre 2 constats d'audits Swissmedic et FDA simulés** (`AUDIT-SWISSMEDIC-004`, `AUDIT-FDA-004`, closes le 22/08/2026) : "Déclassé — retiré" comme état terminal du statut de qualification, sans retour possible sans nouveau projet (Swissmedic) ; extension du rappel de transfert de responsabilité (URS-F-028ter) aux données maîtresses d'actifs échangées avec un connecteur tiers, pas seulement aux livrables (FDA). Aucun nouvel ID URS. Couvre l'intégralité de l'URS v20 (~200 exigences). Prête pour la mise à jour de la FDS et de la SDS.*
+*Document vivant, version 09 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS (REV-URS-005 à 009). v07 intégrait 3 clarifications de la revue multi-experts (REV-FS-002). v08 intégrait 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-004`, `AUDIT-FDA-004`). **v09 intègre la charte graphique et identité visuelle** (`REV-URS-VALIDAPHARM-2026-010`, URS-NF-054 à 054quinquies, identifiée via la checklist de complétude par domaine du cadrage §6ter). Couvre l'intégralité de l'URS v21. Prête pour la mise à jour de la FDS et de la SDS.*
