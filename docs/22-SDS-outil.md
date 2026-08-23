@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | SDS-VALIDAPHARM-2026-001 |
-| **Version** | 10 (résolution du choix de framework — TypeScript + Vue, `08-conventions-codage.md`) |
+| **Version** | 11 (architecture web pure sans installation — API GitHub, contrainte du poste de travail professionnel) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v22, `02-analyse-de-risque-outil.md` v22, `03-specifications-fonctionnelles.md` v10, `16-FDS-outil.md` v13, `08-conventions-codage.md` v01, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `03-specifications-fonctionnelles.md` v11, `16-FDS-outil.md` v14, `08-conventions-codage.md` v01, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -19,9 +19,11 @@ La FDS (v04) décrit le comportement fonctionnel détaillé : écrans, flux, mac
 
 ## 2. Architecture technique globale
 
+**(réécrite v11 — architecture web pure sans installation, décision explicite du 23/08/2026)** Application web pure (PWA) : aucun binaire installé, aucun accès disque natif, aucun `git` local — contrainte réelle d'un poste de travail professionnel dont l'IT bloque les logiciels/services non autorisés (navigateur et `github.com` le sont).
+
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│                     Application (navigateur, locale-first)          │
+│                Application (navigateur uniquement, PWA)             │
 │                                                                       │
 │  ┌─────────────────────────┐        ┌───────────────────────────┐  │
 │  │   Couche Présentation     │        │   Couche Logique métier    │  │
@@ -36,24 +38,28 @@ La FDS (v04) décrit le comportement fonctionnel détaillé : écrans, flux, mac
 │  └─────────────────────────┘        └──────────────┬────────────┘  │
 │                                                        │              │
 │                                       ┌────────────────▼──────────┐  │
-│                                       │  Couche Persistance locale │  │
-│                                       │  (lecture/écriture fichiers│  │
-│                                       │   structurés, §3)          │  │
+│                                       │  Couche Persistance         │  │
+│                                       │  Cache local (IndexedDB) —  │  │
+│                                       │  aucun accès disque natif,  │  │
+│                                       │  §3                         │  │
 │                                       └────────────────┬──────────┘  │
 └────────────────────────────────────────────────────────┼────────────┘
-                                                            │
+                                                            │ appels API HTTPS uniquement
                           ┌─────────────────────────────────┼─────────────────────┐
                           ▼                                 ▼                      ▼
-                 Connecteur Git (§5)              Connecteur Drive (§5)   Routeur IA (§6)
-                 API GitHub (commits signés,           API Drive             API fournisseurs
-                 branche protégée)                  (miroir, écriture)     cloud + modèle local
+              Connecteur GitHub (§5)              Connecteur Drive (§5bis)   Routeur IA (§6)
+              API GitHub (Contents/Git Data,          API Drive              API fournisseurs
+              jeton à portée restreinte,           (miroir, écriture)      cloud + modèle local
+              branche protégée)
 ```
 
 **Règle de conception (répond à FDS §8bis)** : la Couche Logique métier n'importe **jamais** de composant de présentation. Chaque module (moteur de calcul, machine à états, grille de qualification, détection de liens, résolution de conflit) expose une interface fonction-pure (entrée → sortie, sans effet de bord sur l'UI), testable par appel direct dans les tests unitaires sans instancier d'écran.
 
+**Aucun connecteur n'exécute de binaire `git` ni n'accède au disque en dehors du stockage navigateur** — tout accès à GitHub/Drive passe par leurs API HTTPS respectives (répond à URS-NF-030/044).
+
 ## 3. Schéma de données physique
 
-Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Phase 1) :
+**(clarifié v11 — architecture web pure)** L'arborescence ci-dessous décrit la structure logique des enregistrements — à la fois les chemins de fichiers dans le dépôt GitHub dédié (source de vérité, lus/écrits via l'API GitHub, jamais un système de fichiers local monté) et les clés du cache local IndexedDB (miroir de performance/hors-ligne, jamais la source de vérité). Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Phase 1) :
 
 ```
 /data
@@ -69,7 +75,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 
 - Chaque écriture significative = un commit Git (répond à URS-NF-030) ; le message de commit encode `{type} {ref} {action}` (ex. `section a1b2 changement_statut: en_verification→en_approbation`).
 - Migration de schéma (URS-NF-046) : un script de migration versionné accompagne toute évolution de `schema_version`, exécuté à l'ouverture si `schema_version` du dépôt < version attendue par l'application, avant tout accès aux données.
-- **Atomicité de la migration (ajoutée v02 — revue SDS, E2, mitige AR-R-45, URS-NF-046quater)** : avant toute exécution, une sauvegarde intégrale de l'état courant (`/data`) est créée et vérifiée (checksum) ; si la migration échoue à n'importe quelle étape, un mécanisme de retour arrière restaure automatiquement cette sauvegarde, et l'application refuse de démarrer sur un état partiellement migré (message explicite, pas de démarrage silencieux sur données incohérentes). Le retour arrière lui-même est couvert par un test dédié (échec simulé en cours de migration).
+- **Atomicité de la migration (ajoutée v02 — revue SDS, E2, mitige AR-R-45, URS-NF-046quater)** : avant toute exécution, une sauvegarde intégrale de l'état courant (`/data`) est créée et vérifiée (checksum) ; si la migration échoue à n'importe quelle étape, un mécanisme de retour arrière restaure automatiquement cette sauvegarde, et l'application refuse de démarrer sur un état partiellement migré (message explicite, pas de démarrage silencieux sur données incohérentes). Le retour arrière lui-même est couvert par un test dédié (échec simulé en cours de migration). **(clarifié v11 — architecture web pure)** La "sauvegarde" est une référence Git créée via l'API (tag/branche pointant sur le SHA du commit précédant la migration) — un simple pointeur, aucune copie de fichiers nécessaire ; le retour arrière ré-écrit la branche principale sur ce SHA via l'API.
 - **Garde de compatibilité descendante (ajoutée v09 — résorption de dette, URS-NF-055bis, mitige AR-R-60)** : symétriquement, si `schema_version` du dépôt est **postérieur** à la version maximale que l'application sait lire (cas d'un rollback vers une version antérieure de l'application après une migration), l'application refuse explicitement de démarrer — écran dédié (FDS §7, message U-12), **avant tout accès en lecture ou écriture** à `/data`. Cette vérification est la première opération effectuée à l'ouverture, avant même la vérification `<` ci-dessus.
 
 ## 4. Moteur de calcul et logique métier (module isolé)
@@ -79,21 +85,25 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 - Suite de tests unitaires dédiée par fonction, exécutée en local et avant toute fusion de code (référence FDS §8bis) — cas limites systématiques : valeurs nulles, valeurs aux bornes, combinaisons non couvertes par une grille fermée.
 - **Portail de qualité technique (ajouté v02 — revue SDS, E4, mitige AR-R-46, URS-REG-004)** : la maîtrise des changements n'est pas une pratique déclarée mais **appliquée automatiquement** — un pipeline d'intégration continue exécute la suite de tests unitaires de la Couche Logique métier à chaque proposition de modification, et **bloque techniquement** toute fusion vers la branche principale protégée tant qu'un test échoue. Aucune procédure de contournement manuel de ce blocage n'est prévue en Phase 1.
 
-## 5. Connecteur Git — implémentation de la synchronisation et de la résolution de conflit
+## 5. Connecteur GitHub — implémentation de la synchronisation et de la résolution de conflit (réécrite v11 — architecture web pure)
 
-- Commits signés (GPG/SSH) sur la branche principale protégée (répond à URS-NF-030, AR-R-10).
-- **Résolution de conflit (implémente FDS §3.6)** : **(ajouté v03 — audit Swissmedic simulé, MAJ-01, mitige AR-R-34)** en amont, un driver de fusion Git personnalisé est configuré sur tous les fichiers `sections/*.json` (`.gitattributes` : `merge=validapharm-json`), désactivant la fusion automatique par ligne de Git. **Tout** conflit textuel sur un tel fichier — y compris ceux que Git résoudrait normalement sans le signaler — est systématiquement traité par le mécanisme applicatif ci-dessous, jamais par la fusion par défaut de Git. À la détection d'un conflit de fusion sur un fichier `sections/{id}.json`, le connecteur :
-  1. Charge les deux versions divergentes (locale, distante) en mémoire, jamais directement les marqueurs Git bruts.
-  2. Pour les champs scalaires (`values`, `meta`) : calcule un diff champ par champ.
+**Abandon du driver de fusion Git local et de la signature GPG/SSH** : ces deux mécanismes (versions v03-v10 de ce document) supposaient un accès Git natif — incompatible avec un poste où seul le navigateur est autorisé. Remplacés par les mécanismes ci-dessous, strictement équivalents en garantie (aucun écrasement silencieux, motif structuré par décision) mais implémentés au niveau API.
+
+- Interface (`GitHubConnector`) : `lire(chemin): { contenu, sha }`, `ecrire(chemin, contenu, shaAttendu): Confirmation` — chaque écriture transmet le `sha` lu au moment de la dernière lecture (concurrence optimiste). Écritures sur la branche principale protégée (répond à URS-NF-030, AR-R-10).
+- **Attribution (répond à URS-NF-030 amendé)** : chaque commit créé via l'API est attribué à l'utilisateur authentifié par son jeton — attribution fiable mais **pas une signature cryptographique GPG/SSH locale**, limite Phase 1 assumée et documentée (ne jamais présenter ces commits comme "signés" dans l'UI ou l'export).
+- **Résolution de conflit (implémente FDS §3.6, mitige AR-R-34)** : `ecrire()` échoue (HTTP 409) si le `sha` distant a changé depuis la dernière lecture — c'est le **seul** déclencheur de conflit, aucune fusion automatique de contenu n'est jamais tentée côté API ni côté client. À la détection :
+  1. Le connecteur recharge la version distante actuelle et la compare à la version locale en mémoire — jamais de fusion textuelle brute.
+  2. Pour les champs scalaires (`values`, `meta`) : diff champ par champ.
   3. Pour les champs `tableau_dynamique` : diff au niveau ligne, par identifiant stable de ligne — union automatique des lignes non conflictuelles, isolement des lignes réellement en conflit.
   4. Transmet ce diff structuré à la Couche Présentation (écran de résolution, FDS §3.6) — le connecteur ne résout jamais lui-même un conflit sans décision utilisateur explicite.
-  5. À la confirmation, écrit une nouvelle révision avec, pour motif, le détail structuré des décisions prises champ par champ/ligne par ligne (répond à l'amendement FDA sur la FDS, §3.6).
+  5. À la confirmation, réécrit avec le `sha` distant à jour et un motif structuré détaillant les décisions prises champ par champ/ligne par ligne (répond à l'amendement FDA sur la FDS, §3.6).
+- Contrat d'erreur typé (même principe que §6/§6bis/§5bis) : `ConflitShaError` (409, déclenche §5 point 1 ci-dessus), `TimeoutError`, `AuthentificationError`, `PorteeInsuffisanteError` (jeton sans les permissions requises) — jamais une exception générique.
 
 ## 5bis. Connecteur Drive — contrat d'interface (ajouté v08, répond à URS-NF-010/011/047, trouvé manquant lors de la revue de cohérence du 23/08/2026)
 
 - Interface (`DriveConnector`) : `miroir(snapshotGit): Confirmation` — un seul point d'entrée, pas de logique métier propre. Le connecteur Drive **n'est jamais une source de vérité, jamais lu par l'application** (répond à URS-NF-010, §3 FS "toute divergence se résout en faveur de Git").
 - Déclenchement : après chaque session de travail (heuristique : inactivité ou fermeture de l'application) et sur action manuelle "Sauvegarder maintenant" (URS-NF-011) — jamais en continu, pour rester cohérent avec le principe local-first (pas de dépendance réseau permanente).
-- `miroir()` copie l'état courant du dépôt Git local vers le dossier Drive dédié du client — une copie de fichiers, pas une fusion : en cas d'écriture concurrente côté Drive (ex. modification manuelle accidentelle par l'utilisateur dans l'explorateur Drive), le prochain miroir **écrase** le contenu Drive sans tentative de fusion, cohérent avec "jamais lu comme source" (à afficher explicitement à l'utilisateur avant le premier miroir, pour éviter une surprise).
+- `miroir()` lit l'état courant depuis l'API GitHub et l'écrit dans le dossier Drive dédié du client via l'API Drive — une copie, pas une fusion : en cas d'écriture concurrente côté Drive (ex. modification manuelle accidentelle par l'utilisateur dans l'explorateur Drive), le prochain miroir **écrase** le contenu Drive sans tentative de fusion, cohérent avec "jamais lu comme source" (à afficher explicitement à l'utilisateur avant le premier miroir, pour éviter une surprise). **(clarifié v11)** Comme le connecteur GitHub, aucun accès disque natif — uniquement des appels API HTTPS.
 - Contrat d'erreur typé (même principe que §6/§6bis) : `TimeoutError`, `QuotaDepasseError` (quota de stockage Drive), `AuthentificationError` — un échec de miroir **n'est jamais silencieux** : indicateur visible tant que le dernier miroir réussi date de plus d'une session (répond à URS-NF-047, alerte de saturation).
 - Secrets/jeton d'accès Drive isolés par `client_id`, même mécanisme que les autres connecteurs (§7).
 
@@ -114,11 +124,11 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 
 ## 7. Sécurité technique
 
-- Secrets (clés API fournisseurs, jeton Git) stockés exclusivement dans une configuration locale **non versionnée** (répond à URS-NF-044) — jamais dans un fichier suivi par Git.
+- **(réécrite v11 — architecture web pure, mitige AR-R-61)** Secrets (clés API fournisseurs, jeton GitHub, jeton Drive) stockés exclusivement dans le stockage du navigateur (répond à URS-NF-044) — jamais dans un fichier suivi par Git, jamais transmis à un tiers autre que son API cible. **Risque assumé et documenté** (pas un coffre-fort système natif, surface XSS) — mitigé par la portée restreinte du jeton GitHub (URS-NF-044bis, dépôt dédié uniquement) et par le fait qu'aucun secret n'est jamais accessible en dehors du contexte d'origine du navigateur (isolation native par origine).
 - **(ajouté v02 — revue SDS, E1)** Le stockage de secrets est **isolé par `client_id`** — la clé API du fournisseur configuré pour un client A n'est jamais accessible ni utilisée lors d'un appel concernant un client B, y compris techniquement (pas seulement par convention applicative). Élaboration technique de URS-NF-044 combiné à l'isolation stricte déjà exigée par URS-F-024.
-- Scan de secrets automatique avant chaque commit (hook pre-commit), rejet du commit si un pattern de clé/jeton est détecté dans un fichier suivi.
+- Scan de secrets automatique avant chaque commit sur le **dépôt de conception** (hook pre-commit, `scripts/hooks/pre-commit`), rejet du commit si un pattern de clé/jeton est détecté dans un fichier suivi — protège le code source, distinct des secrets d'exécution ci-dessus qui ne sont jamais commités nulle part.
 - Quota configurable par fournisseur (URS-NF-048) implémenté au niveau du routeur IA — compteur d'appels/coût estimé, seuil configurable par `client_config`, blocage des nouveaux appels au-delà du seuil avec message explicite.
-- **Fiabilité de l'horodatage — risque reconnu explicitement (ajouté v03 — audit FDA simulé, MAJ-01)** : en Phase 1, les horodatages de la piste d'audit (commits Git, `revisions[]`, `audit_log[]`) reposent sur l'horloge système locale du poste, non synchronisée ni vérifiée contre une source de temps de confiance — une manipulation de l'horloge locale avant un commit n'est pas détectée. C'est une limite Phase 1 assumée (au-delà du disclaimer générique déjà porté par URS-NF-030), cohérente avec l'absence de signature Part 11 opposable à ce stade. **Remédiation Phase 3 nommée** : lors de la bascule vers l'architecture serveur (cadrage §4), les horodatages seront générés côté serveur par une source de temps de confiance (NTP synchronisé), indépendante de l'horloge des postes clients.
+- **Fiabilité de l'horodatage — risque largement résolu par effet de bord (ajouté v03 — audit FDA simulé, MAJ-01 ; réévalué v11 — architecture web pure, AR-R-47)** : la remédiation "Phase 3, horodatage serveur" prévue à l'origine est en réalité disponible **dès la Phase 1** grâce au choix de l'API GitHub — un commit créé via l'API est horodaté par les serveurs GitHub, indépendamment de l'horloge du poste client, **à condition que le connecteur n'envoie jamais de date `author`/`committer` explicite dans la requête de création de commit** (l'API l'accepterait sinon, ce qui réintroduirait la faiblesse). Règle d'implémentation non négociable : `GitHubConnector.ecrire()` ne transmet jamais de champ de date — laisse systématiquement GitHub assigner l'horodatage serveur. Limite résiduelle assumée : ceci authentifie le moment de réception par GitHub, pas une preuve cryptographique au sens Part 11 complet (toujours hors périmètre Phase 1).
 
 ## 8. Journal d'anomalies — implémentation
 
@@ -136,7 +146,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 
 - `asset_node.parent_id` (lien hiérarchique) : validation anti-cycle implémentée comme fonction pure isolée (`validerAbsenceDeCycle(nodeId, nouveauParentId): boolean`), appelée à la création **et** à tout reparentage — testable indépendamment de l'UI (§8bis FDS/principe cabinet GxP).
 - `asset_node.associated_nodes[]` (liens d'association) : aucune contrainte de cycle — structure de graphe libre, pas d'arbre.
-- Unicité du code (URS-F-100nonies) : **(clarifié v05 — revue SDS-v04, E5 ; renforcé v06 — audit Swissmedic simulé, MAJ-01)** le stockage étant fichier-par-enregistrement (§3), l'unicité n'est pas une contrainte de base de données mais un fichier d'index dédié `/data/asset_nodes_index/{client_id}.json`. L'écriture du fichier nœud et la mise à jour de l'index sont incluses dans le **même commit Git atomique** — jamais deux écritures séparées pouvant diverger en cas d'interruption. Au démarrage, une vérification de cohérence légère (index ↔ fichiers réels) signale toute divergence sans bloquer l'application.
+- Unicité du code (URS-F-100nonies) : **(clarifié v05 — revue SDS-v04, E5 ; renforcé v06 — audit Swissmedic simulé, MAJ-01)** le stockage étant fichier-par-enregistrement (§3), l'unicité n'est pas une contrainte de base de données mais un fichier d'index dédié `/data/asset_nodes_index/{client_id}.json`. L'écriture du fichier nœud et la mise à jour de l'index sont incluses dans le **même commit atomique** — jamais deux écritures séparées pouvant diverger en cas d'interruption. **(clarifié v11 — architecture web pure)** Réalisé via l'API Git Data de GitHub (arbre multi-fichiers assemblé puis un seul appel de création de commit) — pas deux appels séparés à l'API Contents, qui casserait l'atomicité. Au démarrage, une vérification de cohérence légère (index ↔ fichiers réels) signale toute divergence sans bloquer l'application.
 - Suppression d'un niveau de `asset_hierarchy_schema` utilisé par au moins un `asset_node.level_key` existant : bloquée au niveau de la couche logique (fonction pure `niveauUtilise(clientId, levelKey): boolean`), pas seulement un message d'interface.
 - Dérivation automatique de `qualification_status` (URS-F-102ter) : **(clarifié v05 — revue SDS-v04, E3)** vérification de `periodic_qualification.deadline` à l'ouverture de l'application **et** à chaque lecture/affichage d'un `asset_node` (dossier vivant, sélection de projet, etc.) — jamais un minuteur d'arrière-plan (irréaliste pour une application locale-first sans serveur, cohérent avec cadrage §4 Phase 1) — jamais une saisie manuelle silencieusement obsolète.
 - Machine à états minimale de `qualification_status` : "Déclassé — retiré" est un état terminal (aucune transition sortante autorisée par la fonction de transition), toutes les autres transitions passent par la même fonction pure, journalisées.
@@ -164,6 +174,8 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 
 **TypeScript (mode strict) + Vue 3 + Vitest + ESLint/Prettier.** Décision et justification détaillées dans `08-conventions-codage.md`, qui fixe également la structure de dossiers (miroir strict des couches §2), la règle de traçabilité code↔exigence (bloc TSDoc `@requirement`), et les règles de test — répond à la demande explicite de l'utilisateur du 23/08/2026 (code auditable, commenté, structuré pour la testabilité QA). Sans impact sur les contrats d'interface déjà fixés ici (§5, §5bis, §6, §6bis) : ce choix ne fait que les implémenter.
 
+**(précisé v11 — architecture web pure)** Livré comme **PWA (Progressive Web App)**, jamais comme application de bureau empaquetée (Electron/Tauri écartés) — une application de bureau nécessite une installation, bloquée par l'IT sur le poste de travail professionnel de l'utilisateur ; seul le navigateur est garanti disponible sans droits d'administration. Corollaire : aucun accès disque natif, aucun binaire `git` — tous les connecteurs (§5, §5bis, §6bis) sont exclusivement des appels API HTTPS.
+
 ## 10bis. Hors périmètre de cette SDS
 
 - HDS (pas de matériel dédié) et Data Migration Plan (dépôt vierge, décision du 22/08/2026).
@@ -186,6 +198,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 | §2bis FDS (charte graphique) | §7bis |
 | FS §2/§5.2 (miroir Drive, URS-NF-010/011/047) | §5bis |
 | FS §5.1/§5.2/§5.5 (perf/rollback/lecteur d'écran) | §8ter, §3, §9 |
+| FS §2/§9/§10 (architecture web pure, API GitHub) | §2, §5, §5bis, §7, §10 |
 
 ---
-*Document vivant, version 10 — v02 revue multi-experts (REV-SDS-001). v03 audits Swissmedic/FDA (driver de fusion Git, horodatage). v04 cinq besoins Structure Système/connecteurs QMS. v05 revue multi-experts (REV-SDS-002) : index d'unicité de code, dérivation de statut à la lecture. v06 intègre 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-006`, `AUDIT-FDA-006`). v07 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). v08 ajoute le contrat d'interface du connecteur Drive (§5bis). v09 résorbe les trois gaps mineurs actés comme dette explicitement acceptée au cadrage §6ter. **v10 : le choix de framework est résolu** (TypeScript + Vue 3 + Vitest + ESLint/Prettier, `08-conventions-codage.md`, décision explicite du 23/08/2026) — §10 réécrit, jetons de conception précisés (variables CSS + Vue SFC). Cascade de conception URS→FS→FDS→SDS complète et cohérente, framework fixé, avant le démarrage effectif de l'écriture du code le 23/08/2026 — plus aucun gap connu.*
+*Document vivant, version 11 — historique v02-v09 : voir corps du document. v10 : choix de framework résolu (TypeScript + Vue 3). **v11 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel (IT bloque les logiciels non autorisés). Réécriture substantielle : §2 (diagramme, IndexedDB au lieu de disque local), §5 (Connecteur GitHub — abandon du driver de fusion Git local et de la signature GPG/SSH, remplacés par détection de conflit SHA côté API et attribution par jeton), §7 (jeton en stockage navigateur, risque documenté AR-R-61 ; **horodatage de la piste d'audit largement résolu par effet de bord** — commits horodatés serveur par l'API GitHub, AR-R-47 passe de IPR=24 à IPR=9), §10 (PWA confirmée, Electron/Tauri explicitement écartés). Résout au passage une incohérence latente entre le diagramme d'architecture (§2, "API GitHub" depuis l'origine) et l'implémentation décrite en §5 (mécanismes Git natifs), jamais détectée jusqu'ici. Nouveaux risques AR-R-61/R-62. Cascade de conception URS→FS→FDS→SDS complète et cohérente avec l'architecture réellement déployable sur le poste de l'utilisateur.*

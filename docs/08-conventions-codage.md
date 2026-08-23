@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | CONV-CODAGE-VALIDAPHARM-2026-001 |
-| **Version** | 01 |
+| **Version** | 02 (architecture web pure sans installation — API GitHub) |
 | **Statut** | En vigueur — s'applique à partir du démarrage de la conception (23/08/2026) |
-| **Documents de référence** | `22-SDS-outil.md` v09 §10, `00-cadrage-projet.md` |
-| **Décidé par** | Décision explicite de l'utilisateur, 23/08/2026 : code auditable, commenté, structuré pour permettre au QA de tester correctement |
+| **Documents de référence** | `22-SDS-outil.md` v11 §10, `00-cadrage-projet.md` |
+| **Décidé par** | Décision explicite de l'utilisateur, 23/08/2026 : code auditable, commenté, structuré pour permettre au QA de tester correctement ; architecture web pure sans installation (contrainte du poste de travail professionnel) |
 
 ---
 
@@ -24,7 +24,9 @@ Ce document résout le point laissé ouvert en SDS §10 ("choix définitif de fr
 | Qualité automatique | ESLint + Prettier, exécutés par le portail de qualité (SDS §4) |
 | Build | Vite |
 
-**Justification** (répond à SDS §10, sans impact sur les contrats d'interface déjà fixés en SDS §5/§5bis/§6/§6bis) : écosystème mature pour une application locale-first à état riche (éditeur de sections, référentiel Structure Système en arbre+graphe), typage statique fort utile à l'auditabilité (contrat de fonction explicite, erreurs détectées avant même les tests), structure de composants Vue plus prescriptive que des alternatives plus libres — aide à la lisibilité pour un lecteur qui découvre le code.
+**Justification** (répond à SDS §10, sans impact sur les contrats d'interface déjà fixés en SDS §5/§5bis/§6/§6bis) : écosystème mature pour une application à état riche (éditeur de sections, référentiel Structure Système en arbre+graphe), typage statique fort utile à l'auditabilité (contrat de fonction explicite, erreurs détectées avant même les tests), structure de composants Vue plus prescriptive que des alternatives plus libres — aide à la lisibilité pour un lecteur qui découvre le code.
+
+**Livré exclusivement comme PWA (répond à SDS §10, amendé v02, 23/08/2026)** : jamais une application de bureau empaquetée (Electron/Tauri écartés) — installation impossible sur un poste dont l'IT bloque les logiciels non autorisés. Conséquence directe : aucune API Node (`fs`, `child_process`, accès disque natif) n'est utilisable nulle part dans `src/` — uniquement `fetch`/API navigateur standard et IndexedDB. Cette contrainte est vérifiable par lecture du code (aucun `import` de module Node dans `src/`), pas seulement déclarée.
 
 ## 3. Langue du code
 
@@ -53,9 +55,10 @@ src/
     moteur-calcul/         calculerIPR, evaluerGrilleQualification, ...
     machine-etats/         transitions de statut (section, qualification_status)
     structure-systeme/     validerAbsenceDeCycle, niveauUtilise, presenterStatut
-    resolution-conflit/    diff structuré Git (SDS §5)
-  connecteurs/         Git, Drive, IA (ProviderAdapter), QMS (QMSConnectorAdapter) — contrats SDS §5/§5bis/§6/§6bis
-  persistance/         Lecture/écriture fichiers /data (SDS §3), migration de schéma
+    resolution-conflit/    diff structuré sur conflit de SHA (SDS §5)
+  connecteurs/         GitHub (API), Drive (API), IA (ProviderAdapter), QMS (QMSConnectorAdapter) —
+                       contrats SDS §5/§5bis/§6/§6bis, exclusivement des appels API HTTPS
+  persistance/         Cache local (IndexedDB, SDS §3), migration de schéma
 tests/                 Miroir de la structure src/ — voir §6
 ```
 
@@ -71,8 +74,9 @@ tests/                 Miroir de la structure src/ — voir §6
 ## 7. Qualité automatique
 
 - ESLint : mode strict, `any` interdit, règle d'import restreignant `logique-metier/`/`connecteurs/` à ne jamais importer `presentation/` (§5).
+- TypeScript : `tsconfig.app.json` (qui couvre tout `src/`) n'inclut **pas** les types Node — toute tentative d'utiliser une API Node (`fs`, `child_process`, `Buffer`...) échoue au typecheck, pas seulement au linting. Double vérification de la contrainte "aucun accès disque natif" (§2).
 - Prettier : formatage automatique, pas de débat de style en revue de code.
 - Les deux sont exécutés par le portail de qualité CI (`quality-gate.yml`, SDS §4) — bloquant, pas indicatif.
 
 ---
-*Document vivant, version 01 — créé le 23/08/2026, résout le point ouvert de SDS §10. Toute évolution de ces conventions suit le même processus de revue que les autres documents de conception.*
+*Document vivant, version 02 — v01 créé le 23/08/2026, résout le point ouvert de SDS §10. **v02 (23/08/2026) confirme la livraison en PWA exclusive** (Electron/Tauri écartés, contrainte du poste de travail professionnel) et renomme les connecteurs/dossiers en conséquence (GitHub au lieu de Git local). Toute évolution de ces conventions suit le même processus de revue que les autres documents de conception.*

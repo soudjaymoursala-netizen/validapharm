@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 10 (dette explicitement acceptée résorbée : performance/capacité, lecteur d'écran, désinstallation/rollback — checklist §6ter) |
+| **Version** | 11 (architecture web pure sans installation — API GitHub, contrainte du poste de travail professionnel) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
-| **Documents de référence** | `01-URS-outil.md` v22, `02-analyse-de-risque-outil.md` v22, `00-cadrage-projet.md` v2, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -28,7 +28,8 @@ Ce document ne couvre pas le contenu réglementaire détaillé de chaque type de
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│                        ValidaPharm (client, navigateur)                │
+│           ValidaPharm — application web pure, aucune installation       │
+│           (PWA, navigateur uniquement — décision v11, 23/08/2026)        │
 │                                                                          │
 │  ┌─────────────┐ ┌──────────────┐ ┌────────────┐ ┌──────────────────┐ │
 │  │ Gestion de   │ │ Moteur de     │ │ Routeur IA │ │ Bibliothèque de   │ │
@@ -38,14 +39,14 @@ Ce document ne couvre pas le contenu réglementaire détaillé de chaque type de
 │  └──────┬───────┘ └──────┬───────┘ └─────┬──────┘ └──────────────────┘ │
 │         │                 │                │                            │
 │  ┌──────▼─────────────────▼────────────────▼─────────────────────┐    │
-│  │              Couche de données locale (état applicatif)          │   │
+│  │         Cache local navigateur (IndexedDB) — état applicatif     │   │
 │  │   Projets · Sections · Liens · Documents · Workflows · Consent.  │   │
 │  └──────────────────────────────┬───────────────────────────────┘    │
 └─────────────────────────────────┼──────────────────────────────────────┘
-                                   │ sauvegarde / synchronisation
+                                   │ appels API HTTPS (aucun accès disque/Git natif)
                     ┌──────────────┴──────────────┐
                     ▼                              ▼
-          Dépôt Git dédié (privé)          Miroir Google Drive
+       API GitHub (dépôt dédié, privé)     API Google Drive
           — source de vérité —                — filet de secours —
                     │
                     ▼
@@ -56,7 +57,7 @@ Ce document ne couvre pas le contenu réglementaire détaillé de chaque type de
 **Décisions d'architecture structurantes :**
 - Le moteur de gabarits fonctionne **entièrement en local**, sans dépendance réseau (répond à URS-NF-012).
 - Le routeur IA est le seul composant ayant connaissance des fournisseurs cloud configurés ; il n'a **jamais accès par défaut** à la couche de données des livrables (répond à URS-F-031, mitige AR-R-06).
-- La couche de données locale est le modèle pivot (§3), point de vérité pour l'IHM ; elle est synchronisée vers Git puis vers le miroir Drive, jamais l'inverse (répond à URS-NF-010/011).
+- La couche de données locale est le modèle pivot (§3), point de vérité pour l'IHM ; elle est synchronisée vers GitHub (API) puis vers le miroir Drive (API), jamais l'inverse (répond à URS-NF-010/011). **(v11 — architecture web pure, 23/08/2026)** Aucun accès disque ou Git natif : uniquement des appels API HTTPS, cohérent avec un poste de travail où seuls le navigateur et github.com sont autorisés.
 - Chaque gabarit (structure de champs, calculs, libellés multilingues) est une donnée versionnée indépendamment du code du moteur de rendu — mécanisme d'extensibilité retenu pour répondre au principe fondateur n°6 du cadrage (répond à URS-REG-003).
 
 ## 3. Modèle de données pivot
@@ -322,12 +323,12 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 
 ### 5.2 Portabilité et continuité (répond à URS-NF-010/011/012/047/049)
 
-- Le dépôt Git dédié est source de vérité exclusive ; toute divergence avec le miroir Drive se résout toujours en faveur de Git — URS-NF-010.
+- Le dépôt Git dédié est source de vérité exclusive ; toute divergence avec le miroir Drive se résout toujours en faveur de Git — URS-NF-010. **(v11 — architecture web pure)** Accès exclusivement via l'API GitHub, jamais un clone local ni un binaire `git` — un changement de poste ne requiert qu'une connexion (navigateur + jeton), pas d'installation.
 - Miroir Drive déclenché après chaque session de travail ou sur action manuelle "Sauvegarder maintenant" — URS-NF-011.
 - Toutes les fonctions de rédaction/gabarits fonctionnent sans réseau — URS-NF-012.
 - Surveillance de l'usage du stockage local (quota navigateur), avertissement avant saturation — URS-NF-047.
 - Point de restauration explicite en libre-service (au-delà de la sauvegarde automatique et de l'historique Git) permettant un retour à un état antérieur connu — URS-NF-049.
-- **(ajouté v10 — résorption de dette explicitement acceptée, cadrage §6ter)** Désinstallation par simple suppression du dossier applicatif local, sans reliquat système — URS-NF-055.
+- **(ajouté v10 — résorption de dette explicitement acceptée, cadrage §6ter ; amendé v11 — architecture web pure)** Désinstallation par suppression du site depuis l'écran d'accueil (si installé en PWA) et effacement du stockage navigateur pour ce site — sans reliquat, sans exécutable — URS-NF-055.
 - **(ajouté v10)** Rollback vers une version antérieure de l'application : si le `schema_version` des données (§3) est postérieur à ce que cette version sait lire, l'application refuse explicitement de démarrer (message dédié) plutôt que de risquer un accès incorrect silencieux — URS-NF-055bis, mitige AR-R-60.
 
 ### 5.3 Sécurité et confidentialité (répond à URS-NF-020 à 025, 044, 048, 051)
@@ -336,13 +337,13 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - Dépôt Git privé, accès restreint (C-03/C-04) — URS-NF-021.
 - Modèle de données prêt pour le multi-utilisateur dès la Phase 1 (`owner_id`, `shared_with`) même si l'UI n'expose qu'un utilisateur — URS-NF-022.
 - Partage lecture seule temporaire d'un projet à un tiers externe (auditeur), sans compte utilisateur complet — URS-NF-025, dépend de l'infrastructure multi-utilisateur (Phase 3).
-- **Garde-fou technique non négociable** : aucun secret (clé API, jeton) en clair dans le dépôt Git ni le code source — configuration locale non versionnée uniquement, scan de secrets avant chaque commit — URS-NF-044, mitige AR-R-24.
+- **Garde-fou technique non négociable** : aucun secret (clé API, jeton) en clair dans le dépôt Git ni le code source — scan de secrets avant chaque commit sur le dépôt de conception — URS-NF-044, mitige AR-R-24. **(amendé v11 — architecture web pure)** Le jeton d'exécution (GitHub/Drive/IA) utilisé par l'application déployée est stocké dans le navigateur (pas de configuration locale hors navigateur possible sans installation) — risque assumé et documenté, mitigé par la portée restreinte du jeton (URS-NF-044bis, AR-R-61), jamais présenté comme équivalent à un coffre-fort système natif.
 - Quota/seuil configurable par fournisseur contre une consommation excessive imprévue d'un service cloud IA — URS-NF-048, mitige AR-R-25.
 - **Garde-fou non négociable (nouveau v07)** : aucune télémétrie, statistique d'usage ou rapport d'erreur automatique transmis sans consentement explicite et distinct du consentement chat/IA (`client_config.consent_telemetry`), révocable à tout moment, état visible en permanence — URS-NF-051, mitige AR-R-32.
 
 ### 5.4 Traçabilité et audit (répond à URS-NF-030/031)
 
-- Chaque modification est attribuable et horodatée via l'historique Git signé (GPG/SSH) sur branche protégée contre la réécriture — piste d'audit raisonnable Phase 1, pas un audit trail Part 11 complet — URS-NF-030, mitige AR-R-10.
+- Chaque modification est attribuable et horodatée via l'historique Git sur branche protégée contre la réécriture — piste d'audit raisonnable Phase 1, pas un audit trail Part 11 complet — URS-NF-030, mitige AR-R-10. **(amendé v11 — architecture web pure)** Attribution par jeton d'API authentifié, pas par signature cryptographique GPG/SSH locale (impossible sans binaire `git`) — limite Phase 1 assumée et documentée explicitement, pas présentée comme une signature qu'elle n'est pas.
 - Historique complet des révisions consultable depuis l'interface, sans purge — URS-NF-031.
 - **Politique de rétention explicite (clarifiée v03 — revue FS, E3)** : en Phase 1, `revisions[]` et tous les `audit_log[]` sont conservés indéfiniment, alignés sur la durée de vie du dépôt Git — aucune purge automatique, aucune durée de conservation limitée. L'URS ne fixe pas de durée légale de rétention (hors périmètre mono-utilisateur Phase 1) ; une politique de rétention formelle (alignée sur les exigences du SMQ du client final) devra être définie explicitement en Phase 3.
 
@@ -421,8 +422,8 @@ Pour limiter le coût des évolutions inévitables après le début de la concep
 
 | Interface | Nature | Répond à |
 |---|---|---|
-| Dépôt Git dédié (GitHub, privé) | Lecture/écriture via commits signés | URS-NF-010/021/030, C-03/C-04 |
-| Google Drive (compte utilisateur) | Écriture miroir uniquement, jamais lue comme source | URS-NF-011 |
+| Dépôt Git dédié (GitHub, privé) | Lecture/écriture via API GitHub (HTTPS), jeton à portée restreinte — jamais de `git` local | URS-NF-010/021/030/044bis, C-03/C-04 |
+| Google Drive (compte utilisateur) | Écriture miroir via API Drive uniquement, jamais lue comme source | URS-NF-011 |
 | API(s) fournisseur(s) IA cloud | Requête/réponse texte, jamais de contenu de section sans action explicite | URS-F-030 à 037 |
 | Modèle IA local | Fallback sans réseau | URS-F-033, NF-012 |
 | Navigateur (stockage local) | Sauvegarde automatique, quota surveillé | URS-F-009, NF-047 |
@@ -431,9 +432,10 @@ Pour limiter le coût des évolutions inévitables après le début de la concep
 
 ## 10. Contraintes de plateforme (reprises de l'URS §7)
 
-- C-01 : Windows/Mac courants, sans droits d'administration complexes.
+- C-01 : Windows/Mac courants, **aucun droit d'administration requis, aucune installation** — application web pure (v11 — architecture web pure, 23/08/2026). Contrainte réelle ayant motivé ce choix : poste de travail professionnel dont l'IT bloque les logiciels/services non autorisés.
 - C-02 : aucune dépendance à un service payant obligatoire pour les fonctions cœur.
-- C-03/C-04 : dépôt Git privé sur GitHub ; la confidentialité dépend de la sécurité du compte GitHub de l'utilisateur (2FA recommandée), hors périmètre de conception de l'outil.
+- C-03/C-04 : dépôt Git privé sur GitHub, accès exclusivement via API (jamais un client `git` local) ; la confidentialité dépend de la sécurité du compte GitHub de l'utilisateur (2FA recommandée) et de la portée restreinte du jeton (URS-NF-044bis), hors périmètre de conception de l'outil au-delà de cette portée.
+- C-05 *(nouveau v11)* : suppose `api.github.com` (pas seulement `github.com`) accessible depuis le réseau de l'utilisateur — hypothèse non vérifiée par l'outil, risque documenté en AR-R-62, à confirmer par l'utilisateur avant de s'engager sur cette architecture.
 
 ## 11. Hors périmètre de cette FS
 
@@ -478,6 +480,7 @@ Le Plan de validation (VMP) et les protocoles IQ/OQ/PQ de l'outil devront être 
 | URS-F-100 à 102quinquies | §4.10 |
 | URS-NF-054 à 054quinquies | §5.5bis |
 | URS-NF-052bis, 050bis, 055/055bis | §5.1, §5.5, §5.2 |
+| URS-NF-010/030/044/044bis/055 amendés (architecture web pure) | §2, §5.2, §5.3, §5.4, §10 |
 
 ---
-*Document vivant, version 10 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS (REV-URS-005 à 009). v07 intégrait 3 clarifications de la revue multi-experts (REV-FS-002). v08 intégrait 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-004`, `AUDIT-FDA-004`). v09 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). **v10 résorbe les trois gaps mineurs actés comme dette explicitement acceptée au cadrage §6ter** : performance/capacité chiffrée (§5.1), lecteur d'écran (§5.5), désinstallation/rollback applicatif avec protection contre la corruption de données (§5.2, mitige AR-R-60). Couvre l'intégralité de l'URS v22. Prête pour la mise à jour de la FDS et de la SDS.*
+*Document vivant, version 11 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS. v07 intégrait 3 clarifications de la revue multi-experts. v08 intégrait 2 constats d'audits Swissmedic et FDA simulés. v09 intègre la charte graphique et identité visuelle. v10 résorbe les trois gaps mineurs de la checklist §6ter. **v11 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel (IT bloque les logiciels non autorisés). Diagramme d'architecture (§2) et interfaces (§9) réécrits : API GitHub/Drive au lieu de Git local, cache navigateur (IndexedDB). URS-NF-010/030/044/055 amendés, URS-NF-044bis nouveau. Nouvelle contrainte de plateforme C-05 (dépendance à `api.github.com`, AR-R-62, non vérifiée). Couvre l'intégralité de l'URS v23. Prête pour la mise à jour de la FDS et de la SDS.*

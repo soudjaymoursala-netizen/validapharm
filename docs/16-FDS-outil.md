@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | FDS-VALIDAPHARM-2026-001 |
-| **Version** | 13 (résolution du choix de framework — TypeScript + Vue, 08-conventions-codage.md) |
+| **Version** | 14 (architecture web pure sans installation — API GitHub, contrainte du poste de travail professionnel) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v22, `02-analyse-de-risque-outil.md` v22, `03-specifications-fonctionnelles.md` v10, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `03-specifications-fonctionnelles.md` v11, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -200,12 +200,13 @@ Ouverture du panneau Chat
    → Téléchargement / sauvegarde locale
 ```
 
-### 3.6 Résolution de conflit de fusion Git (ajouté v02 — revue FDS, E5, mitige AR-R-34)
+### 3.6 Résolution de conflit de synchronisation (ajouté v02 — revue FDS, E5, mitige AR-R-34 ; re-affiné v14 — architecture web pure)
 
 ```
-Synchronisation vers Git (déclenchée manuellement ou après session)
-   → Conflit détecté sur une section modifiée hors-ligne sur deux postes
-   → Écran de résolution assistée (jamais de marqueurs Git bruts affichés) :
+Synchronisation vers GitHub (déclenchée manuellement ou après session, via API — v14)
+   → Conflit détecté sur une section modifiée hors-ligne sur deux postes : l'écriture API est
+     rejetée (SHA distant différent du SHA lu, HTTP 409) plutôt qu'une fusion Git locale
+   → Écran de résolution assistée (jamais de contenu brut de réponse API affiché) :
         Colonne gauche : version locale (ce poste)     Colonne droite : version distante (autre poste)
         Champ par champ divergent, avec horodatage de dernière modification de chaque côté
    → Pour chaque champ divergent : [Garder version locale] / [Garder version distante] / [Fusionner manuellement]
@@ -390,7 +391,7 @@ Chaque message est stocké comme ressource multilingue (fr/en/de dès Phase 1), 
 
 ## 9. Suite de la cascade documentaire
 
-Cette FDS sert d'entrée à la **SDS** (architecture technique : choix de framework, schéma de base de données physique, contrats d'API précis avec Git/Drive/fournisseurs IA, mécanisme de résolution de conflit de fusion Git au niveau code). Aucun HDS (pas de matériel dédié) ni de Data Migration Plan (dépôt Git vierge, décision du 22/08/2026).
+Cette FDS sert d'entrée à la **SDS** (architecture technique : choix de framework, schéma de cache local, contrats d'API précis avec GitHub/Drive/fournisseurs IA, mécanisme de résolution de conflit par détection SHA). Aucun HDS (pas de matériel dédié) ni de Data Migration Plan (dépôt Git vierge, décision du 22/08/2026).
 
 ## 10. Matrice de traçabilité FS → FDS
 
@@ -413,4 +414,4 @@ Cette FDS sert d'entrée à la **SDS** (architecture technique : choix de framew
 | URS-NF-052bis, 050bis, 055bis (perf/lecteur d'écran/rollback) | §8, §7 (U-12) |
 
 ---
-*Document vivant, version 13 — v02-v04 : voir historique dans le corps du document. v05 intégrait les cinq besoins Structure Système/connecteurs QMS. v06 intégrait 3 clarifications de la revue multi-experts (REV-FDS-002). v07-v10 intègrent 4 constats d'audits (`AUDIT-SWISSMEDIC-005`, `AUDIT-FDA-005`, `AUDIT-CABINET-GXP-002`, `AUDIT-QA-SPECIALISES-002`). v11 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). v12 résorbe les trois gaps mineurs actés comme dette explicitement acceptée au cadrage §6ter. **v13 : le choix de framework est résolu** (TypeScript + Vue 3, `08-conventions-codage.md`, décision explicite du 23/08/2026) — police d'écran confirmée (Inter, chargée localement), quelques formulations laissées ouvertes au framework sont maintenant tranchées. FDS complète, prête pour la mise à jour de la SDS.*
+*Document vivant, version 14 — historique v02-v12 : voir corps du document. v13 : choix de framework résolu (TypeScript + Vue 3). **v14 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel. §3.6 réécrit : résolution de conflit par détection SHA côté API GitHub, plus un mécanisme de fusion Git local (obsolète — supposait un accès Git natif incompatible avec cette architecture). FDS complète, prête pour la mise à jour de la SDS.*
