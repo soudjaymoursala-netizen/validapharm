@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | FDS-VALIDAPHARM-2026-001 |
-| **Version** | 11 (charte graphique et identité visuelle — REV-URS-VALIDAPHARM-2026-010) |
+| **Version** | 12 (dette explicitement acceptée résorbée : performance/capacité, lecteur d'écran, désinstallation/rollback — checklist §6ter) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v21, `02-analyse-de-risque-outil.md` v21, `03-specifications-fonctionnelles.md` v08, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v22, `02-analyse-de-risque-outil.md` v22, `03-specifications-fonctionnelles.md` v10, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -37,6 +37,7 @@ Toute règle déjà énoncée en FS n'est pas reformulée ici sauf si elle néce
 | Configuration des connecteurs QMS *(ajouté v05)* | Liste des connecteurs par client (Veeva/SAP/TrackWise), activation, tenant | URS-F-090 à 090ter |
 | Structure Système *(ajouté v05)* | Arbre + graphe des `asset_node` d'un client, création/édition de nœud, vue graphique | URS-F-100 à 100quater |
 | Dossier vivant d'un actif *(ajouté v05)* | Liste des livrables liés à un nœud, filtrable, export PDF | URS-F-101 à 101septies |
+| Blocage d'incompatibilité de données *(ajouté v12)* | Écran plein affiché avant tout chargement si `schema_version` des données est postérieur à la version de l'application (message U-12) | URS-NF-055bis |
 
 ## 2bis. Charte graphique et identité visuelle *(ajouté v11 — répond à URS-NF-054 à 054quinquies, REV-URS-VALIDAPHARM-2026-010)*
 
@@ -372,6 +373,7 @@ Un gabarit est défini par une structure JSON déclarative, versionnée indépen
 | U-09 *(v05)* | Code de nœud dupliqué à la création | "Ce code est déjà utilisé par « {nom du nœud existant} ». Choisissez un code unique." |
 | U-10 *(v05)* | Sélection d'un nœud en statut "Requalification en retard"/"Suspendu" | "⚠ Ce système/équipement est en statut « {statut} ». Vérifiez que cela est cohérent avec l'objet de ce projet avant de continuer. [J'ai compris, continuer]" — **(v06 — revue FDS-v05, E2)** clic actif requis pour masquer (non bloquant pour la sélection, mais jamais ignorable par un simple clic ailleurs). **(v08 — audit FDA simulé)** L'acquittement crée une entrée `project.audit_log` (qui, quand, quel nœud, quel statut au moment de l'acquittement) — valeur probante d'un avertissement de risque qualité réellement pris en compte |
 | U-11 *(v05)* | Envoi push : confirmation | "Envoyer « {titre}, {référence} v{version} » vers {système} — {tenant} du client {client} ? [Annuler] [Confirmer]" |
+| U-12 *(v12 — résorption de dette, URS-NF-055bis)* | Démarrage de l'application sur des données dont `schema_version` est postérieur à ce que cette version sait lire | Écran de blocage au démarrage (pas une simple modale sur l'écran principal, l'application ne doit pas exposer un état incohérent) : "Cette version de ValidaPharm ne peut pas ouvrir ces données — elles ont été créées ou migrées avec une version plus récente. Mettez à jour l'application avant de continuer, ou revenez à la version {x} pour les rouvrir." Aucune écriture n'a lieu avant confirmation de compatibilité. |
 
 Chaque message est stocké comme ressource multilingue (fr/en/de dès Phase 1), jamais codé en dur dans une seule langue — cohérent avec URS-NF-040/040bis.
 
@@ -379,6 +381,8 @@ Chaque message est stocké comme ressource multilingue (fr/en/de dès Phase 1), 
 
 - Navigation clavier : ordre de tabulation logique par écran (haut→bas, gauche→droite), raccourcis `Ctrl+S` (sauvegarde manuelle immédiate) et `Échap` (fermeture de modale) sur toutes les vues — répond à URS-NF-050.
 - RTL/CJK (URS-NF-040quater) : la mise en page utilise des propriétés logiques (`start`/`end` plutôt que `left`/`right`) dès la Phase 1, même si seuls FR/EN/DE sont livrés — pour ne pas nécessiter de refonte de layout à l'ajout de l'arabe/chinois.
+- **Lecteur d'écran (ajouté v12 — résorption de dette, URS-NF-050bis)** : tout composant interactif (bouton, champ, lien) porte un nom accessible explicite (jamais une icône seule sans libellé programmatique) ; les badges de statut de qualification (FDS §2bis) exposent leur libellé texte complet, pas seulement leur icône visuelle ; toute confirmation/erreur affichée via les messages §7 est annoncée (zone dynamique de type live region) au moment de son apparition, pas seulement visible ; navigation par landmarks (zone principale, navigation, panneau latéral) sur les écrans à plusieurs zones (ex. Éditeur de section + Panneau de suggestions). Vérification par parcours manuel au lecteur d'écran standard (NVDA/VoiceOver) sur les parcours critiques URS-NF-050/050bis (navigation, saisie, export) — pas d'outil automatisé imposé, le choix d'outil dépend du framework retenu (SDS §10).
+- **Performance perçue (ajouté v12 — résorption de dette, URS-NF-052bis)** : chargement du tableau de bord et ouverture d'une section restent sous 2 secondes perçues dans le volume de référence (500 projets/5000 sections, URS-NF-052) ; au-delà, chargement progressif ou pagination de la liste plutôt qu'un blocage — cohérent avec le principe "retour visuel immédiat" déjà posé en §2bis (aucune action sans feedback, même quand elle prend du temps).
 
 ## 8bis. Principe directeur pour la SDS (ajouté v04 — audit cabinet de conseil GxP, MAJ-01)
 
@@ -406,6 +410,7 @@ Cette FDS sert d'entrée à la **SDS** (architecture technique : choix de framew
 | URS-F-090 à 092quater (connecteurs QMS) | §2, §3.8, §7 (U-11) |
 | URS-F-100 à 102quinquies (Structure Système) | §2, §3.9, §7 (U-09/U-10) |
 | URS-NF-054 à 054quinquies (charte graphique) | §2bis |
+| URS-NF-052bis, 050bis, 055bis (perf/lecteur d'écran/rollback) | §8, §7 (U-12) |
 
 ---
-*Document vivant, version 11 — v02-v04 : voir historique dans le corps du document. v05 intégrait les cinq besoins Structure Système/connecteurs QMS. v06 intégrait 3 clarifications de la revue multi-experts (REV-FDS-002). v07-v10 intègrent 4 constats d'audits (`AUDIT-SWISSMEDIC-005`, `AUDIT-FDA-005`, `AUDIT-CABINET-GXP-002`, `AUDIT-QA-SPECIALISES-002`). **v11 intègre la charte graphique et identité visuelle** (`REV-URS-VALIDAPHARM-2026-010`) : direction "Indigo premium + accents vifs", palette sémantique de statut avec double codage couleur+icône (mitige AR-R-59), typographie écran/export distincte, principe de séparation stricte écran premium / export sobre — challengée par une revue multi-experts dédiée et un audit accessibilité ciblé (calibré : pas les 4 audits Swissmedic/FDA/cabinet GxP/QA complets, la palette n'étant pas un sujet réglementaire opposable) qui a corrigé 3 des 8 couleurs de statut, non conformes WCAG AA sur calcul réel (voir `docs/archive/revues-audits/charte-graphique/`). Aucun nouvel ID URS au-delà de la famille URS-NF-054. FDS complète, prête pour la mise à jour de la SDS.*
+*Document vivant, version 12 — v02-v04 : voir historique dans le corps du document. v05 intégrait les cinq besoins Structure Système/connecteurs QMS. v06 intégrait 3 clarifications de la revue multi-experts (REV-FDS-002). v07-v10 intègrent 4 constats d'audits (`AUDIT-SWISSMEDIC-005`, `AUDIT-FDA-005`, `AUDIT-CABINET-GXP-002`, `AUDIT-QA-SPECIALISES-002`). v11 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). **v12 résorbe les trois gaps mineurs actés comme dette explicitement acceptée au cadrage §6ter** : performance perçue chiffrée et lecteur d'écran détaillés en §8 ; écran et message U-12 de blocage au démarrage sur incompatibilité de schéma de données (protection réelle contre la corruption au rollback, mitige AR-R-60). FDS complète, prête pour la mise à jour de la SDS.*

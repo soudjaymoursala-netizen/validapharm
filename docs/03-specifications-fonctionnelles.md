@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 09 (charte graphique et identité visuelle — REV-URS-VALIDAPHARM-2026-010) |
+| **Version** | 10 (dette explicitement acceptée résorbée : performance/capacité, lecteur d'écran, désinstallation/rollback — checklist §6ter) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
-| **Documents de référence** | `01-URS-outil.md` v21, `02-analyse-de-risque-outil.md` v21, `00-cadrage-projet.md` v2, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v22, `02-analyse-de-risque-outil.md` v22, `00-cadrage-projet.md` v2, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -15,7 +15,7 @@
 
 ## 1. Objet et méthode
 
-Ce document décrit **comment** l'outil ValidaPharm répond à chaque exigence de l'URS v21, à un niveau de conception fonctionnelle (pas d'implémentation détaillée — celle-ci relève de la Spécification de conception, §12). Il sert de pont entre l'URS et :
+Ce document décrit **comment** l'outil ValidaPharm répond à chaque exigence de l'URS v22, à un niveau de conception fonctionnelle (pas d'implémentation détaillée — celle-ci relève de la Spécification de conception, §12). Il sert de pont entre l'URS et :
 - le développement (chaque section ci-dessous doit pouvoir être implémentée sans retour à l'URS pour une clarification de fond) ;
 - les tests OQ de l'outil (chaque comportement décrit ici doit être testable et correspondre à un ou plusieurs cas OQ) ;
 - la matrice de traçabilité (§13).
@@ -317,7 +317,8 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - **(ajouté v03 — revue FS, E5, mitige AR-R-34)** Cas distinct : conflit de fusion Git lorsque le même livrable est modifié hors-ligne sur deux postes différents avant synchronisation. Contrairement au cas ci-dessus (verrouillage applicatif en mémoire, même poste), ce cas n'est détectable qu'au moment de la synchronisation Git. L'outil DOIT présenter une interface de résolution assistée (comparaison champ par champ des deux versions divergentes) — jamais une fusion automatique silencieuse, jamais l'exposition de marqueurs de conflit Git bruts à l'utilisateur — URS-NF-045bis.
 - Le schéma du modèle de données pivot (§3) est versionné indépendamment des gabarits, avec un script de migration testé à chaque évolution de schéma — URS-NF-046.
 - **(ajouté v04 — audit Swissmedic simulé, MAJ-03, mitige AR-R-39)** Lorsqu'un défaut du moteur de calcul déterministe est corrigé, une requête exploitant `section.template_engine_version` DOIT permettre de lister toutes les sections `valide_en_interne` produites avec la ou les versions défectueuses, pour engager une revue d'impact rétrospective (CAPA) — le simple enregistrement de la version (URS-F-004bis) ne suffit pas sans ce mécanisme d'exploitation — URS-NF-046bis.
-- Un test de charge (nombre de projets/sections simultanés représentatif d'un usage réel) est spécifié en OQ/PQ de l'outil pour vérifier que l'interface reste réactive à l'échelle — URS-NF-052, référence de volume à définir en conception détaillée (DS).
+- Un test de charge (nombre de projets/sections simultanés représentatif d'un usage réel) est spécifié en OQ/PQ de l'outil pour vérifier que l'interface reste réactive à l'échelle — URS-NF-052. Volume de référence Phase 1 : 500 projets / 5000 sections par client.
+- **(ajouté v10 — résorption de dette explicitement acceptée, cadrage §6ter)** Chargement du tableau de bord et ouverture d'une section restent sous 2 secondes perçues dans les limites du volume de référence ; au-delà, dégradation gracieuse (pagination, chargement progressif) plutôt que blocage — URS-NF-052bis.
 
 ### 5.2 Portabilité et continuité (répond à URS-NF-010/011/012/047/049)
 
@@ -326,6 +327,8 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - Toutes les fonctions de rédaction/gabarits fonctionnent sans réseau — URS-NF-012.
 - Surveillance de l'usage du stockage local (quota navigateur), avertissement avant saturation — URS-NF-047.
 - Point de restauration explicite en libre-service (au-delà de la sauvegarde automatique et de l'historique Git) permettant un retour à un état antérieur connu — URS-NF-049.
+- **(ajouté v10 — résorption de dette explicitement acceptée, cadrage §6ter)** Désinstallation par simple suppression du dossier applicatif local, sans reliquat système — URS-NF-055.
+- **(ajouté v10)** Rollback vers une version antérieure de l'application : si le `schema_version` des données (§3) est postérieur à ce que cette version sait lire, l'application refuse explicitement de démarrer (message dédié) plutôt que de risquer un accès incorrect silencieux — URS-NF-055bis, mitige AR-R-60.
 
 ### 5.3 Sécurité et confidentialité (répond à URS-NF-020 à 025, 044, 048, 051)
 
@@ -350,6 +353,7 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - **Garde-fou qualité non négociable** : chaque langue est validée par un expert du domaine natif de cette langue avant mise en service — jamais de traduction automatique non validée — URS-NF-040ter, mitige AR-R-28.
 - L'architecture d'interface supporte nativement RTL (arabe) et CJK (chinois) dès la conception, même si ces langues sont livrées en phase ultérieure — URS-NF-040quater.
 - Accessibilité clavier de base pour les fonctions critiques (navigation, saisie, export) — URS-NF-050.
+- **(ajouté v10 — résorption de dette explicitement acceptée, cadrage §6ter)** Composants interactifs et contenu porteur de sens (statuts, alertes, messages système) exposent un nom/rôle accessible compatible lecteur d'écran standard, sur les mêmes parcours critiques que URS-NF-050 — URS-NF-050bis.
 
 ### 5.5bis Charte graphique et identité visuelle (répond à URS-NF-054 à 054quinquies) *(nouveau v09)*
 
@@ -473,6 +477,7 @@ Le Plan de validation (VMP) et les protocoles IQ/OQ/PQ de l'outil devront être 
 | URS-F-090 à 092quater | §4.9 |
 | URS-F-100 à 102quinquies | §4.10 |
 | URS-NF-054 à 054quinquies | §5.5bis |
+| URS-NF-052bis, 050bis, 055/055bis | §5.1, §5.5, §5.2 |
 
 ---
-*Document vivant, version 09 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS (REV-URS-005 à 009). v07 intégrait 3 clarifications de la revue multi-experts (REV-FS-002). v08 intégrait 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-004`, `AUDIT-FDA-004`). **v09 intègre la charte graphique et identité visuelle** (`REV-URS-VALIDAPHARM-2026-010`, URS-NF-054 à 054quinquies, identifiée via la checklist de complétude par domaine du cadrage §6ter). Couvre l'intégralité de l'URS v21. Prête pour la mise à jour de la FDS et de la SDS.*
+*Document vivant, version 10 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS (REV-URS-005 à 009). v07 intégrait 3 clarifications de la revue multi-experts (REV-FS-002). v08 intégrait 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-004`, `AUDIT-FDA-004`). v09 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). **v10 résorbe les trois gaps mineurs actés comme dette explicitement acceptée au cadrage §6ter** : performance/capacité chiffrée (§5.1), lecteur d'écran (§5.5), désinstallation/rollback applicatif avec protection contre la corruption de données (§5.2, mitige AR-R-60). Couvre l'intégralité de l'URS v22. Prête pour la mise à jour de la FDS et de la SDS.*

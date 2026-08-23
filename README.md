@@ -11,11 +11,11 @@ Documentation de conception complète et cohérente :
 | Document | Version |
 |---|---|
 | Cadrage | voir `docs/00-cadrage-projet.md` |
-| URS | v21 |
-| Analyse de risque (AR) | v21 — 59 entrées |
-| FS | v09 |
-| FDS | v11 |
-| SDS | v08 |
+| URS | v22 |
+| Analyse de risque (AR) | v22 — 60 entrées |
+| FS | v10 |
+| FDS | v12 |
+| SDS | v09 |
 
 Conception (code) : démarre le 23/08/2026. Choix définitif de framework/langage différé à l'implémentation (SDS §10), sans impact sur les contrats d'interface déjà fixés (`ProviderAdapter`, `QMSConnectorAdapter`, moteur de calcul, machine à états, résolution de conflit).
 

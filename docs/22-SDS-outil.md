@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | SDS-VALIDAPHARM-2026-001 |
-| **Version** | 08 (contrat d'interface du connecteur Drive, trouvé manquant lors de la revue de cohérence finale) |
+| **Version** | 09 (dette explicitement acceptée résorbée : performance/capacité, lecteur d'écran, désinstallation/rollback — checklist §6ter) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v21, `02-analyse-de-risque-outil.md` v21, `03-specifications-fonctionnelles.md` v09, `16-FDS-outil.md` v11, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v22, `02-analyse-de-risque-outil.md` v22, `03-specifications-fonctionnelles.md` v10, `16-FDS-outil.md` v12, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -70,6 +70,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 - Chaque écriture significative = un commit Git (répond à URS-NF-030) ; le message de commit encode `{type} {ref} {action}` (ex. `section a1b2 changement_statut: en_verification→en_approbation`).
 - Migration de schéma (URS-NF-046) : un script de migration versionné accompagne toute évolution de `schema_version`, exécuté à l'ouverture si `schema_version` du dépôt < version attendue par l'application, avant tout accès aux données.
 - **Atomicité de la migration (ajoutée v02 — revue SDS, E2, mitige AR-R-45, URS-NF-046quater)** : avant toute exécution, une sauvegarde intégrale de l'état courant (`/data`) est créée et vérifiée (checksum) ; si la migration échoue à n'importe quelle étape, un mécanisme de retour arrière restaure automatiquement cette sauvegarde, et l'application refuse de démarrer sur un état partiellement migré (message explicite, pas de démarrage silencieux sur données incohérentes). Le retour arrière lui-même est couvert par un test dédié (échec simulé en cours de migration).
+- **Garde de compatibilité descendante (ajoutée v09 — résorption de dette, URS-NF-055bis, mitige AR-R-60)** : symétriquement, si `schema_version` du dépôt est **postérieur** à la version maximale que l'application sait lire (cas d'un rollback vers une version antérieure de l'application après une migration), l'application refuse explicitement de démarrer — écran dédié (FDS §7, message U-12), **avant tout accès en lecture ou écriture** à `/data`. Cette vérification est la première opération effectuée à l'ouverture, avant même la vérification `<` ci-dessus.
 
 ## 4. Moteur de calcul et logique métier (module isolé)
 
@@ -141,14 +142,23 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 - Machine à états minimale de `qualification_status` : "Déclassé — retiré" est un état terminal (aucune transition sortante autorisée par la fonction de transition), toutes les autres transitions passent par la même fonction pure, journalisées.
 - Instantané projet↔nœud (URS-F-100decies) : `node_name_snapshot`/`node_code_snapshot` copiés au moment de la liaison, jamais recalculés depuis `asset_node` courant — garantit qu'un renommage ultérieur ne modifie aucun livrable déjà lié.
 
+## 8ter. Performance et capacité — implémentation technique (ajouté v09, répond à URS-NF-052/052bis)
+
+- Volume de référence Phase 1 : 500 projets / 5000 sections par client (URS-NF-052). Les listes (tableau de bord, inventaire d'un référentiel Structure Système, dossier vivant) sont **paginées ou virtualisées** au-delà d'un seuil d'affichage (ex. 100 lignes) — jamais un rendu intégral de la liste complète en mémoire du navigateur.
+- Recherche/filtrage (ex. recherche de nœud par code, filtrage du dossier vivant) s'appuie sur un **index en mémoire construit au chargement**, pas un balayage linéaire répété à chaque frappe — condition nécessaire pour tenir la cible de réactivité perçue (URS-NF-052bis) au volume de référence.
+- Le choix technique exact (bibliothèque de virtualisation, structure d'index) reste ouvert au framework retenu (§10) — cette section fixe la contrainte de conception (pas de rendu/balayage intégral au-delà du seuil), pas l'implémentation exacte.
+- Un test de performance (temps de chargement du tableau de bord et d'ouverture d'une section, mesuré au volume de référence) fait partie de la suite de tests avant mise en service (OQ/PQ de l'outil, URS-NF-052) — pas du portail de qualité en continu (mesure dépendante de la machine d'exécution, moins fiable en CI qu'un test fonctionnel).
+
 ## 9. Stratégie de test (implémentation du principe FDS §8bis)
 
 | Couche | Type de test | Portée |
 |---|---|---|
-| Logique métier (moteur de calcul, machine à états, grille, détection de liens, résolution de conflit, anti-cycle Structure Système, dérivation de statut) | Unitaire, exhaustif, automatisé | Chaque fonction pure, tous les cas limites identifiés en FDS §5/§6/§3.9 |
+| Logique métier (moteur de calcul, machine à états, grille, détection de liens, résolution de conflit, anti-cycle Structure Système, dérivation de statut, garde de compatibilité descendante) | Unitaire, exhaustif, automatisé | Chaque fonction pure, tous les cas limites identifiés en FDS §5/§6/§3.9, dont le refus de démarrage sur schéma trop récent (mitige AR-R-60) |
 | Connecteur Git/Drive/IA/QMS tiers | Test d'intégration, mocké en CI, réel en OQ | Contrats d'interface (§5, §5bis, §6, §6bis) |
 | Couche Présentation | Test fonctionnel/exploratoire (candidats identifiés en FS §4.5, doctrine CSA) | Écrans à faible risque résiduel |
 | Charte graphique (`presenterStatut`, contraste) | Unitaire, exhaustif, automatisé | Fonction pure de mapping statut→couleur/icône/libellé, ratios de contraste WCAG (§7bis, mitige AR-R-59) |
+| Accessibilité lecteur d'écran (URS-NF-050bis) | Exploratoire (parcours manuel NVDA/VoiceOver) | Parcours critiques uniquement (navigation, saisie, export) — pas d'automatisation imposée, outil dépendant du framework retenu (§10) |
+| Performance/capacité (URS-NF-052bis) | Mesure au volume de référence, hors portail de qualité continu | Temps de chargement tableau de bord et ouverture de section (§8ter) |
 
 ## 10. Hors périmètre de cette SDS
 
@@ -172,6 +182,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 | §3.9 FDS (Structure Système) | §3, §8bis |
 | §2bis FDS (charte graphique) | §7bis |
 | FS §2/§5.2 (miroir Drive, URS-NF-010/011/047) | §5bis |
+| FS §5.1/§5.2/§5.5 (perf/rollback/lecteur d'écran) | §8ter, §3, §9 |
 
 ---
-*Document vivant, version 08 — v02 revue multi-experts (REV-SDS-001). v03 audits Swissmedic/FDA (driver de fusion Git, horodatage). v04 cinq besoins Structure Système/connecteurs QMS. v05 revue multi-experts (REV-SDS-002) : index d'unicité de code, dérivation de statut à la lecture. v06 intègre 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-006`, `AUDIT-FDA-006`). v07 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). **v08 ajoute le contrat d'interface du connecteur Drive (§5bis)** — asymétrie trouvée lors de la revue de cohérence finale du 23/08/2026 : le connecteur Drive était spécifié fonctionnellement (FS) mais sans contrat technique détaillé, contrairement aux connecteurs Git/IA/QMS qui en avaient chacun un. Aucun nouvel ID URS (répond à URS-NF-010/011/047 déjà existants). Cascade de conception URS→FS→FDS→SDS complète et cohérente avant le démarrage de la conception le 23/08/2026.*
+*Document vivant, version 09 — v02 revue multi-experts (REV-SDS-001). v03 audits Swissmedic/FDA (driver de fusion Git, horodatage). v04 cinq besoins Structure Système/connecteurs QMS. v05 revue multi-experts (REV-SDS-002) : index d'unicité de code, dérivation de statut à la lecture. v06 intègre 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-006`, `AUDIT-FDA-006`). v07 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). v08 ajoute le contrat d'interface du connecteur Drive (§5bis). **v09 résorbe les trois gaps mineurs actés comme dette explicitement acceptée au cadrage §6ter** : garde de compatibilité descendante contre la corruption au rollback (§3, mitige AR-R-60) ; virtualisation/pagination et index en mémoire pour tenir la cible de performance (§8ter) ; test exploratoire lecteur d'écran ajouté à la stratégie de test (§9). Cascade de conception URS→FS→FDS→SDS complète et cohérente avant le démarrage de la conception le 23/08/2026 — plus aucun gap connu.*
