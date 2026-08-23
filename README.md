@@ -36,6 +36,7 @@ docs/                        documents vivants (état courant, seule source de v
   06-protocole-OQ-outil.md
   07-protocole-PQ-outil.md
   archive/                    comptes-rendus clos (revues multi-experts, audits) — voir docs/archive/README.md
+prototype-initial/          prototype fonctionnel antérieur à la cascade de specs actuelle — voir prototype-initial/STATUT.md, ne pas reprendre tel quel
 data/           persistance fichier-par-enregistrement (SDS §3)
 config/         configuration locale non versionnée (secrets — voir .gitignore)
 scripts/hooks/  hooks Git (scan de secrets pre-commit — SDS §7)
