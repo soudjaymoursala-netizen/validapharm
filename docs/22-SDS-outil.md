@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | SDS-VALIDAPHARM-2026-001 |
-| **Version** | 07 (charte graphique et identité visuelle — REV-URS-VALIDAPHARM-2026-010) |
+| **Version** | 08 (contrat d'interface du connecteur Drive, trouvé manquant lors de la revue de cohérence finale) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
 | **Documents de référence** | `01-URS-outil.md` v21, `02-analyse-de-risque-outil.md` v21, `03-specifications-fonctionnelles.md` v09, `16-FDS-outil.md` v11, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
@@ -88,6 +88,14 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
   4. Transmet ce diff structuré à la Couche Présentation (écran de résolution, FDS §3.6) — le connecteur ne résout jamais lui-même un conflit sans décision utilisateur explicite.
   5. À la confirmation, écrit une nouvelle révision avec, pour motif, le détail structuré des décisions prises champ par champ/ligne par ligne (répond à l'amendement FDA sur la FDS, §3.6).
 
+## 5bis. Connecteur Drive — contrat d'interface (ajouté v08, répond à URS-NF-010/011/047, trouvé manquant lors de la revue de cohérence du 23/08/2026)
+
+- Interface (`DriveConnector`) : `miroir(snapshotGit): Confirmation` — un seul point d'entrée, pas de logique métier propre. Le connecteur Drive **n'est jamais une source de vérité, jamais lu par l'application** (répond à URS-NF-010, §3 FS "toute divergence se résout en faveur de Git").
+- Déclenchement : après chaque session de travail (heuristique : inactivité ou fermeture de l'application) et sur action manuelle "Sauvegarder maintenant" (URS-NF-011) — jamais en continu, pour rester cohérent avec le principe local-first (pas de dépendance réseau permanente).
+- `miroir()` copie l'état courant du dépôt Git local vers le dossier Drive dédié du client — une copie de fichiers, pas une fusion : en cas d'écriture concurrente côté Drive (ex. modification manuelle accidentelle par l'utilisateur dans l'explorateur Drive), le prochain miroir **écrase** le contenu Drive sans tentative de fusion, cohérent avec "jamais lu comme source" (à afficher explicitement à l'utilisateur avant le premier miroir, pour éviter une surprise).
+- Contrat d'erreur typé (même principe que §6/§6bis) : `TimeoutError`, `QuotaDepasseError` (quota de stockage Drive), `AuthentificationError` — un échec de miroir **n'est jamais silencieux** : indicateur visible tant que le dernier miroir réussi date de plus d'une session (répond à URS-NF-047, alerte de saturation).
+- Secrets/jeton d'accès Drive isolés par `client_id`, même mécanisme que les autres connecteurs (§7).
+
 ## 6. Routeur IA — contrats d'interface
 
 - Interface commune à tous les fournisseurs (`ProviderAdapter`) : `envoyerMessage(contexte, question): Reponse` — chaque fournisseur (Claude, OpenAI, Copilot, DeepSeek, modèle local) implémente cet adaptateur, aucune logique de routage ne dépend du fournisseur spécifique au-delà du choix de l'adaptateur actif (`client_config.ai_provider`).
@@ -138,7 +146,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 | Couche | Type de test | Portée |
 |---|---|---|
 | Logique métier (moteur de calcul, machine à états, grille, détection de liens, résolution de conflit, anti-cycle Structure Système, dérivation de statut) | Unitaire, exhaustif, automatisé | Chaque fonction pure, tous les cas limites identifiés en FDS §5/§6/§3.9 |
-| Connecteur Git/Drive/IA/QMS tiers | Test d'intégration, mocké en CI, réel en OQ | Contrats d'interface (§5, §6, §6bis) |
+| Connecteur Git/Drive/IA/QMS tiers | Test d'intégration, mocké en CI, réel en OQ | Contrats d'interface (§5, §5bis, §6, §6bis) |
 | Couche Présentation | Test fonctionnel/exploratoire (candidats identifiés en FS §4.5, doctrine CSA) | Écrans à faible risque résiduel |
 | Charte graphique (`presenterStatut`, contraste) | Unitaire, exhaustif, automatisé | Fonction pure de mapping statut→couleur/icône/libellé, ratios de contraste WCAG (§7bis, mitige AR-R-59) |
 
@@ -163,6 +171,7 @@ Un fichier structuré par enregistrement (répond à URS-NF-046, cadrage §4 Pha
 | §3.8 FDS (connecteurs QMS) | §3, §6bis |
 | §3.9 FDS (Structure Système) | §3, §8bis |
 | §2bis FDS (charte graphique) | §7bis |
+| FS §2/§5.2 (miroir Drive, URS-NF-010/011/047) | §5bis |
 
 ---
-*Document vivant, version 07 — v02 revue multi-experts (REV-SDS-001). v03 audits Swissmedic/FDA (driver de fusion Git, horodatage). v04 cinq besoins Structure Système/connecteurs QMS. v05 revue multi-experts (REV-SDS-002) : index d'unicité de code, dérivation de statut à la lecture. v06 intègre 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-006`, `AUDIT-FDA-006`). **v07 intègre la charte graphique et identité visuelle** (`REV-URS-VALIDAPHARM-2026-010`) : jetons de conception versionnés, fonction pure `presenterStatut` (mitige AR-R-59), test de contraste automatisé intégré au portail de qualité, séparation technique stricte écran/export. Cascade de conception URS→FS→FDS→SDS complète et cohérente, y compris la charte graphique, avant le démarrage de la conception le 23/08/2026.*
+*Document vivant, version 08 — v02 revue multi-experts (REV-SDS-001). v03 audits Swissmedic/FDA (driver de fusion Git, horodatage). v04 cinq besoins Structure Système/connecteurs QMS. v05 revue multi-experts (REV-SDS-002) : index d'unicité de code, dérivation de statut à la lecture. v06 intègre 2 constats d'audits Swissmedic et FDA simulés (`AUDIT-SWISSMEDIC-006`, `AUDIT-FDA-006`). v07 intègre la charte graphique et identité visuelle (`REV-URS-VALIDAPHARM-2026-010`). **v08 ajoute le contrat d'interface du connecteur Drive (§5bis)** — asymétrie trouvée lors de la revue de cohérence finale du 23/08/2026 : le connecteur Drive était spécifié fonctionnellement (FS) mais sans contrat technique détaillé, contrairement aux connecteurs Git/IA/QMS qui en avaient chacun un. Aucun nouvel ID URS (répond à URS-NF-010/011/047 déjà existants). Cascade de conception URS→FS→FDS→SDS complète et cohérente avant le démarrage de la conception le 23/08/2026.*
