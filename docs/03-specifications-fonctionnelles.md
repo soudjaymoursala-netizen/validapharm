@@ -15,7 +15,7 @@
 
 ## 1. Objet et méthode
 
-Ce document décrit **comment** l'outil ValidaPharm répond à chaque exigence de l'URS v20, à un niveau de conception fonctionnelle (pas d'implémentation détaillée — celle-ci relève de la Spécification de conception, §12). Il sert de pont entre l'URS et :
+Ce document décrit **comment** l'outil ValidaPharm répond à chaque exigence de l'URS v21, à un niveau de conception fonctionnelle (pas d'implémentation détaillée — celle-ci relève de la Spécification de conception, §12). Il sert de pont entre l'URS et :
 - le développement (chaque section ci-dessous doit pouvoir être implémentée sans retour à l'URS pour une clarification de fond) ;
 - les tests OQ de l'outil (chaque comportement décrit ici doit être testable et correspondre à un ou plusieurs cas OQ) ;
 - la matrice de traçabilité (§13).

@@ -7,7 +7,7 @@
 | **Statut** | En rédaction |
 | **Système concerné** | ValidaPharm (assistant de rédaction qualité CQV/CSV/QA — pharma & dispositifs médicaux) |
 | **Catégorie GAMP 5 envisagée** | Catégorie 5 — Logiciel sur mesure (bespoke), avec composants de catégorie 3/4 (bibliothèques, éventuel LLM local) — confirmée par revue multi-experts |
-| **Document de référence** | `00-cadrage-projet.md`, `REV-URS-VALIDAPHARM-2026-001` à `010` v01 (closes), `AUDIT-SWISSMEDIC-VALIDAPHARM-2026-001/002/003` v01, `AUDIT-FDA-VALIDAPHARM-2026-001/002/003` v01, `AUDIT-CABINET-GXP-VALIDAPHARM-2026-001` v01, `AUDIT-QA-SPECIALISES-VALIDAPHARM-2026-001` v01 (closes), `AR-VALIDAPHARM-2026-001` v20, `03-specifications-fonctionnelles.md` v08, `16-FDS-outil.md` v10, `22-SDS-outil.md` v06 |
+| **Document de référence** | `00-cadrage-projet.md`, `REV-URS-VALIDAPHARM-2026-001` à `010` v01 (closes), `AUDIT-SWISSMEDIC-VALIDAPHARM-2026-001/002/003` v01, `AUDIT-FDA-VALIDAPHARM-2026-001/002/003` v01, `AUDIT-CABINET-GXP-VALIDAPHARM-2026-001` v01, `AUDIT-QA-SPECIALISES-VALIDAPHARM-2026-001` v01 (closes), `AR-VALIDAPHARM-2026-001` v21, `03-specifications-fonctionnelles.md` v09, `16-FDS-outil.md` v11, `22-SDS-outil.md` v07 |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
