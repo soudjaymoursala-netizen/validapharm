@@ -24,13 +24,26 @@ Documents de qualification de l'outil lui-même (VMP, IQ/OQ/PQ — `docs/04` à 
 ## Structure du dépôt
 
 ```
-docs/           spécifications (URS, AR, FS, FDS, SDS, revues, audits)
+docs/                        documents vivants (état courant, seule source de vérité)
+  00-cadrage-projet.md
+  01-URS-outil.md
+  02-analyse-de-risque-outil.md
+  03-specifications-fonctionnelles.md   (FS)
+  16-FDS-outil.md                        (FDS)
+  22-SDS-outil.md                        (SDS)
+  04-plan-de-validation.md               (VMP — à revoir après conception)
+  05-protocole-IQ-outil.md
+  06-protocole-OQ-outil.md
+  07-protocole-PQ-outil.md
+  archive/                    comptes-rendus clos (revues multi-experts, audits) — voir docs/archive/README.md
 data/           persistance fichier-par-enregistrement (SDS §3)
 config/         configuration locale non versionnée (secrets — voir .gitignore)
 scripts/hooks/  hooks Git (scan de secrets pre-commit — SDS §7)
 scripts/setup.sh  installe les hooks locaux + le driver de fusion JSON
 .gitattributes  driver de fusion applicatif sur data/sections/*.json (SDS §5)
 ```
+
+Seuls les documents à la racine de `docs/` font foi pour l'état courant. Tout ce qui est dans `docs/archive/` est un enregistrement clos, jamais mis à jour, conservé pour la piste d'audit (jamais supprimé).
 
 ## Installation locale
 
