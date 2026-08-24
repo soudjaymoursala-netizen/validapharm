@@ -15,7 +15,7 @@ Documentation de conception complète et cohérente :
 | Analyse de risque (AR) | v25 — 66 entrées                     |
 | FS                     | v11                                  |
 | FDS                    | v14                                  |
-| SDS                    | v11                                  |
+| SDS                    | v12                                  |
 | Conventions de codage  | voir `docs/08-conventions-codage.md` |
 | Architecture détaillée (technique) | voir `docs/09-architecture-detaillee.md` |
 | Architecture expliquée (non-technique) | voir `docs/10-architecture-expliquee.md` |
