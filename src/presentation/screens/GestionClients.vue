@@ -46,8 +46,12 @@ async function creerClient(): Promise<void> {
 
     <ul v-else class="liste-clients">
       <li v-for="client in store.clients" :key="client.id">
+        {{ client.name }}
         <RouterLink :to="{ name: 'configuration-drive', params: { clientId: client.id } }">
-          {{ client.name }}
+          Drive
+        </RouterLink>
+        <RouterLink :to="{ name: 'configuration-ia', params: { clientId: client.id } }">
+          IA
         </RouterLink>
       </li>
     </ul>
@@ -111,6 +115,13 @@ button {
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon);
   padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.liste-clients li > :first-child {
+  margin-right: auto;
 }
 
 .etat-vide {

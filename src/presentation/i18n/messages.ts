@@ -8,9 +8,10 @@ import type { Langue } from '../../logique-metier/domaine/types'
  * @requirement FDS §7, URS-NF-040/040bis
  *
  * Seuls les codes déjà mobilisés par un écran construit à ce stade sont
- * transcrits (U-01/U-02/U-03/U-12) — les autres (U-04 à U-11, export/chat
- * IA/Structure Système/QMS) seront ajoutés avec chaque module correspondant
- * plutôt que traduits par avance sans écran pour les vérifier à l'usage.
+ * transcrits (U-01/U-02/U-03/U-05/U-06/U-12) — les autres (U-04, U-07 à
+ * U-11, Structure Système/QMS) seront ajoutés avec chaque module
+ * correspondant plutôt que traduits par avance sans écran pour les
+ * vérifier à l'usage.
  *
  * **Traductions EN/DE non relues par un locuteur natif du domaine
  * réglementaire** — traduction directe depuis le texte français source de
@@ -33,6 +34,16 @@ export const messagesSysteme = {
     fr: 'Cette section OQ ne peut être clôturée sans lien vers un Plan de maintenance préventive de ce projet.',
     en: 'This OQ section cannot be closed without a link to a Preventive Maintenance Plan of this project.',
     de: 'Dieser OQ-Abschnitt kann nicht geschlossen werden ohne Verknüpfung zu einem vorbeugenden Wartungsplan dieses Projekts.',
+  },
+  'U-05': {
+    fr: 'Ce fournisseur ne peut être activé pour un usage réel : la qualification de fiabilité (échantillon versionné) est requise au préalable.',
+    en: 'This provider cannot be activated for real use: reliability qualification (versioned test sample) is required beforehand.',
+    de: 'Dieser Anbieter kann nicht für den realen Einsatz aktiviert werden: Eine Zuverlässigkeitsqualifizierung (versioniertes Testmuster) ist vorher erforderlich.',
+  },
+  'U-06': {
+    fr: 'Le contenu de « {titre} » sera transmis à {fournisseur}. Continuer ?',
+    en: 'The content of "{titre}" will be sent to {fournisseur}. Continue?',
+    de: 'Der Inhalt von „{titre}“ wird an {fournisseur} übermittelt. Fortfahren?',
   },
   'U-12': {
     fr: "Cette version de ValidaPharm ne peut pas ouvrir ces données — elles ont été créées ou migrées avec une version plus récente. Mettez à jour l'application avant de continuer, ou revenez à la version {x} pour les rouvrir.",

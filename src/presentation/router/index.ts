@@ -46,5 +46,11 @@ export const router = createRouter({
       component: () => import('../screens/ConfigurationDrive.vue'),
       props: true,
     },
+    {
+      path: '/clients/:clientId/ia',
+      name: 'configuration-ia',
+      component: () => import('../screens/ConfigurationIA.vue'),
+      props: true,
+    },
   ],
 })
