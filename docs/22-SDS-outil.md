@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | SDS-VALIDAPHARM-2026-001 |
-| **Version** | 11 (architecture web pure sans installation — API GitHub, contrainte du poste de travail professionnel) |
+| **Version** | 12 (architecture détaillée — stratégie Git Trees API/quota, hébergement GitHub Pages confirmé, `09-architecture-detaillee.md`) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `03-specifications-fonctionnelles.md` v11, `16-FDS-outil.md` v14, `08-conventions-codage.md` v01, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v24, `03-specifications-fonctionnelles.md` v11, `16-FDS-outil.md` v14, `08-conventions-codage.md` v02, `09-architecture-detaillee.md` v01, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -97,7 +97,8 @@ La FDS (v04) décrit le comportement fonctionnel détaillé : écrans, flux, mac
   3. Pour les champs `tableau_dynamique` : diff au niveau ligne, par identifiant stable de ligne — union automatique des lignes non conflictuelles, isolement des lignes réellement en conflit.
   4. Transmet ce diff structuré à la Couche Présentation (écran de résolution, FDS §3.6) — le connecteur ne résout jamais lui-même un conflit sans décision utilisateur explicite.
   5. À la confirmation, réécrit avec le `sha` distant à jour et un motif structuré détaillant les décisions prises champ par champ/ligne par ligne (répond à l'amendement FDA sur la FDS, §3.6).
-- Contrat d'erreur typé (même principe que §6/§6bis/§5bis) : `ConflitShaError` (409, déclenche §5 point 1 ci-dessus), `TimeoutError`, `AuthentificationError`, `PorteeInsuffisanteError` (jeton sans les permissions requises) — jamais une exception générique.
+- Contrat d'erreur typé (même principe que §6/§6bis/§5bis) : `ConflitShaError` (409, déclenche §5 point 1 ci-dessus), `TimeoutError`, `AuthentificationError`, `PorteeInsuffisanteError` (jeton sans les permissions requises), `QuotaApiDepasseError` (voir ci-dessous) — jamais une exception générique.
+- **Stratégie d'appels (ajoutée v12, mitige AR-R-63, détaillée dans `09-architecture-detaillee.md` §5)** : l'API GitHub limite à 5000 requêtes/heure par jeton — un appel par enregistrement épuiserait ce quota bien avant le volume de référence (500 projets/5000 sections, URS-NF-052). Le connecteur **ne lit/n'écrit jamais fichier par fichier en boucle** : chargement/resynchronisation via l'API Git Trees (`recursive=1`, un seul appel pour l'arborescence complète avec SHA de chaque fichier, comparaison au cache local pour ne récupérer que les blobs changés) ; écritures groupées via l'API Git Data (blob+arbre+commit en un nombre d'appels constant, indépendant du nombre de fichiers modifiés). Le quota restant (en-tête `X-RateLimit-Remaining`) est exposé à la Couche Présentation, avec avertissement avant épuisement — jamais un échec silencieux en cours de session.
 
 ## 5bis. Connecteur Drive — contrat d'interface (ajouté v08, répond à URS-NF-010/011/047, trouvé manquant lors de la revue de cohérence du 23/08/2026)
 
@@ -176,7 +177,13 @@ La FDS (v04) décrit le comportement fonctionnel détaillé : écrans, flux, mac
 
 **(précisé v11 — architecture web pure)** Livré comme **PWA (Progressive Web App)**, jamais comme application de bureau empaquetée (Electron/Tauri écartés) — une application de bureau nécessite une installation, bloquée par l'IT sur le poste de travail professionnel de l'utilisateur ; seul le navigateur est garanti disponible sans droits d'administration. Corollaire : aucun accès disque natif, aucun binaire `git` — tous les connecteurs (§5, §5bis, §6bis) sont exclusivement des appels API HTTPS.
 
-## 10bis. Hors périmètre de cette SDS
+**Bibliothèques complémentaires retenues (ajouté v12, détail dans `09-architecture-detaillee.md` §3)** : Pinia (état), Vue Router (navigation), Dexie.js (cache IndexedDB typé), vite-plugin-pwa (service worker/manifeste).
+
+## 10bis. Hébergement — résolu (ajouté v12, vérifié le 24/08/2026)
+
+**GitHub Pages** (`*.github.io`), confirmé par un test réseau réel effectué par l'utilisateur depuis le poste de travail professionnel concerné (mitige AR-R-62, clos) — cohérent avec le reste de l'écosystème déjà autorisé (`api.github.com`). Déploiement automatisé depuis la branche principale, uniquement après succès du portail de qualité (§4) — jamais un déploiement direct non vérifié. Aucun secret dans le bundle buildé (le jeton est saisi à l'exécution par l'utilisateur, jamais injecté au build), répond à URS-NF-044/044bis.
+
+## 10ter. Hors périmètre de cette SDS
 
 - HDS (pas de matériel dédié) et Data Migration Plan (dépôt vierge, décision du 22/08/2026).
 
@@ -199,6 +206,7 @@ La FDS (v04) décrit le comportement fonctionnel détaillé : écrans, flux, mac
 | FS §2/§5.2 (miroir Drive, URS-NF-010/011/047) | §5bis |
 | FS §5.1/§5.2/§5.5 (perf/rollback/lecteur d'écran) | §8ter, §3, §9 |
 | FS §2/§9/§10 (architecture web pure, API GitHub) | §2, §5, §5bis, §7, §10 |
+| `09-architecture-detaillee.md` (bibliothèques, quota API, hébergement) | §5, §10, §10bis |
 
 ---
-*Document vivant, version 11 — historique v02-v09 : voir corps du document. v10 : choix de framework résolu (TypeScript + Vue 3). **v11 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel (IT bloque les logiciels non autorisés). Réécriture substantielle : §2 (diagramme, IndexedDB au lieu de disque local), §5 (Connecteur GitHub — abandon du driver de fusion Git local et de la signature GPG/SSH, remplacés par détection de conflit SHA côté API et attribution par jeton), §7 (jeton en stockage navigateur, risque documenté AR-R-61 ; **horodatage de la piste d'audit largement résolu par effet de bord** — commits horodatés serveur par l'API GitHub, AR-R-47 passe de IPR=24 à IPR=9), §10 (PWA confirmée, Electron/Tauri explicitement écartés). Résout au passage une incohérence latente entre le diagramme d'architecture (§2, "API GitHub" depuis l'origine) et l'implémentation décrite en §5 (mécanismes Git natifs), jamais détectée jusqu'ici. Nouveaux risques AR-R-61/R-62. Cascade de conception URS→FS→FDS→SDS complète et cohérente avec l'architecture réellement déployable sur le poste de l'utilisateur.*
+*Document vivant, version 12 — historique v02-v10 : voir corps du document. v11 (23/08/2026) : architecture web pure sans installation. **v12 (23-24/08/2026) : architecture détaillée** — stratégie Git Trees API pour éviter l'épuisement du quota GitHub (5000 req/h), trouvée en rédigeant `09-architecture-detaillee.md` avant tout code écrit (nouveau risque AR-R-63, mitigé dès la conception) ; hébergement GitHub Pages confirmé après vérification réseau réelle par l'utilisateur depuis son poste de travail (AR-R-62 clos) ; bibliothèques complémentaires actées (Pinia, Vue Router, Dexie.js, vite-plugin-pwa). Cascade de conception URS→FS→FDS→SDS complète, architecture entièrement vérifiée (réseau) et détaillée (bibliothèques, quotas, hébergement) — prête pour l'écriture du code.*
