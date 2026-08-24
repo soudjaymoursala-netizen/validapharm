@@ -38,3 +38,11 @@ export class ValidaPharmDatabase extends Dexie {
     })
   }
 }
+
+/**
+ * Instance unique utilisée par l'application réelle (stores Pinia). Les
+ * tests instancient leur propre `ValidaPharmDatabase` (nom de base isolé)
+ * plutôt que d'importer ce singleton, pour ne jamais partager d'état entre
+ * tests.
+ */
+export const db = new ValidaPharmDatabase()

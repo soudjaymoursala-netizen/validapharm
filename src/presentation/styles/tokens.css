@@ -1,0 +1,56 @@
+/**
+ * Jetons de conception — écran de travail (FDS §2bis, "Indigo premium +
+ * accents vifs"). Thème clair uniquement pour l'instant (le mode sombre est
+ * Should, explicitement non prioritaire Phase 1, FDS §2bis).
+ *
+ * Séparation stricte écran/export (URS-NF-054bis, SDS §7bis) : ce fichier
+ * n'est JAMAIS importé par le moteur de génération d'export (backlog) —
+ * uniquement par la Couche Présentation.
+ *
+ * Police Inter documentée en FDS §2bis mais pas encore chargée en asset
+ * local du bundle (aucun fichier de police fourni à ce stade) — utiliser
+ * system-ui en attendant plutôt que de dépendre d'un CDN externe, interdit
+ * par le principe local-first déjà acté. À compléter quand la police sera
+ * effectivement acquise/vendorisée.
+ */
+:root {
+  /* Fond */
+  --vp-fond-page: #ffffff;
+  --vp-fond-carte: #f7f7fb;
+
+  /* Texte */
+  --vp-texte-principal: #0f1222;
+  --vp-texte-secondaire: #5b5f73;
+
+  /* Marque (indigo) */
+  --vp-marque: #4f46e5;
+  --vp-marque-survol: #4338ca;
+  --vp-marque-fond-leger: #eef2ff;
+
+  /* Structure */
+  --vp-bordure: #e4e4ee;
+  --vp-rayon: 8px;
+  --vp-transition: 175ms ease;
+
+  /* Typographie */
+  --vp-police: 'Inter', system-ui, sans-serif;
+  --vp-taille-texte-min: 14px;
+
+  /* Palette sémantique qualification_status (FDS §2bis) — couleur ET icône
+     ET libellé systématiques, jamais la couleur seule (URS-NF-054ter). */
+  --vp-statut-non-qualifie: #6b7280;
+  --vp-statut-en-cours-qualification-initiale: #2563eb;
+  --vp-statut-qualifie: #15803d;
+  --vp-statut-qualifie-ecart-ouvert: #b45309;
+  --vp-statut-requalification-requise: #c2410c;
+  --vp-statut-requalification-en-retard: #dc2626;
+  --vp-statut-suspendu: #7c3aed;
+  --vp-statut-declasse: #374151;
+}
+
+body {
+  background-color: var(--vp-fond-page);
+  color: var(--vp-texte-principal);
+  font-family: var(--vp-police);
+  font-size: var(--vp-taille-texte-min);
+}
