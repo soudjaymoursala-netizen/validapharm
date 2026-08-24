@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 12 (ajout de l'entité `client`, gap trouvé en conception du connecteur Drive) |
+| **Version** | 13 (ajout de la valeur `import` à `section.audit_log.action`, gap trouvé en construisant l'export/import JSON §4.3) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -100,7 +100,7 @@ Ce document ne couvre pas le contenu réglementaire détaillé de chaque type de
     "values": { "...champs du gabarit...": "..." },
     "tables": { "...tableaux dynamiques du gabarit...": [] },
     "generation_source": { "source_document_id": "uuid | null", "generated_fields": ["…"] },
-    "audit_log": [{ "timestamp": "…", "actor": "…", "action": "création | modification | export | changement_statut | export_force" }],
+    "audit_log": [{ "timestamp": "…", "actor": "…", "action": "création | modification | export | changement_statut | export_force | import" }],
     "created_at": "ISO-8601",
     "updated_at": "ISO-8601"
   },
@@ -490,4 +490,4 @@ Le Plan de validation (VMP) et les protocoles IQ/OQ/PQ de l'outil devront être 
 | URS-NF-010/030/044/044bis/055 amendés (architecture web pure) | §2, §5.2, §5.3, §5.4, §10 |
 
 ---
-*Document vivant, version 11 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS. v07 intégrait 3 clarifications de la revue multi-experts. v08 intégrait 2 constats d'audits Swissmedic et FDA simulés. v09 intègre la charte graphique et identité visuelle. v10 résorbe les trois gaps mineurs de la checklist §6ter. **v11 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel (IT bloque les logiciels non autorisés). Diagramme d'architecture (§2) et interfaces (§9) réécrits : API GitHub/Drive au lieu de Git local, cache navigateur (IndexedDB). URS-NF-010/030/044/055 amendés, URS-NF-044bis nouveau. Nouvelle contrainte de plateforme C-05 (dépendance à `api.github.com`, AR-R-62, non vérifiée). Couvre l'intégralité de l'URS v23. Prête pour la mise à jour de la FDS et de la SDS. **v12 (24/08/2026, gap trouvé en construisant le connecteur Drive)** : ajout de l'entité `client` (§3) — `client_id` était référencé partout (project, client_config, asset_hierarchy_schema, asset_node) sans jamais être lui-même modélisé comme entité ; nécessaire dès qu'un écran doit créer/lister des clients (config Drive par client, SDS §5bis/§7).*
+*Document vivant, version 11 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS. v07 intégrait 3 clarifications de la revue multi-experts. v08 intégrait 2 constats d'audits Swissmedic et FDA simulés. v09 intègre la charte graphique et identité visuelle. v10 résorbe les trois gaps mineurs de la checklist §6ter. **v11 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel (IT bloque les logiciels non autorisés). Diagramme d'architecture (§2) et interfaces (§9) réécrits : API GitHub/Drive au lieu de Git local, cache navigateur (IndexedDB). URS-NF-010/030/044/055 amendés, URS-NF-044bis nouveau. Nouvelle contrainte de plateforme C-05 (dépendance à `api.github.com`, AR-R-62, non vérifiée). Couvre l'intégralité de l'URS v23. Prête pour la mise à jour de la FDS et de la SDS. **v12 (24/08/2026, gap trouvé en construisant le connecteur Drive)** : ajout de l'entité `client` (§3) — `client_id` était référencé partout (project, client_config, asset_hierarchy_schema, asset_node) sans jamais être lui-même modélisé comme entité ; nécessaire dès qu'un écran doit créer/lister des clients (config Drive par client, SDS §5bis/§7). **v13 (24/08/2026, gap trouvé en construisant l'export §4.3)** : `section.audit_log.action` documentait "création | modification | export | changement_statut | export_force" mais pas "import" — alors que URS-F-021 (export/import JSON, "transfert entre postes") exige une piste d'audit distincte pour un enregistrement recréé par import plutôt que rédigé (ALCOA+ "Attributable"/"Original", cadrage principe n°2) ; utiliser "création" pour un import aurait masqué cette origine.*

@@ -6,10 +6,15 @@
 // logique-metier/gabarits/catalogue/index.ts). Transitions de statut avec
 // garde-fous fidèles (FDS §3.2/§3.3), sauvegarde automatique (URS-F-009).
 import { computed, onMounted, ref, watch } from 'vue'
+import { genererExportCSV } from '../../logique-metier/export/genererExportCSV'
+import { genererExportJSON } from '../../logique-metier/export/genererExportJSON'
+import { genererExportWord } from '../../logique-metier/export/genererExportWord'
+import { verifierBlocageExport } from '../../logique-metier/export/verifierBlocageExport'
 import { obtenirDefinitionGabarit } from '../../logique-metier/gabarits/catalogue'
+import type { ChampTableauDynamique } from '../../logique-metier/gabarits/definitionGabarit'
 import type { Section } from '../../logique-metier/domaine/types'
 import RenduGabarit from '../composants/RenduGabarit.vue'
-import { messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
+import { libelleStatut, messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
 import { useSectionsStore, type ResultatActionSection } from '../stores/useSectionsStore'
 
 const props = defineProps<{ projectId: string; sectionId: string }>()
@@ -66,6 +71,76 @@ async function majTableGabarit(
 ): Promise<void> {
   await sectionsStore.mettreAJourTable(props.sectionId, cleTable, lignes)
   await recharger()
+}
+
+// Export (FS §4.3, URS-F-020/021/022/027/028ter).
+const blocageExport = computed(() =>
+  section.value ? verifierBlocageExport(section.value) : { bloque: false as const },
+)
+const exportForce = ref(false)
+
+const tableauxExportables = computed<ChampTableauDynamique[]>(() => {
+  if (!definitionGabarit.value) return []
+  return definitionGabarit.value.sections.flatMap((s) =>
+    s.fields.filter((f): f is ChampTableauDynamique => f.type === 'tableau_dynamique'),
+  )
+})
+
+function telechargerFichier(nomFichier: string, contenu: string, typeMime: string): void {
+  const blob = new Blob([contenu], { type: typeMime })
+  const url = URL.createObjectURL(blob)
+  const lien = document.createElement('a')
+  lien.href = url
+  lien.download = nomFichier
+  lien.click()
+  URL.revokeObjectURL(url)
+}
+
+async function journaliserEtReinitialiser(): Promise<void> {
+  await sectionsStore.journaliserExport(props.sectionId, blocageExport.value.bloque)
+  exportForce.value = false
+  await recharger()
+}
+
+async function exporterJSON(): Promise<void> {
+  if (!section.value) return
+  telechargerFichier(
+    `${section.value.meta.ref || section.value.id}.json`,
+    genererExportJSON(section.value),
+    'application/json',
+  )
+  await journaliserEtReinitialiser()
+}
+
+async function exporterWord(): Promise<void> {
+  if (!section.value) return
+  const html = genererExportWord(section.value, definitionGabarit.value, section.value.language)
+  telechargerFichier(
+    `${section.value.meta.ref || section.value.id}.doc`,
+    html,
+    'application/msword',
+  )
+  await journaliserEtReinitialiser()
+}
+
+async function exporterCSV(champ: ChampTableauDynamique): Promise<void> {
+  if (!section.value) return
+  const csv = genererExportCSV(
+    champ.colonnes,
+    section.value.tables[champ.field_key] ?? [],
+    section.value.language,
+  )
+  telechargerFichier(
+    `${section.value.meta.ref || section.value.id}-${champ.field_key}.csv`,
+    csv,
+    'text/csv',
+  )
+  await journaliserEtReinitialiser()
+}
+
+async function imprimer(): Promise<void> {
+  await journaliserEtReinitialiser()
+  window.print()
 }
 
 const messagesBlocage = computed<string[]>(() => {
@@ -151,12 +226,16 @@ async function ajouterAvisRelecteur(): Promise<void> {
 
 <template>
   <main v-if="section" class="editeur-section">
-    <RouterLink :to="{ name: 'fiche-projet', params: { projectId: props.projectId } }">
+    <RouterLink
+      :to="{ name: 'fiche-projet', params: { projectId: props.projectId } }"
+      class="no-print"
+    >
       &larr; Fiche projet
     </RouterLink>
     <h1>{{ section.meta.titre }}</h1>
     <p class="meta">
-      {{ section.template_type }} — statut : <strong>{{ section.status }}</strong>
+      {{ section.template_type }} — statut :
+      <strong>{{ libelleStatut(section.status, section.language) }}</strong>
     </p>
 
     <RenduGabarit
@@ -175,7 +254,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
       <textarea v-model="contenu" :disabled="section.status === 'valide_en_interne'" rows="10" />
     </label>
 
-    <section v-if="section.status !== 'valide_en_interne'" class="workflow">
+    <section v-if="section.status !== 'valide_en_interne'" class="workflow no-print">
       <h2>Workflow (URS-F-011, URS-F-014ter/quater)</h2>
       <p>
         Approbateur final :
@@ -208,7 +287,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
       </div>
     </section>
 
-    <div v-if="messagesBlocage.length > 0" class="blocage" role="alert">
+    <div v-if="messagesBlocage.length > 0" class="blocage no-print" role="alert">
       <p v-for="message in messagesBlocage" :key="message">
         {{ message }}
       </p>
@@ -226,11 +305,11 @@ async function ajouterAvisRelecteur(): Promise<void> {
       </button>
     </div>
 
-    <p v-if="raisonTransitionBloquee" class="blocage" role="alert">
+    <p v-if="raisonTransitionBloquee" class="blocage no-print" role="alert">
       Transition refusée : {{ raisonTransitionBloquee }}
     </p>
 
-    <div class="actions-cycle">
+    <div class="actions-cycle no-print">
       <template v-if="section.status === 'brouillon_aide'">
         <button type="button" @click="engagerVerification">
           Engager le cycle « validé en interne »
@@ -266,6 +345,31 @@ async function ajouterAvisRelecteur(): Promise<void> {
         Nouvelle révision : backlog.
       </p>
     </div>
+
+    <section class="export no-print">
+      <h2>Export (FS §4.3)</h2>
+
+      <div v-if="blocageExport.bloque && !exportForce" class="blocage" role="alert">
+        <p>{{ blocageExport.motif }}</p>
+        <button type="button" @click="exportForce = true">
+          Forcer l'export malgré l'avertissement
+        </button>
+      </div>
+
+      <div v-else class="actions-export">
+        <button type="button" @click="exporterJSON">Exporter en JSON</button>
+        <button type="button" @click="exporterWord">Exporter en Word (.doc)</button>
+        <button type="button" @click="imprimer">Imprimer / Exporter en PDF</button>
+        <button
+          v-for="champ in tableauxExportables"
+          :key="champ.field_key"
+          type="button"
+          @click="exporterCSV(champ)"
+        >
+          Exporter « {{ champ.labels[section.language] ?? champ.labels.fr }} » en CSV
+        </button>
+      </div>
+    </section>
   </main>
   <p v-else>Chargement…</p>
 </template>
@@ -359,5 +463,19 @@ button {
 
 .verrouille {
   color: var(--vp-texte-secondaire);
+}
+
+.actions-export {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Impression / export PDF (FS §4.3) : uniquement le contenu du livrable,
+   jamais le chrome applicatif (navigation, actions de workflow, export). */
+@media print {
+  .no-print {
+    display: none !important;
+  }
 }
 </style>

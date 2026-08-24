@@ -322,4 +322,17 @@ button {
   margin: 0.25rem 0 0;
   font-size: 0.9em;
 }
+
+/* Export PDF (FS §4.3 : "sans coupure de tableau en milieu de ligne") —
+   une ligne de tableau dynamique ne doit jamais être scindée entre deux
+   pages imprimées. */
+@media print {
+  tr {
+    break-inside: avoid;
+  }
+
+  button {
+    display: none;
+  }
+}
 </style>

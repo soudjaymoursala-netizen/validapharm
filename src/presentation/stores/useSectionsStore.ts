@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { aLienVersTypeSection } from '../../logique-metier/detection-liens/aLienVersTypeSection'
 import type { Langue, Section, TemplateType } from '../../logique-metier/domaine/types'
+import type { DonneesImportSection } from '../../logique-metier/export/analyserImportJSON'
 import {
   evaluerGardesFinalisation,
   motifDeForcageValide,
@@ -85,6 +86,69 @@ export const useSectionsStore = defineStore('sections', () => {
 
     await chargerSectionsDuProjet(input.project_id)
     return section
+  }
+
+  /**
+   * Recrée une section importée depuis un export JSON (FS §4.3, URS-F-021,
+   * "transfert entre postes") comme une section **nouvelle** dans le
+   * projet cible — jamais un écrasement par id, qui risquerait une
+   * collision entre installations (voir `analyserImportJSON.ts`).
+   * Préserve l'historique importé (`audit_log`/`revisions`) et lui ajoute
+   * une entrée `import` — jamais "création", qui masquerait l'origine
+   * (ALCOA+ "Attributable"/"Original", FS §3 v13).
+   */
+  async function importerSection(
+    projectId: string,
+    donnees: DonneesImportSection,
+    actor: string,
+  ): Promise<Section> {
+    const maintenant = new Date().toISOString()
+    const section: Section = {
+      ...donnees,
+      id: crypto.randomUUID(),
+      project_id: projectId,
+      updated_at: maintenant,
+      audit_log: [...donnees.audit_log, { timestamp: maintenant, actor, action: 'import' }],
+    }
+    await db.sections.put(section)
+
+    const projet = await db.projects.get(projectId)
+    if (projet) {
+      await db.projects.put({
+        ...projet,
+        sections: [...projet.sections, section.id],
+        updated_at: maintenant,
+        audit_log: [...projet.audit_log, { timestamp: maintenant, actor, action: 'ajout_section' }],
+      })
+    }
+
+    await chargerSectionsDuProjet(projectId)
+    return section
+  }
+
+  /**
+   * Journalise un export réussi (FS §3 : `audit_log.action` inclut
+   * "export"/"export_force") — jamais bloqué par le verrouillage
+   * `valide_en_interne` (l'export d'une section validée est précisément
+   * l'usage principal, FS §4.3), contrairement à `mettreAJourValeurs`.
+   *
+   * @requirement URS-F-027, FS §4.3
+   */
+  async function journaliserExport(sectionId: string, force: boolean): Promise<void> {
+    const section = await chargerSection(sectionId)
+    const maintenant = new Date().toISOString()
+    await db.sections.put({
+      ...section,
+      audit_log: [
+        ...section.audit_log,
+        {
+          timestamp: maintenant,
+          actor: section.owner_id,
+          action: force ? 'export_force' : 'export',
+        },
+      ],
+    })
+    await chargerSectionsDuProjet(section.project_id)
   }
 
   /**
@@ -342,6 +406,8 @@ export const useSectionsStore = defineStore('sections', () => {
     sectionsParProjet,
     chargerSectionsDuProjet,
     creerSection,
+    importerSection,
+    journaliserExport,
     mettreAJourValeurs,
     mettreAJourTable,
     assignerApprobateurFinal,

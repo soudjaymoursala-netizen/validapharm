@@ -58,3 +58,11 @@ export function messageSysteme(
     gabarit,
   )
 }
+
+// Libellés de statut de section (URS-F-011bis) : déplacés dans
+// logique-metier/i18n/libellesStatut.ts — genererExportWord.ts (pur, sans
+// dépendance Vue) en a besoin lui aussi pour respecter le garde-fou "à
+// l'écran ET sur les exports" (FS §4.2/§4.3), et logique-metier ne peut
+// jamais importer depuis presentation (règle ESLint de couches). Réexporté
+// ici pour ne rien casser côté écrans.
+export { libelleStatut, libellesStatut } from '../../logique-metier/i18n/libellesStatut'

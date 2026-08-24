@@ -4,7 +4,9 @@
 // de cet incrément : la vue de traçabilité (graphe des liens) et le
 // chargement de documents restent backlog (tâche #12).
 import { computed, onMounted, ref } from 'vue'
+import { analyserImportJSON } from '../../logique-metier/export/analyserImportJSON'
 import type { Project, TemplateType } from '../../logique-metier/domaine/types'
+import { libelleStatut } from '../i18n/messages'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useSectionsStore } from '../stores/useSectionsStore'
@@ -17,6 +19,7 @@ const projet = ref<Project | undefined>(undefined)
 const formulaireOuvert = ref(false)
 const nouveauTitre = ref('')
 const nouveauTemplateType = ref<TemplateType>('contexte_procede')
+const erreurImport = ref<string | null>(null)
 
 // Catalogue restreint à ce qui est réellement exploitable par la machine à
 // états et les garde-fous de cet incrément (URS §10, catalogue complet en
@@ -54,6 +57,32 @@ async function ajouterSection(): Promise<void> {
   formulaireOuvert.value = false
   nouveauTitre.value = ''
 }
+
+/**
+ * Import JSON (FS §4.3, URS-F-021 : "réutilisable pour sauvegarde
+ * manuelle ou transfert entre postes") — crée toujours une section
+ * nouvelle dans ce projet, jamais un écrasement.
+ */
+async function importerFichier(evenement: Event): Promise<void> {
+  erreurImport.value = null
+  const fichier = (evenement.target as HTMLInputElement).files?.[0]
+  if (!fichier) return
+
+  const texte = await fichier.text()
+  const resultat = analyserImportJSON(texte)
+  ;(evenement.target as HTMLInputElement).value = ''
+
+  if (!resultat.ok) {
+    erreurImport.value = resultat.motif
+    return
+  }
+
+  await sectionsStore.importerSection(
+    props.projectId,
+    resultat.donnees,
+    IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+  )
+}
 </script>
 
 <template>
@@ -69,8 +98,15 @@ async function ajouterSection(): Promise<void> {
     <section class="sections">
       <header>
         <h2>Sections</h2>
-        <button type="button" @click="formulaireOuvert = true">Ajouter une section</button>
+        <div class="actions-entete">
+          <label class="bouton-fichier">
+            Importer une section (JSON)
+            <input type="file" accept="application/json" @change="importerFichier" />
+          </label>
+          <button type="button" @click="formulaireOuvert = true">Ajouter une section</button>
+        </div>
       </header>
+      <p v-if="erreurImport" class="erreur-import" role="alert">{{ erreurImport }}</p>
 
       <form v-if="formulaireOuvert" class="formulaire-section" @submit.prevent="ajouterSection">
         <label>
@@ -102,7 +138,9 @@ async function ajouterSection(): Promise<void> {
           >
             {{ section.meta.titre }}
           </RouterLink>
-          <span class="meta">{{ section.template_type }} — {{ section.status }}</span>
+          <span class="meta">
+            {{ section.template_type }} — {{ libelleStatut(section.status, section.language) }}
+          </span>
         </li>
       </ul>
     </section>
@@ -127,6 +165,34 @@ async function ajouterSection(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.actions-entete {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.bouton-fichier {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--vp-marque);
+  color: white;
+  border-radius: var(--vp-rayon);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 1em;
+}
+
+.bouton-fichier input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.erreur-import {
+  color: var(--vp-statut-requalification-en-retard);
 }
 
 button {

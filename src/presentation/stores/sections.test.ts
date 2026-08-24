@@ -284,3 +284,66 @@ describe("useSectionsStore — cycle complet jusqu'à valide_en_interne", () => 
     expect(tentative).toEqual({ ok: false, raisonTransition: 'section_verrouillee' })
   })
 })
+
+describe('useSectionsStore — journaliserExport (FS §4.3, URS-F-027)', () => {
+  test('journalise "export" par défaut', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await sections.journaliserExport(section.id, false)
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.audit_log.at(-1)?.action).toBe('export')
+  })
+
+  test('journalise "export_force" quand forcé', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await sections.journaliserExport(section.id, true)
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.audit_log.at(-1)?.action).toBe('export_force')
+  })
+
+  test("n'est jamais bloqué par le verrouillage valide_en_interne (l'export d'une section validée est l'usage principal)", async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await db.sections.put({ ...section, status: 'valide_en_interne' })
+    await sections.journaliserExport(section.id, false)
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.audit_log.at(-1)?.action).toBe('export')
+  })
+})
+
+describe('useSectionsStore — importerSection (FS §4.3, URS-F-021)', () => {
+  test('crée une section nouvelle (id distinct), rattachée au projet cible, avec entrée "import"', async () => {
+    const { sections, projet } = await creerProjetEtSection('contexte_procede')
+    const donnees = {
+      template_type: 'dq' as const,
+      template_engine_version: '0.1.0',
+      owner_id: 'u-distant',
+      shared_with: [],
+      language: 'fr' as const,
+      status: 'brouillon_aide' as const,
+      meta: { ref: 'REF-X', titre: 'Section importée', version: '0.1' },
+      workflow: { authors: ['u-distant'], reviewers: [], approver_final: null },
+      signatures: { redacteur: {}, verificateur: {}, approbateur: {} },
+      revisions: [],
+      values: {},
+      tables: {},
+      generation_source: { source_document_id: null, generated_fields: [] },
+      audit_log: [
+        { timestamp: '2026-01-01T00:00:00.000Z', actor: 'u-distant', action: 'création' },
+      ],
+      created_at: '2026-01-01T00:00:00.000Z',
+    }
+
+    const importee = await sections.importerSection(projet.id, donnees, 'u-local')
+    expect(importee.project_id).toBe(projet.id)
+    expect(importee.id).not.toBe('')
+
+    const sectionEnBase = await db.sections.get(importee.id)
+    expect(sectionEnBase?.meta.titre).toBe('Section importée')
+    // Historique importé préservé + entrée "import" ajoutée (jamais "création", qui masquerait l'origine).
+    expect(sectionEnBase?.audit_log).toHaveLength(2)
+    expect(sectionEnBase?.audit_log[0]?.action).toBe('création')
+    expect(sectionEnBase?.audit_log[1]).toMatchObject({ actor: 'u-local', action: 'import' })
+
+    const projetEnBase = await db.projects.get(projet.id)
+    expect(projetEnBase?.sections).toContain(importee.id)
+  })
+})
