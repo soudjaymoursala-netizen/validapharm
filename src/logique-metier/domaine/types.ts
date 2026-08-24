@@ -9,6 +9,7 @@
  * mentale, cohérent avec l'objectif d'auditabilité (08-conventions-codage.md
  * §4).
  */
+import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
 
 export type Langue = 'fr' | 'en' | 'de'
 
@@ -153,4 +154,22 @@ export interface ClientConfig {
   } | null
   export_template_id: string | null
   consent_telemetry: { granted: boolean; date: string | null; revocable_at_any_time: true }
+}
+
+/**
+ * Journal de session de chat (FS §3 v16, URS-F-037) — jamais le contenu
+ * échangé, seulement horodatage début/fin, fournisseur, moteur exact et
+ * indication qu'un document a été joint. `section.audit_log` ne pouvait
+ * pas porter cette information : une session peut se dérouler sans
+ * qu'aucun document ne soit jamais joint.
+ */
+export interface AiChatSessionLog {
+  id: string
+  client_id: string
+  started_at: string
+  ended_at: string | null
+  mode: ModeUsageIA
+  ai_provider: string
+  moteur_version: string | null
+  document_joint: boolean
 }

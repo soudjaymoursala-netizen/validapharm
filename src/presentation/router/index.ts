@@ -52,5 +52,11 @@ export const router = createRouter({
       component: () => import('../screens/ConfigurationIA.vue'),
       props: true,
     },
+    {
+      path: '/clients/:clientId/chat',
+      name: 'panneau-chat',
+      component: () => import('../screens/PanneauChat.vue'),
+      props: true,
+    },
   ],
 })

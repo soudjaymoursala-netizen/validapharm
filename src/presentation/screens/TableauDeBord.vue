@@ -5,6 +5,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Langue } from '../../logique-metier/domaine/types'
+import { useClientsStore } from '../stores/useClientsStore'
 import { useProjectsStore, type NouveauProjetInput } from '../stores/useProjectsStore'
 import {
   useSynchronisationStore,
@@ -13,6 +14,7 @@ import {
 } from '../stores/useSynchronisationStore'
 
 const projetsStore = useProjectsStore()
+const clientsStore = useClientsStore()
 const syncStore = useSynchronisationStore()
 const router = useRouter()
 const formulaireOuvert = ref(false)
@@ -53,6 +55,7 @@ const brouillon = reactive<NouveauProjetInput>({
 
 onMounted(() => {
   void projetsStore.chargerProjets()
+  void clientsStore.chargerClients()
 })
 
 async function creerProjet(): Promise<void> {
@@ -116,6 +119,15 @@ async function recupererDepuisGitHub(): Promise<void> {
       <label>
         Nom du projet
         <input v-model="brouillon.name" type="text" required autofocus />
+      </label>
+      <label>
+        Client
+        <select v-model="brouillon.client_id">
+          <option :value="null">— aucun —</option>
+          <option v-for="client in clientsStore.clients" :key="client.id" :value="client.id">
+            {{ client.name }}
+          </option>
+        </select>
       </label>
       <label>
         Contexte

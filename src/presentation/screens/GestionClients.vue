@@ -53,6 +53,9 @@ async function creerClient(): Promise<void> {
         <RouterLink :to="{ name: 'configuration-ia', params: { clientId: client.id } }">
           IA
         </RouterLink>
+        <RouterLink :to="{ name: 'panneau-chat', params: { clientId: client.id } }">
+          Chat
+        </RouterLink>
       </li>
     </ul>
   </main>
