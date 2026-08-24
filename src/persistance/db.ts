@@ -13,6 +13,20 @@ export interface EnregistrementVersionSchema {
 }
 
 /**
+ * Configuration de connexion au dépôt GitHub dédié (URS-NF-044) —
+ * enregistrement unique, pas par client : SDS §3 décrit un seul dépôt de
+ * données pour l'ensemble de l'installation locale (`/data/projects/...`),
+ * pas un dépôt par client.
+ */
+export interface EnregistrementConnexionGitHub {
+  id: 'unique'
+  owner: string
+  repo: string
+  branche: string
+  jeton: string
+}
+
+/**
  * Cache local IndexedDB (SDS §3) — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée en
@@ -26,6 +40,7 @@ export class ValidaPharmDatabase extends Dexie {
   projectDocuments!: EntityTable<ProjectDocument, 'id'>
   clientConfigs!: EntityTable<ClientConfig, 'client_id'>
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
+  connexionGitHub!: EntityTable<EnregistrementConnexionGitHub, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -35,6 +50,7 @@ export class ValidaPharmDatabase extends Dexie {
       projectDocuments: 'id, project_id',
       clientConfigs: 'client_id',
       schemaVersion: 'id',
+      connexionGitHub: 'id',
     })
   }
 }

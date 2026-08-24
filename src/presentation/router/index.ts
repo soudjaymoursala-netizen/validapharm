@@ -25,5 +25,10 @@ export const router = createRouter({
       component: () => import('../screens/EditeurSection.vue'),
       props: true,
     },
+    {
+      path: '/configuration',
+      name: 'configuration-client',
+      component: () => import('../screens/ConfigurationClient.vue'),
+    },
   ],
 })

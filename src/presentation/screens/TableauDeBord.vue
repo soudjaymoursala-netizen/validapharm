@@ -41,7 +41,10 @@ async function creerProjet(): Promise<void> {
   <main class="tableau-de-bord">
     <header>
       <h1>Tableau de bord</h1>
-      <button type="button" @click="formulaireOuvert = true">Nouveau projet</button>
+      <div class="actions-entete">
+        <RouterLink :to="{ name: 'configuration-client' }">Configuration</RouterLink>
+        <button type="button" @click="formulaireOuvert = true">Nouveau projet</button>
+      </div>
     </header>
 
     <form v-if="formulaireOuvert" class="formulaire-projet" @submit.prevent="creerProjet">
@@ -93,6 +96,12 @@ header {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 1.5rem;
+}
+
+.actions-entete {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 button {
