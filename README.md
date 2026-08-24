@@ -12,10 +12,10 @@ Documentation de conception complète et cohérente :
 | ---------------------- | ------------------------------------ |
 | Cadrage                | voir `docs/00-cadrage-projet.md`     |
 | URS                    | v25                                  |
-| Analyse de risque (AR) | v26 — 67 entrées                     |
+| Analyse de risque (AR) | v27 — 67 entrées                     |
 | FS                     | v11                                  |
 | FDS                    | v14                                  |
-| SDS                    | v13                                  |
+| SDS                    | v14                                  |
 | Conventions de codage  | voir `docs/08-conventions-codage.md` |
 | Architecture détaillée (technique) | voir `docs/09-architecture-detaillee.md` |
 | Architecture expliquée (non-technique) | voir `docs/10-architecture-expliquee.md` |

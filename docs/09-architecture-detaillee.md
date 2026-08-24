@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | ARCH-VALIDAPHARM-2026-001 |
-| **Version** | 02 (relais IA de production — `REV-URS-VALIDAPHARM-2026-010`, 24/08/2026) |
+| **Version** | 03 (relais IA de production, test réseau vérifié — `REV-URS-VALIDAPHARM-2026-010`, 24/08/2026) |
 | **Statut** | En vigueur |
 | **Documents de référence** | `22-SDS-outil.md` v12, `08-conventions-codage.md` v02, `00-cadrage-projet.md` |
 | **Objet** | Consolider et compléter l'architecture technique (SDS §2-§10) en un document de référence unique, et trancher les points laissés implicites — bibliothèques précises, stratégie hors-ligne, limites d'API — avant l'écriture du code |
@@ -87,12 +87,12 @@ Ces choix sont ajoutés comme dépendances validées dans `08-conventions-codage
 
 **Architecture retenue** : `navigateur (PWA) → relais serverless → fournisseur IA`. Le navigateur ne parle **jamais** directement au fournisseur — seul le relais l'appelle, côté serveur.
 
-- **Hébergement** : Cloudflare Workers — cohérent avec la contrainte "zéro service à gérer" déjà retenue pour le reste de l'architecture (GitHub Pages, IndexedDB). Domaine v1 : sous-domaine gratuit `*.workers.dev` (pas de domaine custom nécessaire pour lever le doute réseau, cf. `REV-URS-VALIDAPHARM-2026-010` §"point non retenu").
+- **Hébergement** : Cloudflare Workers — cohérent avec la contrainte "zéro service à gérer" déjà retenue pour le reste de l'architecture (GitHub Pages, IndexedDB). Domaine retenu : sous-domaine `workers.dev` du compte Cloudflare de l'utilisateur (`soudjaymoursala.workers.dev`, déjà utilisé pour des Workers existants) — pas de domaine custom nécessaire (cf. `REV-URS-VALIDAPHARM-2026-010` §"point non retenu").
 - **Clé API** : stockée en secret du Worker (`wrangler secret put`), jamais dans le dépôt applicatif ni dans le bundle buildé — cohérent avec URS-NF-044.
 - **Sans état** : aucune persistance du contenu de la requête ou de la réponse au-delà du traitement de l'appel en cours ; pas de journalisation du corps des requêtes côté plateforme d'hébergement (à vérifier explicitement en configuration avant mise en production) — répond à URS-NF-044ter, mitige AR-R-67.
 - **CORS** : restreint strictement à l'origine exacte de la PWA déployée (domaine GitHub Pages retenu), jamais `*`.
 - **Modèle par mode d'usage** : le relais transmet un paramètre de mode (chat normatif vs mode audit simulé) permettant de router vers un modèle différent selon l'usage — répond à URS-F-038bis (qualification de fiabilité séparée par mode). Configuration exacte des modèles en `22-SDS-outil.md` §11.
-- **Test de joignabilité réseau (AR-R-64)** : à effectuer par l'utilisateur depuis son poste professionnel sur le domaine `*.workers.dev`, même méthode que le test déjà réalisé pour `api.github.com`/`*.github.io` (AR-R-62, clos) — **reste à faire**, seule action de ce point non réalisable depuis une session Claude Code.
+- **Test de joignabilité réseau (AR-R-64)** : **vérifié et clos le 24/08/2026** — le compte Cloudflare de l'utilisateur dispose déjà de Workers actifs, et un chargement explicite de leur URL `*.workers.dev` depuis le poste professionnel a été confirmé réussi, même méthode que le test déjà réalisé pour `api.github.com`/`*.github.io` (AR-R-62, clos).
 
 ---
-*Document vivant, version 02 — créé le 23/08/2026, en réponse à une demande proactive de l'utilisateur ("architecture complète et détaillée") avant le démarrage effectif du code. Complète la SDS sans la contredire ; toute divergence future doit être répercutée dans les deux documents. **v02 (24/08/2026, `REV-URS-VALIDAPHARM-2026-010`)** : §8 corrigé (incohérence CSP/relais), §10 nouveau (conception du relais IA).*
+*Document vivant, version 03 — créé le 23/08/2026, en réponse à une demande proactive de l'utilisateur ("architecture complète et détaillée") avant le démarrage effectif du code. Complète la SDS sans la contredire ; toute divergence future doit être répercutée dans les deux documents. **v02 (24/08/2026, `REV-URS-VALIDAPHARM-2026-010`)** : §8 corrigé (incohérence CSP/relais), §10 nouveau (conception du relais IA). **v03 (24/08/2026)** : test de joignabilité réseau du relais vérifié et clos (AR-R-64) — Workers Cloudflare déjà actifs sur le poste professionnel de l'utilisateur, `*.workers.dev` confirmé accessible.*

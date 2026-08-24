@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | ARCH-EXPL-VALIDAPHARM-2026-001 |
-| **Version** | 02 (relais IA de production — `REV-URS-VALIDAPHARM-2026-010`, 24/08/2026) |
+| **Version** | 03 (relais IA de production, test réseau vérifié — `REV-URS-VALIDAPHARM-2026-010`, 24/08/2026) |
 | **Statut** | En vigueur |
 | **Public visé** | Toute personne du projet **sans compétence logicielle** — pour comprendre où vivent les données, comment l'outil fonctionne, et où se situent les points de vigilance, sans avoir besoin de lire le code ou les documents techniques |
-| **Documents de référence** | `09-architecture-detaillee.md` v02 (version technique, pour les développeurs), `22-SDS-outil.md` v13, `02-analyse-de-risque-outil.md` v26 |
+| **Documents de référence** | `09-architecture-detaillee.md` v03 (version technique, pour les développeurs), `22-SDS-outil.md` v14, `02-analyse-de-risque-outil.md` v27 |
 | **Objet** | Répondre à la demande explicite de l'utilisateur (24/08/2026) : disposer d'une explication complète et commentée de l'architecture, compréhensible par un non-informaticien, décrivant le rôle de chaque niveau, les interactions entre niveaux, et les points de vigilance et de maîtrise |
 
 ---
@@ -93,7 +93,7 @@ Ce bloc est **en cours de conception**, pas encore construit — décrit ici pou
 - **Ce qu'il n'est pas** : il ne modifie jamais un document, ne prend jamais de décision à la place de l'utilisateur, et ne remplace en aucun cas un vrai audit réglementaire — un rappel s'affiche à chaque activation pour éviter toute confusion.
 - **Nouveau composant technique, désormais conçu (24/08/2026)** : pour parler à un service d'intelligence artificielle sans exposer publiquement la clé d'accès payante, un petit relais intermédiaire (Cloudflare Workers, hébergé séparément, très simple, sans données stockées) s'intercale entre le navigateur de l'utilisateur et le fournisseur IA — c'est un nouveau maillon qui n'existait pas dans l'architecture initiale. Conséquence importante : **le navigateur de l'utilisateur ne parle plus jamais directement au fournisseur IA**, seul ce relais l'appelle. Donc c'est la joignabilité du relais qui compte pour le poste professionnel — pas celle du fournisseur, jamais sollicité depuis ce poste.
 - **Fournisseur retenu** : Claude (déjà le choix par défaut) — avec un modèle plus léger pour les questions courantes et un modèle plus capable réservé au mode audit simulé, où la qualité du débat contradictoire est ce qui fait la valeur de la fonctionnalité (le coût réel de l'un ou l'autre reste négligeable pour un usage interne).
-- **Seul point encore réellement bloquant** : tester la joignabilité réseau du relais (une adresse `*.workers.dev`) depuis le poste professionnel — même démarche que pour GitHub (§9).
+- **Test réseau effectué et concluant (24/08/2026)** : le relais (une adresse `*.workers.dev`) est bien joignable depuis le poste professionnel — même démarche que pour GitHub, vérifiée avec succès. Plus aucun point bloquant côté réseau.
 
 ## 6. Sécurité — ce qui protège, et ce qui ne protège pas
 
@@ -120,7 +120,7 @@ Ce bloc est **en cours de conception**, pas encore construit — décrit ici pou
 | Clé d'accès GitHub volée (ex. faille du navigateur) | §6 | Portée de la clé restreinte au seul dépôt dédié ; risque documenté et accepté comme compromis (AR-R-61), pas éliminé |
 | Version de l'application incompatible avec des données plus récentes (retour arrière) | — (voir `02-analyse-de-risque-outil.md`, R-60) | L'application refuse explicitement de démarrer plutôt que de risquer une écriture incorrecte silencieuse |
 | Limite du nombre d'appels à GitHub par heure | `09-architecture-detaillee.md` §5 | Un seul appel pour toute l'arborescence du dépôt, pas un appel par document (AR-R-63) |
-| Nouveau relais réseau pour l'IA non testé depuis le poste professionnel | §5 | Repli automatique sur un fonctionnement sans IA ; test de joignabilité du relais restant à faire par l'utilisateur (AR-R-64, ouvert) |
+| Nouveau relais réseau pour l'IA non testé depuis le poste professionnel | §5 | Test de joignabilité du relais effectué avec succès par l'utilisateur le 24/08/2026 (AR-R-64, clos) ; repli automatique sur un fonctionnement sans IA conservé en filet de sécurité |
 | Coût de l'IA qui dérive avec l'usage | §5 | Plafond de dépense à deux niveaux (applicatif + tableau de bord fournisseur) à configurer avant mise en production (AR-R-65) |
 | Relais journalisant par erreur le contenu des échanges | §5 | Relais conçu sans état, à vérifier en configuration avant mise en production (AR-R-67) |
 | Faux sentiment de protection du code par la seule organisation en modules | §6 | Communication explicite de la limite technique ; protection réelle recommandée par voie contractuelle (AR-R-66) |
@@ -128,8 +128,7 @@ Ce bloc est **en cours de conception**, pas encore construit — décrit ici pou
 
 ## 9. Ce qui reste ouvert (à trancher avant de coder les blocs concernés)
 
-- **Un seul point réellement ouvert** : tester la joignabilité réseau du relais (`*.workers.dev`) depuis le poste professionnel — action à faire par l'utilisateur, impossible à réaliser depuis une session Claude Code (nécessite un accès réseau réel au poste concerné).
-- Fournisseur, hébergement du relais et plafond de dépense sont désormais conçus (§5) — reste à les configurer concrètement au moment d'écrire ce bloc de code (pas une décision en attente).
+- **Plus aucun point bloquant** : le fournisseur, l'hébergement du relais, le plafond de dépense et la joignabilité réseau (§5) sont désormais tous conçus et vérifiés. Reste à les configurer concrètement au moment d'écrire ce bloc de code (pas une décision en attente).
 
 ---
-*Document vivant, version 02 (24/08/2026) — créé le 24/08/2026 en réponse à la demande explicite de l'utilisateur d'une explication d'architecture complète, commentée et accessible à un non-informaticien. **v02 (24/08/2026, `REV-URS-VALIDAPHARM-2026-010`)** : conception du relais IA actée (§5, §8), ne reste ouvert que le test réseau du relais. Ne remplace pas `09-architecture-detaillee.md` (référence technique) : les deux doivent rester cohérents, toute divergence future doit être répercutée dans les deux documents.*
+*Document vivant, version 03 (24/08/2026) — créé le 24/08/2026 en réponse à la demande explicite de l'utilisateur d'une explication d'architecture complète, commentée et accessible à un non-informaticien. v02 (24/08/2026, `REV-URS-VALIDAPHARM-2026-010`) : conception du relais IA actée (§5, §8). **v03 (24/08/2026)** : test réseau du relais vérifié et clos. Ne remplace pas `09-architecture-detaillee.md` (référence technique) : les deux doivent rester cohérents, toute divergence future doit être répercutée dans les deux documents.*

@@ -5,7 +5,7 @@
 | **Référence** | REV-URS-VALIDAPHARM-2026-010 |
 | **Version** | 01 (close) |
 | **Objet** | Trancher le point ouvert laissé par `CONTEXTE-REPRISE-SESSION.md` §5.1 : fournisseur IA de production pour le chat expert (URS-F-030) et le mode audit simulé (URS-F-038), conception du relais serverless nécessaire pour masquer la clé API (nouveau composant), et clôture méthodologique d'AR-R-64/R-65 |
-| **Statut** | Close — intégré en URS v25, AR v26, `09-architecture-detaillee.md` v02, `22-SDS-outil.md` v13 |
+| **Statut** | Close — intégré en URS v25, AR v27, `09-architecture-detaillee.md` v03, `22-SDS-outil.md` v14 |
 
 ---
 
@@ -77,4 +77,4 @@ Le relais est un nouveau composant technique hors du dépôt Git. Question posé
 
 ## Statut
 
-Clôturé le 24/08/2026. URS passe en v25, AR en v26 (67 risques). Test de joignabilité réseau du domaine du relais (`*.workers.dev`) **restant à effectuer par l'utilisateur depuis son poste professionnel** avant de figer définitivement l'hébergement du relais — AR-R-64 reste ouvert jusqu'à ce test, seule action non réalisable depuis cette session (nécessite un accès réseau réel au poste concerné).
+Clôturé le 24/08/2026. URS passe en v25, AR en v27 (67 risques, dont R-64 clos). Test de joignabilité réseau du domaine du relais effectué par l'utilisateur le jour même depuis son poste professionnel : le compte Cloudflare de l'utilisateur avait déjà des Workers actifs sur ce poste (`soudjaymoursala.workers.dev`), chargement de leur URL confirmé réussi — AR-R-64 vérifié et clos, même méthode que R-62. Seule action encore en attente (non bloquante) : configurer le plafond de dépense côté tableau de bord du fournisseur IA au moment du déploiement réel (AR-R-65).
