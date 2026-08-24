@@ -63,5 +63,11 @@ export const router = createRouter({
       name: 'assistant-strategie-qualification',
       component: () => import('../screens/AssistantStrategieQualification.vue'),
     },
+    {
+      path: '/clients/:clientId/structure-systeme',
+      name: 'structure-systeme',
+      component: () => import('../screens/StructureSysteme.vue'),
+      props: true,
+    },
   ],
 })

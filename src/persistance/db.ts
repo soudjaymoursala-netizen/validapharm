@@ -1,6 +1,8 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   AiChatSessionLog,
+  AssetHierarchySchema,
+  AssetNode,
   Client,
   ClientConfig,
   Project,
@@ -92,6 +94,8 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisIA!: EntityTable<EnregistrementConnexionRelaisIA, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
+  assetHierarchySchemas!: EntityTable<AssetHierarchySchema, 'client_id'>
+  assetNodes!: EntityTable<AssetNode, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -114,6 +118,10 @@ export class ValidaPharmDatabase extends Dexie {
     })
     this.version(4).stores({
       aiChatSessionLogs: 'id, client_id, started_at',
+    })
+    this.version(5).stores({
+      assetHierarchySchemas: 'client_id',
+      assetNodes: 'id, client_id, parent_id, code',
     })
   }
 }

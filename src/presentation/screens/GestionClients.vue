@@ -56,6 +56,9 @@ async function creerClient(): Promise<void> {
         <RouterLink :to="{ name: 'panneau-chat', params: { clientId: client.id } }">
           Chat
         </RouterLink>
+        <RouterLink :to="{ name: 'structure-systeme', params: { clientId: client.id } }">
+          Structure Système
+        </RouterLink>
       </li>
     </ul>
   </main>

@@ -157,6 +157,54 @@ export interface ClientConfig {
 }
 
 /**
+ * Schéma de hiérarchie des actifs (FS §3, URS-F-100bis) — par client,
+ * aucune structure imposée par défaut. `levels[]` est ordonné du plus
+ * générique au plus spécifique (ex. Site > Zone > Système > Équipement),
+ * mais cet ordre n'est pas encore appliqué comme garde-fou dans cet
+ * incrément (voir `logique-metier/structure-systeme/` : seule l'absence
+ * de cycle et l'unicité du code sont vérifiées ; l'ordre des niveaux
+ * reste informationnel jusqu'à un incrément futur).
+ */
+export interface AssetHierarchySchema {
+  client_id: string
+  levels: Array<{ key: string; label: Record<Langue, string>; numbering_pattern: string }>
+}
+
+/**
+ * Nœud du référentiel d'actifs (FS §3, URS-F-100 à 102quinquies) — arbre
+ * (`parent_id`, sans cycle, URS-F-100ter/nonies) et graphe libre
+ * (`associated_nodes[]`, cycles acceptés). `qms_connector_id` et
+ * `periodic_qualification`/`qualification_status` sont modélisés dès
+ * cette version (alignés sur FS §3) mais leur exploitation (pull QMS,
+ * alertes de périodicité) reste hors périmètre du premier incrément —
+ * voir le backlog.
+ */
+export interface AssetNode {
+  id: string
+  client_id: string
+  level_key: string
+  name: string
+  code: string
+  parent_id: string | null
+  associated_nodes: string[]
+  source: 'manuel' | 'qms_pull'
+  qms_connector_id: string | null
+  periodic_qualification: { applicable: boolean; deadline: string | null }
+  qualification_status:
+    | 'non_qualifie'
+    | 'en_cours_qualification_initiale'
+    | 'qualifie'
+    | 'qualifie_ecart_ouvert'
+    | 'requalification_requise'
+    | 'requalification_en_retard'
+    | 'suspendu'
+    | 'declasse'
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
  * Journal de session de chat (FS §3 v16, URS-F-037) — jamais le contenu
  * échangé, seulement horodatage début/fin, fournisseur, moteur exact et
  * indication qu'un document a été joint. `section.audit_log` ne pouvait
