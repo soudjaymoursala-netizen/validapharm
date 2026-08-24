@@ -32,7 +32,7 @@ Chaque évolution substantielle des documents passe par :
 | Cadrage | `docs/00-cadrage-projet.md`, notes de cohérence 23 et 24/08/2026 |
 | URS | v25 |
 | Analyse de risque (AR) | v27 — 67 entrées, dont 2 closes (R-62, R-64) |
-| FS | v11 |
+| FS | v12 — ajout de l'entité `client` (gap trouvé en conception du connecteur Drive) |
 | FDS | v14 |
 | SDS | v14 |
 | Conventions de codage | `docs/08-conventions-codage.md` v02 |
@@ -41,7 +41,7 @@ Chaque évolution substantielle des documents passe par :
 
 VMP + protocoles IQ/OQ/PQ (`docs/04` à `07`) : **explicitement reportés après la conception (code)**, marqués "À REVOIR" — ne pas les traiter avant que le code existe.
 
-Code : conception démarrée le 23/08/2026, premier incrément vertical réellement écrit et testé le 24/08/2026 (même session que ce fichier). Toolchain validé (lint/typecheck/format/test/build OK) : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js + Vitest + ESLint/Prettier (`vite-plugin-pwa` pas encore câblé — backlog). Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint. Livré et poussé (PR #1, CI verte) : modèle de données pivot, garde de compatibilité de schéma, machine à états du cycle de vie d'une section, garde-fous de finalisation (U-01/U-02/U-03), calcul IPR, persistance Dexie, 4 écrans (Tableau de bord/Fiche Projet/Éditeur de section/Blocage U-12), connecteur GitHub réel testé contre `fetch` mocké (lecture/écriture/résolution de conflit par SHA, SDS §5). 98 tests. Backlog restant : moteur de gabarits complet, export, chat IA/relais, câblage du connecteur GitHub à l'app (config client, sync, écran de conflit FDS §3.6), Structure Système/QMS, assistant de qualification/bibliothèque de normes.
+Code : conception démarrée le 23/08/2026, premier incrément vertical réellement écrit et testé le 24/08/2026 (même session que ce fichier), poursuivi toute la journée du 24/08/2026. Toolchain validé (lint/typecheck/format/test/build OK) : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js + Vitest + ESLint/Prettier (`vite-plugin-pwa` pas encore câblé — backlog). Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint. Livré et poussé (PR #1, CI verte) : modèle de données pivot, garde de compatibilité de schéma, machine à états du cycle de vie d'une section, garde-fous de finalisation (U-01/U-02/U-03), calcul IPR, persistance Dexie, 6 écrans (Tableau de bord/Fiche Projet/Éditeur de section/Blocage U-12/Configuration client GitHub/Résolution de conflit/Gestion des clients/Configuration Drive — 8 en tout), connecteur GitHub réel (lecture/écriture groupée/résolution de conflit par SHA, SDS §5) et connecteur Drive réel (miroir, SDS §5bis) testés contre `fetch` mocké, orchestrateur de synchronisation GitHub (push/pull) et orchestrateur de miroir Drive par client (déclenchement manuel "Sauvegarder maintenant"), entité `client` (FS §3 v12, gap trouvé en construisant la config Drive par client_id). 148 tests. Migration de schéma Dexie v1→v2 vérifiée en navigateur réel sans perte de données (condition non négociable). Backlog restant : moteur de gabarits complet, export, chat IA/relais, Structure Système/QMS, assistant de qualification/bibliothèque de normes, déclenchement automatique du miroir Drive par heuristique de fin de session (le déclenchement manuel est fait).
 
 ## 5. Points ouverts — état au 24/08/2026 (session de reprise)
 

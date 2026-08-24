@@ -45,10 +45,10 @@ async function creerClient(): Promise<void> {
     </p>
 
     <ul v-else class="liste-clients">
-      <!-- Lien vers la configuration Drive du client ajouté avec l'écran
-           correspondant (backlog #25) — pas de route à cibler pour l'instant. -->
       <li v-for="client in store.clients" :key="client.id">
-        {{ client.name }}
+        <RouterLink :to="{ name: 'configuration-drive', params: { clientId: client.id } }">
+          {{ client.name }}
+        </RouterLink>
       </li>
     </ul>
   </main>

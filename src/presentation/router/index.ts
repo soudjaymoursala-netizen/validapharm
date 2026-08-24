@@ -40,5 +40,11 @@ export const router = createRouter({
       name: 'gestion-clients',
       component: () => import('../screens/GestionClients.vue'),
     },
+    {
+      path: '/clients/:clientId/drive',
+      name: 'configuration-drive',
+      component: () => import('../screens/ConfigurationDrive.vue'),
+      props: true,
+    },
   ],
 })

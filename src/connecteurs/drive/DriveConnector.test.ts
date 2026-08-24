@@ -122,3 +122,28 @@ describe('DriveConnector — miroir', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe('DriveConnector — verifierDossier', () => {
+  test('dossier accessible : renvoie son nom', async () => {
+    fetchMock.mockResolvedValueOnce(
+      reponseMock({ name: 'Client A', mimeType: 'application/vnd.google-apps.folder' }),
+    )
+    const resultat = await connecteur().verifierDossier()
+    expect(resultat).toEqual({ nom: 'Client A' })
+
+    const [url] = fetchMock.mock.calls[0] as [string]
+    expect(url).toBe('https://www.googleapis.com/drive/v3/files/dossier-1?fields=name,mimeType')
+  })
+
+  test("l'identifiant configuré ne désigne pas un dossier : erreur explicite", async () => {
+    fetchMock.mockResolvedValueOnce(reponseMock({ name: 'p1.json', mimeType: 'application/json' }))
+    await expect(connecteur().verifierDossier()).rejects.toThrow(
+      "L'identifiant configuré ne désigne pas un dossier Drive.",
+    )
+  })
+
+  test('401 -> AuthentificationError', async () => {
+    fetchMock.mockResolvedValueOnce(reponseMock({}, { status: 401 }))
+    await expect(connecteur().verifierDossier()).rejects.toBeInstanceOf(AuthentificationError)
+  })
+})

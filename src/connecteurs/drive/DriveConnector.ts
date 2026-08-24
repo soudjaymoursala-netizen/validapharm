@@ -51,6 +51,23 @@ export class DriveConnector {
     this.delaiMaxMs = config.delaiMaxMs ?? DELAI_MAX_PAR_DEFAUT_MS
   }
 
+  /**
+   * Vérifie réellement l'accès (jeton valide, dossier accessible) en
+   * lisant les métadonnées du dossier configuré — pas une simple
+   * validation de forme des champs. Usage ponctuel (écran de
+   * configuration), pas le chemin de `miroir()`.
+   */
+  async verifierDossier(): Promise<{ nom: string }> {
+    const reponse = await this.appel(
+      `https://www.googleapis.com/drive/v3/files/${this.config.dossierId}?fields=name,mimeType`,
+    )
+    const corps = (await reponse.json()) as { name: string; mimeType: string }
+    if (corps.mimeType !== 'application/vnd.google-apps.folder') {
+      throw new Error("L'identifiant configuré ne désigne pas un dossier Drive.")
+    }
+    return { nom: corps.name }
+  }
+
   async miroir(fichiers: readonly FichierAMirroir[]): Promise<ConfirmationMiroir> {
     for (const fichier of fichiers) {
       const idExistant = await this.rechercherFichier(fichier.chemin)
