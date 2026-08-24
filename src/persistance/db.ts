@@ -1,0 +1,40 @@
+import Dexie, { type EntityTable } from 'dexie'
+import type {
+  ClientConfig,
+  Project,
+  ProjectDocument,
+  Section,
+} from '../logique-metier/domaine/types'
+
+export interface EnregistrementVersionSchema {
+  id: 'unique'
+  version: string
+  migrated_at: string
+}
+
+/**
+ * Cache local IndexedDB (SDS §3) — miroir de performance/hors-ligne,
+ * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
+ * type d'enregistrement, alignée sur l'arborescence `/data` documentée en
+ * SDS §3.
+ *
+ * @requirement SDS §3, URS-NF-046, URS-NF-012
+ */
+export class ValidaPharmDatabase extends Dexie {
+  projects!: EntityTable<Project, 'id'>
+  sections!: EntityTable<Section, 'id'>
+  projectDocuments!: EntityTable<ProjectDocument, 'id'>
+  clientConfigs!: EntityTable<ClientConfig, 'client_id'>
+  schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
+
+  constructor(nomBaseDeDonnees = 'validapharm') {
+    super(nomBaseDeDonnees)
+    this.version(1).stores({
+      projects: 'id, client_id, updated_at',
+      sections: 'id, project_id, template_type, status, updated_at',
+      projectDocuments: 'id, project_id',
+      clientConfigs: 'client_id',
+      schemaVersion: 'id',
+    })
+  }
+}

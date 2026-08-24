@@ -12,7 +12,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "vue": "^3.5.41"
+    "dexie": "^4.4.5",
+    "pinia": "^4.0.3",
+    "vue": "^3.5.41",
+    "vue-router": "^5.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -21,6 +24,7 @@
     "@vue/tsconfig": "^0.9.1",
     "eslint": "^10.9.0",
     "eslint-plugin-vue": "^10.10.0",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.0.1",
     "prettier": "^3.9.6",
     "typescript": "5.9.3",
