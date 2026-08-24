@@ -57,6 +57,20 @@ export interface EnregistrementEtatMiroirDrive {
 }
 
 /**
+ * Configuration de connexion au relais IA (SDS §10quater) — enregistrement
+ * unique, pas par client : un seul relais serverless pour toute
+ * l'installation (même raisonnement que GitHub, SDS §3) ; c'est
+ * `client_config.ai_provider` (par client) qui détermine quel fournisseur
+ * le relais sélectionne pour une requête donnée, pas l'URL du relais
+ * elle-même.
+ */
+export interface EnregistrementConnexionRelaisIA {
+  id: 'unique'
+  relayUrl: string
+  jeton: string
+}
+
+/**
  * Cache local IndexedDB (SDS §3) — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée en
@@ -75,6 +89,7 @@ export class ValidaPharmDatabase extends Dexie {
   etatSynchronisation!: EntityTable<EnregistrementEtatSynchronisation, 'id'>
   connexionDrive!: EntityTable<EnregistrementConnexionDrive, 'client_id'>
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
+  connexionRelaisIA!: EntityTable<EnregistrementConnexionRelaisIA, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -91,6 +106,9 @@ export class ValidaPharmDatabase extends Dexie {
       clients: 'id, name',
       connexionDrive: 'client_id',
       etatMiroirDrive: 'client_id',
+    })
+    this.version(3).stores({
+      connexionRelaisIA: 'id',
     })
   }
 }

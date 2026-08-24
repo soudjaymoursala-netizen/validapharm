@@ -1,17 +1,23 @@
 <script setup lang="ts">
-// Configuration client (FDS §2) — version minimale : connexion au dépôt
-// GitHub dédié (URS-NF-044). Fournisseur IA / gabarit d'export /
-// consentement télémétrie restent backlog (tâches #14/#13).
+// Configuration client (FDS §2) — connexion au dépôt GitHub dédié
+// (URS-NF-044) + relais IA (SDS §10quater), tous deux globaux à
+// l'installation (un seul dépôt/relais, pas un par client — contrairement
+// au fournisseur IA/qualification de fiabilité, qui sont par client et se
+// configurent sur l'écran Configuration IA d'un client, GestionClients.vue).
 import { onMounted, reactive, ref } from 'vue'
 import {
   useConnexionGitHubStore,
   type ResultatTestConnexion,
 } from '../stores/useConnexionGitHubStore'
+import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 
 const store = useConnexionGitHubStore()
 const brouillon = reactive({ owner: '', repo: '', branche: 'main', jeton: '' })
 const resultatTest = ref<ResultatTestConnexion | undefined>(undefined)
 const testEnCours = ref(false)
+
+const relaisStore = useConnexionRelaisIAStore()
+const brouillonRelais = reactive({ relayUrl: '', jeton: '' })
 
 onMounted(async () => {
   await store.charger()
@@ -20,6 +26,12 @@ onMounted(async () => {
     brouillon.repo = store.connexion.repo
     brouillon.branche = store.connexion.branche
     brouillon.jeton = store.connexion.jeton
+  }
+
+  await relaisStore.charger()
+  if (relaisStore.connexion) {
+    brouillonRelais.relayUrl = relaisStore.connexion.relayUrl
+    brouillonRelais.jeton = relaisStore.connexion.jeton
   }
 })
 
@@ -44,6 +56,16 @@ async function testerConnexion(): Promise<void> {
   } finally {
     testEnCours.value = false
   }
+}
+
+async function enregistrerRelais(): Promise<void> {
+  await relaisStore.enregistrer({ ...brouillonRelais })
+}
+
+async function effacerRelais(): Promise<void> {
+  await relaisStore.effacer()
+  brouillonRelais.relayUrl = ''
+  brouillonRelais.jeton = ''
 }
 </script>
 
@@ -94,6 +116,35 @@ async function testerConnexion(): Promise<void> {
           Échec de connexion : {{ resultatTest.message }}
         </p>
       </div>
+    </section>
+
+    <section class="bloc-relais-ia">
+      <h2>Relais IA</h2>
+      <p class="rappel">
+        Le navigateur ne contacte jamais un fournisseur d'IA directement : toutes les requêtes
+        passent par ce relais serverless unique, qui détient la clé du fournisseur configuré côté
+        serveur (SDS §10quater, URS-NF-044ter).
+      </p>
+
+      <form class="formulaire" @submit.prevent="enregistrerRelais">
+        <label>
+          URL du relais
+          <input
+            v-model="brouillonRelais.relayUrl"
+            type="url"
+            required
+            placeholder="https://relais.exemple.workers.dev"
+          />
+        </label>
+        <label>
+          Jeton d'accès
+          <input v-model="brouillonRelais.jeton" type="password" required autocomplete="off" />
+        </label>
+        <div class="actions">
+          <button type="button" @click="effacerRelais">Effacer</button>
+          <button type="submit">Enregistrer</button>
+        </div>
+      </form>
     </section>
   </main>
 </template>

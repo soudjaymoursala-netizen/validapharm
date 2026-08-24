@@ -129,11 +129,27 @@ export interface Client {
 export interface ClientConfig {
   client_id: string
   ai_provider: string
+  /**
+   * Accusé de réception des conditions de traitement des données du
+   * fournisseur actuellement configuré (FS §3 v15) — un accusé par
+   * fournisseur, jamais un simple booléen global : changer de fournisseur
+   * exige un nouvel accusé, les conditions différant d'un fournisseur à
+   * l'autre.
+   */
+  ai_provider_conditions_acquittees: { fournisseur: string; date: string } | null
   ai_provider_reliability_qualification: {
     date: string
     resultat: string
     qualification_test_set_id: string
     qualification_test_set_version: string
+    /**
+     * Identifiant de version de modèle exposé par le fournisseur au
+     * moment de cette qualification (FS §3 v14) — distinct de
+     * `qualification_test_set_version` (version du jeu de test, pas du
+     * moteur évalué). `null` si le fournisseur n'exposait aucune version
+     * au moment de la qualification.
+     */
+    moteur_version_qualifiee: string | null
   } | null
   export_template_id: string | null
   consent_telemetry: { granted: boolean; date: string | null; revocable_at_any_time: true }
