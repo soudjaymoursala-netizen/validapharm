@@ -81,6 +81,7 @@ async function recupererDepuisGitHub(): Promise<void> {
     <header>
       <h1>Tableau de bord</h1>
       <div class="actions-entete">
+        <RouterLink :to="{ name: 'gestion-clients' }">Clients</RouterLink>
         <RouterLink :to="{ name: 'configuration-client' }">Configuration</RouterLink>
         <button type="button" @click="formulaireOuvert = true">Nouveau projet</button>
       </div>

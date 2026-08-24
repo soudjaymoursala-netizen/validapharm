@@ -113,6 +113,19 @@ export interface ProjectDocument {
   uploaded_by: string
 }
 
+/**
+ * Entité `client` — identité minimale (FS §3, v12, gap trouvé en
+ * construisant le connecteur Drive) : `client_id` était référencé partout
+ * (`Project.client_id`, `ClientConfig`, `asset_hierarchy_schema`,
+ * `asset_node`) sans jamais être lui-même modélisé. Volontairement
+ * minimal — l'identité seule ; c'est `ClientConfig` qui porte les réglages.
+ */
+export interface Client {
+  id: string
+  name: string
+  created_at: string
+}
+
 export interface ClientConfig {
   client_id: string
   ai_provider: string

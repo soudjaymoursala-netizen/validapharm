@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
+  Client,
   ClientConfig,
   Project,
   ProjectDocument,
@@ -38,6 +39,24 @@ export interface EnregistrementEtatSynchronisation {
 }
 
 /**
+ * Configuration de connexion au miroir Google Drive (SDS §5bis) — une par
+ * client (`client_id`), jamais globale : contrairement à GitHub (un seul
+ * dépôt pour toute l'installation), Drive est explicitement "le dossier
+ * dédié du client" et les secrets sont isolés par `client_id` (SDS §7).
+ */
+export interface EnregistrementConnexionDrive {
+  client_id: string
+  dossierId: string
+  jeton: string
+}
+
+/** Horodatage du dernier miroir Drive réussi par client (URS-NF-047 : alerte si > 1 session). */
+export interface EnregistrementEtatMiroirDrive {
+  client_id: string
+  dernierMiroirReussi: string | null
+}
+
+/**
  * Cache local IndexedDB (SDS §3) — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée en
@@ -46,6 +65,7 @@ export interface EnregistrementEtatSynchronisation {
  * @requirement SDS §3, URS-NF-046, URS-NF-012
  */
 export class ValidaPharmDatabase extends Dexie {
+  clients!: EntityTable<Client, 'id'>
   projects!: EntityTable<Project, 'id'>
   sections!: EntityTable<Section, 'id'>
   projectDocuments!: EntityTable<ProjectDocument, 'id'>
@@ -53,6 +73,8 @@ export class ValidaPharmDatabase extends Dexie {
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
   connexionGitHub!: EntityTable<EnregistrementConnexionGitHub, 'id'>
   etatSynchronisation!: EntityTable<EnregistrementEtatSynchronisation, 'id'>
+  connexionDrive!: EntityTable<EnregistrementConnexionDrive, 'client_id'>
+  etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -64,6 +86,11 @@ export class ValidaPharmDatabase extends Dexie {
       schemaVersion: 'id',
       connexionGitHub: 'id',
       etatSynchronisation: 'id',
+    })
+    this.version(2).stores({
+      clients: 'id, name',
+      connexionDrive: 'client_id',
+      etatMiroirDrive: 'client_id',
     })
   }
 }

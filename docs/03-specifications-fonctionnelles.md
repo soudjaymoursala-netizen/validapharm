@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 11 (architecture web pure sans installation — API GitHub, contrainte du poste de travail professionnel) |
+| **Version** | 12 (ajout de l'entité `client`, gap trouvé en conception du connecteur Drive) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -112,6 +112,11 @@ Ce document ne couvre pas le contenu réglementaire détaillé de chaque type de
     "uploaded_at": "ISO-8601",
     "uploaded_by": "…"
   },
+  "client": {
+    "id": "uuid",
+    "name": "string",
+    "created_at": "ISO-8601"
+  },
   "client_config": {
     "client_id": "uuid",
     "ai_provider": "claude | openai | copilot | deepseek | …",
@@ -150,6 +155,8 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 **Clarification ALCOA+ (ajoutée v04 — audit Swissmedic simulé, OBS-01)** : pour une section issue de §4.1bis, `revisions[]` DOIT distinguer explicitement l'entrée horodatant la génération par l'IA (motif "génération assistée", auteur = système + fournisseur utilisé) de l'entrée horodatant chaque validation humaine ultérieure section par section (motif "validation utilisateur", auteur = utilisateur) — jamais une seule entrée fusionnant les deux, pour rester cohérent avec le principe "Contemporaneous" d'ALCOA+ (cadrage, principe n°2).
 
 **Clarification terminologique (ajoutée v03 — revue FS, E5)** : ce modèle distingue deux notions à ne jamais confondre en conception détaillée. Le **multi-client** (`client_config`, isolation des gabarits d'export et des fournisseurs IA par `client_id`) est une capacité **Must dès la Phase 1** — un même professionnel travaille pour plusieurs clients/organisations. Le **multi-utilisateur** (`owner_id`, `shared_with`, comptes/rôles multiples) est une capacité dont le modèle de données est préparé dès la Phase 1 mais dont l'**activation reste hors périmètre** jusqu'à la Phase 3 (URS §8). Un client (organisation externe) n'est jamais un utilisateur (compte humain) de l'outil.
+
+**`client` (ajouté v12 — gap trouvé en conception, connecteur Drive)** : toutes les versions précédentes référençaient `client_id` (dans `project`, `client_config`, `asset_hierarchy_schema`, `asset_node`) comme s'appliquant à une entité `client` déjà modélisée — or aucune version antérieure de cette FS ne définissait cette entité elle-même (seulement ses réglages, `client_config`). Gap resté invisible tant qu'aucun écran ne nécessitait de créer/lister des clients ; révélé en construisant la configuration Drive par client (SDS §5bis/§7, qui exige l'isolation par `client_id`). `client` est volontairement minimal (identité seule — nom) : c'est `client_config` qui porte les réglages, pas l'inverse.
 
 ## 4. Spécifications fonctionnelles par module
 
@@ -483,4 +490,4 @@ Le Plan de validation (VMP) et les protocoles IQ/OQ/PQ de l'outil devront être 
 | URS-NF-010/030/044/044bis/055 amendés (architecture web pure) | §2, §5.2, §5.3, §5.4, §10 |
 
 ---
-*Document vivant, version 11 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS. v07 intégrait 3 clarifications de la revue multi-experts. v08 intégrait 2 constats d'audits Swissmedic et FDA simulés. v09 intègre la charte graphique et identité visuelle. v10 résorbe les trois gaps mineurs de la checklist §6ter. **v11 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel (IT bloque les logiciels non autorisés). Diagramme d'architecture (§2) et interfaces (§9) réécrits : API GitHub/Drive au lieu de Git local, cache navigateur (IndexedDB). URS-NF-010/030/044/055 amendés, URS-NF-044bis nouveau. Nouvelle contrainte de plateforme C-05 (dépendance à `api.github.com`, AR-R-62, non vérifiée). Couvre l'intégralité de l'URS v23. Prête pour la mise à jour de la FDS et de la SDS.*
+*Document vivant, version 11 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS. v07 intégrait 3 clarifications de la revue multi-experts. v08 intégrait 2 constats d'audits Swissmedic et FDA simulés. v09 intègre la charte graphique et identité visuelle. v10 résorbe les trois gaps mineurs de la checklist §6ter. **v11 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel (IT bloque les logiciels non autorisés). Diagramme d'architecture (§2) et interfaces (§9) réécrits : API GitHub/Drive au lieu de Git local, cache navigateur (IndexedDB). URS-NF-010/030/044/055 amendés, URS-NF-044bis nouveau. Nouvelle contrainte de plateforme C-05 (dépendance à `api.github.com`, AR-R-62, non vérifiée). Couvre l'intégralité de l'URS v23. Prête pour la mise à jour de la FDS et de la SDS. **v12 (24/08/2026, gap trouvé en construisant le connecteur Drive)** : ajout de l'entité `client` (§3) — `client_id` était référencé partout (project, client_config, asset_hierarchy_schema, asset_node) sans jamais être lui-même modélisé comme entité ; nécessaire dès qu'un écran doit créer/lister des clients (config Drive par client, SDS §5bis/§7).*
