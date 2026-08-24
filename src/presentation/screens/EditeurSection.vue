@@ -1,11 +1,14 @@
 <script setup lang="ts">
-// Éditeur de section (FDS §2) — version minimale de cet incrément : un
-// champ de contenu générique (le moteur de gabarits déclaratif complet
-// avec ses types de champs par gabarit est backlog, tâche #12), les
-// transitions de statut avec garde-fous fidèles (FDS §3.2/§3.3), la
-// sauvegarde automatique (URS-F-009).
+// Éditeur de section (FDS §2). Rédaction guidée par le moteur de gabarits
+// déclaratif (FDS §4, tâche #12) quand une définition existe pour le
+// template_type de la section ; repli sur un champ de contenu générique
+// sinon (gabarits pas encore définis dans le catalogue — voir
+// logique-metier/gabarits/catalogue/index.ts). Transitions de statut avec
+// garde-fous fidèles (FDS §3.2/§3.3), sauvegarde automatique (URS-F-009).
 import { computed, onMounted, ref, watch } from 'vue'
+import { obtenirDefinitionGabarit } from '../../logique-metier/gabarits/catalogue'
 import type { Section } from '../../logique-metier/domaine/types'
+import RenduGabarit from '../composants/RenduGabarit.vue'
 import { messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
 import { useSectionsStore, type ResultatActionSection } from '../stores/useSectionsStore'
 
@@ -22,6 +25,10 @@ const nouvelAvisRelecteurTexte = ref('')
 const dernierResultat = ref<ResultatActionSection | undefined>(undefined)
 let minuteurSauvegarde: ReturnType<typeof setTimeout> | undefined
 
+const definitionGabarit = computed(() =>
+  section.value ? obtenirDefinitionGabarit(section.value.template_type) : undefined,
+)
+
 async function recharger(): Promise<void> {
   await sectionsStore.chargerSectionsDuProjet(props.projectId)
   const trouvee = (sectionsStore.sectionsParProjet[props.projectId] ?? []).find(
@@ -33,13 +40,33 @@ async function recharger(): Promise<void> {
 
 onMounted(recharger)
 
-// Sauvegarde automatique locale, debounce court (URS-F-009).
+// Sauvegarde automatique locale, debounce court (URS-F-009) — uniquement
+// pour le repli générique (pas de gabarit défini pour ce template_type) ;
+// RenduGabarit gère son propre debounce par champ pour un gabarit défini.
 watch(contenu, (valeur) => {
+  if (definitionGabarit.value) return
   if (minuteurSauvegarde) clearTimeout(minuteurSauvegarde)
   minuteurSauvegarde = setTimeout(() => {
     void sectionsStore.mettreAJourValeurs(props.sectionId, { contenu: valeur })
   }, 400)
 })
+
+async function majValeursGabarit(valeurs: Record<string, string | number | null>): Promise<void> {
+  // `valeurs` est déjà l'instantané complet et à jour calculé par
+  // RenduGabarit — jamais refusionné ici avec `section.value.values`, qui
+  // pourrait être en retard d'un aller-retour de sauvegarde (course
+  // trouvée en navigateur entre deux champs modifiés rapidement).
+  await sectionsStore.mettreAJourValeurs(props.sectionId, valeurs)
+  await recharger()
+}
+
+async function majTableGabarit(
+  cleTable: string,
+  lignes: Array<Record<string, string | number | null>>,
+): Promise<void> {
+  await sectionsStore.mettreAJourTable(props.sectionId, cleTable, lignes)
+  await recharger()
+}
 
 const messagesBlocage = computed<string[]>(() => {
   if (dernierResultat.value?.ok === false && 'blocagesFinalisation' in dernierResultat.value) {
@@ -132,7 +159,18 @@ async function ajouterAvisRelecteur(): Promise<void> {
       {{ section.template_type }} — statut : <strong>{{ section.status }}</strong>
     </p>
 
-    <label class="champ-contenu">
+    <RenduGabarit
+      v-if="definitionGabarit"
+      :key="section.id"
+      :definition="definitionGabarit"
+      :values="section.values"
+      :tables="section.tables"
+      :langue="section.language"
+      :verrouille="section.status === 'valide_en_interne'"
+      @maj-valeurs="majValeursGabarit"
+      @maj-table="majTableGabarit"
+    />
+    <label v-else class="champ-contenu">
       Contenu
       <textarea v-model="contenu" :disabled="section.status === 'valide_en_interne'" rows="10" />
     </label>

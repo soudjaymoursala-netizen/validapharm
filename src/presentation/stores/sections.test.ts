@@ -11,7 +11,7 @@ beforeEach(async () => {
   await db.sections.clear()
 })
 
-async function creerProjetEtSection(templateType: 'oq' | 'iq' | 'contexte_procede' = 'oq') {
+async function creerProjetEtSection(templateType: 'oq' | 'iq' | 'contexte_procede' | 'dq' = 'oq') {
   const projets = useProjectsStore()
   const sections = useSectionsStore()
   const projet = await projets.creerProjet({
@@ -96,6 +96,37 @@ describe('useSectionsStore — mettreAJourValeurs (URS-F-009)', () => {
     await sections.mettreAJourValeurs(section.id, { contenu: 'tentative' })
     const sectionEnBase = await db.sections.get(section.id)
     expect(sectionEnBase?.audit_log).toHaveLength(1)
+  })
+})
+
+describe('useSectionsStore — mettreAJourTable (FDS §4, tableau_dynamique)', () => {
+  test('persiste les lignes sous la clé de table donnée, sans toucher aux autres tables', async () => {
+    const { sections, section } = await creerProjetEtSection('dq')
+    await db.sections.put({ ...section, tables: { autre_table: [{ x: 1 }] } })
+
+    await sections.mettreAJourTable(section.id, 'risques', [
+      { danger: 'Panne capteur', severite: 4, occurrence: 2, detectabilite: 3 },
+    ])
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.tables.risques).toEqual([
+      { danger: 'Panne capteur', severite: 4, occurrence: 2, detectabilite: 3 },
+    ])
+    expect(sectionEnBase?.tables.autre_table).toEqual([{ x: 1 }])
+  })
+
+  test('refuse silencieusement toute écriture sur une section verrouillée', async () => {
+    const { sections, section } = await creerProjetEtSection('dq')
+    await db.sections.put({ ...section, status: 'valide_en_interne', tables: { risques: [] } })
+    await sections.mettreAJourTable(section.id, 'risques', [{ danger: 'x' }])
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.tables.risques).toEqual([])
+  })
+
+  test("journalise une entrée 'modification'", async () => {
+    const { sections, section } = await creerProjetEtSection('dq')
+    await sections.mettreAJourTable(section.id, 'risques', [{ danger: 'x' }])
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.audit_log.at(-1)?.action).toBe('modification')
   })
 })
 

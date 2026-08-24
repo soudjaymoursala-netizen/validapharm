@@ -117,6 +117,32 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
+   * Sauvegarde automatique locale des lignes d'un tableau dynamique (FDS §4,
+   * URS-F-009/003) — même discipline que `mettreAJourValeurs` (verrouillage,
+   * piste d'audit), pour la partie `Section.tables` du modèle pivot plutôt
+   * que `Section.values`.
+   */
+  async function mettreAJourTable(
+    sectionId: string,
+    cleTable: string,
+    lignes: Section['tables'][string],
+  ): Promise<void> {
+    const section = await chargerSection(sectionId)
+    if (section.status === 'valide_en_interne') return
+    const maintenant = new Date().toISOString()
+    await db.sections.put({
+      ...section,
+      tables: { ...section.tables, [cleTable]: lignes },
+      updated_at: maintenant,
+      audit_log: [
+        ...section.audit_log,
+        { timestamp: maintenant, actor: section.owner_id, action: 'modification' },
+      ],
+    })
+    await chargerSectionsDuProjet(section.project_id)
+  }
+
+  /**
    * Renseigne l'approbateur final du workflow (FDS §3.2 : requis dès
    * l'engagement du cycle — URS-F-011, voir note d'interprétation sur
    * `appliquerTransition`).
@@ -317,6 +343,7 @@ export const useSectionsStore = defineStore('sections', () => {
     chargerSectionsDuProjet,
     creerSection,
     mettreAJourValeurs,
+    mettreAJourTable,
     assignerApprobateurFinal,
     ajouterAvisRelecteur,
     engagerVerification,
