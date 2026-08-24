@@ -1,28 +1,38 @@
 import { describe, expect, test } from 'vitest'
 import { obtenirDefinitionGabarit } from './index'
 
-describe('obtenirDefinitionGabarit', () => {
-  test('renvoie une définition pour les gabarits réellement construits', () => {
-    expect(obtenirDefinitionGabarit('contexte_procede')).toBeDefined()
-    expect(obtenirDefinitionGabarit('dq')).toBeDefined()
-    expect(obtenirDefinitionGabarit('plan_metrologie')).toBeDefined()
-  })
+const TOUS_LES_GABARITS_DEFINIS: Array<Parameters<typeof obtenirDefinitionGabarit>[0]> = [
+  'contexte_procede',
+  'urs',
+  'dq',
+  'fat',
+  'sat',
+  'iq',
+  'oq',
+  'pq',
+  'validation_procede',
+  'plan_metrologie',
+  'plan_maintenance',
+]
 
-  test('renvoie undefined (jamais une erreur) pour un gabarit pas encore défini', () => {
-    expect(obtenirDefinitionGabarit('urs')).toBeUndefined()
-    expect(obtenirDefinitionGabarit('oq')).toBeUndefined()
+describe('obtenirDefinitionGabarit', () => {
+  test('renvoie une définition pour chaque gabarit du catalogue (§10 URS, familles A/C/D/L/M + B)', () => {
+    for (const templateType of TOUS_LES_GABARITS_DEFINIS) {
+      expect(obtenirDefinitionGabarit(templateType)).toBeDefined()
+    }
   })
 
   test('cohérence structurelle de chaque gabarit enregistré : clés uniques, formules référençant des colonnes existantes', () => {
-    const templates: Array<Parameters<typeof obtenirDefinitionGabarit>[0]> = [
-      'contexte_procede',
-      'dq',
-      'plan_metrologie',
-    ]
-
-    for (const templateType of templates) {
+    for (const templateType of TOUS_LES_GABARITS_DEFINIS) {
       const definition = obtenirDefinitionGabarit(templateType)
+      expect(definition).toBeDefined()
       if (definition === undefined) continue
+
+      expect(definition.template_id).toBe(templateType)
+      expect(definition.sections.length).toBeGreaterThan(0)
+
+      const clesSections = definition.sections.map((s) => s.section_key)
+      expect(new Set(clesSections).size).toBe(clesSections.length)
 
       for (const section of definition.sections) {
         const clesChamps = section.fields.map((f) => f.field_key)

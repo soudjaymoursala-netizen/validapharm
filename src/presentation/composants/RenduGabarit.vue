@@ -175,6 +175,37 @@ function valeurCalculee(
                     <template v-if="colonne.type === 'nombre' && colonne.formule">
                       {{ valeurCalculee(colonne, champ, ligne) ?? '—' }}
                     </template>
+                    <template v-else-if="colonne.type === 'liste'">
+                      <select
+                        :value="ligne[colonne.field_key] ?? ''"
+                        :disabled="verrouille"
+                        @change="
+                          (e: Event) =>
+                            saisirCellule(
+                              champ,
+                              colonne,
+                              index,
+                              (e.target as HTMLSelectElement).value,
+                            )
+                        "
+                      >
+                        <option value=""></option>
+                        <option
+                          v-for="option in colonne.options"
+                          :key="option.valeur"
+                          :value="option.valeur"
+                        >
+                          {{ libelle(option.labels) }}
+                        </option>
+                      </select>
+                      <p
+                        v-if="erreurs[cleErreurCellule(champ.field_key, index, colonne.field_key)]"
+                        class="erreur"
+                        role="alert"
+                      >
+                        {{ erreurs[cleErreurCellule(champ.field_key, index, colonne.field_key)] }}
+                      </p>
+                    </template>
                     <template v-else>
                       <input
                         :value="ligne[colonne.field_key] ?? ''"
