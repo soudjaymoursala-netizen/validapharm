@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | URS-VALIDAPHARM-2026-001 |
-| **Version** | 23 (architecture web pure sans installation — API GitHub, contrainte du poste de travail professionnel) |
+| **Version** | 24 (mode audit simulé dans le chat expert + modularité/protection de la propriété intellectuelle — suggestions d'un ingénieur logiciel externe, 24/08/2026) |
 | **Statut** | En rédaction |
 | **Système concerné** | ValidaPharm (assistant de rédaction qualité CQV/CSV/QA — pharma & dispositifs médicaux) |
 | **Catégorie GAMP 5 envisagée** | Catégorie 5 — Logiciel sur mesure (bespoke), avec composants de catégorie 3/4 (bibliothèques, éventuel LLM local) — confirmée par revue multi-experts |
@@ -147,6 +147,9 @@ L'utilisateur (professionnel qualité/validation en pharma et dispositifs médic
 | URS-F-035 | Le chat expert DOIT citer, quand c'est pertinent, les normes/référentiels sur lesquels s'appuie sa réponse. | Should |
 | URS-F-036 | Le chat expert DOIT afficher un avertissement rappelant qu'il s'agit d'une aide et non d'un avis réglementaire opposable. | Must |
 | URS-F-037 | *(amendé v05)* Le système DOIT journaliser chaque session de chat expert (horodatage début/fin, **fournisseur et moteur exact utilisé** — cloud nommé ou local, document joint ou non), sans jamais journaliser le contenu échangé. | Must |
+| URS-F-038 | *(nouveau v24 — suggestion d'un ingénieur logiciel externe consulté par l'utilisateur, 24/08/2026)* Le chat expert DOIT proposer un **mode audit simulé**, invocable explicitement par l'utilisateur, appliquant au document ou à la question en cours la même méthodologie de challenge que celle utilisée pour la production des livrables projet ValidaPharm eux-mêmes : débat contradictoire multi-angles (fonctionnel, réglementaire, sécurité, qualité) puis, si pertinent, simulation d'un ou plusieurs profils d'auditeur (Swissmedic, FDA, cabinet de conseil GxP, QA spécialisée). Priorité donnée aux documents produits dans l'outil et aux questions portant sur des informations destinées à figurer dans un document de sortie (périmètre confirmé par l'utilisateur, 24/08/2026) — pas un mode de conversation libre sans lien avec un livrable. | Must |
+| URS-F-039 | *(nouveau v24)* Le mode audit simulé (URS-F-038) DOIT rester strictement consultatif : il émet un avis argumenté, il ne modifie jamais un document ni ne prend de décision à la place de l'utilisateur, qui reste seul responsable du contenu final — cohérent avec le principe déjà retenu pour le chat expert (URS-F-030/031) et avec le classement de risque GAMP 5 visé (l'IA assiste, elle ne décide pas). | Must |
+| URS-F-040 | *(nouveau v24)* Le mode audit simulé (URS-F-038) DOIT afficher, à chaque activation, un rappel explicite qu'une simulation de persona réglementaire (ex. "Swissmedic", "FDA") **ne constitue en aucun cas un audit réglementaire réel ni un avis opposable** — pour prévenir tout faux sentiment de conformité chez l'utilisateur final. Ce rappel est distinct et complémentaire de l'avertissement général du chat expert (URS-F-036). | Must |
 
 ### 4.5 Bibliothèque de normes
 
@@ -305,6 +308,14 @@ L'utilisateur (professionnel qualité/validation en pharma et dispositifs médic
 | URS-NF-054ter | Toute information fonctionnelle portée par une couleur (notamment `qualification_status`, criticité IPR/AMDEC) NE DOIT JAMAIS être encodée par la couleur seule — un second indicateur (icône, libellé texte, motif) DOIT toujours l'accompagner, pour rester lisible en cas de daltonisme. | Must |
 | URS-NF-054quater | Le contraste texte/fond de toute information porteuse de sens fonctionnel DOIT atteindre un niveau reconnu (référence : WCAG 2.1 niveau AA), y compris pour les couleurs de statut. | Should |
 | URS-NF-054quinquies | L'écran de travail et les documents exportés DOIVENT utiliser des familles de polices distinctes et intentionnelles : une police système moderne pour l'écran, une police classique à empattements pour les documents exportés, cohérente avec l'usage réglementaire de ces derniers. | Should |
+
+### 5.7 Modularité et protection de la propriété intellectuelle *(nouveau v24 — suggestion d'un ingénieur logiciel externe consulté par l'utilisateur, 24/08/2026)*
+
+| ID | Exigence | Priorité |
+|---|---|---|
+| URS-NF-056 | Le code applicatif DOIT être organisé en modules à faible couplage et forte cohésion (séparation présentation / logique métier / connecteurs / persistance, déjà actée en `08-conventions-codage.md`), pour la maintenabilité et la testabilité — l'ajout ou le remplacement d'un module ne DOIT pas nécessiter de modifier les autres. | Must |
+| URS-NF-057 | *(mise en garde documentée, pas une exigence technique testable)* L'organisation modulaire du code (URS-NF-056) NE DOIT PAS être présentée comme garantissant l'impossibilité de récupérer le code source complet en cas de livraison de l'application à un client : dans une PWA servie par le navigateur, le code JavaScript exécuté côté client reste, par construction, techniquement accessible (inspection navigateur, téléchargement des fichiers déployés) — la minification/l'obfuscation (activées en production, voir SDS) rendent le code difficile à lire, pas impossible à extraire. Ce constat DOIT être communiqué explicitement à l'utilisateur pour éviter un faux sentiment de protection. | Must |
+| URS-NF-058 | La protection effective de la propriété intellectuelle en cas de livraison à un tiers DOIT reposer en priorité sur un mécanisme contractuel (licence d'usage, cession ou non-cession de droits, clause de confidentialité/NDA) et non sur la seule protection technique du code — point hors périmètre de conception logicielle, à traiter par l'utilisateur avec un conseil juridique avant toute livraison. | Should |
 
 ## 6. Exigences réglementaires et de conformité
 
