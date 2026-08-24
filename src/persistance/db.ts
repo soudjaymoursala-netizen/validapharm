@@ -27,6 +27,17 @@ export interface EnregistrementConnexionGitHub {
 }
 
 /**
+ * SHA de branche connu après la dernière synchronisation réussie —
+ * nécessaire à la détection de conflit optimiste (SDS §5) : chaque
+ * `ecrireGroupe` doit connaître le SHA sur lequel il se base.
+ */
+export interface EnregistrementEtatSynchronisation {
+  id: 'unique'
+  shaBrancheConnue: string | null
+  derniereSynchronisation: string | null
+}
+
+/**
  * Cache local IndexedDB (SDS §3) — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée en
@@ -41,6 +52,7 @@ export class ValidaPharmDatabase extends Dexie {
   clientConfigs!: EntityTable<ClientConfig, 'client_id'>
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
   connexionGitHub!: EntityTable<EnregistrementConnexionGitHub, 'id'>
+  etatSynchronisation!: EntityTable<EnregistrementEtatSynchronisation, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -51,6 +63,7 @@ export class ValidaPharmDatabase extends Dexie {
       clientConfigs: 'client_id',
       schemaVersion: 'id',
       connexionGitHub: 'id',
+      etatSynchronisation: 'id',
     })
   }
 }

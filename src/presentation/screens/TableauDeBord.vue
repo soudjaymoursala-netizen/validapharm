@@ -2,14 +2,44 @@
 // Tableau de bord / Vue portefeuille (FDS §2) — version minimale de cet
 // incrément : liste des projets + création (URS-F-070 à 073 pour la
 // version complète avec statuts agrégés/alertes, backlog).
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Langue } from '../../logique-metier/domaine/types'
 import { useProjectsStore, type NouveauProjetInput } from '../stores/useProjectsStore'
+import {
+  useSynchronisationStore,
+  type ResultatRecuperation,
+  type ResultatSynchronisation,
+} from '../stores/useSynchronisationStore'
 
 const projetsStore = useProjectsStore()
+const syncStore = useSynchronisationStore()
 const router = useRouter()
 const formulaireOuvert = ref(false)
+const dernierResultatSync = ref<ResultatSynchronisation | ResultatRecuperation | undefined>(
+  undefined,
+)
+
+const messageSync = computed(() => {
+  if (dernierResultatSync.value === undefined) return null
+  if (dernierResultatSync.value.ok) {
+    return {
+      type: 'succes',
+      texte: `${dernierResultatSync.value.nbFichiers} fichier(s) synchronisé(s).`,
+    }
+  }
+  if ('conflit' in dernierResultatSync.value && dernierResultatSync.value.conflit) {
+    return {
+      type: 'conflit',
+      texte:
+        "Conflit détecté : la branche distante a changé depuis la dernière synchronisation. Vos modifications locales n'ont PAS été écrasées ni envoyées — utilisez « Récupérer depuis GitHub » pour voir l'état distant avant de réessayer.",
+    }
+  }
+  return {
+    type: 'erreur',
+    texte: 'message' in dernierResultatSync.value ? dernierResultatSync.value.message : 'Erreur.',
+  }
+})
 
 const brouillon = reactive<NouveauProjetInput>({
   name: '',
@@ -35,6 +65,15 @@ async function creerProjet(): Promise<void> {
   brouillon.scope_out = ''
   await router.push({ name: 'fiche-projet', params: { projectId: projet.id } })
 }
+
+async function synchroniser(): Promise<void> {
+  dernierResultatSync.value = await syncStore.synchroniser()
+}
+
+async function recupererDepuisGitHub(): Promise<void> {
+  dernierResultatSync.value = await syncStore.recupererDepuisGitHub()
+  await projetsStore.chargerProjets()
+}
 </script>
 
 <template>
@@ -46,6 +85,28 @@ async function creerProjet(): Promise<void> {
         <button type="button" @click="formulaireOuvert = true">Nouveau projet</button>
       </div>
     </header>
+
+    <section class="synchronisation">
+      <div class="actions-sync">
+        <button type="button" :disabled="syncStore.synchronisationEnCours" @click="synchroniser">
+          {{ syncStore.synchronisationEnCours ? 'Synchronisation…' : 'Synchroniser vers GitHub' }}
+        </button>
+        <button
+          type="button"
+          :disabled="syncStore.synchronisationEnCours"
+          @click="recupererDepuisGitHub"
+        >
+          Récupérer depuis GitHub
+        </button>
+      </div>
+      <p
+        v-if="messageSync"
+        :class="['message-sync', `message-sync--${messageSync.type}`]"
+        :role="messageSync.type === 'succes' ? undefined : 'alert'"
+      >
+        {{ messageSync.texte }}
+      </p>
+    </section>
 
     <form v-if="formulaireOuvert" class="formulaire-projet" @submit.prevent="creerProjet">
       <label>
@@ -116,6 +177,34 @@ button {
 
 button:hover {
   background-color: var(--vp-marque-survol);
+}
+
+.synchronisation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.actions-sync {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.message-sync {
+  margin: 0;
+}
+
+.message-sync--succes {
+  color: var(--vp-statut-qualifie);
+}
+
+.message-sync--conflit {
+  color: var(--vp-statut-requalification-en-retard);
+}
+
+.message-sync--erreur {
+  color: var(--vp-statut-requalification-en-retard);
 }
 
 .formulaire-projet {
