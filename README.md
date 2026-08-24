@@ -8,16 +8,16 @@ Dépôt Git dédié, séparé de tout autre projet, conformément à `docs/00-ca
 
 Documentation de conception complète et cohérente :
 
-| Document               | Version                              |
-| ---------------------- | ------------------------------------ |
-| Cadrage                | voir `docs/00-cadrage-projet.md`     |
-| URS                    | v25                                  |
-| Analyse de risque (AR) | v27 — 67 entrées                     |
-| FS                     | v11                                  |
-| FDS                    | v14                                  |
-| SDS                    | v14                                  |
-| Conventions de codage  | voir `docs/08-conventions-codage.md` |
-| Architecture détaillée (technique) | voir `docs/09-architecture-detaillee.md` |
+| Document                               | Version                                  |
+| -------------------------------------- | ---------------------------------------- |
+| Cadrage                                | voir `docs/00-cadrage-projet.md`         |
+| URS                                    | v25                                      |
+| Analyse de risque (AR)                 | v27 — 67 entrées                         |
+| FS                                     | v11                                      |
+| FDS                                    | v14                                      |
+| SDS                                    | v14                                      |
+| Conventions de codage                  | voir `docs/08-conventions-codage.md`     |
+| Architecture détaillée (technique)     | voir `docs/09-architecture-detaillee.md` |
 | Architecture expliquée (non-technique) | voir `docs/10-architecture-expliquee.md` |
 
 Conception (code) : démarre le 23/08/2026. Stack technique résolue (`08-conventions-codage.md`) : **TypeScript (strict) + Vue 3 + Vitest + ESLint/Prettier**, code auditable (bloc TSDoc `@requirement` sur chaque fonction métier, structure en couches strictes reflétant SDS §2, tests co-localisés).
