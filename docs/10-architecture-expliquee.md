@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | ARCH-EXPL-VALIDAPHARM-2026-001 |
-| **Version** | 01 |
+| **Version** | 02 (relais IA de production — `REV-URS-VALIDAPHARM-2026-010`, 24/08/2026) |
 | **Statut** | En vigueur |
 | **Public visé** | Toute personne du projet **sans compétence logicielle** — pour comprendre où vivent les données, comment l'outil fonctionne, et où se situent les points de vigilance, sans avoir besoin de lire le code ou les documents techniques |
-| **Documents de référence** | `09-architecture-detaillee.md` v01 (version technique, pour les développeurs), `22-SDS-outil.md` v11, `02-analyse-de-risque-outil.md` v25 |
+| **Documents de référence** | `09-architecture-detaillee.md` v02 (version technique, pour les développeurs), `22-SDS-outil.md` v13, `02-analyse-de-risque-outil.md` v26 |
 | **Objet** | Répondre à la demande explicite de l'utilisateur (24/08/2026) : disposer d'une explication complète et commentée de l'architecture, compréhensible par un non-informaticien, décrivant le rôle de chaque niveau, les interactions entre niveaux, et les points de vigilance et de maîtrise |
 
 ---
@@ -91,8 +91,9 @@ Ce bloc est **en cours de conception**, pas encore construit — décrit ici pou
 
 - **Rôle** : un chat séparé de l'espace de rédaction (jamais un accès automatique au contenu d'un document, il faut un geste explicite), qui répond aux questions normatives, et qui peut désormais aussi simuler, à la demande, le même débat multi-experts et les mêmes profils d'auditeur (Swissmedic, FDA, cabinet GxP, QA) que ceux utilisés pour la conception de ValidaPharm elle-même.
 - **Ce qu'il n'est pas** : il ne modifie jamais un document, ne prend jamais de décision à la place de l'utilisateur, et ne remplace en aucun cas un vrai audit réglementaire — un rappel s'affiche à chaque activation pour éviter toute confusion.
-- **Nouveau composant technique impliqué** : pour parler à un service d'intelligence artificielle sans exposer publiquement la clé d'accès payante, il faut un petit relais intermédiaire (hébergé séparément, très simple, sans données stockées) entre le navigateur de l'utilisateur et le fournisseur IA — c'est un nouveau maillon qui n'existait pas dans l'architecture initiale.
-- **Décision non encore prise, à trancher avant de coder ce bloc** : quel fournisseur IA exactement (impact sur le coût et sur la joignabilité depuis le poste professionnel — à tester, comme cela a été fait pour GitHub).
+- **Nouveau composant technique, désormais conçu (24/08/2026)** : pour parler à un service d'intelligence artificielle sans exposer publiquement la clé d'accès payante, un petit relais intermédiaire (Cloudflare Workers, hébergé séparément, très simple, sans données stockées) s'intercale entre le navigateur de l'utilisateur et le fournisseur IA — c'est un nouveau maillon qui n'existait pas dans l'architecture initiale. Conséquence importante : **le navigateur de l'utilisateur ne parle plus jamais directement au fournisseur IA**, seul ce relais l'appelle. Donc c'est la joignabilité du relais qui compte pour le poste professionnel — pas celle du fournisseur, jamais sollicité depuis ce poste.
+- **Fournisseur retenu** : Claude (déjà le choix par défaut) — avec un modèle plus léger pour les questions courantes et un modèle plus capable réservé au mode audit simulé, où la qualité du débat contradictoire est ce qui fait la valeur de la fonctionnalité (le coût réel de l'un ou l'autre reste négligeable pour un usage interne).
+- **Seul point encore réellement bloquant** : tester la joignabilité réseau du relais (une adresse `*.workers.dev`) depuis le poste professionnel — même démarche que pour GitHub (§9).
 
 ## 6. Sécurité — ce qui protège, et ce qui ne protège pas
 
@@ -119,16 +120,16 @@ Ce bloc est **en cours de conception**, pas encore construit — décrit ici pou
 | Clé d'accès GitHub volée (ex. faille du navigateur) | §6 | Portée de la clé restreinte au seul dépôt dédié ; risque documenté et accepté comme compromis (AR-R-61), pas éliminé |
 | Version de l'application incompatible avec des données plus récentes (retour arrière) | — (voir `02-analyse-de-risque-outil.md`, R-60) | L'application refuse explicitement de démarrer plutôt que de risquer une écriture incorrecte silencieuse |
 | Limite du nombre d'appels à GitHub par heure | `09-architecture-detaillee.md` §5 | Un seul appel pour toute l'arborescence du dépôt, pas un appel par document (AR-R-63) |
-| Nouveau relais réseau pour l'IA non testé depuis le poste professionnel | §5 | Repli automatique sur un fonctionnement sans IA ; test de joignabilité à faire avant de figer le fournisseur (AR-R-64) |
-| Coût de l'IA qui dérive avec l'usage | §5 | Plafond de dépense à configurer côté fournisseur avant mise en production (AR-R-65) |
+| Nouveau relais réseau pour l'IA non testé depuis le poste professionnel | §5 | Repli automatique sur un fonctionnement sans IA ; test de joignabilité du relais restant à faire par l'utilisateur (AR-R-64, ouvert) |
+| Coût de l'IA qui dérive avec l'usage | §5 | Plafond de dépense à deux niveaux (applicatif + tableau de bord fournisseur) à configurer avant mise en production (AR-R-65) |
+| Relais journalisant par erreur le contenu des échanges | §5 | Relais conçu sans état, à vérifier en configuration avant mise en production (AR-R-67) |
 | Faux sentiment de protection du code par la seule organisation en modules | §6 | Communication explicite de la limite technique ; protection réelle recommandée par voie contractuelle (AR-R-66) |
 | Simulation d'audit prise pour un vrai audit réglementaire | §5 | Rappel explicite affiché à chaque activation du mode audit simulé (URS-F-040) |
 
 ## 9. Ce qui reste ouvert (à trancher avant de coder les blocs concernés)
 
-- Choix définitif du fournisseur IA de production (coût, qualité, joignabilité réseau à tester).
-- Hébergement final du relais IA (probablement un service "sans serveur à gérer", type Cloudflare Workers — à confirmer).
-- Plafond de dépense IA à configurer.
+- **Un seul point réellement ouvert** : tester la joignabilité réseau du relais (`*.workers.dev`) depuis le poste professionnel — action à faire par l'utilisateur, impossible à réaliser depuis une session Claude Code (nécessite un accès réseau réel au poste concerné).
+- Fournisseur, hébergement du relais et plafond de dépense sont désormais conçus (§5) — reste à les configurer concrètement au moment d'écrire ce bloc de code (pas une décision en attente).
 
 ---
-*Document vivant, version 01 — créé le 24/08/2026 en réponse à la demande explicite de l'utilisateur d'une explication d'architecture complète, commentée et accessible à un non-informaticien. Ne remplace pas `09-architecture-detaillee.md` (référence technique) : les deux doivent rester cohérents, toute divergence future doit être répercutée dans les deux documents.*
+*Document vivant, version 02 (24/08/2026) — créé le 24/08/2026 en réponse à la demande explicite de l'utilisateur d'une explication d'architecture complète, commentée et accessible à un non-informaticien. **v02 (24/08/2026, `REV-URS-VALIDAPHARM-2026-010`)** : conception du relais IA actée (§5, §8), ne reste ouvert que le test réseau du relais. Ne remplace pas `09-architecture-detaillee.md` (référence technique) : les deux doivent rester cohérents, toute divergence future doit être répercutée dans les deux documents.*

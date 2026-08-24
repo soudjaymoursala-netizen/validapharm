@@ -4,18 +4,18 @@ Outil d'aide à la rédaction de la documentation de validation/qualification GA
 
 Dépôt Git dédié, séparé de tout autre projet, conformément à `docs/00-cadrage-projet.md` §4. **Ce dépôt est le dépôt de conception** (code source, documentation) — cloné/travaillé normalement par un développeur. Il ne faut pas le confondre avec le dépôt Git _de données_ que l'application déployée gère à l'exécution, via l'API GitHub, pour le compte d'un client (voir Architecture ci-dessous).
 
-## État au 23/08/2026
+## État au 24/08/2026
 
 Documentation de conception complète et cohérente :
 
 | Document               | Version                              |
 | ---------------------- | ------------------------------------ |
 | Cadrage                | voir `docs/00-cadrage-projet.md`     |
-| URS                    | v24                                  |
-| Analyse de risque (AR) | v25 — 66 entrées                     |
+| URS                    | v25                                  |
+| Analyse de risque (AR) | v26 — 67 entrées                     |
 | FS                     | v11                                  |
 | FDS                    | v14                                  |
-| SDS                    | v12                                  |
+| SDS                    | v13                                  |
 | Conventions de codage  | voir `docs/08-conventions-codage.md` |
 | Architecture détaillée (technique) | voir `docs/09-architecture-detaillee.md` |
 | Architecture expliquée (non-technique) | voir `docs/10-architecture-expliquee.md` |

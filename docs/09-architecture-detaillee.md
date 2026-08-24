@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | **Référence** | ARCH-VALIDAPHARM-2026-001 |
-| **Version** | 01 |
+| **Version** | 02 (relais IA de production — `REV-URS-VALIDAPHARM-2026-010`, 24/08/2026) |
 | **Statut** | En vigueur |
-| **Documents de référence** | `22-SDS-outil.md` v11, `08-conventions-codage.md` v02, `00-cadrage-projet.md` |
+| **Documents de référence** | `22-SDS-outil.md` v12, `08-conventions-codage.md` v02, `00-cadrage-projet.md` |
 | **Objet** | Consolider et compléter l'architecture technique (SDS §2-§10) en un document de référence unique, et trancher les points laissés implicites — bibliothèques précises, stratégie hors-ligne, limites d'API — avant l'écriture du code |
 
 ---
@@ -70,7 +70,7 @@ Ces choix sont ajoutés comme dépendances validées dans `08-conventions-codage
 
 ## 8. Sécurité complémentaire (précise SDS §7)
 
-- **Content-Security-Policy** : restreint les origines autorisées à `api.github.com`, `www.googleapis.com` (Drive), les domaines des fournisseurs IA configurés, et l'origine du bundle lui-même — bloque toute exfiltration vers un domaine tiers non listé, y compris en cas de faille XSS (défense en profondeur, complète la mitigation de AR-R-61).
+- **Content-Security-Policy** : restreint les origines autorisées à `api.github.com`, `www.googleapis.com` (Drive), **le domaine du relais IA** (§10 ci-dessous — pas celui du/des fournisseur(s) IA eux-mêmes, jamais appelés directement depuis le navigateur, cf. §10), et l'origine du bundle lui-même — bloque toute exfiltration vers un domaine tiers non listé, y compris en cas de faille XSS (défense en profondeur, complète la mitigation de AR-R-61). *(corrigé v02 — la version v01 listait par erreur "les domaines des fournisseurs IA configurés", incohérent avec l'architecture à relais posée en §10 ; incohérence trouvée en `REV-URS-VALIDAPHARM-2026-010`.)*
 - **Aucun `eval`/`Function` dynamique** dans le code applicatif — imposé par la CSP et vérifiable par ESLint.
 
 ## 9. Nouveaux risques identifiés (à intégrer en AR)
@@ -78,6 +78,21 @@ Ces choix sont ajoutés comme dépendances validées dans `08-conventions-codage
 | Risque | Mitigation |
 |---|---|
 | Épuisement du quota d'appels API GitHub en usage intensif | Stratégie Git Trees API + compteur exposé (§5 ci-dessus) — voir AR-R-63 |
+| Relais IA introduisant un nouveau domaine externe non testé depuis le poste utilisateur | Test de joignabilité réseau du domaine du relais avant mise en production — voir AR-R-64 (§10 ci-dessous) |
+| Relais IA journalisant par erreur le contenu des échanges | Relais sans état, exigence explicite URS-NF-044ter — voir AR-R-67 (§10 ci-dessous) |
+
+## 10. Relais IA — masquage de la clé API (nouveau v02, `REV-URS-VALIDAPHARM-2026-010`)
+
+**Composant nouveau, non prévu dans l'architecture initiale** : le chat expert (URS-F-030) et le mode audit simulé (URS-F-038) appellent un fournisseur IA cloud payant (Claude par défaut, URS-F-032). Exposer la clé d'API dans le bundle navigateur la rendrait publique (code client par construction accessible, AR-R-66) — impossible à faire directement depuis une PWA sans installation. Un relais intermédiaire est donc nécessaire.
+
+**Architecture retenue** : `navigateur (PWA) → relais serverless → fournisseur IA`. Le navigateur ne parle **jamais** directement au fournisseur — seul le relais l'appelle, côté serveur.
+
+- **Hébergement** : Cloudflare Workers — cohérent avec la contrainte "zéro service à gérer" déjà retenue pour le reste de l'architecture (GitHub Pages, IndexedDB). Domaine v1 : sous-domaine gratuit `*.workers.dev` (pas de domaine custom nécessaire pour lever le doute réseau, cf. `REV-URS-VALIDAPHARM-2026-010` §"point non retenu").
+- **Clé API** : stockée en secret du Worker (`wrangler secret put`), jamais dans le dépôt applicatif ni dans le bundle buildé — cohérent avec URS-NF-044.
+- **Sans état** : aucune persistance du contenu de la requête ou de la réponse au-delà du traitement de l'appel en cours ; pas de journalisation du corps des requêtes côté plateforme d'hébergement (à vérifier explicitement en configuration avant mise en production) — répond à URS-NF-044ter, mitige AR-R-67.
+- **CORS** : restreint strictement à l'origine exacte de la PWA déployée (domaine GitHub Pages retenu), jamais `*`.
+- **Modèle par mode d'usage** : le relais transmet un paramètre de mode (chat normatif vs mode audit simulé) permettant de router vers un modèle différent selon l'usage — répond à URS-F-038bis (qualification de fiabilité séparée par mode). Configuration exacte des modèles en `22-SDS-outil.md` §11.
+- **Test de joignabilité réseau (AR-R-64)** : à effectuer par l'utilisateur depuis son poste professionnel sur le domaine `*.workers.dev`, même méthode que le test déjà réalisé pour `api.github.com`/`*.github.io` (AR-R-62, clos) — **reste à faire**, seule action de ce point non réalisable depuis une session Claude Code.
 
 ---
-*Document vivant, version 01 — créé le 23/08/2026, en réponse à une demande proactive de l'utilisateur ("architecture complète et détaillée") avant le démarrage effectif du code. Complète la SDS sans la contredire ; toute divergence future doit être répercutée dans les deux documents.*
+*Document vivant, version 02 — créé le 23/08/2026, en réponse à une demande proactive de l'utilisateur ("architecture complète et détaillée") avant le démarrage effectif du code. Complète la SDS sans la contredire ; toute divergence future doit être répercutée dans les deux documents. **v02 (24/08/2026, `REV-URS-VALIDAPHARM-2026-010`)** : §8 corrigé (incohérence CSP/relais), §10 nouveau (conception du relais IA).*

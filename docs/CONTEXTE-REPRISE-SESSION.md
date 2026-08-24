@@ -29,30 +29,32 @@ Chaque évolution substantielle des documents passe par :
 | Document | Version |
 |---|---|
 | Cadrage | `docs/00-cadrage-projet.md`, notes de cohérence 23 et 24/08/2026 |
-| URS | v24 |
-| Analyse de risque (AR) | v25 — 66 entrées |
+| URS | v25 |
+| Analyse de risque (AR) | v26 — 67 entrées |
 | FS | v11 |
 | FDS | v14 |
-| SDS | v12 |
+| SDS | v13 |
 | Conventions de codage | `docs/08-conventions-codage.md` v02 |
-| Architecture détaillée (technique) | `docs/09-architecture-detaillee.md` v01 |
-| Architecture expliquée (non-technique) | `docs/10-architecture-expliquee.md` v01 |
+| Architecture détaillée (technique) | `docs/09-architecture-detaillee.md` v02 |
+| Architecture expliquée (non-technique) | `docs/10-architecture-expliquee.md` v02 |
 
 VMP + protocoles IQ/OQ/PQ (`docs/04` à `07`) : **explicitement reportés après la conception (code)**, marqués "À REVOIR" — ne pas les traiter avant que le code existe.
 
 Code : conception démarrée le 23/08/2026. Toolchain scaffoldé et validé (lint/typecheck/format/test/build OK, zéro vulnérabilité npm) : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js + vite-plugin-pwa + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint (pas seulement une convention déclarée).
 
-## 5. Points ouverts, non encore tranchés — à traiter avec la même rigueur proactive
+## 5. Points ouverts — état au 24/08/2026 (session de reprise)
 
-1. **Choix du fournisseur IA de production pour le chat expert + le nouveau "mode audit simulé"** (URS-F-038 à 040, ajoutés le 24/08/2026 suite à une suggestion d'un ingénieur logiciel externe consulté par l'utilisateur). Points déjà clarifiés à ne pas re-discuter :
-   - **GitHub Copilot est exclu** : pas d'API publique intégrable dans une app tierce, ce n'est pas un problème de coût.
-   - Éviter un modèle "gratuit" en stratégie de production (quotas trop bas) — préférer un modèle payant léger et peu coûteux (ex. Claude Haiku), le coût réel étant négligeable pour un usage interne.
-   - Nécessite un **relais serverless minimal** pour masquer la clé API (nouveau composant, ex. Cloudflare Workers pressenti) — pas encore choisi ni conçu.
-   - **Avant de figer un fournisseur : tester la joignabilité réseau de son domaine depuis le poste professionnel de l'utilisateur**, exactement comme pour `api.github.com`/`*.github.io` (AR-R-62, clos). Ne pas supposer, tester réellement.
-   - Plafond de dépense à configurer côté fournisseur avant mise en production (AR-R-65).
-2. **Portée du mode audit simulé** déjà cadrée par l'utilisateur : priorité aux documents produits dans l'outil et aux questions sur des informations destinées à un document de sortie — pas une conversation libre sans lien avec un livrable. L'agent reste **strictement consultatif** (donne un avis, ne décide jamais, ne modifie jamais un document).
-3. **Protection de la propriété intellectuelle du code en cas de livraison à un client** (2ᵉ suggestion de l'ingénieur externe) : traité avec honnêteté le 24/08/2026 — la modularité du code (déjà actée) améliore la maintenabilité, **pas** la confidentialité (une PWA reste techniquement extractible par construction). La vraie protection recommandée est **contractuelle** (licence, NDA), hors périmètre de conception logicielle — l'utilisateur a été informé qu'il devra voir ça avec un conseil juridique s'il livre le projet à un tiers. Formalisé en URS-NF-056 à 058, AR-R-66.
-4. **La 3ᵉ suggestion annoncée par l'ingénieur externe consulté par l'utilisateur n'a en réalité jamais existé** — il n'y en avait que 2, confirmé par l'utilisateur le 24/08/2026 ("il y'avait pas de 3ème suggestion my bad"). Ne pas la chercher ou la redemander.
+Les 4 points listés à l'origine dans ce fichier ont été retraités dans la session de reprise elle-même (`REV-URS-VALIDAPHARM-2026-010`, panel E1/E3/E4/E5). Points 2 à 4 étaient déjà clos (rien à faire). Point 1 est **tranché en conception**, un seul sous-point reste réellement ouvert :
+
+1. **Fournisseur IA de production + relais** — conçu et intégré en URS v25 (URS-F-038bis, URS-NF-044ter), AR v26 (R-64 précisé, R-65 précisé, R-67 nouveau), `09-architecture-detaillee.md` v02 §10, `22-SDS-outil.md` v13 §10quater. Résumé des décisions :
+   - Fournisseur : Claude (déjà par défaut, URS-F-032), avec un modèle distinct par mode d'usage (léger pour le chat normatif, plus capable pour le mode audit simulé — qualité du débat = valeur du produit, coût déjà jugé négligeable), chacun qualifié séparément (URS-F-038bis).
+   - Relais : Cloudflare Workers, `*.workers.dev` (pas de domaine custom nécessaire), sans état (URS-NF-044ter, mitige le nouveau risque AR-R-67 — un relais mal configuré pourrait journaliser le contenu échangé), clé en secret du Worker, CORS restreint à l'origine de la PWA.
+   - **Gap trouvé et corrigé** : `09-architecture-detaillee.md` §8 (v01) listait par erreur les domaines des fournisseurs IA dans la CSP du navigateur — incohérent avec l'architecture à relais (le navigateur ne parle jamais au fournisseur directement). Corrigé en v02.
+   - Plafond de dépense (AR-R-65) : deux niveaux — quota applicatif (URS-NF-048, déjà existant) + plafond configuré côté tableau de bord du fournisseur, ce dernier restant à activer au moment du déploiement réel.
+   - **Seul sous-point encore ouvert (AR-R-64)** : tester la joignabilité réseau du domaine du relais (`*.workers.dev`) depuis le poste professionnel de l'utilisateur — même méthode que pour `api.github.com`/`*.github.io` (AR-R-62, clos). **Ne peut pas être fait depuis une session Claude Code** : c'est un test réseau réel sur le poste concerné, à faire par l'utilisateur. Tant que ce n'est pas fait, AR-R-64 reste ouvert (impact faible : repli automatique déjà prévu sur un fonctionnement sans IA, URS-F-033).
+2. **Portée du mode audit simulé** : close, rien à retraiter (URS-F-038/039/040).
+3. **Protection de la propriété intellectuelle du code** : close, rien à retraiter (URS-NF-056/057/058, AR-R-66) — contractuel, hors périmètre logiciel.
+4. **3ᵉ suggestion externe inexistante** : confirmé, ne pas la chercher.
 
 ## 6. Repères pratiques
 
