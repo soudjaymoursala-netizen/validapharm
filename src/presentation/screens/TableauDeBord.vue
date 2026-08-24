@@ -32,7 +32,7 @@ const messageSync = computed(() => {
     return {
       type: 'conflit',
       texte:
-        "Conflit détecté : la branche distante a changé depuis la dernière synchronisation. Vos modifications locales n'ont PAS été écrasées ni envoyées — utilisez « Récupérer depuis GitHub » pour voir l'état distant avant de réessayer.",
+        "Conflit détecté : la branche distante a changé depuis la dernière synchronisation. Vos modifications locales n'ont PAS été écrasées ni envoyées — ouvrez la résolution de conflit pour comparer champ par champ.",
     }
   }
   return {
@@ -106,6 +106,9 @@ async function recupererDepuisGitHub(): Promise<void> {
       >
         {{ messageSync.texte }}
       </p>
+      <RouterLink v-if="messageSync?.type === 'conflit'" :to="{ name: 'resolution-conflit' }">
+        Résoudre le conflit
+      </RouterLink>
     </section>
 
     <form v-if="formulaireOuvert" class="formulaire-projet" @submit.prevent="creerProjet">

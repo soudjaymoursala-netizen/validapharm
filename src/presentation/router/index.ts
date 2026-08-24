@@ -30,5 +30,10 @@ export const router = createRouter({
       name: 'configuration-client',
       component: () => import('../screens/ConfigurationClient.vue'),
     },
+    {
+      path: '/resolution-conflit',
+      name: 'resolution-conflit',
+      component: () => import('../screens/ResolutionConflit.vue'),
+    },
   ],
 })

@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { GitHubConnector, type FichierAEcrire } from '../../connecteurs/github/GitHubConnector'
-import { ConflitShaError } from '../../connecteurs/github/erreurs'
+import { ConflitShaError, FichierIntrouvableError } from '../../connecteurs/github/erreurs'
+import {
+  appliquerResolutions,
+  construireMotifResolution,
+  diffChamps,
+  type ChampDivergent,
+  type ChoixResolutionChamp,
+} from '../../logique-metier/resolution-conflit/diffChamps'
 import { db } from '../../persistance/db'
 
 export type ResultatSynchronisation =
@@ -10,6 +17,19 @@ export type ResultatSynchronisation =
   | { ok: false; conflit: false; message: string }
 
 export type ResultatRecuperation = { ok: true; nbFichiers: number } | { ok: false; message: string }
+
+export interface ConflitEnregistrement {
+  type: 'project' | 'section'
+  id: string
+  local: Record<string, unknown>
+  distant: Record<string, unknown>
+  divergences: ChampDivergent[]
+}
+
+// Champs qui divergent par construction entre deux copies indépendantes
+// sans constituer un conflit de contenu à faire trancher par l'utilisateur
+// (FDS §3.6 : seuls les champs de contenu métier sont présentés).
+const CHAMPS_IGNORES_DIFF = ['updated_at', 'audit_log', 'revisions', 'created_at']
 
 const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
 
@@ -149,10 +169,149 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
     }
   }
 
+  /**
+   * Compare chaque projet/section local à sa contrepartie distante et
+   * retourne les enregistrements dont au moins un champ diverge
+   * réellement (FDS §3.6). Un enregistrement absent côté distant (jamais
+   * encore poussé) n'est jamais un conflit.
+   *
+   * Portée assumée (voir en-tête du fichier) : diff au niveau champ
+   * scalaire uniquement — un enregistrement dont seul `tables` diverge
+   * sera signalé avec `tables` comme unique champ divergent (résolution
+   * "tout ou rien" sur ce champ), pas une résolution ligne par ligne.
+   */
+  async function analyserConflit(): Promise<ConflitEnregistrement[]> {
+    const connecteur = await obtenirConnecteur()
+    if (connecteur === null) return []
+
+    const [projets, sections] = await Promise.all([db.projects.toArray(), db.sections.toArray()])
+    const conflits: ConflitEnregistrement[] = []
+
+    for (const projet of projets) {
+      const distant = await lireDistantOuNull(connecteur, `data/projects/${projet.id}.json`)
+      if (distant === null) continue
+      const divergences = diffChamps(
+        projet as unknown as Record<string, unknown>,
+        distant,
+        CHAMPS_IGNORES_DIFF,
+      )
+      if (divergences.length > 0) {
+        conflits.push({
+          type: 'project',
+          id: projet.id,
+          local: projet as unknown as Record<string, unknown>,
+          distant,
+          divergences,
+        })
+      }
+    }
+    for (const section of sections) {
+      const distant = await lireDistantOuNull(connecteur, `data/sections/${section.id}.json`)
+      if (distant === null) continue
+      const divergences = diffChamps(
+        section as unknown as Record<string, unknown>,
+        distant,
+        CHAMPS_IGNORES_DIFF,
+      )
+      if (divergences.length > 0) {
+        conflits.push({
+          type: 'section',
+          id: section.id,
+          local: section as unknown as Record<string, unknown>,
+          distant,
+          divergences,
+        })
+      }
+    }
+    return conflits
+  }
+
+  /**
+   * Applique les décisions de résolution prises pour chaque conflit
+   * signalé par `analyserConflit()`, journalise le motif structuré
+   * (FDS §3.6 : "capture, pour chaque champ en conflit, la décision
+   * retenue"), puis relance `synchroniser()` pour pousser l'état fusionné.
+   */
+  async function confirmerResolutionConflits(
+    resolutions: ReadonlyArray<{ conflit: ConflitEnregistrement; choix: ChoixResolutionChamp[] }>,
+  ): Promise<ResultatSynchronisation> {
+    const connecteur = await obtenirConnecteur()
+    if (connecteur === null) {
+      return { ok: false, conflit: false, message: 'Aucune connexion GitHub configurée.' }
+    }
+
+    const maintenant = new Date().toISOString()
+    for (const { conflit, choix } of resolutions) {
+      const motif = construireMotifResolution(choix)
+      if (conflit.type === 'project') {
+        const local = await db.projects.get(conflit.id)
+        if (local === undefined) continue
+        const fusionne = appliquerResolutions(
+          local,
+          conflit.distant as unknown as typeof local,
+          choix,
+        )
+        await db.projects.put({
+          ...fusionne,
+          updated_at: maintenant,
+          audit_log: [
+            ...local.audit_log,
+            {
+              timestamp: maintenant,
+              actor: local.audit_log.at(-1)?.actor ?? 'utilisateur',
+              action: motif,
+            },
+          ],
+        })
+      } else {
+        const local = await db.sections.get(conflit.id)
+        if (local === undefined) continue
+        const fusionne = appliquerResolutions(
+          local,
+          conflit.distant as unknown as typeof local,
+          choix,
+        )
+        await db.sections.put({
+          ...fusionne,
+          updated_at: maintenant,
+          audit_log: [
+            ...local.audit_log,
+            { timestamp: maintenant, actor: local.owner_id, action: motif },
+          ],
+          revisions: [
+            ...local.revisions,
+            { version: local.meta.version, date: maintenant, auteur: local.owner_id, motif },
+          ],
+        })
+      }
+    }
+
+    // La résolution repart de l'état distant : le SHA connu devient donc
+    // le SHA distant actuel avant de repousser l'état fusionné.
+    const shaActuel = await connecteur.shaBrancheActuel()
+    await enregistrerNouvelEtat(shaActuel)
+    return synchroniser()
+  }
+
+  async function lireDistantOuNull(
+    connecteur: GitHubConnector,
+    chemin: string,
+  ): Promise<Record<string, unknown> | null> {
+    try {
+      const { contenu } = await connecteur.lire(chemin)
+      return JSON.parse(contenu) as Record<string, unknown>
+    } catch (erreur) {
+      if (erreur instanceof FichierIntrouvableError) return null
+      throw erreur
+    }
+  }
+
   return {
     synchronisationEnCours,
     derniereSynchronisation,
     synchroniser,
     recupererDepuisGitHub,
+    analyserConflit,
+    confirmerResolutionConflits,
   }
 })

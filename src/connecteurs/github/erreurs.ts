@@ -37,6 +37,14 @@ export class PorteeInsuffisanteError extends Error {
   }
 }
 
+/** HTTP 404 : fichier absent à ce chemin/cette branche — pas nécessairement une erreur (ex. enregistrement jamais encore poussé). */
+export class FichierIntrouvableError extends Error {
+  constructor(message = 'Aucun fichier trouvé à ce chemin sur cette branche.') {
+    super(message)
+    this.name = 'FichierIntrouvableError'
+  }
+}
+
 /** HTTP 403 avec `X-RateLimit-Remaining: 0` : quota d'appels API épuisé (AR-R-63). */
 export class QuotaApiDepasseError extends Error {
   constructor(

@@ -1,6 +1,7 @@
 import {
   AuthentificationError,
   ConflitShaError,
+  FichierIntrouvableError,
   PorteeInsuffisanteError,
   QuotaApiDepasseError,
   TimeoutError,
@@ -208,6 +209,7 @@ export class GitHubConnector {
     if (reponse.ok) return reponse
 
     if (reponse.status === 401) throw new AuthentificationError()
+    if (reponse.status === 404) throw new FichierIntrouvableError()
     if (reponse.status === 409 || reponse.status === reglages?.statutConflitSupplementaire) {
       throw new ConflitShaError()
     }

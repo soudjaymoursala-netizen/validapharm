@@ -181,6 +181,203 @@ describe('useSynchronisationStore — synchroniser', () => {
   })
 })
 
+describe('useSynchronisationStore — analyserConflit', () => {
+  test('sans connexion configurée : aucun conflit signalé, aucun appel réseau', async () => {
+    const store = useSynchronisationStore()
+    const conflits = await store.analyserConflit()
+    expect(conflits).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  test('enregistrement jamais encore poussé (404 distant) : jamais un conflit', async () => {
+    await configurerConnexion()
+    await db.projects.put({
+      id: 'p1',
+      name: 'Projet local',
+      context: '',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+      sections: [],
+      documents: [],
+      links: [],
+      audit_log: [],
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    })
+    fetchMock.mockResolvedValueOnce(reponseMock({}, { status: 404 }))
+
+    const store = useSynchronisationStore()
+    const conflits = await store.analyserConflit()
+    expect(conflits).toEqual([])
+  })
+
+  test('champ de contenu divergent : signalé ; updated_at/audit_log seuls divergents : pas signalé', async () => {
+    await configurerConnexion()
+    await db.projects.put({
+      id: 'p1',
+      name: 'Nom local',
+      context: '',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+      sections: [],
+      documents: [],
+      links: [],
+      audit_log: [{ timestamp: '2026-01-02', actor: 'u1', action: 'modification' }],
+      created_at: '2026-01-01',
+      updated_at: '2026-01-02',
+    })
+    await db.projects.put({
+      id: 'p2',
+      name: 'Identique',
+      context: '',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+      sections: [],
+      documents: [],
+      links: [],
+      audit_log: [],
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    })
+
+    const distantP1 = JSON.stringify({
+      id: 'p1',
+      name: 'Nom distant',
+      context: '',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+      sections: [],
+      documents: [],
+      links: [],
+      audit_log: [],
+      created_at: '2026-01-01',
+      updated_at: '2026-01-03',
+    })
+    const distantP2 = JSON.stringify({
+      id: 'p2',
+      name: 'Identique',
+      context: '',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+      sections: [],
+      documents: [],
+      links: [],
+      audit_log: [{ timestamp: '2026-01-09', actor: 'autre', action: 'modification' }],
+      created_at: '2026-01-01',
+      updated_at: '2026-01-09',
+    })
+
+    fetchMock
+      .mockResolvedValueOnce(reponseMock({ content: encoderBase64Utf8(distantP1) }))
+      .mockResolvedValueOnce(reponseMock({ content: encoderBase64Utf8(distantP2) }))
+
+    const store = useSynchronisationStore()
+    const conflits = await store.analyserConflit()
+    expect(conflits).toHaveLength(1)
+    expect(conflits[0]?.id).toBe('p1')
+    expect(conflits[0]?.divergences).toEqual([
+      { champ: 'name', valeurLocale: 'Nom local', valeurDistante: 'Nom distant' },
+    ])
+  })
+})
+
+describe('useSynchronisationStore — confirmerResolutionConflits', () => {
+  test('applique le choix par champ, journalise le motif structuré, puis repousse via synchroniser()', async () => {
+    await configurerConnexion()
+    await db.projects.put({
+      id: 'p1',
+      name: 'Nom local',
+      context: 'contexte local',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+      sections: [],
+      documents: [],
+      links: [],
+      audit_log: [{ timestamp: '2026-01-01', actor: 'u1', action: 'création' }],
+      created_at: '2026-01-01',
+      updated_at: '2026-01-02',
+    })
+
+    const distant = {
+      id: 'p1',
+      name: 'Nom distant',
+      context: 'contexte distant',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+      sections: [],
+      documents: [],
+      links: [],
+      audit_log: [],
+      created_at: '2026-01-01',
+      updated_at: '2026-01-03',
+    }
+
+    const store = useSynchronisationStore()
+    const conflit = {
+      type: 'project' as const,
+      id: 'p1',
+      local: {} as Record<string, unknown>,
+      distant: distant as Record<string, unknown>,
+      divergences: [
+        { champ: 'name', valeurLocale: 'Nom local', valeurDistante: 'Nom distant' },
+        { champ: 'context', valeurLocale: 'contexte local', valeurDistante: 'contexte distant' },
+      ],
+    }
+
+    fetchMock
+      .mockResolvedValueOnce(reponseMock({ object: { sha: 'sha-post-resolution' } })) // shaBrancheActuel avant réenregistrement
+      .mockResolvedValueOnce(reponseMock({ object: { sha: 'sha-post-resolution' } })) // vérif dans ecrireGroupe (synchroniser)
+      .mockResolvedValueOnce(reponseMock({ tree: { sha: 'sha-arbre-base' } }))
+      .mockResolvedValueOnce(reponseMock({ sha: 'sha-blob-1' }))
+      .mockResolvedValueOnce(reponseMock({ sha: 'sha-nouvel-arbre' }))
+      .mockResolvedValueOnce(reponseMock({ sha: 'sha-nouveau-commit' }))
+      .mockResolvedValueOnce(reponseMock({ object: { sha: 'sha-nouveau-commit' } }))
+
+    const resultat = await store.confirmerResolutionConflits([
+      {
+        conflit,
+        choix: [
+          { champ: 'name', choix: 'locale' },
+          { champ: 'context', choix: 'distante' },
+        ],
+      },
+    ])
+
+    expect(resultat).toEqual({ ok: true, nbFichiers: 1 })
+
+    const fusionne = await db.projects.get('p1')
+    expect(fusionne?.name).toBe('Nom local')
+    expect(fusionne?.context).toBe('contexte distant')
+    expect(fusionne?.audit_log.at(-1)?.action).toBe(
+      'Résolution de conflit — name: version locale ; context: version distante',
+    )
+
+    const etat = await db.etatSynchronisation.get('unique')
+    expect(etat?.shaBrancheConnue).toBe('sha-nouveau-commit')
+  })
+})
+
 describe('useSynchronisationStore — recupererDepuisGitHub', () => {
   test('filtre aux chemins data/projects et data/sections, ignore le reste', async () => {
     await configurerConnexion()

@@ -3,6 +3,7 @@ import { GitHubConnector } from './GitHubConnector'
 import {
   AuthentificationError,
   ConflitShaError,
+  FichierIntrouvableError,
   PorteeInsuffisanteError,
   QuotaApiDepasseError,
   TimeoutError,
@@ -78,6 +79,11 @@ describe('GitHubConnector — lire', () => {
   test('403 sans quota épuisé -> PorteeInsuffisanteError', async () => {
     fetchMock.mockResolvedValueOnce(reponseMock({}, { status: 403 }))
     await expect(connecteur().lire('x.json')).rejects.toBeInstanceOf(PorteeInsuffisanteError)
+  })
+
+  test('404 -> FichierIntrouvableError (ex. enregistrement jamais encore poussé)', async () => {
+    fetchMock.mockResolvedValueOnce(reponseMock({}, { status: 404 }))
+    await expect(connecteur().lire('x.json')).rejects.toBeInstanceOf(FichierIntrouvableError)
   })
 
   test('abandon réseau (timeout) -> TimeoutError', async () => {
