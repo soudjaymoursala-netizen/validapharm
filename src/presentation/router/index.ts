@@ -58,5 +58,10 @@ export const router = createRouter({
       component: () => import('../screens/PanneauChat.vue'),
       props: true,
     },
+    {
+      path: '/strategie-qualification',
+      name: 'assistant-strategie-qualification',
+      component: () => import('../screens/AssistantStrategieQualification.vue'),
+    },
   ],
 })
