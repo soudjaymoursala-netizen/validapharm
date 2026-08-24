@@ -79,6 +79,24 @@ describe('useSectionsStore — mettreAJourValeurs (URS-F-009)', () => {
     const sectionEnBase = await db.sections.get(section.id)
     expect(sectionEnBase?.values.contenu).toBe('v1')
   })
+
+  test("journalise une entrée 'modification' dans audit_log (FS §3, traçabilité)", async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    expect(section.audit_log).toHaveLength(1) // création uniquement, à ce stade
+
+    await sections.mettreAJourValeurs(section.id, { contenu: 'v1' })
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.audit_log.at(-1)?.action).toBe('modification')
+    expect(sectionEnBase?.audit_log).toHaveLength(2)
+  })
+
+  test('une section verrouillée ne journalise pas non plus de tentative refusée', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await db.sections.put({ ...section, status: 'valide_en_interne' })
+    await sections.mettreAJourValeurs(section.id, { contenu: 'tentative' })
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.audit_log).toHaveLength(1)
+  })
 })
 
 describe('useSectionsStore — workflow (approbateur, avis relecteur)', () => {

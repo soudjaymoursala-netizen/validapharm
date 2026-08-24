@@ -5,6 +5,7 @@
 // chargement de documents restent backlog (tâche #12).
 import { computed, onMounted, ref } from 'vue'
 import type { Project, TemplateType } from '../../logique-metier/domaine/types'
+import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useSectionsStore } from '../stores/useSectionsStore'
 
@@ -48,7 +49,7 @@ async function ajouterSection(): Promise<void> {
     template_type: nouveauTemplateType.value,
     language: projet.value?.language_default ?? 'fr',
     titre: nouveauTitre.value,
-    owner_id: 'utilisateur-local',
+    owner_id: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
   })
   formulaireOuvert.value = false
   nouveauTitre.value = ''

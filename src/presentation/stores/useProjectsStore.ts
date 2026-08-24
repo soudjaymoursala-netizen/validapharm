@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Langue, Project } from '../../logique-metier/domaine/types'
+import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouveauProjetInput {
@@ -49,7 +50,9 @@ export const useProjectsStore = defineStore('projects', () => {
       sections: [],
       documents: [],
       links: [],
-      audit_log: [{ timestamp: maintenant, actor: 'utilisateur', action: 'création' }],
+      audit_log: [
+        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
+      ],
       created_at: maintenant,
       updated_at: maintenant,
     }

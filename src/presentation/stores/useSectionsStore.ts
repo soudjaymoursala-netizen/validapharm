@@ -93,11 +93,26 @@ export const useSectionsStore = defineStore('sections', () => {
    * Refuse silencieusement toute modification si la section est
    * verrouillée (URS-F-012) plutôt que d'écrire un corps qui devrait
    * passer par une nouvelle révision (backlog).
+   *
+   * @requirement URS-NF-030/031 — `audit_log.action` inclut explicitement
+   * "modification" dans le modèle pivot (FS §3) : une sauvegarde de
+   * contenu qui ne laisserait aucune trace serait un écart de
+   * traçabilité, pas seulement un détail d'implémentation. Une entrée
+   * par appel (donc par sauvegarde debounced), jamais par frappe.
    */
   async function mettreAJourValeurs(sectionId: string, values: Section['values']): Promise<void> {
     const section = await chargerSection(sectionId)
     if (section.status === 'valide_en_interne') return
-    await db.sections.put({ ...section, values, updated_at: new Date().toISOString() })
+    const maintenant = new Date().toISOString()
+    await db.sections.put({
+      ...section,
+      values,
+      updated_at: maintenant,
+      audit_log: [
+        ...section.audit_log,
+        { timestamp: maintenant, actor: section.owner_id, action: 'modification' },
+      ],
+    })
     await chargerSectionsDuProjet(section.project_id)
   }
 
