@@ -5,6 +5,8 @@ import type {
   AssetNode,
   Client,
   ClientConfig,
+  EvaluationACFC,
+  MethodProfileACFC,
   Project,
   ProjectDocument,
   Section,
@@ -96,6 +98,8 @@ export class ValidaPharmDatabase extends Dexie {
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
   assetHierarchySchemas!: EntityTable<AssetHierarchySchema, 'client_id'>
   assetNodes!: EntityTable<AssetNode, 'id'>
+  methodProfilesACFC!: EntityTable<MethodProfileACFC, 'id'>
+  evaluationsACFC!: EntityTable<EvaluationACFC, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -122,6 +126,10 @@ export class ValidaPharmDatabase extends Dexie {
     this.version(5).stores({
       assetHierarchySchemas: 'client_id',
       assetNodes: 'id, client_id, parent_id, code',
+    })
+    this.version(6).stores({
+      methodProfilesACFC: 'id, client_id, created_at',
+      evaluationsACFC: 'id, client_id, method_profile_id, created_at',
     })
   }
 }

@@ -221,3 +221,74 @@ export interface AiChatSessionLog {
   moteur_version: string | null
   document_joint: boolean
 }
+
+/**
+ * Question d'une méthode ACFC (FS §4.6bis, Phase 1 de convergence
+ * architecturale — `docs/convergence/CONVERGENCE_PLAN.md`). Le texte est
+ * conservé mot pour mot tel que fourni par le client, jamais reformulé ni
+ * traduit automatiquement (seule la langue explicitement saisie est
+ * garantie fidèle ; les autres langues du record restent vides tant que
+ * personne ne les a renseignées).
+ */
+export interface QuestionACFC {
+  id: string
+  texte: Partial<Record<Langue, string>>
+  famille?: string
+}
+
+export type OrigineMethodeACFC = 'procedure_client' | 'defini_utilisateur' | 'baseline_validapharm'
+
+/**
+ * Méthode ACFC configurable par client (FS §4.6bis, remplace la grille de
+ * criticité codée en dur — voir `docs/convergence/TECHNICAL_DECISIONS.md`
+ * TD-002). Un client peut avoir 4, 6, 7, 9 ou N questions ; **jamais de
+ * valeur figée dans le code**. Immuable une fois créée (principe de
+ * versionnement du package Target Architecture, "Versioned records are
+ * immutable") : toute modification crée une nouvelle version, elle ne
+ * mute jamais un profil existant déjà utilisé par une évaluation.
+ *
+ * `decision_rule` est modélisée comme donnée plutôt que codée en dur,
+ * mais une seule règle a été confirmée sur source réelle à ce jour (au
+ * moins un "oui" parmi les questions → élément critique, confirmée sur 4
+ * sources indépendantes le 24-25/08/2026) — le type n'accueille donc
+ * qu'une seule valeur pour l'instant, pas par choix de conception mais
+ * par absence de contre-exemple réel documenté.
+ *
+ * @requirement URS-F-050 (F2, Analyse de risque)
+ */
+export interface MethodProfileACFC {
+  id: string
+  client_id: string
+  version: string
+  effective_date: string
+  source: string
+  origin: OrigineMethodeACFC
+  questions: QuestionACFC[]
+  decision_rule: 'au_moins_un_oui_critique'
+  created_at: string
+}
+
+export type ReponseQuestionACFC = 'oui' | 'non' | 'inconnu' | 'sans_objet'
+
+/**
+ * Une évaluation ACFC (FS §4.6bis) : l'exécution d'un `MethodProfileACFC`
+ * contre un élément réel (composant/fonction), optionnellement rattaché à
+ * un nœud de Structure Système (§4.10). `method_profile_version` fige la
+ * version utilisée au moment de l'évaluation (traçabilité/reproductibilité
+ * historique, cohérent avec le principe `ContextSnapshot` immuable du
+ * package Target Architecture) : si la méthode est révisée ensuite, cette
+ * évaluation reste lisible telle qu'elle a été produite.
+ */
+export interface EvaluationACFC {
+  id: string
+  client_id: string
+  method_profile_id: string
+  method_profile_version: string
+  asset_node_id: string | null
+  nom_element: string
+  reponses: Record<string, ReponseQuestionACFC>
+  verdict: 'critique' | 'non_critique' | null
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}

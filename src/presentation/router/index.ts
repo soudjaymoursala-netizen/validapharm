@@ -59,9 +59,10 @@ export const router = createRouter({
       props: true,
     },
     {
-      path: '/strategie-qualification',
+      path: '/clients/:clientId/strategie-qualification',
       name: 'assistant-strategie-qualification',
       component: () => import('../screens/AssistantStrategieQualification.vue'),
+      props: true,
     },
     {
       path: '/clients/:clientId/structure-systeme',
