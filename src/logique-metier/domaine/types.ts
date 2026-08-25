@@ -292,3 +292,100 @@ export interface EvaluationACFC {
   created_at: string
   updated_at: string
 }
+
+/**
+ * Paramètre de procédé/produit (Phase 2 de convergence architecturale,
+ * `docs/convergence/CONVERGENCE_PLAN.md`). Objet de base — ne porte lui-même
+ * aucune notion de criticité : le niveau d'importance/criticité est un objet
+ * séparé (`ClassificationCriticiteParametre`), jamais un champ mutable ici,
+ * pour qu'une classification reste un événement daté et justifié plutôt
+ * qu'un simple attribut qu'on écrase.
+ *
+ * @requirement Target Architecture §10 (`01_ARCHITECTURE_MASTER_FINAL.md`),
+ * DEC-019/DEC-020
+ */
+export interface Parameter {
+  id: string
+  client_id: string
+  asset_node_id: string | null
+  nom: string
+  description: string
+  unite: string | null
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+export type NiveauCriticiteParametre = 'important' | 'critique'
+
+/**
+ * Déclaration qu'un `Parameter` est important ou critique **pour le
+ * procédé** (`ImportantParameter`/`CriticalParameter` du package Target
+ * Architecture §10 — modélisés ici comme un seul type discriminé par
+ * `niveau` : les deux partagent exactement la même structure de
+ * déclaration, seul le niveau diffère, et les fondre en deux interfaces
+ * identiques n'ajouterait aucune garantie supplémentaire).
+ *
+ * **Ne crée jamais de `CPP` ni de `CQA`.** Le package l'interdit
+ * explicitement (§10 : *"Un CPP ne doit jamais être promu automatiquement à
+ * partir d'un simple score de criticité"*, DEC-019). Un `CPP`/`CQA` ne peut
+ * être créé que par une déclaration humaine explicite et séparée.
+ */
+export interface ClassificationCriticiteParametre {
+  id: string
+  client_id: string
+  parameter_id: string
+  niveau: NiveauCriticiteParametre
+  contexte: string | null
+  justification: string
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+}
+
+/**
+ * CPP (Critical Process Parameter, ICH Q8/Q9/Q10) — déclaration humaine
+ * explicite, jamais dérivée automatiquement d'une `ClassificationCriticiteParametre`
+ * (DEC-019). Contextuel (DEC-021, "CQA/CPP context change" —
+ * `11_USE_CASES_70_SCENARIOS.md`) : un même `Parameter` peut être un CPP
+ * dans un contexte produit/procédé donné et ne pas l'être dans un autre.
+ * `contexte` reste un champ texte libre tant que `ManufacturingContext`
+ * n'existe pas comme entité relationnelle (Phase 4 du plan de convergence) —
+ * pas une simplification définitive, une étape intermédiaire assumée.
+ *
+ * Immuable comme événement : un changement de contexte ne mute jamais un
+ * CPP existant, il en désactive un (`actif: false`, motif tracé dans
+ * `audit_log`) et, si applicable, en déclare un nouveau pour le nouveau
+ * contexte — l'historique reste lisible tel qu'il a été produit.
+ */
+export interface CPP {
+  id: string
+  client_id: string
+  parameter_id: string
+  contexte: string
+  justification: string
+  actif: boolean
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * CQA (Critical Quality Attribute, ICH Q8) — même principe de déclaration
+ * humaine explicite et contextuelle que `CPP`, mais porte sur un attribut
+ * qualité (produit), pas sur un paramètre de procédé : pas de
+ * `parameter_id`, car un CQA n'est pas nécessairement issu d'un `Parameter`
+ * suivi dans l'outil (ex. un attribut mesuré uniquement en laboratoire
+ * externe).
+ */
+export interface CQA {
+  id: string
+  client_id: string
+  nom: string
+  description: string
+  contexte: string
+  justification: string
+  actif: boolean
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}

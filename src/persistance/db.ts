@@ -5,8 +5,12 @@ import type {
   AssetNode,
   Client,
   ClientConfig,
+  ClassificationCriticiteParametre,
+  CPP,
+  CQA,
   EvaluationACFC,
   MethodProfileACFC,
+  Parameter,
   Project,
   ProjectDocument,
   Section,
@@ -100,6 +104,10 @@ export class ValidaPharmDatabase extends Dexie {
   assetNodes!: EntityTable<AssetNode, 'id'>
   methodProfilesACFC!: EntityTable<MethodProfileACFC, 'id'>
   evaluationsACFC!: EntityTable<EvaluationACFC, 'id'>
+  parameters!: EntityTable<Parameter, 'id'>
+  classificationsCriticiteParametre!: EntityTable<ClassificationCriticiteParametre, 'id'>
+  cpps!: EntityTable<CPP, 'id'>
+  cqas!: EntityTable<CQA, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -130,6 +138,12 @@ export class ValidaPharmDatabase extends Dexie {
     this.version(6).stores({
       methodProfilesACFC: 'id, client_id, created_at',
       evaluationsACFC: 'id, client_id, method_profile_id, created_at',
+    })
+    this.version(7).stores({
+      parameters: 'id, client_id, asset_node_id',
+      classificationsCriticiteParametre: 'id, client_id, parameter_id, created_at',
+      cpps: 'id, client_id, parameter_id, actif',
+      cqas: 'id, client_id, actif',
     })
   }
 }
