@@ -6,17 +6,21 @@
 
 ---
 
-### TD-001 — Introduire un backend serveur léger pour les capacités qui l'exigent
-- **Statut** : **PROPOSÉE — arbitrage utilisateur requis** (découle de CONFLICT-001).
-- **Context** : PWA 100% navigateur actuelle, contrainte réelle du poste professionnel (pas d'installation locale). La Target Architecture présuppose un backend (Modular Monolith, base relationnelle, recherche, workers asynchrones).
-- **Problem** : Source Intelligence, recherche, workers asynchrones fiables sont difficiles à livrer à un niveau GxP uniquement dans le navigateur.
-- **Options** : (1) rester 100% navigateur, dégrader ces ambitions ; (2) backend distant léger pour OCR/recherche/AI Gateway, cœur GxP inchangé côté navigateur ; (3) reconstruction complète serveur.
-- **Pros/Cons** : (2) préserve tout l'existant testé, ouvre les capacités cible ; coût = un nouveau composant d'infrastructure à héberger et sécuriser (au-delà de GitHub Pages).
-- **Risk** : Moyen — nouvelle surface d'attaque/maintenance si (2) est retenue ; risque de sur-promesse si (1) est retenue sans le dire explicitement.
-- **Recommendation** : (2), mais **ne pas trancher sans l'utilisateur** — ça touche une contrainte qu'il a lui-même posée comme non négociable à plusieurs reprises.
-- **Rejected Alternatives** : aucune rejetée définitivement — les 3 options restent ouvertes tant que l'arbitrage n'a pas eu lieu.
-- **Impact** : Majeur, conditionne tout le chantier Source Intelligence/Search.
-- **Reversibility** : Faible une fois construit (changer d'hébergement/backend après coup est coûteux) — raison de plus pour trancher tôt et explicitement.
+### TD-001 — Étendre le pattern serverless existant (Cloudflare Workers) plutôt qu'un backend "Modular Monolith"
+- **Statut** : **ACTÉE (25/08/2026, décision explicite de l'utilisateur)** — résout CONFLICT-001. Version révisée et simplifiée par rapport à la première proposition (backend serveur générique), sur demande explicite de l'utilisateur de challenger la solution la plus simple ne compromettant pas l'objectif.
+- **Context** : PWA 100% navigateur actuelle, contrainte réelle du poste professionnel (pas d'installation locale). La Target Architecture présuppose un backend (Modular Monolith, base relationnelle, recherche, workers asynchrones) pour porter Source Intelligence/Search/Integration Gateway.
+- **Problem** : la première option envisagée (introduire un vrai backend serveur — base relationnelle + stockage objet + moteur de recherche) est plus lourde que ce que l'objectif exige réellement à l'échelle actuelle du projet (mono-utilisateur), et ouvre une nouvelle surface d'infrastructure à héberger/sécuriser/sauvegarder.
+- **Decision** : ne pas construire de backend serveur "Modular Monolith". À la place, **étendre le pattern serverless déjà construit et validé** (relais Cloudflare Workers, URS-NF-044ter, déjà testé joignable depuis le poste professionnel de l'utilisateur — AR-R-64, clos) :
+  - **OCR/Document Intelligence** : un second Worker sans état, relais vers une API cloud de vision/OCR (même pattern exact que le relais IA existant) — pas de pipeline serveur dédié.
+  - **Recherche** : index plein texte calculé côté navigateur (IndexedDB) pour l'usage actuel ; si le volume l'impose un jour, les embeddings deviennent de simples fichiers JSON dans le dépôt Git (déjà source de vérité), comparés côté client — pas de base vectorielle serveur.
+  - **Stockage des sources/preuves** : le dépôt Git dédié existant, pas un nouvel object storage.
+  - **Traitement asynchrone** : Cloudflare Queues (même compte Cloudflare que le relais IA), suffisant à l'échelle mono-utilisateur actuelle — pas d'orchestrateur de jobs serveur.
+- **Pros** : zéro serveur qui tourne en continu, zéro nouvelle base de données à héberger/sécuriser/sauvegarder, zéro nouvelle dépendance de compte (même Cloudflare, même GitHub déjà utilisés et validés), risque et coût minimaux.
+- **Cons** : pas de moteur de requêtes relationnelles complexes multi-entités à grande échelle — accepté explicitement car aucun besoin réel ne le démontre aujourd'hui (cohérent avec le principe de la cible : "un service n'est extrait que si un besoin démontré existe").
+- **Risk** : Faible — réutilise une brique déjà en production et déjà testée réseau.
+- **Rejected Alternatives** : (a) rester 100% navigateur sans aucune extension serverless — rejeté, dégraderait trop l'ambition Document Intelligence/Search ; (b) backend serveur complet (Modular Monolith, base relationnelle, object storage dédié) — rejeté comme disproportionné à l'échelle actuelle du projet, réévaluable seulement si un besoin réel et démontré apparaît.
+- **Impact** : Débloque les Phases 7-8 du `CONVERGENCE_PLAN.md` sans point d'arrêt.
+- **Reversibility** : Élevée — une fonction serverless ponctuelle se remplace ou s'étend sans migration lourde ; si un vrai besoin de backend complet apparaît plus tard, rien de ce qui est construit ici ne devient un frein (le Git reste la source de vérité dans tous les cas).
 
 ---
 

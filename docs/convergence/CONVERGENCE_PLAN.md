@@ -85,17 +85,16 @@
 
 ---
 
-## Phase 6 — Arbitrage TD-001 (architecture serveur) **avant** Source Intelligence/Search
-- **Objective** : trancher l'arbitrage utilisateur sur l'introduction d'un backend distant, condition préalable à tout le reste.
-- **Current State** : 100% navigateur.
-- **Target State** : à décider — hybride recommandé (`TECHNICAL_DECISIONS.md` TD-001).
-- **Dependencies** : aucune dépendance technique, mais bloque les Phases 7-8 tant que non tranché.
-- **Migration** : dépend de la décision.
-- **Risk** : Majeur si mal séquencé (cf. CONFLICT-001).
-- **Tests** : N/A à ce stade.
-- **Rollback** : N/A.
-- **Acceptance Criteria** : décision actée et documentée, quelle qu'elle soit.
-- **⚠️ Point d'arrêt** : ne pas avancer sur les Phases 7-8 sans cette décision.
+## Phase 6 — Extension serverless (Cloudflare Workers) pour OCR/recherche — **RÉSOLU, plus de point d'arrêt**
+- **Objective** : préparer la brique technique dont les Phases 7-8 ont besoin, sans backend serveur complet.
+- **Current State** : 100% navigateur ; un relais Cloudflare Workers déjà en production pour l'IA (URS-NF-044ter).
+- **Target State** (décidé le 25/08/2026, `TECHNICAL_DECISIONS.md` TD-001) : un second Worker sans état pour l'OCR/Document Intelligence (relais vers une API cloud de vision, même pattern que le relais IA) ; recherche calculée côté navigateur (IndexedDB), puis JSON versionnés dans Git si le volume l'exige un jour ; dépôt Git comme seul stockage des sources ; Cloudflare Queues pour le traitement asynchrone léger. Pas de base relationnelle serveur, pas d'object storage dédié.
+- **Dependencies** : aucune — réutilise l'infrastructure Cloudflare/GitHub déjà en place et déjà testée réseau (AR-R-64, clos).
+- **Migration** : ajout d'un nouveau Worker sans état, à côté du relais IA existant ; aucune migration de données requise.
+- **Risk** : Faible — pattern déjà éprouvé dans ce même projet.
+- **Tests** : joignabilité réseau du nouveau Worker (même méthode qu'AR-R-64), tests unitaires du contrat du Worker.
+- **Rollback** : trivial (suppression du Worker, aucune donnée n'y est stockée).
+- **Acceptance Criteria** : un document envoyé au Worker OCR revient structuré, sans qu'aucune donnée métier ne soit conservée côté Worker au-delà de la requête (cohérent avec le relais IA existant, sans état).
 
 ---
 
@@ -128,4 +127,4 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le schém
 
 ---
 
-*Fin de la Phase 0. Les 7 livrables (`GAP.md`, `CURRENT_ARCHITECTURE.md`, `LEGACY_MAPPING.md`, `ARCHITECTURE_CONFLICTS.md`, `ARCHITECTURE_CHALLENGES.md`, `TECHNICAL_DECISIONS.md`, `CONVERGENCE_PLAN.md`) sont produits. Seul TD-001/Phase 6 (architecture serveur) attend un arbitrage explicite de l'utilisateur avant que les Phases 7-8 puissent être engagées — tout le reste (Phases 0bis à 5, 9 à 11) peut être avancé sans blocage.*
+*Fin de la Phase 0. Les 7 livrables (`GAP.md`, `CURRENT_ARCHITECTURE.md`, `LEGACY_MAPPING.md`, `ARCHITECTURE_CONFLICTS.md`, `ARCHITECTURE_CHALLENGES.md`, `TECHNICAL_DECISIONS.md`, `CONVERGENCE_PLAN.md`) sont produits. TD-001/Phase 6 est résolu (25/08/2026, extension serverless plutôt que backend complet) — plus aucun point d'arrêt : toutes les phases (0bis à 11) peuvent être engagées dans l'ordre proposé.*
