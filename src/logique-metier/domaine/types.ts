@@ -840,3 +840,61 @@ export interface ExecutionEvent {
   horodatage: string
   actor: string
 }
+
+/**
+ * Phase 7c (`docs/convergence/PHASE_7C_EVIDENCE_SPEC.md`) — dernière
+ * sous-étape de la Phase 7, dont l'Acceptance Criteria (traçabilité
+ * Requirement→Test→Execution→Evidence démontrable) se clôt ici. Une
+ * `Evidence` est toujours rattachée à une `Execution` réelle — jamais une
+ * preuve orpheline — et optionnellement à un `ExecutionStep` précis.
+ * `type: native` = l'observation directe de l'exécutant fait foi, sans
+ * fichier source ; `type: document` renvoie à un fichier externe via
+ * `EvidenceLocation`. Immutable une fois créée, même garde-fou de
+ * post-clôture qu'`ExecutionStep`/`Measurement` (Phase 7b, ALCOA+).
+ */
+export type TypeEvidence = 'native' | 'document'
+
+export interface Evidence {
+  id: string
+  client_id: string
+  execution_id: string
+  execution_step_id: string | null
+  type: TypeEvidence
+  titre: string
+  description: string
+  horodatage: string
+  actor: string
+}
+
+/**
+ * Pointeur déclaratif vers où réside un document de preuve — jamais le
+ * contenu binaire lui-même (aucun stockage de fichier réel construit dans
+ * cet incrément, cf. §5 de la spec). Cohérent avec l'architecture déjà
+ * actée (SDS §3/§5bis) : dépôt Git dédié = source de vérité, Drive =
+ * miroir. Ne peut exister que pour une `Evidence` de type `document`.
+ */
+export type SystemeEvidenceLocation = 'github' | 'drive' | 'externe'
+
+export interface EvidenceLocation {
+  id: string
+  client_id: string
+  evidence_id: string
+  systeme: SystemeEvidenceLocation
+  reference: string
+}
+
+/**
+ * Lien N:M explicite Evidence↔Requirement, jamais déduit — même logique
+ * que `Couverture` (7a) face à `TestObjective.requirement_id` : une
+ * preuve peut substantier une exigence au-delà de la couverture générique
+ * du test dont elle provient. La traçabilité Execution→Test→Requirement
+ * existe déjà par les clés étrangères ; ce lien sert spécifiquement à
+ * déclarer qu'une `Evidence` appuie une `Requirement` précise.
+ */
+export interface ProvenanceLink {
+  id: string
+  client_id: string
+  evidence_id: string
+  requirement_id: string
+  created_at: string
+}

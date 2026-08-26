@@ -13,6 +13,8 @@ import type {
   EvaluationACFC,
   EvaluationCSVAssessment,
   EvaluationImpactAssessment,
+  Evidence,
+  EvidenceLocation,
   Execution,
   ExecutionEvent,
   ExecutionStep,
@@ -24,6 +26,7 @@ import type {
   Parameter,
   Couverture,
   Process,
+  ProvenanceLink,
   Project,
   ProjectDocument,
   QualityEvent,
@@ -159,6 +162,9 @@ export class ValidaPharmDatabase extends Dexie {
   executionSteps!: EntityTable<ExecutionStep, 'id'>
   measurements!: EntityTable<Measurement, 'id'>
   executionEvents!: EntityTable<ExecutionEvent, 'id'>
+  evidences!: EntityTable<Evidence, 'id'>
+  evidenceLocations!: EntityTable<EvidenceLocation, 'id'>
+  provenanceLinks!: EntityTable<ProvenanceLink, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -227,6 +233,11 @@ export class ValidaPharmDatabase extends Dexie {
       executionSteps: 'id, client_id, execution_id, test_step_id',
       measurements: 'id, client_id, execution_step_id',
       executionEvents: 'id, client_id, execution_id, quality_event_id',
+    })
+    this.version(14).stores({
+      evidences: 'id, client_id, execution_id, execution_step_id',
+      evidenceLocations: 'id, client_id, evidence_id',
+      provenanceLinks: 'id, client_id, evidence_id, requirement_id',
     })
   }
 }

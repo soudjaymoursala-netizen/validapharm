@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 22 (ajout §4.13/URS-F-130 — exécution d'un Test approuvé, Phase 7b, 25/08/2026 — cohérent avec URS v32). Version 21 : ajout §4.12/URS-F-120 — chaîne de définition Requirement → TestObjective → TestCandidate → Test, Phase 7a, 25/08/2026 — cohérent avec URS v31). Version 20 : intégration des exigences manquantes, 25/08/2026 : ajout §4.6quater/URS-F-058 — Parameter/CriticalParameter/CPP/CQA, Phase 2, oublié au moment de son implémentation — et §4.11/URS-F-110 — Quality Events, Phase 5 — cohérent avec URS v30. Version 19 : ajout §4.10bis/URS-F-103, Phase 4. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
+| **Version** | 23 (ajout §4.14/URS-F-140 — Evidence, dernière sous-étape de la Phase 7, 25/08/2026 — cohérent avec URS v33). Version 22 : ajout §4.13/URS-F-130 — exécution d'un Test approuvé, Phase 7b, 25/08/2026 — cohérent avec URS v32). Version 21 : ajout §4.12/URS-F-120 — chaîne de définition Requirement → TestObjective → TestCandidate → Test, Phase 7a, 25/08/2026 — cohérent avec URS v31). Version 20 : intégration des exigences manquantes, 25/08/2026 : ajout §4.6quater/URS-F-058 — Parameter/CriticalParameter/CPP/CQA, Phase 2, oublié au moment de son implémentation — et §4.11/URS-F-110 — Quality Events, Phase 5 — cohérent avec URS v30. Version 19 : ajout §4.10bis/URS-F-103, Phase 4. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -396,6 +396,16 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - **Garde-fou non négociable** : `cloturerExecution` exige un `verdict` explicite, jamais déduit des `ExecutionStep` — cohérent avec le principe fondateur n°1 — URS-F-130quinquies.
 - `ExecutionEvent` : journal d'événements pendant l'exécution (anomalie/pause/reprise/commentaire), distinct du `QualityEvent` (§4.11) ; référence optionnelle `quality_event_id` vers un `QualityEvent` déjà existant, jamais créé automatiquement — vérifié explicitement (un `ExecutionStep` non conforme ne crée aucun `QualityEvent`) — URS-F-130sexies.
 - Aucune génération/validation/clôture automatique par IA — URS-F-130septies.
+
+### 4.14 Evidence — preuve rattachée à une exécution (répond à URS-F-140 à 140sexies, nouveau v23 — Phase 7c, dernière sous-étape de la Phase 7)
+
+- `Evidence` : `type native` (constat direct de l'exécutant, sans document source) ou `document` (renvoie à un fichier externe) — URS-F-140.
+- **Garde-fou non négociable** : immutabilité post-clôture, même règle que `ExecutionStep`/`Measurement` (§4.13) — URS-F-140bis.
+- `execution_step_id` optionnel, DOIT appartenir à l'exécution référencée si fourni — vérifié explicitement — URS-F-140ter.
+- `EvidenceLocation` : pointeur déclaratif (système `github`/`drive`/`externe` + référence) pour une preuve de type `document` uniquement — jamais un stockage de fichier réel (limite assumée, cohérente avec le stub `ProjectDocument` non consommé) — URS-F-140quater.
+- `ProvenanceLink` : déclaration explicite et idempotente Evidence↔Requirement, même logique que `Couverture` (§4.12) — URS-F-140quinquies.
+- Aucune génération/qualification automatique par IA — URS-F-140sexies.
+- **Traçabilité complète démontrée par test** : `Requirement → TestObjective → TestCandidate → Test → Couverture → Execution → ExecutionStep → Evidence → ProvenanceLink`, interrogeable via `preuvesPourRequirement` — clôt l'Acceptance Criteria de la Phase 7 (`CONVERGENCE_PLAN.md`).
 
 ## 5. Spécification des exigences non fonctionnelles
 
