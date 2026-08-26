@@ -59,7 +59,7 @@
 
 ---
 
-## Phase 4 — Extension de Structure Système : `Function` + `Process`/`ManufacturingContext`
+## Phase 4 — Extension de Structure Système : `Function` + `Process`/`ManufacturingContext` — **TERMINÉE (25/08/2026)**
 - **Objective** : donner un sens fonctionnel et contextuel aux nœuds d'actifs déjà modélisés.
 - **Current State** : `AssetNode` sans notion de fonction ni de contexte produit/procédé.
 - **Target State** : `Function` comme entité séparée (relation N:M avec Equipment/DigitalSystem/Process), `ManufacturingContext` explicite.
@@ -137,6 +137,7 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le fourni
 | 1 | Terminée (25/08/2026) | `a8f7f83` | `01-URS-outil.md` v27, `03-specifications-fonctionnelles.md` v18, `16-FDS-outil.md` v15, `02-analyse-de-risque-outil.md` v28 |
 | 2 | Terminée (25/08/2026) | `c6391ca` | Aucune correction de doc réglementaire requise (Phase 2 est un ajout pur, sans description contradictoire préexistante) |
 | 3 | Terminée partiellement (25/08/2026) | voir historique git de la branche | `GAP.md`, `ARCHITECTURE_CONFLICTS.md` (CONFLICT-002 marqué résolu, GxPAssessment noté non implémenté) |
-| 4-11 | Non engagées | — | — |
+| 4 | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v29 (§4.10bis/URS-F-103), `03-specifications-fonctionnelles.md` v19 |
+| 5-11 | Non engagées | — | — |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.

@@ -475,3 +475,107 @@ export interface EvaluationCSVAssessment {
   created_at: string
   updated_at: string
 }
+
+/**
+ * Process (Phase 4 de convergence architecturale, `docs/convergence/
+ * CONVERGENCE_PLAN.md`) — générique, pas limité à la production
+ * (Target Architecture §4, `01_ARCHITECTURE_MASTER_FINAL.md`). EXTEND pur :
+ * n'existait auparavant que comme gabarit de texte libre (famille A,
+ * "Contexte procédé"), qui reste une des sorties possibles, plus la seule
+ * source de vérité.
+ *
+ * @requirement Target Architecture §4
+ */
+export type TypeProcess =
+  | 'manufacturing'
+  | 'packaging'
+  | 'facility'
+  | 'digital'
+  | 'csv'
+  | 'document_workflow'
+  | 'business'
+  | 'ehs'
+  | 'logistics'
+  | 'support'
+  | 'other'
+
+export interface Process {
+  id: string
+  client_id: string
+  nom: string
+  description: string
+  type: TypeProcess
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Function (Phase 4) — indépendante du type de `Process` (Target
+ * Architecture §5) : exprime ce qui doit être réalisé/protégé/fourni
+ * (production, mesure, contrôle, alarme, interlock, manutention, EHS,
+ * nettoyage, support, logistique, fonction digitale), l'implémentation
+ * physique/digitale étant portée séparément par `AssetNode`. Relation N:M
+ * avec `AssetNode` et avec `Process` via des tables d'association dédiées
+ * (`AssociationFonctionAssetNode`/`AssociationFonctionProcess`), jamais un
+ * champ unique — un même équipement peut porter plusieurs fonctions, une
+ * même fonction peut apparaître dans plusieurs procédés.
+ *
+ * @requirement Target Architecture §5
+ */
+export interface FonctionActif {
+  id: string
+  client_id: string
+  nom: string
+  description: string
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/** Relation N:M `FonctionActif` ⟷ `AssetNode` (Equipment/System/Subsystem/Component). */
+export interface AssociationFonctionAssetNode {
+  id: string
+  client_id: string
+  function_id: string
+  asset_node_id: string
+  created_at: string
+}
+
+/** Relation N:M `FonctionActif` ⟷ `Process`. */
+export interface AssociationFonctionProcess {
+  id: string
+  client_id: string
+  function_id: string
+  process_id: string
+  created_at: string
+}
+
+/**
+ * ManufacturingContext (Phase 4) — relie explicitement un `AssetNode`
+ * (Equipment/DigitalSystem) à un `Process`, un produit et, le cas échéant,
+ * une recette/un format (Target Architecture §7). Empêche de déduire
+ * qu'une relation Equipment↔Process est universelle alors qu'elle n'est
+ * vraie que dans une configuration donnée — exemple du package : un même
+ * SCADA sert Coating/Produit A/Recette R02 dans un contexte et
+ * Granulation/Produit B/Recette R05 dans un autre.
+ *
+ * `Product`/`Recipe`/`Format`/`Configuration` ne sont pas encore des
+ * entités séparées (hors périmètre de cette phase, EXTEND pur) : modélisés
+ * en texte libre ici, comme le champ `contexte` de `CPP`/`CQA` (Phase 2)
+ * en attendant — pas une simplification définitive.
+ *
+ * @requirement Target Architecture §7
+ */
+export interface ManufacturingContext {
+  id: string
+  client_id: string
+  asset_node_id: string
+  process_id: string
+  produit: string
+  recette: string | null
+  format: string | null
+  configuration: string | null
+  created_at: string
+  updated_at: string
+}

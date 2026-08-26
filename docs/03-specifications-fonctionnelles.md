@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 18 (§4.6 corrigé : la "grille de critères déterministe" est remplacée par la méthode ACFC configurable par client réellement implémentée en Phase 1 de convergence architecturale, 25/08/2026 ; ajout §4.6bis/URS-F-056 Impact Assessment et §4.6ter/URS-F-057 Computer System Assessment, Phase 3, 25/08/2026 — cohérent avec URS v28) |
+| **Version** | 19 (ajout §4.10bis/URS-F-103 — Function/Process/ManufacturingContext, Phase 4, 25/08/2026, EXTEND pur — cohérent avec URS v29. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -352,6 +352,13 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - Passage automatique à "Requalification requise"/"Requalification en retard" selon `periodic_qualification.deadline`, réutilisant le mécanisme d'alerte déjà posé (URS-F-072) — URS-F-102ter, mitige AR-R-57.
 - **Garde-fou (avertissement, jamais blocage)** : sélectionner un nœud en statut "Requalification en retard" ou "Suspendu" à l'étape URS-F-100quinquies affiche un avertissement explicite, sans empêcher la sélection — URS-F-102quater, mitige AR-R-58.
 - Tout changement de statut (automatique ou manuel) journalisé (`asset_node.audit_log`) — URS-F-102quinquies.
+
+### 4.10bis Function / Process / ManufacturingContext (répond à URS-F-103 à 103ter, nouveau v19 — Phase 4)
+
+- `Process` générique par client (type parmi fabrication/conditionnement/installation/digital/CSV/workflow documentaire/métier/EHS/logistique/support/autre), indépendant de la hiérarchie du référentiel d'actifs — URS-F-103.
+- `Function` indépendante du type de `Process`, associable à plusieurs nœuds du référentiel et à plusieurs `Process` via des relations N:M dédiées, jamais un champ unique — URS-F-103bis.
+- `ManufacturingContext` relie un nœud du référentiel à un `Process`, un produit et, le cas échéant, une recette/un format/une configuration. Un même nœud (ex. système numérique type SCADA) peut être rattaché à plusieurs `ManufacturingContext` distincts sans qu'aucune relation ne soit déduite comme universelle — URS-F-103ter.
+- EXTEND pur : `asset_node`/`asset_hierarchy_schema` (§4.10) ne sont ni modifiés ni mutés par ce module.
 
 ## 5. Spécification des exigences non fonctionnelles
 

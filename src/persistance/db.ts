@@ -3,6 +3,8 @@ import type {
   AiChatSessionLog,
   AssetHierarchySchema,
   AssetNode,
+  AssociationFonctionAssetNode,
+  AssociationFonctionProcess,
   Client,
   ClientConfig,
   ClassificationCriticiteParametre,
@@ -11,9 +13,12 @@ import type {
   EvaluationACFC,
   EvaluationCSVAssessment,
   EvaluationImpactAssessment,
+  FonctionActif,
+  ManufacturingContext,
   MethodProfileACFC,
   MethodProfileImpactAssessment,
   Parameter,
+  Process,
   Project,
   ProjectDocument,
   Section,
@@ -114,6 +119,11 @@ export class ValidaPharmDatabase extends Dexie {
   methodProfilesImpactAssessment!: EntityTable<MethodProfileImpactAssessment, 'id'>
   evaluationsImpactAssessment!: EntityTable<EvaluationImpactAssessment, 'id'>
   evaluationsCSVAssessment!: EntityTable<EvaluationCSVAssessment, 'id'>
+  processes!: EntityTable<Process, 'id'>
+  fonctionsActif!: EntityTable<FonctionActif, 'id'>
+  associationsFonctionAssetNode!: EntityTable<AssociationFonctionAssetNode, 'id'>
+  associationsFonctionProcess!: EntityTable<AssociationFonctionProcess, 'id'>
+  manufacturingContexts!: EntityTable<ManufacturingContext, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -155,6 +165,13 @@ export class ValidaPharmDatabase extends Dexie {
       methodProfilesImpactAssessment: 'id, client_id, created_at',
       evaluationsImpactAssessment: 'id, client_id, method_profile_id, created_at',
       evaluationsCSVAssessment: 'id, client_id, asset_node_id, created_at',
+    })
+    this.version(9).stores({
+      processes: 'id, client_id',
+      fonctionsActif: 'id, client_id',
+      associationsFonctionAssetNode: 'id, client_id, function_id, asset_node_id',
+      associationsFonctionProcess: 'id, client_id, function_id, process_id',
+      manufacturingContexts: 'id, client_id, asset_node_id, process_id',
     })
   }
 }

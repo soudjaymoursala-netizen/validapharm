@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | URS-VALIDAPHARM-2026-001 |
-| **Version** | 28 (clôture des points ouverts de la convergence architecturale, 25/08/2026 : correction d'une collision d'ID — URS-F-040 désignait à tort 2 exigences distinctes, §4.4bis renumérotée URS-F-039bis — et ajout §4.6bis/URS-F-056 — Impact Assessment/System Classification — et §4.6ter/URS-F-057 — Computer System Assessment —, désormais réellement implémentés (Phase 3 de convergence architecturale, 25/08/2026) ; aucun requirement n'existait encore pour ces 2 briques du catalogue §10, seulement une ligne descriptive. Version 27 : §4.6/URS-F-050 corrigé pour refléter la méthode ACFC réellement implémentée en Phase 1 — questionnaire Oui/Non configurable par client, jamais une grille de critères pondérés fixe ; ajout URS-F-050quater. Version 26 : correction famille F — séparation Impact Assessment/System Classification, Analyse de risque (ACFC/AMDEC/FRA), Computer System Assessment en 3 briques séquentielles distinctes, modèle d'impact binaire ; retrait de la référence à un gabarit CSV non implémenté — Phase 0 de convergence architecturale, 25/08/2026) |
+| **Version** | 29 (ajout §4.10bis/URS-F-103 — Function/Process/ManufacturingContext, Phase 4 de convergence architecturale, 25/08/2026, EXTEND pur du référentiel d'actifs §4.10 déjà existant. Version 28 : clôture des points ouverts de la convergence architecturale — correction d'une collision d'ID, URS-F-040 désignait à tort 2 exigences distinctes, §4.4bis renumérotée URS-F-039bis — et ajout §4.6bis/URS-F-056 — Impact Assessment/System Classification — et §4.6ter/URS-F-057 — Computer System Assessment —, désormais réellement implémentés (Phase 3 de convergence architecturale, 25/08/2026) ; aucun requirement n'existait encore pour ces 2 briques du catalogue §10, seulement une ligne descriptive. Version 27 : §4.6/URS-F-050 corrigé pour refléter la méthode ACFC réellement implémentée en Phase 1 — questionnaire Oui/Non configurable par client, jamais une grille de critères pondérés fixe ; ajout URS-F-050quater. Version 26 : correction famille F — séparation Impact Assessment/System Classification, Analyse de risque (ACFC/AMDEC/FRA), Computer System Assessment en 3 briques séquentielles distinctes, modèle d'impact binaire ; retrait de la référence à un gabarit CSV non implémenté — Phase 0 de convergence architecturale, 25/08/2026) |
 | **Statut** | En rédaction |
 | **Système concerné** | ValidaPharm (assistant de rédaction qualité CQV/CSV/QA — pharma & dispositifs médicaux) |
 | **Catégorie GAMP 5 envisagée** | Catégorie 5 — Logiciel sur mesure (bespoke), avec composants de catégorie 3/4 (bibliothèques, éventuel LLM local) — confirmée par revue multi-experts |
@@ -252,6 +252,16 @@ Brique F3 du catalogue §10, distincte de F1 et F2 (URS v26, CONFLICT-002) — d
 | URS-F-102ter | *(nouveau v20 — E5)* Le passage à "Requalification requise"/"Requalification en retard" DOIT être dérivé automatiquement de la date limite (URS-F-102) lorsqu'elle approche ou est dépassée — pas seulement positionné manuellement. Réutilise le mécanisme d'alerte déjà existant (URS-F-072). | Must |
 | URS-F-102quater | *(garde-fou, Must — E3)* Lors de la sélection d'un nœud à la création/liaison d'un projet (URS-F-100quinquies), si son statut est "Requalification en retard" ou "Suspendu", un avertissement explicite DOIT être affiché — sans jamais bloquer la sélection, la décision de poursuite restant sous responsabilité humaine (cohérent avec le principe fondateur n°1). | Must |
 | URS-F-102quinquies | *(garde-fou, Must — E4)* Tout changement de statut d'un nœud, automatique ou manuel, DOIT être journalisé (qui/quand/ancien statut/nouveau statut). | Must |
+
+### 4.10bis Function / Process / ManufacturingContext *(nouveau v28 — Phase 4 de convergence architecturale, 25/08/2026)*
+
+Étend le référentiel d'actifs (§4.10) sans le modifier : `AssetNode` et sa hiérarchie restent inchangés.
+
+| ID | Exigence | Priorité |
+|---|---|---|
+| URS-F-103 | Le système DOIT permettre de définir un `Process` générique par client (type parmi : fabrication, conditionnement, installation, digital, CSV, workflow documentaire, métier, EHS, logistique, support, autre), indépendant de la hiérarchie du référentiel d'actifs. | Should |
+| URS-F-103bis | Le système DOIT permettre de définir une `Function` (ex. production, mesure, contrôle, alarme, interlock, nettoyage, EHS, support) indépendante du type de `Process`, et de l'associer à plusieurs nœuds du référentiel d'actifs et à plusieurs `Process` — jamais une relation 1:1. | Should |
+| URS-F-103ter | Le système DOIT permettre de rattacher un nœud du référentiel d'actifs à un `Process`, un produit et, le cas échéant, une recette/un format via un `ManufacturingContext` explicite. Un même nœud (ex. un système numérique type SCADA) DOIT pouvoir être rattaché à plusieurs `ManufacturingContext` distincts (plusieurs procédés/produits/recettes) sans qu'aucune relation ne soit déduite comme universelle. | Should |
 
 ## 5. Exigences non fonctionnelles
 

@@ -61,9 +61,9 @@ Le cadrage complet (vision, architecture par phases, sécurité, trajectoire de 
 | Document | Version actuelle |
 |---|---|
 | Cadrage | `docs/00-cadrage-projet.md`, notes de cohérence jusqu'au 24/08/2026 |
-| URS | **v28** (`01-URS-outil.md`) — §4.6/URS-F-050 corrigé Phase 1 ; §4.6bis/URS-F-056 (Impact Assessment) et §4.6ter/URS-F-057 (Computer System Assessment) ajoutés Phase 3 |
+| URS | **v29** (`01-URS-outil.md`) — §4.6/URS-F-050 corrigé Phase 1 ; §4.6bis/§4.6ter (F1/F3) Phase 3 ; §4.10bis/URS-F-103 (Function/Process/ManufacturingContext) Phase 4 ; collision d'ID URS-F-040 corrigée (renumérotée URS-F-039bis) |
 | Analyse de risque (AR) | **v28** (`02-analyse-de-risque-outil.md`) — R-15/R-16 terminologie corrigée Phase 1 |
-| FS | **v18** (`03-specifications-fonctionnelles.md`) — §4.6 corrigé Phase 1, §4.6bis/§4.6ter ajoutés Phase 3 |
+| FS | **v19** (`03-specifications-fonctionnelles.md`) — §4.6 corrigé Phase 1, §4.6bis/§4.6ter Phase 3, §4.10bis Phase 4 |
 | FDS | **v15** (`16-FDS-outil.md`) — algorithme de stratégie de qualification corrigé Phase 1, Impact Assessment/CSV Assessment ajoutés Phase 3 |
 | SDS | **v14** (`22-SDS-outil.md`) |
 | Conventions de codage | `docs/08-conventions-codage.md` v02 |
@@ -76,8 +76,8 @@ VMP + protocoles IQ/OQ/PQ de l'outil lui-même (`docs/04` à `07`) : toujours re
 
 - Dépôt : `soudjaymoursala-netizen/validapharm`, branche de travail **`claude/contexte-reprise-session-tin77u`**, à jour avec `origin`, working tree propre.
 - **PR #1 ouverte** : "Relais IA de production : conception, correction CSP et clôture réseau" — https://github.com/soudjaymoursala-netizen/validapharm/pull/1 — accumule tous les incréments depuis son ouverture, jamais mergée. CI ("Lint, typecheck, tests") verte sur le dernier commit à chaque vérification.
-- **321 tests, 45 fichiers de test, tous verts** (`npx vitest run`, vérifié le 25/08/2026).
-- Toolchain : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js (IndexedDB, schéma **v8**) + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint.
+- **331 tests, 46 fichiers de test, tous verts** (`npx vitest run`, vérifié le 25/08/2026).
+- Toolchain : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js (IndexedDB, schéma **v9**) + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint.
 - **Modules construits et testés (unitaire + navigateur réel via Playwright quand pertinent)**, dans l'ordre logique du catalogue :
   - Fondations : modèle de données pivot, garde de compatibilité de schéma, machine à états du cycle de vie d'une section, garde-fous de finalisation (U-01/U-02/U-03), calcul IPR (S×O×D), persistance Dexie (schéma v1→v7, migrations vérifiées sans perte de données).
   - Écrans : Tableau de bord, Fiche Projet, Éditeur de section, Blocage d'incompatibilité (U-12), Configuration client (GitHub + Drive), Résolution de conflit champ par champ, Gestion des clients, Configuration IA par client, Panneau Chat expert, Assistant de stratégie de qualification (client-scopé, `/clients/:clientId/...`), Structure Système.
@@ -90,6 +90,8 @@ VMP + protocoles IQ/OQ/PQ de l'outil lui-même (`docs/04` à `07`) : toujours re
   - **`Parameter`/`ClassificationCriticiteParametre`/`CPP`/`CQA` distincts (Phase 2 de convergence, 25/08/2026)** : un paramètre classé critique ne devient jamais un CPP automatiquement — garde-fou testé explicitement. Pas d'écran dédié pour l'instant (pas de contexte réel encore construit — Process/ManufacturingContext, Phase 4). Voir §5.
   - **Impact Assessment / System Classification (F1) et Computer System Assessment (F3), Phase 3 de convergence, 25/08/2026** : `useImpactAssessmentStore` (même mécanisme que l'ACFC, moteur partagé extrait dans `assessment/moteurQuestionsOuiNon.ts`) et `useCSVAssessmentStore` (catégorie GAMP5 fixe + pertinence GxP/ERES, pas de `MethodProfile`). Nouveau requirements URS-F-056/057. `GxPAssessment` (4ᵉ type nommé par le package Target) **non implémenté**, faute de source réelle en détaillant le périmètre — pas d'écran dédié, même raison qu'en Phase 2. Voir §5.
   - **Bug corrigé en Phase 3** : le calcul du "profil de méthode actif" (ACFC et Impact Assessment) triait par `created_at`, instable quand deux versions sont créées dans la même milliseconde (le tri redevenait alors le profil le plus ANCIEN). Corrigé par tri sur le numéro de version (`vN`, strictement croissant) — `numeroVersion()` dans `logique-metier/versionnage/`. Test de régression ajouté dans les deux stores.
+  - **`Process`/`FonctionActif`/`ManufacturingContext` (Phase 4 de convergence, 25/08/2026)** : `useProcessContextStore` — EXTEND pur, `AssetNode`/Structure Système non touchés. `Process` générique typé, `FonctionActif` en relation N:M avec `AssetNode` et `Process` (jamais 1:1), `ManufacturingContext` permettant à un même nœud (ex. SCADA) d'être rattaché à plusieurs contextes produit/procédé/recette/format distincts sans qu'aucune relation ne soit déduite comme universelle (scénarios obligatoires vérifiés par test). Nouveaux URS-F-103/103bis/103ter. Pas d'écran dédié dans cet incrément (même raisonnement qu'en Phase 2/3) — construire l'UI viendrait naturellement quand Structure Système (l'écran existant) sera étendu pour exposer ces nouvelles relations, pas fait ici pour rester dans le périmètre strict "EXTEND pur" de la phase.
+  - **Clôture des points ouverts (25/08/2026, avant Phase 4)** : collision d'ID trouvée et corrigée (URS-F-040 désignait 2 exigences distinctes, renumérotée URS-F-039bis) ; CONFLICT-003 (gabarit CSV) et CHALLENGE-002 (capacité offline) documentés comme ouverts et non fabriqués ; CHALLENGE-003 confirmé par TD-001.
 - **Backlog explicite restant (tâches #27 à #32, jamais commencées)** :
   - #27 — Gabarits d'export personnalisés par client (§4.3bis, URS-F-023 à 026) — décision de conception "DSL de contenu" volontairement laissée ouverte, documentée dans la FS v17.
   - #28 — Mode audit simulé (§4.4bis, URS-F-038 à 040) + qualification séparée par mode — **bloqué par une décision d'architecture non tranchée** : faut-il une qualification/consentement séparés par mode de chat (normatif vs audit simulé) ? Lié à #29.
@@ -131,9 +133,11 @@ Chaque phase a été vérifiée avant commit : suite complète de tests (`npx vi
 
 **L'alignement documentaire n'est pas une étape de fin de projet reportée : c'est une porte de sortie de chaque phase**, au même titre que les tests — appliqué pour la première fois rétroactivement à la Phase 1 le 25/08/2026 (URS/FS/FDS/AR corrigés après-coup) et à appliquer nativement dès la Phase 3.
 
-### 5.5 Prochaine étape : Phase 4
+### 5.5 Prochaine étape : Phase 5
 
-**Phase 4 — Extension de Structure Système : `Function` + `Process`/`ManufacturingContext`.** Détail complet dans `CONVERGENCE_PLAN.md`. Risque faible (extension pure, `AssetNode` non touché). Une fois faite, `CPP`/`CQA` (Phase 2) et les 3 Assessments (Phase 3) auront un vrai contexte réel auquel se rattacher — ce qui débloquera enfin la question d'un écran dédié, volontairement reportée jusqu'ici pour ne pas fabriquer un usage artificiel.
+**Phase 4 est terminée** (25/08/2026) : `Process`/`FonctionActif`/`ManufacturingContext` construits, EXTEND pur. Un vrai contexte réel existe désormais pour `CPP`/`CQA` (Phase 2) et les 3 Assessments (Phase 3) — les rattacher concrètement (et construire les écrans correspondants) reste un travail non fait, à envisager comme un incrément séparé plutôt qu'un ajout automatique de cette phase.
+
+**Phase 5 — Quality Events** (Change Control, CAPA, Deviation, Investigation, Audit Finding, Periodic Review) : comble la famille H de l'URS, aujourd'hui entièrement vide. Aucune dépendance dure sur les phases précédentes. Détail complet dans `CONVERGENCE_PLAN.md`.
 
 ---
 
