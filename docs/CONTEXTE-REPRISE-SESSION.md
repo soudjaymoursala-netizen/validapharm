@@ -4,6 +4,8 @@ Ce fichier n'est pas un livrable projet (pas d'ID de traçabilité) : c'est un *
 
 **Instruction pour la prochaine session Claude** : lis ce fichier en entier avant d'agir. Il complète (ne remplace pas) les documents vivants de `docs/`, qui restent la source de vérité pour le contenu métier normatif. Ce fichier remplace intégralement la version précédente — ne pas se fier à l'historique Git de ce fichier pour retrouver un état antérieur pertinent, tout ce qui compte encore est repris ci-dessous.
 
+**Priorité explicite pour la prochaine session (demande directe de l'utilisateur, 26/08/2026)** : les 11 phases du plan de convergence sont toutes engagées, mais `Organization`/`Workspace` (Phase 11) restent **non consommés** par le reste de l'application — tous les stores métier existants (Structure Système, Test/Execution/Evidence, Source Intelligence, ContentPlan, Quality Events, Assessment, ACFC, etc.) continuent de filtrer par `client_id` brut, sans passer par un `workspace_id` ni par `resoudreRegleEffective`. **Le câblage effectif de ces stores sur `Workspace`** (remplacement progressif du filtrage `client_id` par un filtrage/héritage `Workspace`, store par store, phase par phase, sans Big Bang) est la suite naturelle et attendue — voir §5.10 pour le détail et l'ordre suggéré. Ne pas repartir sur une nouvelle phase du catalogue métier (§4.x de l'URS) sans avoir d'abord traité ce chantier ou sans instruction explicite contraire de l'utilisateur.
+
 ---
 
 ## 1. Qu'est-ce que ValidaPharm — vision et objectif
@@ -209,7 +211,18 @@ URS §4.18/URS-F-180 à 180septies (v38), FS §4.18 (v28). 431 tests (419 préex
 
 **Périmètre exclu, documenté comme tel** : aucune des ~25 tables existantes n'est réécrite pour référencer `Workspace` (chantier ultérieur, phase par phase) ; pas d'écran `Organization`/`Workspace` (aucun consommateur UI réel à ce stade) ; pas de champ `Effectivity`/date de prise d'effet sur `Workspace` lui-même.
 
-**Prochaine étape** : aucune phase supplémentaire n'est actuellement demandée par l'utilisateur — les 11 phases du plan de convergence sont désormais toutes engagées (certaines partiellement, documenté comme tel : 3, 6, 8b, 9 Generate/Render/Approve/Freeze). Le câblage `Workspace` des stores métier existants reste un chantier ultérieur explicitement différé, à engager phase par phase sur demande.
+**Prochaine étape — priorité explicite (demande directe de l'utilisateur, 26/08/2026) : le câblage effectif de `Workspace` dans les stores métier existants.**
+
+À ce stade, `Organization`/`Workspace` (Phase 11) existent, sont testés, mais **ne sont consommés par aucun autre module** : les ~42 interfaces du domaine indexées par `client_id` (`AssetHierarchySchema`/`AssetNode`, `MethodProfileACFC`/`EvaluationACFC`, `Parameter`/`CPP`/`CQA`, les Assessments, `Process`/`FonctionActif`/`ManufacturingContext`, `QualityEvent`, toute la chaîne Requirement→Test→Execution→Evidence, `Source`→...→`KnowledgeItem`, `ContentPlan`, `Connector`/`SyncJob`/`ExternalReference`) continuent de filtrer uniquement par `client_id` brut — aucune n'a de `workspace_id`, aucune ne passe par `resoudreRegleEffective`. C'est un chantier volontairement non engagé dans la Phase 11 elle-même (voir "Périmètre exclu" ci-dessus), mais c'est la suite naturelle et désormais explicitement prioritaire.
+
+Points de méthode à respecter pour ce chantier, dans la continuité de la discipline déjà appliquée (Spec E1-E7 → Implémentation → Vérification → Alignement documentaire → Commit/Push) :
+- **Jamais de Big Bang** : câbler store par store, un commit/push par store (ou petit groupe de stores fortement couplés), jamais toutes les ~42 interfaces d'un coup — même logique de séquençage que la Phase 7 (7a/7b/7c séparées).
+- **Ajout, pas de rupture** : ajouter un `workspace_id` (probablement optionnel dans un premier temps, ou défaulté au `Workspace` racine `global` de l'`Organization`) plutôt que de retirer `client_id` — la coexistence temporaire des deux évite de casser les ~431 tests existants pendant la transition.
+- **Commencer par un candidat naturel** à discuter avec l'utilisateur plutôt qu'à décider seul : `AssetHierarchySchema`/`AssetNode` (Structure Système) est probablement le point d'entrée le plus logique, puisque la notion de site/atelier y est déjà implicite dans la hiérarchie d'actifs — mais **demander confirmation avant de choisir l'ordre définitif**, ne pas fabriquer un plan de séquençage complet sans validation.
+- **Chaque store câblé doit avoir un test dédié** démontrant le scénario "Global + N sites" appliqué à ce store précis (héritage + dérogation), pas seulement au niveau générique déjà testé dans `useOrganizationStore.test.ts`.
+- Ne pas construire d'écran `Organization`/`Workspace` avant qu'au moins un store réel ne le justifie (règle "pas d'UI sans consommateur réel" déjà appliquée tout du long).
+
+Ne pas redémarrer une nouvelle phase du catalogue métier (§4.x de l'URS, ex. #27-#32 du backlog) sans avoir traité ce chantier ou sans instruction explicite contraire de l'utilisateur.
 
 ---
 
