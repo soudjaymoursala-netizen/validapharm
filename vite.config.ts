@@ -3,6 +3,10 @@ import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
+  // GitHub Pages sert ce dépôt sous /validapharm/ (project page, pas de
+  // domaine personnalisé) — le workflow de déploiement fixe BASE_PATH,
+  // le dev local et les tests restent inchangés (racine '/').
+  base: process.env.BASE_PATH ?? '/',
   plugins: [vue()],
   resolve: {
     alias: {

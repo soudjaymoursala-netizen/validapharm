@@ -8,6 +8,22 @@
          (pas encore câblé) — évite seulement la requête 404 bruyante en
          attendant. -->
     <link rel="icon" href="data:," />
+    <script type="text/javascript">
+      // Décodage de la redirection GitHub Pages (voir public/404.html) —
+      // restaure l'URL réelle demandée avant que Vue Router ne s'initialise.
+      ;(function (l) {
+        if (l.search[1] === '/') {
+          var decoded = l.search
+            .slice(1)
+            .split('&')
+            .map(function (s) {
+              return s.replace(/~and~/g, '&')
+            })
+            .join('?')
+          window.history.replaceState(null, '', l.pathname.slice(0, -1) + decoded + l.hash)
+        }
+      })(window.location)
+    </script>
   </head>
   <body>
     <div id="app"></div>
