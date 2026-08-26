@@ -898,3 +898,80 @@ export interface ProvenanceLink {
   requirement_id: string
   created_at: string
 }
+
+/**
+ * Phase 8a (`docs/convergence/PHASE_8A_SOURCE_INTELLIGENCE_SPEC.md`) —
+ * document/image d'origine. Pointeur déclaratif (même limite assumée
+ * qu'`EvidenceLocation`, 7c) : aucun stockage de fichier binaire réel
+ * construit dans ce périmètre.
+ */
+export type TypeSource = 'document' | 'image'
+export type SystemeLocalisationSource = 'github' | 'drive' | 'externe'
+
+export interface Source {
+  id: string
+  client_id: string
+  type: TypeSource
+  titre: string
+  systeme: SystemeLocalisationSource
+  reference: string
+  created_at: string
+}
+
+/**
+ * Texte brut obtenu à partir d'une `Source` (OCR via le relais Phase 6,
+ * ou saisie manuelle directe) — immutable, la "preuve de premier niveau"
+ * (ce que `GAP.md` nomme "Evidence" dans ce pipeline ; nommé
+ * `contenu_brut` ici pour éviter toute collision avec l'`Evidence` de
+ * traçabilité Test/Execution, Phase 7c, qui est un concept distinct).
+ */
+export type MethodeExtraction = 'ocr_azure' | 'saisie_manuelle'
+
+export interface Extraction {
+  id: string
+  client_id: string
+  source_id: string
+  methode: MethodeExtraction
+  contenu_brut: string
+  horodatage: string
+}
+
+/**
+ * Interprétation structurée candidate d'une `Extraction`. **Garde-fou non
+ * négociable** : toujours créé au statut `a_valider` (NEEDS_REVIEW),
+ * jamais `valide` à la création, quel que soit le contenu — cohérent
+ * avec le principe fondateur n°1 et l'Acceptance Criteria de la Phase 8.
+ * Aucun appel IA n'est fait par ce module : `valeur_interpretee` est
+ * toujours fournie par l'appelant.
+ */
+export type StatutKnowledgeItem = 'a_valider' | 'valide' | 'rejete'
+
+export interface KnowledgeItem {
+  id: string
+  client_id: string
+  extraction_id: string
+  libelle: string
+  valeur_interpretee: string
+  statut: StatutKnowledgeItem
+  valide_par: string | null
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Désaccord explicite entre deux `KnowledgeItem` — reste `ouvert` tant
+ * qu'aucune résolution explicite n'est fournie, jamais auto-résolu.
+ */
+export type StatutConflict = 'ouvert' | 'resolu'
+
+export interface Conflict {
+  id: string
+  client_id: string
+  knowledge_item_source_id: string
+  knowledge_item_cible_id: string
+  description: string
+  statut: StatutConflict
+  resolution: string | null
+  created_at: string
+}

@@ -8,8 +8,10 @@ import type {
   Client,
   ClientConfig,
   ClassificationCriticiteParametre,
+  Conflict,
   CPP,
   CQA,
+  Extraction,
   EvaluationACFC,
   EvaluationCSVAssessment,
   EvaluationImpactAssessment,
@@ -19,6 +21,7 @@ import type {
   ExecutionEvent,
   ExecutionStep,
   FonctionActif,
+  KnowledgeItem,
   ManufacturingContext,
   Measurement,
   MethodProfileACFC,
@@ -33,6 +36,7 @@ import type {
   ReferenceQualityEvent,
   Requirement,
   Section,
+  Source,
   Test,
   TestCandidate,
   TestObjective,
@@ -165,6 +169,10 @@ export class ValidaPharmDatabase extends Dexie {
   evidences!: EntityTable<Evidence, 'id'>
   evidenceLocations!: EntityTable<EvidenceLocation, 'id'>
   provenanceLinks!: EntityTable<ProvenanceLink, 'id'>
+  sources!: EntityTable<Source, 'id'>
+  extractions!: EntityTable<Extraction, 'id'>
+  knowledgeItems!: EntityTable<KnowledgeItem, 'id'>
+  conflicts!: EntityTable<Conflict, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -238,6 +246,12 @@ export class ValidaPharmDatabase extends Dexie {
       evidences: 'id, client_id, execution_id, execution_step_id',
       evidenceLocations: 'id, client_id, evidence_id',
       provenanceLinks: 'id, client_id, evidence_id, requirement_id',
+    })
+    this.version(15).stores({
+      sources: 'id, client_id',
+      extractions: 'id, client_id, source_id',
+      knowledgeItems: 'id, client_id, extraction_id, statut',
+      conflicts: 'id, client_id, knowledge_item_source_id, knowledge_item_cible_id, statut',
     })
   }
 }
