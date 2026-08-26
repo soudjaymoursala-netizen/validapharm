@@ -754,3 +754,89 @@ export interface Couverture {
   test_id: string
   created_at: string
 }
+
+/**
+ * Phase 7b (`docs/convergence/PHASE_7B_EXECUTION_SPEC.md`) — instance
+ * d'exécution d'un `Test` approuvé. Un même `Test` peut être exécuté
+ * plusieurs fois (retest après échec, exécution sur plusieurs actifs) —
+ * `asset_node_id` précise sur quel actif elle a eu lieu, optionnel.
+ * `verdict` reste `null` tant que l'exécution n'est pas clôturée et n'est
+ * **jamais** déduit automatiquement des `ExecutionStep` — garde-fou non
+ * négociable (principe fondateur n°1), toujours une action humaine
+ * explicite (`cloturerExecution`).
+ */
+export type StatutExecution = 'planifiee' | 'en_cours' | 'terminee'
+export type VerdictExecution = 'conforme' | 'non_conforme' | 'conforme_avec_ecart'
+
+export interface Execution {
+  id: string
+  client_id: string
+  test_id: string
+  asset_node_id: string | null
+  executant: string
+  statut: StatutExecution
+  verdict: VerdictExecution | null
+  date_debut: string
+  date_fin: string | null
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Résultat constaté pour une `EtapeTest` précise (référencée par
+ * `test_step_id`), dans le cadre d'une `Execution` donnée. Immutable une
+ * fois créé (ALCOA+ : un enregistrement d'exécution est un fait daté, pas
+ * un brouillon éditable) — une correction passe par un `ExecutionEvent`,
+ * jamais par une réécriture.
+ */
+export type ResultatEtapeExecution = 'conforme' | 'non_conforme' | 'non_applicable'
+
+export interface ExecutionStep {
+  id: string
+  client_id: string
+  execution_id: string
+  test_step_id: string
+  resultat: ResultatEtapeExecution
+  observation: string
+  horodatage: string
+}
+
+/**
+ * Zéro-à-plusieurs valeurs mesurées rattachées à un `ExecutionStep` — une
+ * étape peut produire plusieurs mesures (ex. 3 points de température),
+ * d'où une entité séparée plutôt qu'un champ unique sur `ExecutionStep`.
+ * `valeur` reste en texte (pas de type numérique imposé) — même choix que
+ * `Parameter`/`CPP` (Phase 2), rien dans les sources ne justifie un type
+ * de valeur unique.
+ */
+export interface Measurement {
+  id: string
+  client_id: string
+  execution_step_id: string
+  libelle: string
+  valeur: string
+  unite: string | null
+  horodatage: string
+}
+
+/**
+ * Journal d'événements *pendant* une exécution (anomalie, pause, reprise,
+ * commentaire) — distinct du `QualityEvent` (Phase 5), qui est l'objet de
+ * gestion qualité formel. `quality_event_id` référence *optionnellement*
+ * un `QualityEvent` déjà existant, jamais créé automatiquement (DEC-002 :
+ * aucun couplage bloquant/automatique entre modules, déjà appliqué en
+ * Phase 5).
+ */
+export type TypeExecutionEvent = 'anomalie' | 'pause' | 'reprise' | 'commentaire'
+
+export interface ExecutionEvent {
+  id: string
+  client_id: string
+  execution_id: string
+  type: TypeExecutionEvent
+  description: string
+  quality_event_id: string | null
+  horodatage: string
+  actor: string
+}

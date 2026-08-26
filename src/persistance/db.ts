@@ -13,8 +13,12 @@ import type {
   EvaluationACFC,
   EvaluationCSVAssessment,
   EvaluationImpactAssessment,
+  Execution,
+  ExecutionEvent,
+  ExecutionStep,
   FonctionActif,
   ManufacturingContext,
+  Measurement,
   MethodProfileACFC,
   MethodProfileImpactAssessment,
   Parameter,
@@ -151,6 +155,10 @@ export class ValidaPharmDatabase extends Dexie {
   testCandidates!: EntityTable<TestCandidate, 'id'>
   tests!: EntityTable<Test, 'id'>
   couvertures!: EntityTable<Couverture, 'id'>
+  executions!: EntityTable<Execution, 'id'>
+  executionSteps!: EntityTable<ExecutionStep, 'id'>
+  measurements!: EntityTable<Measurement, 'id'>
+  executionEvents!: EntityTable<ExecutionEvent, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -213,6 +221,12 @@ export class ValidaPharmDatabase extends Dexie {
       testCandidates: 'id, client_id, test_objective_id, statut',
       tests: 'id, client_id, test_candidate_id, statut',
       couvertures: 'id, client_id, requirement_id, test_id',
+    })
+    this.version(13).stores({
+      executions: 'id, client_id, test_id, statut',
+      executionSteps: 'id, client_id, execution_id, test_step_id',
+      measurements: 'id, client_id, execution_step_id',
+      executionEvents: 'id, client_id, execution_id, quality_event_id',
     })
   }
 }

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 21 (ajout §4.12/URS-F-120 — chaîne de définition Requirement → TestObjective → TestCandidate → Test, Phase 7a, 25/08/2026 — cohérent avec URS v31). Version 20 : intégration des exigences manquantes, 25/08/2026 : ajout §4.6quater/URS-F-058 — Parameter/CriticalParameter/CPP/CQA, Phase 2, oublié au moment de son implémentation — et §4.11/URS-F-110 — Quality Events, Phase 5 — cohérent avec URS v30. Version 19 : ajout §4.10bis/URS-F-103, Phase 4. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
+| **Version** | 22 (ajout §4.13/URS-F-130 — exécution d'un Test approuvé, Phase 7b, 25/08/2026 — cohérent avec URS v32). Version 21 : ajout §4.12/URS-F-120 — chaîne de définition Requirement → TestObjective → TestCandidate → Test, Phase 7a, 25/08/2026 — cohérent avec URS v31). Version 20 : intégration des exigences manquantes, 25/08/2026 : ajout §4.6quater/URS-F-058 — Parameter/CriticalParameter/CPP/CQA, Phase 2, oublié au moment de son implémentation — et §4.11/URS-F-110 — Quality Events, Phase 5 — cohérent avec URS v30. Version 19 : ajout §4.10bis/URS-F-103, Phase 4. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -386,6 +386,16 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - `TestStep` (`EtapeTest`) modélisé en tableau imbriqué dans `Test` plutôt qu'en table séparée — même logique que `Section.revisions[]` : pas de sur-normalisation sans besoin démontré.
 - `Couverture` : entité N:M distincte et dédiée, déclarée explicitement (jamais déduite) entre un `Requirement` et un `Test` approuvé ; un même `Test` peut couvrir plusieurs `Requirement` — distinct du lien `TestObjective.requirement_id` qui ne capture que le requirement d'origine du test — URS-F-120sexies, idempotence vérifiée par test.
 - Aucune génération, rétention ou approbation automatique par IA — URS-F-120septies.
+
+### 4.13 Exécution d'un Test approuvé (répond à URS-F-130 à 130septies, nouveau v22 — Phase 7b)
+
+- Garde-fou non négociable : `Execution` créée uniquement depuis un `Test` au statut `approuve` — URS-F-130. Un même `Test` peut être exécuté plusieurs fois (retest, plusieurs actifs) ; `asset_node_id` optionnel précise l'actif concerné.
+- `ExecutionStep` : résultat constaté (conforme/non conforme/non applicable) par étape, référence `test_step_id` vers l'`EtapeTest` réellement présente dans le `Test` exécuté — vérifié explicitement (aucun résultat orphelin) — URS-F-130bis.
+- `Measurement` : zéro-à-plusieurs mesures par étape, `valeur` en texte (pas de type numérique imposé, même choix que `Parameter`/`CPP`) — URS-F-130ter.
+- **Garde-fou non négociable** : immutabilité post-clôture — une fois `Execution.statut = terminee`, plus aucun `ExecutionStep`/`Measurement`/`ExecutionEvent` ne peut être ajouté (ALCOA+) — vérifié explicitement par test — URS-F-130quater.
+- **Garde-fou non négociable** : `cloturerExecution` exige un `verdict` explicite, jamais déduit des `ExecutionStep` — cohérent avec le principe fondateur n°1 — URS-F-130quinquies.
+- `ExecutionEvent` : journal d'événements pendant l'exécution (anomalie/pause/reprise/commentaire), distinct du `QualityEvent` (§4.11) ; référence optionnelle `quality_event_id` vers un `QualityEvent` déjà existant, jamais créé automatiquement — vérifié explicitement (un `ExecutionStep` non conforme ne crée aucun `QualityEvent`) — URS-F-130sexies.
+- Aucune génération/validation/clôture automatique par IA — URS-F-130septies.
 
 ## 5. Spécification des exigences non fonctionnelles
 
