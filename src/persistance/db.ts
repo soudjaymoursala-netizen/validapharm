@@ -90,6 +90,18 @@ export interface EnregistrementConnexionRelaisIA {
 }
 
 /**
+ * Configuration de connexion au relais OCR (TD-001, `docs/convergence/
+ * TECHNICAL_DECISIONS.md`) — même principe que le relais IA :
+ * enregistrement unique, pas par client, un seul Worker serverless pour
+ * toute l'installation.
+ */
+export interface EnregistrementConnexionRelaisOCR {
+  id: 'unique'
+  relayUrl: string
+  jeton: string
+}
+
+/**
  * Cache local IndexedDB (SDS §3) — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée en
@@ -109,6 +121,7 @@ export class ValidaPharmDatabase extends Dexie {
   connexionDrive!: EntityTable<EnregistrementConnexionDrive, 'client_id'>
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisIA!: EntityTable<EnregistrementConnexionRelaisIA, 'id'>
+  connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
   assetHierarchySchemas!: EntityTable<AssetHierarchySchema, 'client_id'>
   assetNodes!: EntityTable<AssetNode, 'id'>
@@ -180,6 +193,9 @@ export class ValidaPharmDatabase extends Dexie {
     this.version(10).stores({
       qualityEvents: 'id, client_id, type, origine, statut, asset_node_id',
       referencesQualityEvent: 'id, client_id, quality_event_source_id, quality_event_cible_id',
+    })
+    this.version(11).stores({
+      connexionRelaisOCR: 'id',
     })
   }
 }

@@ -11,6 +11,9 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.ts'],
+    // `workers/**` = code serveur (Cloudflare Workers, TD-001), pas la PWA,
+    // mais couvert par la même suite de tests pour rester dans le même
+    // portail de qualité (SDS §4) sans fragmenter le pipeline.
+    include: ['src/**/*.test.ts', 'workers/**/*.test.ts'],
   },
 })

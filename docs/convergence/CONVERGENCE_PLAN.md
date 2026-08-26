@@ -85,7 +85,7 @@
 
 ---
 
-## Phase 6 — Extension serverless (Cloudflare Workers) pour OCR/recherche — **RÉSOLU, plus de point d'arrêt**
+## Phase 6 — Extension serverless (Cloudflare Workers) pour OCR/recherche — **CODE TERMINÉ (25/08/2026) ; déploiement réel à faire par l'utilisateur**
 - **Objective** : préparer la brique technique dont les Phases 7-8 ont besoin, sans backend serveur complet.
 - **Current State** : 100% navigateur ; un relais Cloudflare Workers déjà en production pour l'IA (URS-NF-044ter).
 - **Target State** (décidé le 25/08/2026, `TECHNICAL_DECISIONS.md` TD-001) : un second Worker sans état pour l'OCR/Document Intelligence (relais vers une API cloud de vision, même pattern que le relais IA) ; recherche calculée côté navigateur (IndexedDB), puis JSON versionnés dans Git si le volume l'exige un jour ; dépôt Git comme seul stockage des sources ; Cloudflare Queues pour le traitement asynchrone léger. Pas de base relationnelle serveur, pas d'object storage dédié.
@@ -94,7 +94,7 @@
 - **Risk** : Faible — pattern déjà éprouvé dans ce même projet.
 - **Tests** : joignabilité réseau du nouveau Worker (même méthode qu'AR-R-64), tests unitaires du contrat du Worker.
 - **Rollback** : trivial (suppression du Worker, aucune donnée n'y est stockée).
-- **Acceptance Criteria** : un document envoyé au Worker OCR revient structuré, sans qu'aucune donnée métier ne soit conservée côté Worker au-delà de la requête (cohérent avec le relais IA existant, sans état).
+- **Acceptance Criteria** : un document envoyé au Worker OCR revient structuré, sans qu'aucune donnée métier ne soit conservée côté Worker au-delà de la requête (cohérent avec le relais IA existant, sans état). **Code livré et testé** (`workers/ocr-relay/`, 25/08/2026) ; **déploiement réel et vérification en conditions réelles restent à faire par l'utilisateur** (voir `workers/ocr-relay/README.md` et TD-001).
 
 ---
 
@@ -123,7 +123,7 @@
 
 ## Ce qui reste volontairement "OPEN" (non planifié ici)
 
-Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le fournisseur OCR/parseur, le modèle IA exact pour le multimodal, les tests de charge/pentest/sauvegarde-restauration ne sont **pas** tranchés dans ce plan — ils viennent après le GAP, comme le package le précise lui-même. *(Mise à jour 25/08/2026, clôture des points ouverts)* Le "schéma SQL physique si un backend est retenu" mentionné initialement ici est devenu **sans objet** : TD-001 (25/08/2026) a tranché qu'aucun backend relationnel n'est retenu (extension serverless à la place) — il n'y a donc pas de schéma SQL à concevoir tant que ce choix n'est pas révisé sur besoin réel démontré.
+Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèle IA exact pour le multimodal, les tests de charge/pentest/sauvegarde-restauration ne sont **pas** tranchés dans ce plan (*mise à jour 25/08/2026 : le fournisseur OCR/parseur, lui, est désormais tranché — Azure AI Vision, décision explicite de l'utilisateur, TD-001*) — ils viennent après le GAP, comme le package le précise lui-même. *(Mise à jour 25/08/2026, clôture des points ouverts)* Le "schéma SQL physique si un backend est retenu" mentionné initialement ici est devenu **sans objet** : TD-001 (25/08/2026) a tranché qu'aucun backend relationnel n'est retenu (extension serverless à la place) — il n'y a donc pas de schéma SQL à concevoir tant que ce choix n'est pas révisé sur besoin réel démontré.
 
 ---
 
@@ -139,6 +139,7 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le fourni
 | 3 | Terminée partiellement (25/08/2026) | voir historique git de la branche | `GAP.md`, `ARCHITECTURE_CONFLICTS.md` (CONFLICT-002 marqué résolu, GxPAssessment noté non implémenté) |
 | 4 | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v29 (§4.10bis/URS-F-103), `03-specifications-fonctionnelles.md` v19 |
 | 5 | Terminée (25/08/2026) | `2605667` | `01-URS-outil.md` v30 (§4.11/URS-F-110 + backfill §4.6quater/URS-F-058 pour la Phase 2, oublié à l'époque), `03-specifications-fonctionnelles.md` v20 |
-| 6-11 | Non engagées (Phase 6 déjà résolue architecturalement, TD-001 — reste à construire le Worker OCR lui-même) | — | — |
+| 6 | Code terminé (25/08/2026) ; déploiement réel par l'utilisateur | voir historique git de la branche | `TECHNICAL_DECISIONS.md` (TD-001 complété : fournisseur Azure AI Vision), `workers/ocr-relay/README.md` |
+| 7-11 | Non engagées | — | — |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.

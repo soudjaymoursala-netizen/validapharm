@@ -21,6 +21,7 @@
 - **Rejected Alternatives** : (a) rester 100% navigateur sans aucune extension serverless — rejeté, dégraderait trop l'ambition Document Intelligence/Search ; (b) backend serveur complet (Modular Monolith, base relationnelle, object storage dédié) — rejeté comme disproportionné à l'échelle actuelle du projet, réévaluable seulement si un besoin réel et démontré apparaît.
 - **Impact** : Débloque les Phases 7-8 du `CONVERGENCE_PLAN.md` sans point d'arrêt.
 - **Reversibility** : Élevée — une fonction serverless ponctuelle se remplace ou s'étend sans migration lourde ; si un vrai besoin de backend complet apparaît plus tard, rien de ce qui est construit ici ne devient un frein (le Git reste la source de vérité dans tous les cas).
+- **Complément (25/08/2026, Phase 6, décision explicite de l'utilisateur)** : le Worker OCR est réellement construit (`workers/ocr-relay/`). Fournisseur retenu : **Azure AI Vision (Read API)** — meilleur niveau gratuit au moment de la décision (5000 transactions/mois contre 1000 chez Google Cloud Vision, vérifié par recherche le jour même), déjà approuvé par l'utilisateur au même titre que Google Cloud Vision. Architecture délibérément swappable (`FournisseurOcr` interface, un seul fichier à ajouter/changer pour basculer vers Google Cloud Vision). Déploiement réel (compte Cloudflare/Azure, secrets, test de joignabilité réseau équivalent à AR-R-64) **reste à faire par l'utilisateur** — non exécutable depuis cette session distante, voir `workers/ocr-relay/README.md`.
 
 ---
 

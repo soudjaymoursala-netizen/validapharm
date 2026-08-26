@@ -1,0 +1,6 @@
+# Configuration Cloudflare Workers (TD-001, docs/convergence/TECHNICAL_DECISIONS.md)
+# Ce fichier ne porte aucun secret — voir README.md pour `wrangler secret put`.
+
+name = "validapharm-ocr-relay"
+main = "src/index.ts"
+compatibility_date = "2026-08-25"
