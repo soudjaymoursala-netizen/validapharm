@@ -72,7 +72,7 @@
 
 ---
 
-## Phase 5 — Quality Events (Change Control, CAPA, Deviation, Investigation, Audit Finding, Periodic Review)
+## Phase 5 — Quality Events (Change Control, CAPA, Deviation, Investigation, Audit Finding, Periodic Review) — **TERMINÉE (25/08/2026, précédée d'une revue panel E1-E7 explicite : `PHASE_5_QUALITY_EVENTS_SPEC.md`)**
 - **Objective** : combler la famille H de l'URS, aujourd'hui entièrement vide.
 - **Current State** : rien.
 - **Target State** : `QualityEvent` + 6 sous-types, non-bloquant par défaut (INTERNAL/EXTERNAL/MIXED).
@@ -138,6 +138,7 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le fourni
 | 2 | Terminée (25/08/2026) | `c6391ca` | Aucune correction de doc réglementaire requise (Phase 2 est un ajout pur, sans description contradictoire préexistante) |
 | 3 | Terminée partiellement (25/08/2026) | voir historique git de la branche | `GAP.md`, `ARCHITECTURE_CONFLICTS.md` (CONFLICT-002 marqué résolu, GxPAssessment noté non implémenté) |
 | 4 | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v29 (§4.10bis/URS-F-103), `03-specifications-fonctionnelles.md` v19 |
-| 5-11 | Non engagées | — | — |
+| 5 | Terminée (25/08/2026) | `2605667` | `01-URS-outil.md` v30 (§4.11/URS-F-110 + backfill §4.6quater/URS-F-058 pour la Phase 2, oublié à l'époque), `03-specifications-fonctionnelles.md` v20 |
+| 6-11 | Non engagées (Phase 6 déjà résolue architecturalement, TD-001 — reste à construire le Worker OCR lui-même) | — | — |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.
