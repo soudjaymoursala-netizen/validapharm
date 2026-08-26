@@ -1230,3 +1230,42 @@ export interface ExternalReference {
   libelle: string
   created_at: string
 }
+
+/**
+ * Phase 11 (`docs/convergence/PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`) —
+ * remplace le modèle `Client` plat par une hiérarchie organisationnelle
+ * réelle (`01_ARCHITECTURE_MASTER_FINAL.md` §3 : `Organization → Workspace
+ * → Global/Corporate ou Site N → Facility → Area`, DEC-003/061).
+ *
+ * **Décision structurante** : `Organization.id` reprend exactement
+ * l'`id` du `Client` migré — aucune des ~25 tables existantes (toutes
+ * indexées par `client_id`) n'a besoin d'être modifiée dans cet
+ * incrément, leur `client_id` référence désormais `Organization.id`
+ * (même valeur). `Client` devient ainsi littéralement "un cas particulier
+ * à un seul niveau d'Organization" (TD-006), sans Big Bang.
+ */
+export interface Organization {
+  id: string
+  nom: string
+  created_at: string
+}
+
+/**
+ * `Workspace` est un arbre auto-référencé (`parent_workspace_id`) plutôt
+ * que des types rigides `Global`/`Site`/`Facility`/`Area` — cohérent avec
+ * le principe déjà retenu pour `AssetHierarchySchema` ("Global et site ne
+ * sont pas des modèles différents", aucune profondeur figée). Un seul
+ * `Workspace` racine par `Organization`, de type `global`, créé par la
+ * migration ; les `Workspace` enfants (`type: 'site'`) représentent un
+ * site, une facility ou une area selon leur profondeur dans l'arbre.
+ */
+export type TypeWorkspace = 'global' | 'site'
+
+export interface Workspace {
+  id: string
+  organization_id: string
+  type: TypeWorkspace
+  nom: string
+  parent_workspace_id: string | null
+  created_at: string
+}

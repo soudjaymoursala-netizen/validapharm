@@ -61,9 +61,9 @@ Le cadrage complet (vision, architecture par phases, sécurité, trajectoire de 
 | Document | Version actuelle |
 |---|---|
 | Cadrage | `docs/00-cadrage-projet.md`, notes de cohérence jusqu'au 24/08/2026 |
-| URS | **v37** (`01-URS-outil.md`) — §4.6/URS-F-050 corrigé Phase 1 ; §4.6bis/§4.6ter (F1/F3) Phase 3 ; §4.10bis/URS-F-103 (Function/Process/ManufacturingContext) Phase 4 ; §4.6quater/URS-F-058 (Parameter/CPP/CQA, backfill Phase 2 oublié à l'époque) et §4.11/URS-F-110 (Quality Events) Phase 5 ; §4.12/URS-F-120 (chaîne de définition Requirement→TestObjective→TestCandidate→Test, Phase 7a) ; §4.13/URS-F-130 (Exécution, Phase 7b) ; §4.14/URS-F-140 (Evidence, Phase 7c) ; §4.15/URS-F-150 (Source/Document Intelligence, Phase 8a) ; §4.16/URS-F-160 (ContentPlan, Phase 9) ; §4.17/URS-F-170 (Integration Gateway, Phase 10) ; collision d'ID URS-F-040 corrigée (renumérotée URS-F-039bis) ; **v36 : réalignement 7a/7b/8a/9 sur le vrai modèle cible après lecture directe du package source, `docs/convergence/REALIGNMENT_25_08_2026.md`** |
+| URS | **v38** (`01-URS-outil.md`) — §4.6/URS-F-050 corrigé Phase 1 ; §4.6bis/§4.6ter (F1/F3) Phase 3 ; §4.10bis/URS-F-103 (Function/Process/ManufacturingContext) Phase 4 ; §4.6quater/URS-F-058 (Parameter/CPP/CQA, backfill Phase 2 oublié à l'époque) et §4.11/URS-F-110 (Quality Events) Phase 5 ; §4.12/URS-F-120 (chaîne de définition Requirement→TestObjective→TestCandidate→Test, Phase 7a) ; §4.13/URS-F-130 (Exécution, Phase 7b) ; §4.14/URS-F-140 (Evidence, Phase 7c) ; §4.15/URS-F-150 (Source/Document Intelligence, Phase 8a) ; §4.16/URS-F-160 (ContentPlan, Phase 9) ; §4.17/URS-F-170 (Integration Gateway, Phase 10) ; §4.18/URS-F-180 (Organization/Workspace, Phase 11) ; collision d'ID URS-F-040 corrigée (renumérotée URS-F-039bis) ; **v36 : réalignement 7a/7b/8a/9 sur le vrai modèle cible après lecture directe du package source, `docs/convergence/REALIGNMENT_25_08_2026.md`** |
 | Analyse de risque (AR) | **v28** (`02-analyse-de-risque-outil.md`) — R-15/R-16 terminologie corrigée Phase 1 |
-| FS | **v27** (`03-specifications-fonctionnelles.md`) — §4.6 corrigé Phase 1, §4.6bis/§4.6ter Phase 3, §4.10bis Phase 4, §4.6quater/§4.11 Phase 5, §4.12 Phase 7a, §4.13 Phase 7b, §4.14 Phase 7c, §4.15 Phase 8a, §4.16 Phase 9, réalignement v26, §4.17 Phase 10 |
+| FS | **v28** (`03-specifications-fonctionnelles.md`) — §4.6 corrigé Phase 1, §4.6bis/§4.6ter Phase 3, §4.10bis Phase 4, §4.6quater/§4.11 Phase 5, §4.12 Phase 7a, §4.13 Phase 7b, §4.14 Phase 7c, §4.15 Phase 8a, §4.16 Phase 9, réalignement v26, §4.17 Phase 10, §4.18 Phase 11 |
 | FDS | **v15** (`16-FDS-outil.md`) — algorithme de stratégie de qualification corrigé Phase 1, Impact Assessment/CSV Assessment ajoutés Phase 3 |
 | SDS | **v14** (`22-SDS-outil.md`) |
 | Conventions de codage | `docs/08-conventions-codage.md` v02 |
@@ -76,8 +76,8 @@ VMP + protocoles IQ/OQ/PQ de l'outil lui-même (`docs/04` à `07`) : toujours re
 
 - Dépôt : `soudjaymoursala-netizen/validapharm`, branche de travail **`claude/contexte-reprise-session-tin77u`**, à jour avec `origin`, working tree propre.
 - **PR #1 ouverte** : "Relais IA de production : conception, correction CSP et clôture réseau" — https://github.com/soudjaymoursala-netizen/validapharm/pull/1 — accumule tous les incréments depuis son ouverture, jamais mergée. CI ("Lint, typecheck, tests") verte sur le dernier commit à chaque vérification.
-- **419 tests, 59 fichiers de test, tous verts** (`npx vitest run`, vérifié le 25/08/2026) — inclut désormais `workers/ocr-relay/**` (Cloudflare Worker, code serveur), intégré à la même suite Vitest/tsc/ESLint racine (voir `vite.config.ts` `test.include`, `tsconfig.json` référence `workers/ocr-relay`) sans fragmenter le pipeline.
-- Toolchain : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js (IndexedDB, schéma **v18**) + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint. `workers/` (nouveau, Phase 6) est délibérément hors de `src/` : code serveur déployé indépendamment sur Cloudflare, jamais bundlé dans la PWA.
+- **431 tests, 61 fichiers de test, tous verts** (`npx vitest run`, vérifié le 25/08/2026) — inclut désormais `workers/ocr-relay/**` (Cloudflare Worker, code serveur), intégré à la même suite Vitest/tsc/ESLint racine (voir `vite.config.ts` `test.include`, `tsconfig.json` référence `workers/ocr-relay`) sans fragmenter le pipeline.
+- Toolchain : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js (IndexedDB, schéma **v19**) + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint. `workers/` (nouveau, Phase 6) est délibérément hors de `src/` : code serveur déployé indépendamment sur Cloudflare, jamais bundlé dans la PWA.
 - **Modules construits et testés (unitaire + navigateur réel via Playwright quand pertinent)**, dans l'ordre logique du catalogue :
   - Fondations : modèle de données pivot, garde de compatibilité de schéma, machine à états du cycle de vie d'une section, garde-fous de finalisation (U-01/U-02/U-03), calcul IPR (S×O×D), persistance Dexie (schéma v1→v7, migrations vérifiées sans perte de données).
   - Écrans : Tableau de bord, Fiche Projet, Éditeur de section, Blocage d'incompatibilité (U-12), Configuration client (GitHub + Drive), Résolution de conflit champ par champ, Gestion des clients, Configuration IA par client, Panneau Chat expert, Assistant de stratégie de qualification (client-scopé, `/clients/:clientId/...`), Structure Système.
@@ -193,7 +193,23 @@ Garde-fou testé explicitement : un `SyncJob` indisponible/en échec ne bloque j
 
 **Non fait** : backlog #32 (écran de configuration Veeva, pull réel vers `AssetNode`) reste à construire — cette phase pose la fondation générique et le squelette Veeva, pas l'intégration UI complète.
 
-**Prochaine étape : Phase 11** (migration `Client` → `Organization/Workspace/Site`, TD-006) — la plus risquée du plan entier (faible réversibilité, touche la quasi-totalité des stores) — en attente d'une décision explicite de l'utilisateur avant d'être engagée.
+### 5.10 Phase 11 — Migration `Client` → `Organization/Workspace/Site` (TD-006) — **TERMINÉE (25/08/2026)**
+
+Engagée sur instruction explicite de l'utilisateur ("Engage le avec methodologie et rigueure, n'oublie rien..."), après une revue panel E1-E7 explicite (`docs/convergence/PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`) — la migration la plus risquée et la moins réversible du plan entier (TD-006), volontairement engagée en dernier.
+
+**Décision structurante** (résout la tension "migrer" vs "ne jamais toucher en Big Bang aux ~25 tables indexées par `client_id`") : `Organization.id` reprend exactement l'`id` du `Client` migré. Aucune table existante n'a donc besoin d'être réécrite ou renommée dans cet incrément — `client_id` continue de référencer la même valeur, désormais celle d'une `Organization`. `Client` devient de fait un cas particulier d'`Organization` à un seul `Workspace`.
+
+`Workspace` modélisé en arbre auto-référencé (`parent_workspace_id`), un seul discriminant `type: 'global' | 'site'` plutôt que 4 types rigides Global/Site/Facility/Area — Facility/Area seraient de simples nœuds plus profonds dans l'arbre, cohérent avec le principe déjà acté pour `AssetHierarchySchema` (pas de profondeur de hiérarchie figée d'avance).
+
+Fonction pure `resoudreRegleEffective` (`src/logique-metier/organisation/resolutionEffective.ts`) implémentant "Scope + Applicability + Effectivity + Inheritance/Override" (DEC-061) : remonte l'arbre `Workspace` depuis un point donné, retourne la première règle trouvée avec son `workspaceIdOrigine` (traçabilité de provenance systématique) ou `null` si aucune — garde anti-cycle incluse.
+
+Garde-fous testés explicitement (`useOrganizationStore.test.ts`, 8 tests + `resolutionEffective.test.ts`, 4 tests) : `migrerClient`/`migrerTousLesClients` idempotents et jamais automatiques ; `client_introuvable` explicite ; `creerWorkspaceSite` refuse une `Organization` ou un parent inconnu, et refuse un parent d'une autre `Organization` ; **scénario obligatoire "Global + N sites"** démontré (Site A hérite de la règle globale, Site B la voit prévalue par sa propre règle, chacun avec `workspaceIdOrigine` correct).
+
+URS §4.18/URS-F-180 à 180septies (v38), FS §4.18 (v28). 431 tests (419 préexistants inchangés + 12 nouveaux), schéma Dexie v19.
+
+**Périmètre exclu, documenté comme tel** : aucune des ~25 tables existantes n'est réécrite pour référencer `Workspace` (chantier ultérieur, phase par phase) ; pas d'écran `Organization`/`Workspace` (aucun consommateur UI réel à ce stade) ; pas de champ `Effectivity`/date de prise d'effet sur `Workspace` lui-même.
+
+**Prochaine étape** : aucune phase supplémentaire n'est actuellement demandée par l'utilisateur — les 11 phases du plan de convergence sont désormais toutes engagées (certaines partiellement, documenté comme tel : 3, 6, 8b, 9 Generate/Render/Approve/Freeze). Le câblage `Workspace` des stores métier existants reste un chantier ultérieur explicitement différé, à engager phase par phase sur demande.
 
 ---
 

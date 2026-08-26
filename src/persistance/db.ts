@@ -32,6 +32,7 @@ import type {
   Measurement,
   MethodProfileACFC,
   MethodProfileImpactAssessment,
+  Organization,
   Parameter,
   Couverture,
   Process,
@@ -47,6 +48,7 @@ import type {
   SourceVersion,
   SyncJob,
   Test,
+  Workspace,
   TestCandidate,
   TestObjective,
 } from '../logique-metier/domaine/types'
@@ -191,6 +193,8 @@ export class ValidaPharmDatabase extends Dexie {
   connectors!: EntityTable<Connector, 'id'>
   syncJobs!: EntityTable<SyncJob, 'id'>
   externalReferences!: EntityTable<ExternalReference, 'id'>
+  organizations!: EntityTable<Organization, 'id'>
+  workspaces!: EntityTable<Workspace, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -295,6 +299,15 @@ export class ValidaPharmDatabase extends Dexie {
       connectors: 'id, client_id, type, actif',
       syncJobs: 'id, client_id, connector_id, statut',
       externalReferences: 'id, client_id, connector_id',
+    })
+    /**
+     * Phase 11 (`docs/convergence/PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`) —
+     * `organizations.id` reprend l'`id` du `Client` migré : aucune des
+     * tables `client_id` existantes n'est renommée ni migrée ici.
+     */
+    this.version(19).stores({
+      organizations: 'id',
+      workspaces: 'id, organization_id, parent_workspace_id, type',
     })
   }
 }
