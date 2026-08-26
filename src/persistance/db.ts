@@ -10,6 +10,7 @@ import type {
   ClassificationCriticiteParametre,
   Confirmation,
   Conflict,
+  Connector,
   ContentPlan,
   CPP,
   CQA,
@@ -23,6 +24,7 @@ import type {
   Execution,
   ExecutionEvent,
   ExecutionStep,
+  ExternalReference,
   FonctionActif,
   KnowledgeItem,
   KnowledgeRelation,
@@ -43,6 +45,7 @@ import type {
   Source,
   SourceLocation,
   SourceVersion,
+  SyncJob,
   Test,
   TestCandidate,
   TestObjective,
@@ -185,6 +188,9 @@ export class ValidaPharmDatabase extends Dexie {
   knowledgeRelations!: EntityTable<KnowledgeRelation, 'id'>
   conflicts!: EntityTable<Conflict, 'id'>
   contentPlans!: EntityTable<ContentPlan, 'id'>
+  connectors!: EntityTable<Connector, 'id'>
+  syncJobs!: EntityTable<SyncJob, 'id'>
+  externalReferences!: EntityTable<ExternalReference, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -284,6 +290,11 @@ export class ValidaPharmDatabase extends Dexie {
       knowledgeItems: 'id, client_id, extraction_item_id, statut',
       confirmations: 'id, client_id, knowledge_item_id',
       knowledgeRelations: 'id, client_id, knowledge_item_source_id, knowledge_item_cible_id',
+    })
+    this.version(18).stores({
+      connectors: 'id, client_id, type, actif',
+      syncJobs: 'id, client_id, connector_id, statut',
+      externalReferences: 'id, client_id, connector_id',
     })
   }
 }

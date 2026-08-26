@@ -61,9 +61,9 @@ Le cadrage complet (vision, architecture par phases, sécurité, trajectoire de 
 | Document | Version actuelle |
 |---|---|
 | Cadrage | `docs/00-cadrage-projet.md`, notes de cohérence jusqu'au 24/08/2026 |
-| URS | **v36** (`01-URS-outil.md`) — §4.6/URS-F-050 corrigé Phase 1 ; §4.6bis/§4.6ter (F1/F3) Phase 3 ; §4.10bis/URS-F-103 (Function/Process/ManufacturingContext) Phase 4 ; §4.6quater/URS-F-058 (Parameter/CPP/CQA, backfill Phase 2 oublié à l'époque) et §4.11/URS-F-110 (Quality Events) Phase 5 ; §4.12/URS-F-120 (chaîne de définition Requirement→TestObjective→TestCandidate→Test, Phase 7a) ; §4.13/URS-F-130 (Exécution, Phase 7b) ; §4.14/URS-F-140 (Evidence, Phase 7c) ; §4.15/URS-F-150 (Source/Document Intelligence, Phase 8a) ; §4.16/URS-F-160 (ContentPlan, Phase 9) ; collision d'ID URS-F-040 corrigée (renumérotée URS-F-039bis) ; **v36 : réalignement 7a/7b/8a/9 sur le vrai modèle cible après lecture directe du package source, `docs/convergence/REALIGNMENT_25_08_2026.md`** |
+| URS | **v37** (`01-URS-outil.md`) — §4.6/URS-F-050 corrigé Phase 1 ; §4.6bis/§4.6ter (F1/F3) Phase 3 ; §4.10bis/URS-F-103 (Function/Process/ManufacturingContext) Phase 4 ; §4.6quater/URS-F-058 (Parameter/CPP/CQA, backfill Phase 2 oublié à l'époque) et §4.11/URS-F-110 (Quality Events) Phase 5 ; §4.12/URS-F-120 (chaîne de définition Requirement→TestObjective→TestCandidate→Test, Phase 7a) ; §4.13/URS-F-130 (Exécution, Phase 7b) ; §4.14/URS-F-140 (Evidence, Phase 7c) ; §4.15/URS-F-150 (Source/Document Intelligence, Phase 8a) ; §4.16/URS-F-160 (ContentPlan, Phase 9) ; §4.17/URS-F-170 (Integration Gateway, Phase 10) ; collision d'ID URS-F-040 corrigée (renumérotée URS-F-039bis) ; **v36 : réalignement 7a/7b/8a/9 sur le vrai modèle cible après lecture directe du package source, `docs/convergence/REALIGNMENT_25_08_2026.md`** |
 | Analyse de risque (AR) | **v28** (`02-analyse-de-risque-outil.md`) — R-15/R-16 terminologie corrigée Phase 1 |
-| FS | **v26** (`03-specifications-fonctionnelles.md`) — §4.6 corrigé Phase 1, §4.6bis/§4.6ter Phase 3, §4.10bis Phase 4, §4.6quater/§4.11 Phase 5, §4.12 Phase 7a, §4.13 Phase 7b, §4.14 Phase 7c, §4.15 Phase 8a, §4.16 Phase 9, réalignement v26 |
+| FS | **v27** (`03-specifications-fonctionnelles.md`) — §4.6 corrigé Phase 1, §4.6bis/§4.6ter Phase 3, §4.10bis Phase 4, §4.6quater/§4.11 Phase 5, §4.12 Phase 7a, §4.13 Phase 7b, §4.14 Phase 7c, §4.15 Phase 8a, §4.16 Phase 9, réalignement v26, §4.17 Phase 10 |
 | FDS | **v15** (`16-FDS-outil.md`) — algorithme de stratégie de qualification corrigé Phase 1, Impact Assessment/CSV Assessment ajoutés Phase 3 |
 | SDS | **v14** (`22-SDS-outil.md`) |
 | Conventions de codage | `docs/08-conventions-codage.md` v02 |
@@ -76,8 +76,8 @@ VMP + protocoles IQ/OQ/PQ de l'outil lui-même (`docs/04` à `07`) : toujours re
 
 - Dépôt : `soudjaymoursala-netizen/validapharm`, branche de travail **`claude/contexte-reprise-session-tin77u`**, à jour avec `origin`, working tree propre.
 - **PR #1 ouverte** : "Relais IA de production : conception, correction CSP et clôture réseau" — https://github.com/soudjaymoursala-netizen/validapharm/pull/1 — accumule tous les incréments depuis son ouverture, jamais mergée. CI ("Lint, typecheck, tests") verte sur le dernier commit à chaque vérification.
-- **403 tests, 55 fichiers de test, tous verts** (`npx vitest run`, vérifié le 25/08/2026) — inclut désormais `workers/ocr-relay/**` (Cloudflare Worker, code serveur), intégré à la même suite Vitest/tsc/ESLint racine (voir `vite.config.ts` `test.include`, `tsconfig.json` référence `workers/ocr-relay`) sans fragmenter le pipeline.
-- Toolchain : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js (IndexedDB, schéma **v17**) + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint. `workers/` (nouveau, Phase 6) est délibérément hors de `src/` : code serveur déployé indépendamment sur Cloudflare, jamais bundlé dans la PWA.
+- **419 tests, 59 fichiers de test, tous verts** (`npx vitest run`, vérifié le 25/08/2026) — inclut désormais `workers/ocr-relay/**` (Cloudflare Worker, code serveur), intégré à la même suite Vitest/tsc/ESLint racine (voir `vite.config.ts` `test.include`, `tsconfig.json` référence `workers/ocr-relay`) sans fragmenter le pipeline.
+- Toolchain : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js (IndexedDB, schéma **v18**) + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint. `workers/` (nouveau, Phase 6) est délibérément hors de `src/` : code serveur déployé indépendamment sur Cloudflare, jamais bundlé dans la PWA.
 - **Modules construits et testés (unitaire + navigateur réel via Playwright quand pertinent)**, dans l'ordre logique du catalogue :
   - Fondations : modèle de données pivot, garde de compatibilité de schéma, machine à états du cycle de vie d'une section, garde-fous de finalisation (U-01/U-02/U-03), calcul IPR (S×O×D), persistance Dexie (schéma v1→v7, migrations vérifiées sans perte de données).
   - Écrans : Tableau de bord, Fiche Projet, Éditeur de section, Blocage d'incompatibilité (U-12), Configuration client (GitHub + Drive), Résolution de conflit champ par champ, Gestion des clients, Configuration IA par client, Panneau Chat expert, Assistant de stratégie de qualification (client-scopé, `/clients/:clientId/...`), Structure Système.
@@ -180,7 +180,20 @@ Chaque phase a été vérifiée avant commit : suite complète de tests (`npx vi
 
 Après ce réalignement : **403 tests** (docs à jour : URS v36, FS v26, schéma Dexie v17).
 
-**Prochaine étape : Phase 10** (Integration Gateway générique, TD-005, + Connecteurs QMS tiers) — aucune dépendance dure, mais peu utile avant qu'un vrai connecteur QMS (Veeva, backlog #32) soit engagé. Non engagée.
+### 5.9 Phase 10 — Integration Gateway générique — **TERMINÉE (25/08/2026)**
+
+Engagée sur demande explicite de l'utilisateur (plutôt que différée comme initialement noté dans `CONVERGENCE_PLAN.md`), en anticipant les connexions les plus utilisées : Veeva Vault, systèmes documentaires génériques, dossiers sur disque réseau, Google Drive.
+
+`Connector`/`SyncJob`/`ExternalReference` génériques, précédés d'une revue panel E1-E7 (`docs/convergence/PHASE_10_INTEGRATION_GATEWAY_SPEC.md`). Interface swappable `ConnecteurDocumentaire` (même pattern que `FournisseurOcr`, Phase 6) :
+- `github`/`google_drive` : ADAPT (TD-005) — enveloppent `GitHubConnector`/`DriveConnector` déjà existants et testés, sans réécrire leur logique validée. Le connecteur Drive reste volontairement écriture seule (`OperationNonSupporteeError` sur lecture, cohérent avec URS-NF-010).
+- `veeva_vault` : squelette basé sur le flux d'authentification réel de l'API Vault, vérifié par recherche web le 25/08/2026 (session ID + header `Authorization`) — **non testé en conditions réelles**, aucun compte Veeva disponible dans cette session.
+- `sharepoint`/`dossier_reseau`/`edms_generique` : types reconnus et modélisés (config + store), **adaptateur non implémenté** — aucun point d'accès concret (dossier réseau non accessible depuis un navigateur sans relais serveur) ni source vérifiée disponible.
+
+Garde-fou testé explicitement : un `SyncJob` indisponible/en échec ne bloque jamais une opération métier indépendante (DEC-002/055). `AssetNode.qms_connector_id` (déjà présent, Structure Système) référence désormais un `Connector` réel de ce domaine. URS §4.17/URS-F-170 (v37), FS §4.17 (v27). 419 tests, schéma Dexie v18.
+
+**Non fait** : backlog #32 (écran de configuration Veeva, pull réel vers `AssetNode`) reste à construire — cette phase pose la fondation générique et le squelette Veeva, pas l'intégration UI complète.
+
+**Prochaine étape : Phase 11** (migration `Client` → `Organization/Workspace/Site`, TD-006) — la plus risquée du plan entier (faible réversibilité, touche la quasi-totalité des stores) — en attente d'une décision explicite de l'utilisateur avant d'être engagée.
 
 ---
 

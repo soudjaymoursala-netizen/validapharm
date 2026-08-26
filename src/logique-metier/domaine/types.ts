@@ -1128,3 +1128,105 @@ export interface ContentPlan {
   created_at: string
   updated_at: string
 }
+
+/**
+ * Phase 10 (`docs/convergence/PHASE_10_INTEGRATION_GATEWAY_SPEC.md`) —
+ * connecteur générique vers un système documentaire externe (domaine
+ * "Integration" de `03_DOMAIN_DATA_MODEL.md` : `Connector, SyncJob,
+ * ExternalReference`). `github`/`google_drive` sont les connecteurs de
+ * stockage propres à ValidaPharm (source de vérité/miroir, déjà
+ * existants), réutilisés ici en ADAPT (TD-005) comme deux premières
+ * implémentations concrètes de l'interface générique — pas le cœur
+ * métier de cette phase, qui vise les vrais connecteurs QMS/documentaires
+ * tiers. `AssetNode.qms_connector_id` (Structure Système) référence
+ * désormais un `Connector` de ce domaine.
+ */
+export type TypeConnector =
+  'github' | 'google_drive' | 'veeva_vault' | 'sharepoint' | 'dossier_reseau' | 'edms_generique'
+
+export interface ConfigConnectorGitHub {
+  owner: string
+  repo: string
+  branche: string | null
+  jeton: string
+}
+
+export interface ConfigConnectorGoogleDrive {
+  dossierId: string
+  jeton: string
+}
+
+/** Squelette basé sur le flux d'authentification réel et vérifié de l'API Veeva Vault (session ID via endpoint d'authentification, header `Authorization` ensuite) — non testé en conditions réelles, cf. spec §4. */
+export interface ConfigConnectorVeevaVault {
+  vaultDns: string
+  nomUtilisateur: string
+  motDePasse: string
+}
+
+/** Type reconnu et modélisé — adaptateur non implémenté (aucune source vérifiée disponible dans cette session, cf. spec §4). */
+export interface ConfigConnectorSharePoint {
+  siteUrl: string
+  jeton: string
+}
+
+/** Type reconnu et modélisé — adaptateur non implémenté (aucun accès disque réseau natif possible depuis un navigateur sans relais serveur, aucun point d'accès concret fourni). */
+export interface ConfigConnectorDossierReseau {
+  chemin: string
+}
+
+/** Type reconnu et modélisé — adaptateur non implémenté (aucune source vérifiée disponible dans cette session). */
+export interface ConfigConnectorEdmsGenerique {
+  url: string
+  jeton: string
+}
+
+export type ConfigConnector =
+  | { type: 'github'; config: ConfigConnectorGitHub }
+  | { type: 'google_drive'; config: ConfigConnectorGoogleDrive }
+  | { type: 'veeva_vault'; config: ConfigConnectorVeevaVault }
+  | { type: 'sharepoint'; config: ConfigConnectorSharePoint }
+  | { type: 'dossier_reseau'; config: ConfigConnectorDossierReseau }
+  | { type: 'edms_generique'; config: ConfigConnectorEdmsGenerique }
+
+export type Connector = {
+  id: string
+  client_id: string
+  nom: string
+  actif: boolean
+  created_at: string
+} & ConfigConnector
+
+/**
+ * Une tentative de synchronisation via un `Connector`. **Garde-fou non
+ * négociable** : `indisponible`/`echec` ne bloque jamais une activité
+ * métier indépendante — cohérent avec DEC-002/055 déjà appliqué à
+ * `QualityEvent` (Phase 5), étendu ici explicitement aux connecteurs
+ * (`05_CONTRACTS_EVENTS.md` : `PENDING/UNAVAILABLE/RETRYING/FAILED`).
+ */
+export type StatutSyncJob =
+  'en_attente' | 'indisponible' | 'nouvelle_tentative' | 'echec' | 'reussi'
+
+export interface SyncJob {
+  id: string
+  client_id: string
+  connector_id: string
+  statut: StatutSyncJob
+  tentative: number
+  derniere_erreur: string | null
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Pointeur vers un document/objet externe — jamais son contenu dupliqué
+ * comme contenu officiel (même principe que `EvidenceLocation`/
+ * `SourceLocation`, Phases 7c/8a).
+ */
+export interface ExternalReference {
+  id: string
+  client_id: string
+  connector_id: string
+  identifiant_externe: string
+  libelle: string
+  created_at: string
+}
