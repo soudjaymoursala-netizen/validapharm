@@ -179,10 +179,19 @@ export interface AssetHierarchySchema {
  * cette version (alignés sur FS §3) mais leur exploitation (pull QMS,
  * alertes de périodicité) reste hors périmètre du premier incrément —
  * voir le backlog.
+ *
+ * `workspace_id` (câblage Workspace, étape 1, 26/08/2026,
+ * `CABLAGE_ETAPE_1_STRUCTURE_SYSTEME_SPEC.md`) : `null` = nœud hérité non
+ * encore assigné à un site (visible depuis tout `Workspace` de
+ * l'organisation, aucune régression) ; sinon le site auquel l'actif
+ * appartient physiquement — un nœud reste visible depuis ce site et
+ * depuis tous ses ancêtres (`noeudsVisiblesDepuisWorkspace`), jamais
+ * depuis un site "cousin".
  */
 export interface AssetNode {
   id: string
   client_id: string
+  workspace_id: string | null
   level_key: string
   name: string
   code: string

@@ -309,6 +309,16 @@ export class ValidaPharmDatabase extends Dexie {
       organizations: 'id',
       workspaces: 'id, organization_id, parent_workspace_id, type',
     })
+    /**
+     * Câblage Workspace, étape 1 (`CABLAGE_ETAPE_1_STRUCTURE_SYSTEME_SPEC.md`)
+     * — ajout additif de `workspace_id` sur `assetNodes`, indexé pour les
+     * lectures par site. Les nœuds existants (créés avant cette version)
+     * conservent `workspace_id: undefined`, traité comme `null` par le
+     * store (nœud non assigné, visible partout — aucune régression).
+     */
+    this.version(20).stores({
+      assetNodes: 'id, client_id, parent_id, code, workspace_id',
+    })
   }
 }
 

@@ -1,4 +1,5 @@
 import type { Workspace } from '../domaine/types'
+import { ancetresWorkspace } from './ancetresWorkspace'
 
 export interface RegleEffective<T> {
   valeur: T
@@ -11,7 +12,7 @@ export interface RegleEffective<T> {
  * Inheritance/Override`, DEC-061).
  *
  * Remonte l'arbre `Workspace` depuis `workspaceId` vers la racine
- * (`global`) via `parent_workspace_id`, et retourne la première règle
+ * (`global`) via `ancetresWorkspace`, et retourne la première règle
  * trouvée dans `reglesParWorkspace` — un `Workspace` avec sa propre règle
  * la voit toujours prévaloir sur celle héritée (override explicite,
  * puisqu'elle est rencontrée avant tout ancêtre). `workspaceIdOrigine`
@@ -27,19 +28,10 @@ export function resoudreRegleEffective<T>(
   reglesParWorkspace: ReadonlyMap<string, T>,
   arbre: ReadonlyMap<string, Pick<Workspace, 'id' | 'parent_workspace_id'>>,
 ): RegleEffective<T> | null {
-  const visites = new Set<string>()
-  let courant: string | null = workspaceId
-
-  while (courant !== null) {
-    if (visites.has(courant)) return null // cycle inattendu dans l'arbre — pas de règle résolvable
-    visites.add(courant)
-
-    if (reglesParWorkspace.has(courant)) {
-      return { valeur: reglesParWorkspace.get(courant) as T, workspaceIdOrigine: courant }
+  for (const id of ancetresWorkspace(workspaceId, arbre)) {
+    if (reglesParWorkspace.has(id)) {
+      return { valeur: reglesParWorkspace.get(id) as T, workspaceIdOrigine: id }
     }
-
-    courant = arbre.get(courant)?.parent_workspace_id ?? null
   }
-
   return null
 }

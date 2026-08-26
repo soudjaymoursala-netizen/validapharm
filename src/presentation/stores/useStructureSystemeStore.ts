@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { AssetHierarchySchema, AssetNode, Langue } from '../../logique-metier/domaine/types'
+import type {
+  AssetHierarchySchema,
+  AssetNode,
+  Langue,
+  Workspace,
+} from '../../logique-metier/domaine/types'
+import { ancetresWorkspace } from '../../logique-metier/organisation/ancetresWorkspace'
 import { introduitUnCycle } from '../../logique-metier/structure-systeme/detectionCycle'
 import { codeDejaUtilise } from '../../logique-metier/structure-systeme/validerCodeUnique'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
@@ -17,12 +23,15 @@ export interface NouveauNoeudInput {
   name: string
   code: string
   parent_id: string | null
+  /** Câblage Workspace, étape 1 — omis ou `null` : nœud non assigné à un site précis (comportement inchangé). */
+  workspace_id?: string | null
 }
 
 export type ResultatActionNoeud =
   | { ok: true }
   | { ok: false; raison: 'code_deja_utilise' }
   | { ok: false; raison: 'cycle_introduit' }
+  | { ok: false; raison: 'workspace_introuvable' }
 
 /**
  * Store de la Couche Présentation pour le référentiel d'actifs (FS §4.10,
@@ -73,6 +82,13 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     if (codeDejaUtilise(noeuds.value, input.code, null)) {
       return { ok: false, raison: 'code_deja_utilise' }
     }
+    const workspaceId = input.workspace_id ?? null
+    if (workspaceId !== null) {
+      const workspace = await db.workspaces.get(workspaceId)
+      if (!workspace || workspace.organization_id !== clientId) {
+        return { ok: false, raison: 'workspace_introuvable' }
+      }
+    }
     // Pas de vérification de cycle à la création : un nœud neuf reçoit un
     // id inédit, qu'aucun nœud existant ne peut déjà avoir comme parent —
     // un cycle est structurellement impossible ici. Seul le reparentage
@@ -82,6 +98,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     const noeud: AssetNode = {
       id: crypto.randomUUID(),
       client_id: clientId,
+      workspace_id: workspaceId,
       level_key: input.level_key,
       name: input.name,
       code: input.code,
@@ -138,5 +155,28 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     return { ok: true }
   }
 
-  return { schema, noeuds, enChargement, charger, ajouterNiveau, creerNoeud, reparenterNoeud }
+  /**
+   * Câblage Workspace, étape 1 (`CABLAGE_ETAPE_1_STRUCTURE_SYSTEME_SPEC.md`
+   * §E1/E7) : un nœud est visible depuis `workspaceId` s'il y est assigné,
+   * s'il est assigné à l'un de ses ancêtres (héritage descendant), ou s'il
+   * n'a pas encore été assigné (`workspace_id: null`, non-régression).
+   */
+  function noeudsVisiblesDepuisWorkspace(
+    workspaceId: string,
+    arbre: ReadonlyMap<string, Pick<Workspace, 'id' | 'parent_workspace_id'>>,
+  ): AssetNode[] {
+    const ancetres = new Set(ancetresWorkspace(workspaceId, arbre))
+    return noeuds.value.filter((n) => n.workspace_id === null || ancetres.has(n.workspace_id))
+  }
+
+  return {
+    schema,
+    noeuds,
+    enChargement,
+    charger,
+    ajouterNiveau,
+    creerNoeud,
+    reparenterNoeud,
+    noeudsVisiblesDepuisWorkspace,
+  }
 })
