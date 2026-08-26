@@ -42,6 +42,14 @@ jobs:
   # une pull_request, uniquement sur push vers main, et seulement après
   # succès du portail de qualité ci-dessus — jamais un déploiement direct
   # non vérifié.
+  #
+  # Prérequis manuel unique (non automatisable) : Pages doit être activé
+  # une première fois sur ce dépôt — Settings → Pages → Build and
+  # deployment → Source : "GitHub Actions". `GITHUB_TOKEN` ne peut pas
+  # créer le site Pages lui-même (`administration` n'est pas un scope de
+  # permission valide pour ce token — le tenter invalide tout le fichier
+  # de workflow, constaté le 26/08/2026), d'où ce geste unique laissé à
+  # l'utilisateur, comme pour tout autre réglage administratif du dépôt.
   deploy-pages-build:
     name: Déploiement Pages — build
     needs: quality-gate
@@ -49,12 +57,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pages: write
-      administration: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22
