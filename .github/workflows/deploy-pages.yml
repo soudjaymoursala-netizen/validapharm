@@ -13,6 +13,11 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  # `administration: write` requis uniquement pour la toute première
+  # activation de Pages par `configure-pages` (`enablement: true` ci-dessous)
+  # — sans ça l'API "Get a Pages site" renvoie 404 tant que Pages n'a
+  # jamais été activé sur ce dépôt.
+  administration: write
 
 concurrency:
   group: pages
@@ -27,6 +32,8 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22
