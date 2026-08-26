@@ -123,7 +123,7 @@
 
 ## Ce qui reste volontairement "OPEN" (non planifié ici)
 
-Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le schéma SQL physique si un backend est retenu (Phase 6), le fournisseur OCR/parseur, le modèle IA exact pour le multimodal, l'infrastructure d'hébergement du backend, les tests de charge/pentest/sauvegarde-restauration ne sont **pas** tranchés dans ce plan — ils viennent après le GAP, comme le package le précise lui-même.
+Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le fournisseur OCR/parseur, le modèle IA exact pour le multimodal, les tests de charge/pentest/sauvegarde-restauration ne sont **pas** tranchés dans ce plan — ils viennent après le GAP, comme le package le précise lui-même. *(Mise à jour 25/08/2026, clôture des points ouverts)* Le "schéma SQL physique si un backend est retenu" mentionné initialement ici est devenu **sans objet** : TD-001 (25/08/2026) a tranché qu'aucun backend relationnel n'est retenu (extension serverless à la place) — il n'y a donc pas de schéma SQL à concevoir tant que ce choix n'est pas révisé sur besoin réel démontré.
 
 ---
 

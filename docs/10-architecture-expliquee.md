@@ -124,7 +124,7 @@ Ce bloc est **en cours de conception**, pas encore construit — décrit ici pou
 | Coût de l'IA qui dérive avec l'usage | §5 | Plafond de dépense à deux niveaux (applicatif + tableau de bord fournisseur) à configurer avant mise en production (AR-R-65) |
 | Relais journalisant par erreur le contenu des échanges | §5 | Relais conçu sans état, à vérifier en configuration avant mise en production (AR-R-67) |
 | Faux sentiment de protection du code par la seule organisation en modules | §6 | Communication explicite de la limite technique ; protection réelle recommandée par voie contractuelle (AR-R-66) |
-| Simulation d'audit prise pour un vrai audit réglementaire | §5 | Rappel explicite affiché à chaque activation du mode audit simulé (URS-F-040) |
+| Simulation d'audit prise pour un vrai audit réglementaire | §5 | Rappel explicite affiché à chaque activation du mode audit simulé (URS-F-039bis) |
 
 ## 9. Ce qui reste ouvert (à trancher avant de coder les blocs concernés)
 

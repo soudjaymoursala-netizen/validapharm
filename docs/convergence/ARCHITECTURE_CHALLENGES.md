@@ -33,6 +33,7 @@
 - **Recommendation** : traiter la capacité matérielle du poste comme un point à vérifier explicitement (même méthode que R-62/AR-64 pour le réseau), avant d'inscrire l'OCR/diagram intelligence local comme acquis.
 - **Risk si ignoré** : fonctionnalité offline promise mais inutilisable en pratique sur le seul poste réel connu du projet.
 - **Decision Required** : OUI, à un horizon proche du chantier Source Intelligence — pas urgent maintenant, mais à ne pas oublier avant de committer sur une capacité offline multimodale.
+- **Statut (25/08/2026, clôture des points ouverts)** : **reste ouvert, ne peut pas être clos par Claude** — le test ne peut être fait que sur le poste réel de l'utilisateur (même limite que le test réseau AR-R-64, déjà fait par l'utilisateur lui-même). Pas urgent (Source Intelligence n'est pas engagé, Phase 8 du plan), donc volontairement non bloquant maintenant. Quand l'utilisateur voudra le clore : vérifier CPU/RAM/GPU disponibles sur le poste professionnel (ex. Gestionnaire des tâches Windows → Performance, ou `wmic cpu get name` / `wmic memorychip get capacity` / `dxdiag` pour le GPU) et tester la latence réelle d'un modèle Ollama local déjà utilisé (URS-F-033) sur un exemple d'OCR/image simple, pas seulement le chat textuel.
 
 ---
 
@@ -48,6 +49,7 @@
 - **Recommendation** : séquencer après CONFLICT-001 (l'architecture serveur doit être décidée avant qu'un index vectoriel ait un endroit où vivre) et après un premier volume réel de contenu ingéré.
 - **Risk si ignoré** : investissement d'infrastructure de recherche avancée avant même de savoir où elle doit être hébergée.
 - **Decision Required** : NON immédiatement — recommandation de séquencement, à revisiter une fois CONFLICT-001 tranché.
+- **Statut (25/08/2026, clôture des points ouverts)** : CONFLICT-001 est tranché (TD-001, 25/08/2026) — **confirme cette recommandation plutôt que de la remettre en cause** : la décision retenue (recherche calculée côté navigateur, IndexedDB, puis JSON versionnés dans Git si le volume l'exige un jour) est exactement l'alternative "plein texte simple d'abord" proposée ici, pas une base vectorielle serveur. Aucune action supplémentaire requise maintenant ; revisiter seulement si un volume réel de contenu ingéré (Source Intelligence, Phase 8) le justifie un jour.
 
 ---
 

@@ -45,6 +45,7 @@
 - **Options** : corriger l'URS pour refléter l'absence du gabarit, ou le créer.
 - **Recommendation** : corriger l'URS pour l'instant (aligner la documentation sur la réalité), créer le vrai gabarit CSV quand le chantier CSV/CSVAssessment sera engagé (dépend de CONFLICT-002 résolu au préalable).
 - **Decision Required** : NON — correction documentaire directe.
+- **Statut (25/08/2026, clôture des points ouverts)** : correction documentaire faite (Phase 0bis). Condition de déclenchement de la construction réelle du gabarit ("quand CSVAssessment sera engagé") **désormais remplie** (Phase 3, `EvaluationCSVAssessment`). **Reste néanmoins ouvert, volontairement** : construire le contenu réel d'un dossier CSV (sections/champs d'un dossier de validation de système informatisé — au-delà de la simple catégorisation GAMP5/pertinence GxP déjà codée) exigerait de sourcer un contenu normatif réel (structure GAMP5 d'un dossier CSV) non encore recherché cette session — le fabriquer maintenant violerait l'interdiction de ne jamais inventer de contenu réglementaire. Backlog dédié créé (tâche #55) plutôt que de le construire à la légère.
 
 ---
 
