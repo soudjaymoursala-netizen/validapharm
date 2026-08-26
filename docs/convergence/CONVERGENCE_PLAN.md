@@ -7,7 +7,7 @@
 
 ---
 
-## Phase 0bis — Corrections documentaires (prérequis, avant tout code)
+## Phase 0bis — Corrections documentaires (prérequis, avant tout code) — **TERMINÉE (25/08/2026)**
 - **Objective** : aligner l'URS sur les faits déjà établis, sans toucher au code.
 - **Current State** : URS v25 contient une fusion ACFC/CSA erronée et un modèle d'impact à 3 niveaux (CONFLICT-002), et référence un gabarit CSV inexistant (CONFLICT-003).
 - **Target State** : URS corrigée — 3 briques distinctes (Impact Assessment, Computer System Assessment, Risk Analysis), modèle binaire, référence au gabarit CSV retirée jusqu'à sa construction réelle.
@@ -20,7 +20,7 @@
 
 ---
 
-## Phase 1 — Method/Template/Example générique + remplacement ACFC (TD-002)
+## Phase 1 — Method/Template/Example générique + remplacement ACFC (TD-002) — **TERMINÉE (25/08/2026, commit `a8f7f83`)**
 - **Objective** : remplacer `grilleCriticite.ts`/`grilleDecision.ts` par un vrai `MethodProfile` configurable (questions mot pour mot, version, source, règle de décision), sans attendre le reste du modèle de domaine.
 - **Current State** : grille de 9 critères codée en dur, moteur de décision fermé (§4.6).
 - **Target State** : `MethodProfile` par client (Origin CLIENT_PROCEDURE/USER_DEFINED/VALIDAPHARM_DEFAULT), questions en données, règle de décision configurable, dimensions de criticité indépendantes (Quality ≠ HSE ≠ Data Integrity...).
@@ -33,7 +33,7 @@
 
 ---
 
-## Phase 2 — Parameter / CriticalParameter / CPP / CQA distincts
+## Phase 2 — Parameter / CriticalParameter / CPP / CQA distincts — **TERMINÉE (25/08/2026, commit `c6391ca`)**
 - **Objective** : poser le modèle de paramètres avant de construire l'Assessment générique (Phase 3), pour ne pas répéter l'erreur "criticité = CPP automatique" que la cible interdit explicitement (§22).
 - **Current State** : triplet S/O/D dans le gabarit DQ uniquement.
 - **Target State** : `Parameter`, `ImportantParameter`, `CriticalParameter`, `CPP`, `CQA` comme types distincts, jamais de promotion automatique.
@@ -128,3 +128,14 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le schém
 ---
 
 *Fin de la Phase 0. Les 7 livrables (`GAP.md`, `CURRENT_ARCHITECTURE.md`, `LEGACY_MAPPING.md`, `ARCHITECTURE_CONFLICTS.md`, `ARCHITECTURE_CHALLENGES.md`, `TECHNICAL_DECISIONS.md`, `CONVERGENCE_PLAN.md`) sont produits. TD-001/Phase 6 est résolu (25/08/2026, extension serverless plutôt que backend complet) — plus aucun point d'arrêt : toutes les phases (0bis à 11) peuvent être engagées dans l'ordre proposé.*
+
+## Suivi d'avancement (mis à jour à chaque phase terminée)
+
+| Phase | Statut | Commit | Docs sources mis à jour en conséquence |
+|---|---|---|---|
+| 0bis | Terminée (25/08/2026) | `fc08890` | `01-URS-outil.md` v26 |
+| 1 | Terminée (25/08/2026) | `a8f7f83` | `01-URS-outil.md` v27, `03-specifications-fonctionnelles.md` v18, `16-FDS-outil.md` v15, `02-analyse-de-risque-outil.md` v28 |
+| 2 | Terminée (25/08/2026) | `c6391ca` | Aucune correction de doc réglementaire requise (Phase 2 est un ajout pur, sans description contradictoire préexistante) |
+| 3-11 | Non engagées | — | — |
+
+**Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.

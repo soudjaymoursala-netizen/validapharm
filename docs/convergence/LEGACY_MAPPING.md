@@ -43,7 +43,7 @@ Statuts possibles : `KEEP` · `ADAPT` · `EXTEND` · `REFACTOR` · `MIGRATE` · 
 - **Dependencies** : aucun autre module n'en dépend (bonne nouvelle — remplacement isolé).
 - **Risk** : faible techniquement (peu de dépendants), élevé si on ne le remplace pas (violation documentée d'une règle explicite de la cible).
 - **Regression Risk** : faible — 11 tests actuels, tous réécrits nécessairement avec le nouveau modèle.
-- **Final Status** : **REPLACE** (priorité la plus haute, cf. `GAP.md`).
+- **Final Status** : **REPLACE** (priorité la plus haute, cf. `GAP.md`). **Exécuté le 25/08/2026 (Phase 1, commit `a8f7f83`)** : `grilleCriticite.ts` supprimé, remplacé par `MethodProfileACFC`/`EvaluationACFC` (`src/logique-metier/acfc/`, `useMethodProfileACFCStore`) ; `grilleDecision.ts` adapté au verdict binaire plutôt que remplacé (conservé, cf. sa propre entrée ci-dessous si présente).
 
 ### Calcul IPR (`calculerIPR.ts`)
 - **Purpose** : S×O×D → IPR, seul calcul réglementaire déterministe du repo.

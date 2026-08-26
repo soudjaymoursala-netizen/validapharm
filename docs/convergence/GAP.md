@@ -9,6 +9,8 @@
 
 ---
 
+> **Note de suivi (25/08/2026, mise à jour au fil des phases) :** ce document reste un **instantané de l'audit de Phase 0**, figé au moment de sa rédaction — il n'est volontairement pas réécrit à chaque phase terminée, pour conserver sa valeur de point de départ. Les lignes "Method/Template/Example (ACFC inclus)" et "Parameter/CriticalParameter/CPP/CQA" ci-dessous sont **closes depuis les Phases 1 et 2** (voir `CONVERGENCE_PLAN.md` §"Suivi d'avancement" pour l'état courant réel et les commits correspondants) ; le reste de l'inventaire (§0 notamment) reste exact pour les domaines non encore traités.
+
 ## 0. Inventaire brut de l'existant (vérifié le 25/08/2026)
 
 Entités actuelles (`domaine/types.ts`) : `Project`, `Section`, `ProjectDocument`, `Client`, `ClientConfig`, `AssetHierarchySchema`, `AssetNode`, `AiChatSessionLog`. Aucune autre.

@@ -1,8 +1,8 @@
 # Contexte de reprise — à lire en premier dans une nouvelle session
 
-Ce fichier n'est pas un livrable projet (pas d'ID de traçabilité) : c'est un **aide-mémoire de continuité**, réécrit intégralement le 25/08/2026 à la demande explicite de l'utilisateur, pour servir d'état complet du projet à l'instant T — utilisable par une autre session Claude (y compris un autre compte) ou par l'utilisateur lui-même s'il a besoin de tout reconstituer sans se souvenir du détail.
+Ce fichier n'est pas un livrable projet (pas d'ID de traçabilité) : c'est un **aide-mémoire de continuité**, réécrit intégralement le 25/08/2026 (deuxième réécriture de la journée, après le lancement du chantier de convergence architecturale décrit en §5) à la demande explicite de l'utilisateur, pour servir d'état complet du projet à l'instant T — utilisable par une autre session Claude (y compris un autre compte) ou par l'utilisateur lui-même s'il a besoin de tout reconstituer sans se souvenir du détail.
 
-**Instruction pour la prochaine session Claude** : lis ce fichier en entier avant d'agir. Il complète (ne remplace pas) les documents vivants de `docs/`, qui restent la source de vérité pour le contenu métier normatif. Ce fichier remplace intégralement la version précédente (rédigée le 24/08/2026) — ne pas se fier à l'historique Git de ce fichier pour retrouver un état antérieur pertinent, tout ce qui compte encore est repris ci-dessous.
+**Instruction pour la prochaine session Claude** : lis ce fichier en entier avant d'agir. Il complète (ne remplace pas) les documents vivants de `docs/`, qui restent la source de vérité pour le contenu métier normatif. Ce fichier remplace intégralement la version précédente — ne pas se fier à l'historique Git de ce fichier pour retrouver un état antérieur pertinent, tout ce qui compte encore est repris ci-dessous.
 
 ---
 
@@ -38,7 +38,8 @@ Le cadrage complet (vision, architecture par phases, sécurité, trajectoire de 
 - **Ne jamais fabriquer de contenu réglementaire.** Rappelé plusieurs fois cette session : si une table numérique (ex. grille criticité×complexité) est illisible dans un PDF extrait, le dire plutôt que de deviner les valeurs.
 - L'utilisateur alterne entre deux modes de travail bien distincts, à ne pas confondre :
   - **Mode construction** : avancer le code dans l'ordre logique du catalogue de mini-outils (URS §10), avec tests réels (unitaires + navigateur via Playwright) avant de passer au suivant.
-  - **Mode instruction/recherche** : pas de code, lecture de normes/guides réels (Google Drive de l'utilisateur), pour que Claude maîtrise le métier avant de concevoir les prochains modules. **C'est le mode actif à la reprise de cette session** (voir §5 et §6).
+  - **Mode instruction/recherche** : pas de code, lecture de normes/guides réels (Google Drive de l'utilisateur), pour que Claude maîtrise le métier avant de concevoir les prochains modules.
+  - Depuis le 25/08/2026, un troisième mode s'est ajouté : **mode convergence architecturale** — implémentation phase par phase du plan `docs/convergence/CONVERGENCE_PLAN.md`, avec alignement documentaire systématique en sortie de phase (voir §5). **C'est le mode actif à la reprise de cette session.**
 - Sur les fichiers Google Drive à vérifier : **toujours ouvrir et lire le contenu réel avant de le classer pertinent/non pertinent** — ne jamais se fier au seul titre du fichier (consigne explicite de l'utilisateur, respectée en trouvant qu'un fichier "CSV x IA" était en fait une feuille de route personnelle, pas une norme).
 
 ---
@@ -60,31 +61,33 @@ Le cadrage complet (vision, architecture par phases, sécurité, trajectoire de 
 | Document | Version actuelle |
 |---|---|
 | Cadrage | `docs/00-cadrage-projet.md`, notes de cohérence jusqu'au 24/08/2026 |
-| URS | **v25** (`01-URS-outil.md`) |
-| Analyse de risque (AR) | **v27** (`02-analyse-de-risque-outil.md`) |
-| FS | **v17** (`03-specifications-fonctionnelles.md`) — ajout entité `export_template` |
-| FDS | **v14** (`16-FDS-outil.md`) |
+| URS | **v27** (`01-URS-outil.md`) — §4.6/URS-F-050 corrigé Phase 1 (25/08/2026) |
+| Analyse de risque (AR) | **v28** (`02-analyse-de-risque-outil.md`) — R-15/R-16 terminologie corrigée Phase 1 |
+| FS | **v18** (`03-specifications-fonctionnelles.md`) — §4.6 corrigé Phase 1 |
+| FDS | **v15** (`16-FDS-outil.md`) — algorithme de stratégie de qualification corrigé Phase 1 |
 | SDS | **v14** (`22-SDS-outil.md`) |
 | Conventions de codage | `docs/08-conventions-codage.md` v02 |
 | Architecture détaillée | `docs/09-architecture-detaillee.md` v03 |
+| **Convergence architecturale (nouveau, `docs/convergence/`)** | `GAP.md`, `CURRENT_ARCHITECTURE.md`, `LEGACY_MAPPING.md`, `ARCHITECTURE_CONFLICTS.md`, `ARCHITECTURE_CHALLENGES.md`, `TECHNICAL_DECISIONS.md`, `CONVERGENCE_PLAN.md` — voir §5, c'est le chantier actif |
 
 VMP + protocoles IQ/OQ/PQ de l'outil lui-même (`docs/04` à `07`) : toujours reportés après la conception (code), marqués "À REVOIR".
 
 ### Code — état vérifié le 25/08/2026
 
 - Dépôt : `soudjaymoursala-netizen/validapharm`, branche de travail **`claude/contexte-reprise-session-tin77u`**, à jour avec `origin`, working tree propre.
-- **PR #1 ouverte** : "Relais IA de production : conception, correction CSP et clôture réseau" — https://github.com/soudjaymoursala-netizen/validapharm/pull/1 — accumule tous les incréments depuis son ouverture, jamais mergée.
-- **282 tests, 39 fichiers de test, tous verts** (`npx vitest run`, vérifié le 25/08/2026).
-- Toolchain : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js (IndexedDB) + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint.
+- **PR #1 ouverte** : "Relais IA de production : conception, correction CSP et clôture réseau" — https://github.com/soudjaymoursala-netizen/validapharm/pull/1 — accumule tous les incréments depuis son ouverture, jamais mergée. CI ("Lint, typecheck, tests") verte sur le dernier commit à chaque vérification.
+- **298 tests, 41 fichiers de test, tous verts** (`npx vitest run`, vérifié le 25/08/2026).
+- Toolchain : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js (IndexedDB, schéma **v7**) + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint.
 - **Modules construits et testés (unitaire + navigateur réel via Playwright quand pertinent)**, dans l'ordre logique du catalogue :
-  - Fondations : modèle de données pivot, garde de compatibilité de schéma, machine à états du cycle de vie d'une section, garde-fous de finalisation (U-01/U-02/U-03), calcul IPR (S×O×D), persistance Dexie (schéma v1→v5, migrations vérifiées sans perte de données).
-  - Écrans : Tableau de bord, Fiche Projet, Éditeur de section, Blocage d'incompatibilité (U-12), Configuration client (GitHub + Drive), Résolution de conflit champ par champ, Gestion des clients, Configuration IA par client, Panneau Chat expert, Assistant de stratégie de qualification, Structure Système.
+  - Fondations : modèle de données pivot, garde de compatibilité de schéma, machine à états du cycle de vie d'une section, garde-fous de finalisation (U-01/U-02/U-03), calcul IPR (S×O×D), persistance Dexie (schéma v1→v7, migrations vérifiées sans perte de données).
+  - Écrans : Tableau de bord, Fiche Projet, Éditeur de section, Blocage d'incompatibilité (U-12), Configuration client (GitHub + Drive), Résolution de conflit champ par champ, Gestion des clients, Configuration IA par client, Panneau Chat expert, Assistant de stratégie de qualification (client-scopé, `/clients/:clientId/...`), Structure Système.
   - Connecteurs réels : GitHub (lecture/écriture groupée/résolution de conflit par SHA), Drive (miroir), IA (ProviderAdapter — relais Cloudflare Workers + Ollama local, bascule automatique).
   - Moteur de gabarits déclaratif (FDS §4) — catalogue complet des 13 gabarits de l'URS (contexte_procede, DQ, plan_metrologie, URS, FAT, SAT, IQ, OQ, PQ, validation_procede, plan_maintenance, + 2 autres).
   - Export/import de section : JSON, Word (.doc HTML), impression/PDF, CSV par tableau dynamique.
   - Chat expert + routeur IA (§4.4, mode `chat_normatif` uniquement pour l'instant — le mode "audit simulé" reste à faire, tâche #28).
   - Structure Système — fondation référentiel d'actifs (§4.10) : hiérarchie configurable par client, CRUD de nœuds, détection de cycle, unicité de code, journal d'audit par nœud.
-  - Assistant de stratégie de qualification (§4.6) : moteur déterministe sur une grille de criticité **provisoire** (9 critères, explicitement étiquetée comme telle dans l'écran) — **à ne pas confondre avec le futur "vrai" outil ACFC**, voir §5 et §6.
+  - **Méthode ACFC configurable par client (`MethodProfileACFC`/`EvaluationACFC`, Phase 1 de convergence, 25/08/2026)** : remplace l'ancienne grille de criticité codée en dur (9 critères fixes, supprimée) — questions Oui/Non définies par le client, conservées mot pour mot, versionnées et immuables, aucune question par défaut fabriquée. Voir §5.
+  - **`Parameter`/`ClassificationCriticiteParametre`/`CPP`/`CQA` distincts (Phase 2 de convergence, 25/08/2026)** : un paramètre classé critique ne devient jamais un CPP automatiquement — garde-fou testé explicitement. Pas d'écran dédié pour l'instant (pas de contexte réel encore construit — Process/ManufacturingContext, Phase 4). Voir §5.
 - **Backlog explicite restant (tâches #27 à #32, jamais commencées)** :
   - #27 — Gabarits d'export personnalisés par client (§4.3bis, URS-F-023 à 026) — décision de conception "DSL de contenu" volontairement laissée ouverte, documentée dans la FS v17.
   - #28 — Mode audit simulé (§4.4bis, URS-F-038 à 040) + qualification séparée par mode — **bloqué par une décision d'architecture non tranchée** : faut-il une qualification/consentement séparés par mode de chat (normatif vs audit simulé) ? Lié à #29.
@@ -95,75 +98,51 @@ VMP + protocoles IQ/OQ/PQ de l'outil lui-même (`docs/04` à `07`) : toujours re
 
 ---
 
-## 5. Phase actuelle (24-25/08/2026) : pause construction, montée en compétence métier — et une remise en question d'architecture majeure
+## 5. Phase actuelle (25/08/2026) : convergence vers la Target Architecture v5.0 — chantier actif, méthodologie inspirée de BMAD
 
-Le 24/08/2026 au soir, l'utilisateur a **explicitement arrêté la construction** ("On va s'arrêter là aujourd'hui pour la construction de l'outil") pour que Claude s'instruise en profondeur sur le métier réel, à partir de vrais documents (Google Drive de l'utilisateur : SOP/procédures/protocoles réels de Ferring et Sanofi, normes publiques PIC/S/EudraLex/WHO/ISO/ASTM/ISPE). Consigne explicite répétée : **lire les normes à 100%, littéralement**, pas de survol ; ne jamais mélanger des notions distinctes ; être exhaustif dans la recherche avant de conclure.
+### 5.1 Comment on est arrivés là (résumé de l'historique, pour comprendre le "pourquoi")
 
-### 5.1 Ce qui a été appris et confirmé — synthèse condensée
+Le 24/08/2026 au soir, l'utilisateur avait arrêté la construction pour une phase d'instruction métier approfondie (normes/guides réels lus quasi intégralement : ASTM E2500-20, EudraLex Annexes 11/15, PIC/S PI_041/PI 006-4, WHO Annexe 5, MHRA/FDA Data Integrity, ISO 13485:2016 clauses 1-8, Ferring FSMP Project Master Plan, ISPE Baseline Guide chapitres 1-5, Guide BPF France partiel, 2 papiers Antaes — état de couverture inchangé depuis, voir tâches #33-#42 du fichier de tâches interne si reprise nécessaire). Cette phase a confirmé 4 notions à ne jamais fusionner (ACFC, AMDEC/FMEA, Impact Assessment/System Classification, catégorisation GAMP5) et a fait remonter un problème de fond : **l'URS ne définissait nulle part les données d'entrée/sortie de chaque mini-outil**, ni si elles étaient figées ou modulables par client.
 
-**Quatre notions distinctes, confirmées séparément sur des sources primaires réelles, jamais à fusionner :**
+Le 25/08/2026, l'utilisateur a alors donné l'instruction pivot : lire **intégralement** un package d'architecture cible ("Target Architecture v5.0") qu'il avait lui-même préparé dans Google Drive, dossier `10- Architecture détaillée / Nouvelle Architecture Cible` (19 fichiers : `01_ARCHITECTURE_MASTER_FINAL.md`, `02_DECISION_LEDGER_FROM_CONVERSATION.md` — 64+ décisions actées DEC-001 à DEC-0XX —, `11_USE_CASES_70_SCENARIOS.md`, `15_FINAL_LITERAL_VERIFICATION.md`, et un `ValidaPharm_Master_Prompt_Convergence_Architecture.md` de 64 sections qui gouverne la méthode de convergence elle-même). **Ce package répond directement et complètement au problème de fond soulevé le 24/08** (voir §5.3 de l'ancienne version de ce fichier, maintenant caduque) : chaque concept (`Parameter`/`CriticalParameter`/`CPP`/`CQA`, `MethodProfile`/`TemplateProfile`/`ExampleProfile`, `Criticality` multidimensionnelle, etc.) y est défini comme un objet distinct, avec sa règle de modularité explicite.
 
-1. **ACFC (Analyse de Criticité des Fonctions et des Composants)** — questionnaire binaire Oui/Non appliqué **par fonction/composant** (6 à 10 questions selon le site : 6 chez Ferring, 10 chez Sanofi Marcy, 4 chez Sanofi Lyon-Gerland, 8 dans le "System Classification" de l'ISPE Baseline Guide sous un autre nom). **Règle universelle confirmée sur 4 sources indépendantes** : au moins un "Oui" → l'élément est critique, jamais pondéré/moyenné.
-2. **AMDEC/FMEA** — outil différent : score numérique **par mode de défaillance** (pas par composant), Sévérité × Occurrence × Détection = IPR/RPN — déjà implémenté fidèlement dans le code (`calculerIPR.ts`, tâche #4).
-3. **Impact Assessment / System Classification** — étape **en amont** de l'ACFC, pas la même chose : détermine si un système est GMP-pertinent ("Direct Impact") ou non, via un questionnaire à part (7 questions chez Ferring, 8 dans l'ISPE Baseline Guide), avec la même règle "au moins un Oui → Direct Impact". Un système Direct Impact est ensuite qualifié ; un système non-Direct-Impact est seulement commissionné (vérification technique simple, sans supervision Assurance Qualité).
-4. **Catégorisation GAMP5** — grille normative fixe à 5 catégories (1 Infrastructure, 2 Firmware, 3 Logiciel standard non configuré, 4 Logiciel configurable, 5 Sur mesure), issue de PIC/S PI 011-3 — **non modulable par client**, contrairement aux 3 notions précédentes qui le sont.
+### 5.2 Les 7 livrables de Phase 0 (produits le 25/08/2026, dans `docs/convergence/`)
 
-**Data Integrity / ALCOA+** approfondi séparément (PIC/S PI_041, WHO Annexe 5, MHRA GXP DI Guidance, FDA DI Q&A) : gouvernance des données, approche par les risques appliquée à la criticité des données, définitions ALCOA+ complètes, exigences de piste d'audit, distinction "true copy" vs original vs summary report. Comparaison croisée entre régulateurs faite (PIC/S vs WHO vs MHRA vs FDA — nuances mineures, principes convergents).
+Le master prompt impose une séquence obligatoire avant tout code : Lire la cible → Lire le repository → Comprendre l'existant → Reconstruire l'architecture réelle → produire, dans l'ordre, `GAP.md` → `CURRENT_ARCHITECTURE.md` → `LEGACY_MAPPING.md` → `ARCHITECTURE_CONFLICTS.md` → `ARCHITECTURE_CHALLENGES.md` → `TECHNICAL_DECISIONS.md` → `CONVERGENCE_PLAN.md`. Les 7 sont produits et committés. Un seul point d'arrêt réel est apparu (CONFLICT-001/TD-001 : l'architecture cible suggère par défaut un "Modular Monolith" serveur, alors que la contrainte réelle du poste de travail professionnel de l'utilisateur impose du 100% navigateur) — **résolu le 25/08/2026** : extension du relais serverless Cloudflare Workers déjà en production pour l'IA (un second Worker sans état pour l'OCR, recherche côté navigateur, Git comme seul stockage), plutôt qu'un backend complet. Voir `TECHNICAL_DECISIONS.md` TD-001.
 
-**Dispositifs médicaux (ISO 13485:2016, lu intégralement clauses 1-8)** : QMS bâti sur ISO 9001, avec gestion des risques via **ISO 14971** (distincte d'ICH Q9, côté pharma) et un cycle de "design controls" (§7.3) dont le vocabulaire "vérification"/"validation" **ne veut pas dire la même chose** qu'en qualification d'équipement pharma (IQ/OQ/PQ) — piège de confusion identifié et documenté.
+`CONVERGENCE_PLAN.md` définit **11 phases d'implémentation** (0bis à 11), volontairement réordonnées par rapport à l'ordre par défaut du master prompt car un chantier isolé (Method/ACFC) était déjà mûr. Sa section "Suivi d'avancement" (ajoutée en Phase 1) est **la référence à jour** pour savoir où en est l'implémentation — plus fiable que ce paragraphe s'ils divergent un jour.
 
-**Document le plus significatif trouvé** : le "Project Master Plan for Migrating FSMP Automation Systems to a DCS" (Ferring Swiss Manufacturing Plant, document réel 2025, produit Pentasa®) donne noir sur blanc la séquence réelle et la définit sans ambiguïté : **System Impact Assessment (tout système, verdict Direct/Not Direct Impact) → Computerized System Assessment (catégorie GAMP, pertinence GxP/ERES) → Risk Analysis (ACFC et/ou FRA et/ou FMEA, seulement pour les systèmes Direct Impact) → Design Review → C&Q → Data Integrity Assessment.**
+### 5.3 Phases déjà exécutées (25/08/2026)
 
-**Découverte la plus importante pour l'architecture de l'outil** : l'ISPE Baseline Guide: Commissioning and Qualification (2ᵉ édition, 2019 — référence consensus de l'industrie, co-écrite par Amgen/Pfizer/GSK/Merck/J&J/AbbVie) **retire explicitement le concept de "Component Criticality Assessment"** (= ACFC littéralement traduit) de sa 1ʳᵉ édition, au motif que le "System Risk Assessment" intégré produit directement les "Critical Design Elements" sans questionnaire de criticité séparé par composant. **Conséquence pour ValidaPharm : ACFC est UNE méthode possible pour l'étape "analyse de risque", pas LA méthode canonique à coder en dur.** Le même guide retire aussi la notion "Indirect Impact" (le modèle est binaire Direct/Not Direct, jamais ternaire) et le "V-Model" comme représentation du cycle de qualification.
+- **Phase 0bis** (commit `fc08890`) : URS v26 — corrige la fusion erronée ACFC/Computer System Assessment et le modèle d'impact à 3 niveaux, déjà repérée le 24/08 (§5.2 de l'ancienne version de ce fichier).
+- **Phase 1** (commit `a8f7f83`) : `grilleCriticite.ts` (grille de 9 critères codée en dur) **supprimé**, remplacé par `MethodProfileACFC`/`EvaluationACFC` (`src/logique-metier/acfc/`, `useMethodProfileACFCStore`) — questions Oui/Non définies par le client, conservées mot pour mot, versionnées et immuables, **aucune question par défaut fabriquée** (l'écran affiche explicitement "non configuré" sinon). `grilleDecision.ts` adapté au verdict binaire. Écran devenu client-scopé. URS/FS/FDS/AR corrigés en conséquence (v27/v18/v15/v28) — la description "grille de critères déterministe ASTM E2500/EudraLex/ICH Q9" qui y figurait était devenue fausse une fois le vrai modèle ACFC confirmé sur 4 sources réelles indépendantes (Ferring, Sanofi Marcy, Sanofi Lyon-Gerland, ISPE Baseline Guide).
+- **Phase 2** (commit `c6391ca`) : `Parameter`, `ClassificationCriticiteParametre` (important/critique), `CPP`, `CQA` comme objets distincts (`useParameterStore`) — garde-fou central testé explicitement : classifier un paramètre critique ne crée jamais de CPP automatiquement (interdiction explicite de la cible, DEC-019). Pas d'écran dédié : aucun contexte réel (Process/ManufacturingContext, Phase 4) n'existe encore auquel le rattacher sans fabriquer un usage artificiel.
 
-### 5.2 Deux erreurs concrètes trouvées dans l'URS actuelle (v25), pas encore corrigées
+Chaque phase a été vérifiée avant commit : suite complète de tests (`npx vitest run`), typecheck (`vue-tsc -b --noEmit`), lint (`eslint . --max-warnings 0`), et vérification navigateur réelle via Playwright quand un écran existe (persistance IndexedDB après rechargement, zéro erreur console — ce projet a déjà rencontré deux fois un bug `DataCloneError` Dexie/réactivité Vue, d'où cette vérification systématique).
 
-Repérées lors du "challenge" du projet demandé par l'utilisateur le 25/08/2026, à traiter en premier à la reprise :
+### 5.4 Méthodologie appliquée à partir de la Phase 1 (inspirée de BMAD)
 
-1. **`01-URS-outil.md` ligne 412** : mentionne un modèle "impact direct/indirect/aucun" — trois niveaux, alors que la référence actuelle (ISPE Baseline Guide 2ᵉ éd.) n'en connaît que deux (Direct Impact / Not Direct Impact). À corriger.
-2. **`01-URS-outil.md` lignes 399-410** : dit qu'ACFC et Computer System Assessment sont "fusionnés en un seul mini-outil" — contredit à la fois le document Ferring FSMP (trois étapes séquentielles distinctes : System Impact Assessment, Computerized System Assessment, Risk Analysis) et la structure de l'ISPE Baseline Guide (System Classification ≠ System Risk Assessment, jamais fusionnés). À corriger : restructurer en 3 briques séquentielles distinctes dans le catalogue famille F.
+À la demande explicite de l'utilisateur ("ajoute la méthode Bmade ou tout autre méthode robuste"), chaque phase suit désormais un cycle explicite emprunté aux deux piliers de **BMAD-METHOD™** (*Breakthrough Method for Agile AI-Driven Development*, framework open-source réel — vérifié par recherche web le 25/08/2026, pas installé tel quel : son CLI/ses personas d'agents ne sont pas utilisés, mais sa discipline documentaire est adaptée ici via la structure déjà existante de `docs/convergence/`) :
 
-### 5.3 La remise en question d'architecture de l'utilisateur — non résolue, c'est le sujet de la prochaine session de travail
+`Spec (déjà posée par CONVERGENCE_PLAN.md) → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → Alignement documentaire (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de la table de suivi`
 
-L'utilisateur a soulevé un point de fond avant la pause construction : **l'URS actuelle ne définit nulle part les données d'entrée et de sortie de chaque mini-outil** (ACFC, AMDEC, Impact Assessment, Computer System Assessment, protocoles...). Question posée explicitement : pour chaque module, quelles sont les données d'entrée (fixes ? modulables par client ? qui les fournit ?) et quelles sont les données de sortie (le livrable rempli, au format demandé) ?
+**L'alignement documentaire n'est pas une étape de fin de projet reportée : c'est une porte de sortie de chaque phase**, au même titre que les tests — appliqué pour la première fois rétroactivement à la Phase 1 le 25/08/2026 (URS/FS/FDS/AR corrigés après-coup) et à appliquer nativement dès la Phase 3.
 
-Diagnostic déjà posé (validé par l'utilisateur, à formaliser dans l'URS/FS) :
-- Le moteur de gabarits existant (`definitionGabarit.ts`) résout déjà la moitié **sortie** du problème (schéma déclaratif générique, jamais besoin de modifier le moteur pour un nouveau gabarit).
-- Rien ne résout la moitié **entrée** : chaque mini-outil de type "questionnaire/grille" doit séparer clairement une **Définition** (les questions/critères, propres à chaque client — jamais codées en dur, contrairement à ce qui a été fait pour la grille provisoire du §4.6) d'une **Instance** (une exécution de cette définition contre un composant/fonction réel réel, rattaché à un nœud de la Structure Système déjà construite en §4.10).
-- Certains éléments sont fixes/normatifs (ex. la grille des 5 catégories GAMP5, la règle d'agrégation "au moins un Oui → critique") et ne doivent jamais être rendus "modulables" ; d'autres sont structurellement propres à chaque client (les questions ACFC elles-mêmes, les échelles AMDEC S/O/D) et ne doivent jamais être codés en dur. Trancher, module par module, lequel est lequel — c'est exactement l'objet de la session de travail que l'utilisateur veut mener ensuite : **"bosser plus intelligemment, module par module depuis le début jusqu'à la fin pour définir les données d'entrée et de sorties qu'on veut. Modulable ou non."**
+### 5.5 Prochaine étape : Phase 3
 
-**C'est le sujet de travail prioritaire annoncé pour la reprise** (message de l'utilisateur du 24/08 au soir, toujours valable) — pas encore commencé au moment de la rédaction de ce fichier.
-
-### 5.4 Sources lues cette phase — état de couverture (25/08/2026)
-
-Lues **intégralement** (texte primaire, pas résumé) : ASTM E2500-20, EudraLex Annexe 11, EudraLex Annexe 15, PIC/S PI_041, PIC/S PI 006-4 (49 p.), WHO Annexe 5, MHRA GXP Data Integrity Guidance, FDA Data Integrity Q&A, ISO 13485:2016 (clauses 1-8), Ferring FSMP Project Master Plan, 2 papiers Antaes Consulting, présentation webinaire GAMP Data Integrity by Design.
-
-Lues **partiellement**, à continuer : ISPE Baseline Guide: Commissioning and Qualification (chapitres 1 à 5 sur 14 lus intégralement — Introduction, URS, System Classification, System Risk Assessment, début DR/DQ ; chapitres 6-14 et annexes restants), Guide BPF France/ANSM (table des matières complète + Chapitre 1 "Système Qualité Pharmaceutique" lus intégralement sur ~9 chapitres de la Partie I + Parties II/III/IV, document de ~400 pages).
-
-Pas encore ouverts : Vocabulaire Qualité, ISO 10004, Annexe 15 PIC/S (projet de modification, version 2026 en consultation).
-
-Le fichier de tâches interne de la session liste ces lectures individuellement (tâches #33 à #42) — utile pour reprendre précisément là où c'est resté en suspens si l'utilisateur veut continuer l'exhaustivité à 100 % de ces documents avant de reprendre la construction.
+**Phase 3 — Moteur d'Assessment générique** (`CriticalityAssessment`/`ImpactAssessment`/`CSVAssessment`/`GxPAssessment`), débloquée (Phases 1 et 2 dont elle dépend sont terminées). Détail complet dans `CONVERGENCE_PLAN.md`. C'est un chantier structurant (remplace l'assistant fermé §4.6 par un moteur configurable commun à 4 types d'assessment) — à traiter avec la même discipline que ci-dessus.
 
 ---
 
-## 6. Prochaines étapes (dans l'ordre annoncé par l'utilisateur)
-
-1. **Terminer les lectures en cours** si l'utilisateur le souhaite (ISPE Baseline Guide chapitres 6-14 + annexes, Guide BPF France restant, 3 documents jamais ouverts) — non bloquant pour la suite.
-2. **Corriger les deux erreurs identifiées dans l'URS v25** (§5.2 ci-dessus) — modèle binaire Direct/Not Direct, séparation ACFC / Computer System Assessment / Risk Analysis en 3 briques distinctes.
-3. **Le chantier principal annoncé** : reprendre le catalogue de mini-outils de l'URS §10 **module par module, du début à la fin**, et pour chacun trancher explicitement : quelles sont les données d'entrée, sont-elles figées (normatives) ou modulables (propres au client), quelles sont les données de sortie, sous quel format. Formaliser ça dans l'URS/FS avant de reprendre le code — pas l'inverse.
-4. Une fois ce travail de définition fait, reprendre la construction (probablement en commençant par le "vrai" outil ACFC/Impact Assessment/Risk Analysis, qui remplacera à terme la grille provisoire du §4.6 — celle-ci reste explicitement étiquetée "provisoire" dans l'écran tant que ce travail n'est pas fait).
-5. Backlog déjà connu et non urgent : tâches #27 à #32 listées en §4.
-
----
-
-## 7. Repères pratiques
+## 6. Repères pratiques
 
 - Dépôt local : `/home/user/validapharm`, remote `origin` = `https://github.com/soudjaymoursala-netizen/validapharm`.
 - Branche de travail active : `claude/contexte-reprise-session-tin77u` (pas `main`) — c'est elle qui porte la PR #1 ouverte.
-- PR ouverte : #1, https://github.com/soudjaymoursala-netizen/validapharm/pull/1 — jamais mergée, continuer à y committer.
-- Tests : `npx vitest run` — 282 tests, 39 fichiers, tous verts au 25/08/2026.
+- PR ouverte : #1, https://github.com/soudjaymoursala-netizen/validapharm/pull/1 — jamais mergée, continuer à y committer. Session abonnée aux événements CI/review de cette PR (`subscribe_pr_activity`).
+- Tests : `npx vitest run` — 298 tests, 41 fichiers, tous verts au 25/08/2026.
 - Toute action risquée (push, suppression, écrasement, merge de PR) reste soumise à confirmation explicite au cas par cas.
-- Fichiers Google Drive de référence utilisés cette phase : dossier `01 - Metiers Pharma / 00 - Normes et guidline GMP / Guide et normes CQV-CSV` (sous-dossiers `CSV`, `CQV`, `PIC/S`) — c'est là que se trouvent les normes réelles téléchargées par l'utilisateur, à explorer en premier pour toute future recherche normative.
+- Fichiers Google Drive de référence : dossier `01 - Metiers Pharma / 00 - Normes et guidline GMP / Guide et normes CQV-CSV` (normes réelles, phase de recherche du 24/08) et dossier `10- Architecture détaillée / Nouvelle Architecture Cible` (19 fichiers, package Target Architecture v5.0 gouvernant le chantier de convergence actif — voir §5).
+- Le fichier de tâches interne de la session (`TaskList`) porte le détail phase par phase (tâches #50 à #53 pour la convergence architecturale) — utile pour retrouver l'état exact si ce fichier et le fichier de tâches divergent un jour ; en cas de divergence, `CONVERGENCE_PLAN.md` §"Suivi d'avancement" fait foi pour l'implémentation, ce fichier-ci pour le récit et le contexte.
 
 ---
 *Fichier de continuité, pas un livrable projet — à réécrire entièrement (pas juste amender) la prochaine fois qu'un état des lieux complet est demandé, plutôt que de laisser les deux versions coexister.*

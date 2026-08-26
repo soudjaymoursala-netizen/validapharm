@@ -7,6 +7,8 @@
 
 ---
 
+> **Note de suivi (25/08/2026, mise à jour au fil des phases) :** instantané figé de la Phase 0, non réécrit à chaque phase terminée pour conserver sa valeur de point de départ. Les mentions de "grille de criticité ACFC codée en dur" (ligne 30 et §"Technical Debt" ci-dessous) sont **obsolètes depuis la Phase 1** (`a8f7f83`, remplacé par `MethodProfileACFC`) ; il n'existait alors aucun `Parameter`/`CPP`/`CQA`, **ajoutés depuis en Phase 2** (`c6391ca`). Voir `CONVERGENCE_PLAN.md` §"Suivi d'avancement" pour l'état courant réel.
+
 ## Current Domains
 
 Le repository ne connaît aujourd'hui que 3 domaines métier réels (au sens : entité persistée + logique + écran) :

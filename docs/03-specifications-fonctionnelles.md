@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 17 (ajout de l'entité `export_template`, gap trouvé en analysant §4.3bis pour implémentation) |
+| **Version** | 18 (§4.6 corrigé : la "grille de critères déterministe" est remplacée par la méthode ACFC configurable par client réellement implémentée en Phase 1 de convergence architecturale, 25/08/2026, cohérent avec URS v27) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -275,9 +275,10 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 
 ### 4.6 Assistant de stratégie de qualification (répond à URS-F-050 à 055)
 
-- Grille de critères **déterministe** (ASTM E2500 / EudraLex Annexe 15 §43 / ICH Q9), alimentée manuellement ou depuis un Change Control joint (via URS-F-031) ; conclusion parmi une liste fermée (Aucun impact / Revue documentaire / FAT / SAT / IQ / IQ+OQ / IQ+OQ+PQ / Autre) — URS-F-050.
-- **Garde-fou non négociable (mitige AR-R-15/R-16)** : l'IA peut proposer des réponses aux critères à partir d'un Change Control joint, mais chaque réponse individuelle doit être validée/corrigée par l'utilisateur ; la conclusion résulte exclusivement du calcul déterministe sur les réponses validées, jamais d'une génération libre — URS-F-050bis.
+- Méthode ACFC **configurable par client** (`MethodProfileACFC` : questions Oui/Non définies par le client, conservées mot pour mot, versionnée et immuable — aucune valeur figée dans le code), alimentée manuellement ou depuis un Change Control joint (via URS-F-031) ; le verdict de criticité (critique/non_critique), combiné à la complexité, produit une conclusion parmi une liste fermée (Aucun impact / Revue documentaire / FAT / SAT / IQ / IQ+OQ / IQ+OQ+PQ / Autre) — URS-F-050. **(Corrigé v18 — Phase 1 de convergence architecturale, 25/08/2026)** Remplace la précédente description "grille de critères déterministe ASTM E2500/EudraLex Annexe 15 §43/ICH Q9", qui décrivait à tort un barème de critères pondérés fixe et universel ; confirmé sur 4 sources indépendantes (Ferring, Sanofi Marcy, Sanofi Lyon-Gerland, ISPE Baseline Guide) qu'il s'agit en réalité d'un questionnaire propre à chaque client, avec une règle de décision elle-même configurable ("au moins un Oui → critique" est la seule règle confirmée à ce jour, pas une règle universelle codée en dur).
+- **Garde-fou non négociable (mitige AR-R-15/R-16)** : l'IA peut proposer des réponses aux questions de la méthode active à partir d'un Change Control joint, mais chaque réponse individuelle doit être validée/corrigée par l'utilisateur ; le verdict résulte exclusivement du calcul déterministe sur les réponses validées, jamais d'une génération libre — URS-F-050bis.
 - La référence et la version du Change Control utilisé comme contexte sont affichées et conservées — URS-F-050ter.
+- Tant qu'aucune méthode ACFC n'a été configurée pour un client, aucune question par défaut n'est proposée : l'écran l'indique explicitement et invite à saisir les questions réelles de la procédure du client — URS-F-050quater.
 - Avertissement renforcé systématique : "aide à la décision, non une décision de qualification" — URS-F-053.
 - L'assistant est accessible directement depuis une section Change Control en cours de rédaction, en plus de son accès en module indépendant — URS-F-054.
 - Lorsqu'une évaluation ACFC ou Computer System Assessment (catalogue §10.F) conclut à la nécessité d'un dossier complet, ses réponses pré-remplissent automatiquement les champs correspondants du gabarit cible (ex. section "Généralités" du CSV) — pas de double saisie — URS-F-055.
