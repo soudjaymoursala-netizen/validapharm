@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 19 (ajout §4.10bis/URS-F-103 — Function/Process/ManufacturingContext, Phase 4, 25/08/2026, EXTEND pur — cohérent avec URS v29. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
+| **Version** | 20 (intégration des exigences manquantes, 25/08/2026 : ajout §4.6quater/URS-F-058 — Parameter/CriticalParameter/CPP/CQA, Phase 2, oublié au moment de son implémentation — et §4.11/URS-F-110 — Quality Events, Phase 5 — cohérent avec URS v30. Version 19 : ajout §4.10bis/URS-F-103, Phase 4. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -280,6 +280,12 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - La référence et la version du Change Control utilisé comme contexte sont affichées et conservées — URS-F-050ter.
 - Tant qu'aucune méthode ACFC n'a été configurée pour un client, aucune question par défaut n'est proposée : l'écran l'indique explicitement et invite à saisir les questions réelles de la procédure du client — URS-F-050quater.
 
+### 4.6quater Paramètres de procédé et attributs qualité — Parameter/CriticalParameter/CPP/CQA (répond à URS-F-058 à 058ter, nouveau v20 — Phase 2, requirement intégré v20 après coup)
+
+- `Parameter` : entité de base, rattachable optionnellement à un nœud du référentiel d'actifs, sans notion de criticité intrinsèque — URS-F-058.
+- **Garde-fou non négociable** : classer un `Parameter` comme important/critique pour le procédé ne crée jamais automatiquement un CPP — un CPP est une déclaration humaine explicite et séparée — URS-F-058bis.
+- CPP/CQA contextuels : une déclaration existante n'est jamais mutée lors d'un changement de contexte (nouvelle recette/produit) — elle est désactivée explicitement (motif tracé) et une nouvelle est créée si applicable, historique préservé — URS-F-058ter.
+
 ### 4.6bis Impact Assessment / System Classification (répond à URS-F-056, nouveau v18 — Phase 3)
 
 - Méthode configurable par client (`MethodProfileImpactAssessment` : questions Oui/Non définies par le client, conservées mot pour mot, versionnée et immuable — même principe que `MethodProfileACFC`), appliquée à chaque système **avant** toute analyse de risque ACFC (F2) — URS-F-056.
@@ -359,6 +365,15 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - `Function` indépendante du type de `Process`, associable à plusieurs nœuds du référentiel et à plusieurs `Process` via des relations N:M dédiées, jamais un champ unique — URS-F-103bis.
 - `ManufacturingContext` relie un nœud du référentiel à un `Process`, un produit et, le cas échéant, une recette/un format/une configuration. Un même nœud (ex. système numérique type SCADA) peut être rattaché à plusieurs `ManufacturingContext` distincts sans qu'aucune relation ne soit déduite comme universelle — URS-F-103ter.
 - EXTEND pur : `asset_node`/`asset_hierarchy_schema` (§4.10) ne sont ni modifiés ni mutés par ce module.
+
+### 4.11 Quality Events (répond à URS-F-110 à 110sexies, nouveau v20 — Phase 5)
+
+- `QualityEvent` unique avec discriminant de type (Change Control/Déviation/Investigation/CAPA/Constat d'audit/Revue périodique) — aucune source ne documente de champs distincts par sous-type au-delà du nom, pas de duplication d'interface sans justification — URS-F-110.
+- **Garde-fou non négociable** : `origine` (interne/externe/mixte) ; un événement externe/mixte est référencé (système, identifiant), jamais dupliqué comme contenu officiel — URS-F-110bis.
+- **Garde-fou non négociable** : aucun mécanisme de blocage automatique basé sur le statut d'un événement externe — vérifié explicitement par test (un Change Control externe ouvert ne bloque jamais une opération indépendante sur le même équipement) — URS-F-110ter.
+- Références optionnelles entre événements (ex. Déviation → Investigation → CAPA), jamais un workflow à étapes obligatoires — URS-F-110quater.
+- Rattachement optionnel à un nœud du référentiel/`Process`/`ManufacturingContext` (§4.10/§4.10bis) — URS-F-110quinquies.
+- Aucune classification/priorisation/clôture automatique par IA — URS-F-110sexies.
 
 ## 5. Spécification des exigences non fonctionnelles
 

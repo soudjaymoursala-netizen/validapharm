@@ -21,6 +21,8 @@ import type {
   Process,
   Project,
   ProjectDocument,
+  QualityEvent,
+  ReferenceQualityEvent,
   Section,
 } from '../logique-metier/domaine/types'
 
@@ -124,6 +126,8 @@ export class ValidaPharmDatabase extends Dexie {
   associationsFonctionAssetNode!: EntityTable<AssociationFonctionAssetNode, 'id'>
   associationsFonctionProcess!: EntityTable<AssociationFonctionProcess, 'id'>
   manufacturingContexts!: EntityTable<ManufacturingContext, 'id'>
+  qualityEvents!: EntityTable<QualityEvent, 'id'>
+  referencesQualityEvent!: EntityTable<ReferenceQualityEvent, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -172,6 +176,10 @@ export class ValidaPharmDatabase extends Dexie {
       associationsFonctionAssetNode: 'id, client_id, function_id, asset_node_id',
       associationsFonctionProcess: 'id, client_id, function_id, process_id',
       manufacturingContexts: 'id, client_id, asset_node_id, process_id',
+    })
+    this.version(10).stores({
+      qualityEvents: 'id, client_id, type, origine, statut, asset_node_id',
+      referencesQualityEvent: 'id, client_id, quality_event_source_id, quality_event_cible_id',
     })
   }
 }

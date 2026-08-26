@@ -579,3 +579,65 @@ export interface ManufacturingContext {
   created_at: string
   updated_at: string
 }
+
+/**
+ * QualityEvent (Phase 5 de convergence architecturale, `docs/convergence/
+ * CONVERGENCE_PLAN.md`, spec détaillée dans `PHASE_5_QUALITY_EVENTS_SPEC.md`)
+ * — comble la famille H de l'URS (Change Control, CAPA), aujourd'hui vide
+ * de code, et absorbe `Deviation`/`Investigation`/`AuditFinding`
+ * (absents du catalogue jusqu'ici) ainsi que `PeriodicReview` (famille I).
+ *
+ * Un seul type avec discriminant `type`, pas 6 interfaces dupliquées :
+ * aucune source lue ne documente de champs distincts par sous-type
+ * au-delà du nom (à la différence de l'Assessment générique, Phase 3, où
+ * `CSVAssessment` avait un mécanisme réellement différent).
+ *
+ * `origine`/`reference_externe` portent le principe non négociable de la
+ * cible (DEC-002/DEC-055) : un événement externe est référencé, jamais
+ * dupliqué comme contenu officiel, et ne bloque **jamais** par
+ * construction une activité indépendante — aucun garde-fou de blocage
+ * automatique n'existe dans ce module, intentionnellement.
+ *
+ * @requirement URS catalogue §10 famille H (Change Control, CAPA), famille
+ * I (Revue périodique)
+ */
+export type TypeQualityEvent =
+  'change_control' | 'deviation' | 'capa' | 'investigation' | 'audit_finding' | 'periodic_review'
+
+export type OrigineQualityEvent = 'interne' | 'externe' | 'mixte'
+
+export interface ReferenceExterneQualityEvent {
+  systeme: string
+  identifiant: string
+}
+
+export interface QualityEvent {
+  id: string
+  client_id: string
+  type: TypeQualityEvent
+  titre: string
+  description: string
+  origine: OrigineQualityEvent
+  reference_externe: ReferenceExterneQualityEvent | null
+  asset_node_id: string | null
+  process_id: string | null
+  manufacturing_context_id: string | null
+  statut: 'ouvert' | 'en_cours' | 'cloture'
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Référence optionnelle entre deux `QualityEvent` (ex. Deviation →
+ * Investigation → CAPA, ou AuditFinding → CAPA) — jamais un workflow figé
+ * à étapes obligatoires : une déviation mineure peut se clôturer sans
+ * investigation ni CAPA.
+ */
+export interface ReferenceQualityEvent {
+  id: string
+  client_id: string
+  quality_event_source_id: string
+  quality_event_cible_id: string
+  created_at: string
+}
