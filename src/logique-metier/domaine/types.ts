@@ -975,3 +975,35 @@ export interface Conflict {
   resolution: string | null
   created_at: string
 }
+
+/**
+ * Phase 9 (`docs/convergence/PHASE_9_CONTENT_PLAN_SPEC.md`) — planifie
+ * quelles entrées (Method/Template, contexte d'actif/procédé) alimentent
+ * un livrable, sans produire le contenu réglementaire lui-même. Ne couvre
+ * que la première moitié du pipeline (`Request → Resolve → Context
+ * Snapshot → Content Plan`) — `Generate → Render → Approve → Freeze`
+ * (intégration avec `DefinitionGabarit`/`RenduGabarit.vue` et le cycle de
+ * vie de `Section`) reste un chantier distinct, non engagé ici.
+ * `context_snapshot` est figé une seule fois à la création et reste
+ * immutable — même si le `MethodProfile` référencé évolue plus tard.
+ * `method_profile_type` distingue la table réellement référencée, car il
+ * n'existe pas de type `Method` générique unifiant `MethodProfileACFC`/
+ * `MethodProfileImpactAssessment` (décision déjà actée en Phase 3).
+ */
+export type StatutContentPlan = 'brouillon' | 'valide' | 'gele'
+export type TypeMethodProfileReference = 'acfc' | 'impact_assessment'
+
+export interface ContentPlan {
+  id: string
+  client_id: string
+  template_id: TemplateType
+  asset_node_id: string | null
+  process_id: string | null
+  method_profile_id: string | null
+  method_profile_type: TypeMethodProfileReference | null
+  context_snapshot: string
+  statut: StatutContentPlan
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}

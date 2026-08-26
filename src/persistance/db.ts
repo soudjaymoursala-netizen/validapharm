@@ -9,6 +9,7 @@ import type {
   ClientConfig,
   ClassificationCriticiteParametre,
   Conflict,
+  ContentPlan,
   CPP,
   CQA,
   Extraction,
@@ -173,6 +174,7 @@ export class ValidaPharmDatabase extends Dexie {
   extractions!: EntityTable<Extraction, 'id'>
   knowledgeItems!: EntityTable<KnowledgeItem, 'id'>
   conflicts!: EntityTable<Conflict, 'id'>
+  contentPlans!: EntityTable<ContentPlan, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -252,6 +254,9 @@ export class ValidaPharmDatabase extends Dexie {
       extractions: 'id, client_id, source_id',
       knowledgeItems: 'id, client_id, extraction_id, statut',
       conflicts: 'id, client_id, knowledge_item_source_id, knowledge_item_cible_id, statut',
+    })
+    this.version(16).stores({
+      contentPlans: 'id, client_id, template_id, asset_node_id, process_id, statut',
     })
   }
 }

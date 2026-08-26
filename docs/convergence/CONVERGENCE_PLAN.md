@@ -113,9 +113,11 @@
 - **Sous-phase 8a — Terminée (25/08/2026)** : `Source → Extraction → KnowledgeItem` + `Conflict`, précédée d'une revue panel E1-E7 (`docs/convergence/PHASE_8A_SOURCE_INTELLIGENCE_SPEC.md`). Décision de conception documentée : le mot "Evidence" utilisé par `GAP.md` pour ce pipeline est porté par `Extraction.contenu_brut` (texte brut immutable), pas par un objet séparé — pour éviter toute collision avec l'`Evidence` de traçabilité Test/Execution (Phase 7c), qui est un concept distinct. Aucun appel IA réel construit : `valeur_interpretee` toujours fournie par l'appelant. Garde-fous testés : `KnowledgeItem` toujours `a_valider` à la création ; validation/rejet toujours humains et tracés ; `Conflict` reste `ouvert` tant que non résolu explicitement. Voir `01-URS-outil.md` §4.15/URS-F-150, `03-specifications-fonctionnelles.md` §4.15.
 - **Sous-phase 8b — Non engagée** : compréhension de schémas techniques complexes (P&ID, schémas électriques, diagrammes Oui/Non) — TD-004 : "seulement après retour d'expérience réel" sur 8a.
 
-## Phase 9 — Deliverable Engine complet (ContentPlan, provenance, versionnement)
+## Phase 9 — Deliverable Engine complet (ContentPlan, provenance, versionnement) — **ContentPlan (planification) TERMINÉ (25/08/2026) ; Generate/Render/Approve/Freeze non engagés**
 - **Dependencies** : Phases 1-3 (Method/Assessment) pour que le Content Planner ait des règles réelles à appliquer.
 - **Migration** : ADAPT du moteur de gabarits existant (KEEP), ajout de la couche amont.
+- **Réalisé (25/08/2026)** : `ContentPlan` (`Request → Resolve → Context Snapshot → Content Plan`), précédé d'une revue panel E1-E7 (`docs/convergence/PHASE_9_CONTENT_PLAN_SPEC.md`). Garde-fous testés : `context_snapshot` figé et immutable dès la création ; passage obligatoire par `valide` avant `gele` ; immutabilité totale après `gele`. Voir `01-URS-outil.md` §4.16/URS-F-160, `03-specifications-fonctionnelles.md` §4.16.
+- **Non engagé, documenté comme tel** : `Generate → Validate → Review → Render → Approve → Freeze` (intégration avec `DefinitionGabarit`/`RenduGabarit.vue`, KEEP, et le cycle de vie de `Section`) — chantier distinct, plus risqué (tests existants du moteur de rendu à préserver, per `GAP.md`). Résolution "Example" (Method/Template/**Example**) non fabriquée, aucune source locale ne la détaillant.
 
 ## Phase 10 — Integration Gateway générique (TD-005) + Connecteurs QMS tiers
 - **Dependencies** : aucune dure, mais peu utile avant qu'un vrai connecteur QMS (Veeva, backlog #32) soit engagé.
@@ -149,6 +151,7 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèl
 | 7b | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v32 (§4.13/URS-F-130), `03-specifications-fonctionnelles.md` v22, `docs/convergence/PHASE_7B_EXECUTION_SPEC.md` |
 | 7c | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v33 (§4.14/URS-F-140), `03-specifications-fonctionnelles.md` v23, `docs/convergence/PHASE_7C_EVIDENCE_SPEC.md` |
 | 8a | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v34 (§4.15/URS-F-150), `03-specifications-fonctionnelles.md` v24, `docs/convergence/PHASE_8A_SOURCE_INTELLIGENCE_SPEC.md` |
-| 8b, 9-11 | Non engagées | — | — |
+| 9 (ContentPlan) | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v35 (§4.16/URS-F-160), `03-specifications-fonctionnelles.md` v25, `docs/convergence/PHASE_9_CONTENT_PLAN_SPEC.md` |
+| 8b, 9 (Generate/Render/Approve/Freeze), 10-11 | Non engagées | — | — |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.

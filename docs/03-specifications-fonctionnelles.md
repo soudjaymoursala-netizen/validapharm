@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 24 (ajout §4.15/URS-F-150 — Source/Document Intelligence, structuration assistée, Phase 8a, 25/08/2026 — cohérent avec URS v34). Version 23 : ajout §4.14/URS-F-140 — Evidence, dernière sous-étape de la Phase 7, 25/08/2026 — cohérent avec URS v33). Version 22 : ajout §4.13/URS-F-130 — exécution d'un Test approuvé, Phase 7b, 25/08/2026 — cohérent avec URS v32). Version 21 : ajout §4.12/URS-F-120 — chaîne de définition Requirement → TestObjective → TestCandidate → Test, Phase 7a, 25/08/2026 — cohérent avec URS v31). Version 20 : intégration des exigences manquantes, 25/08/2026 : ajout §4.6quater/URS-F-058 — Parameter/CriticalParameter/CPP/CQA, Phase 2, oublié au moment de son implémentation — et §4.11/URS-F-110 — Quality Events, Phase 5 — cohérent avec URS v30. Version 19 : ajout §4.10bis/URS-F-103, Phase 4. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
+| **Version** | 25 (ajout §4.16/URS-F-160 — ContentPlan, planification d'un livrable, Phase 9, 25/08/2026 — cohérent avec URS v35). Version 24 : ajout §4.15/URS-F-150 — Source/Document Intelligence, structuration assistée, Phase 8a, 25/08/2026 — cohérent avec URS v34). Version 23 : ajout §4.14/URS-F-140 — Evidence, dernière sous-étape de la Phase 7, 25/08/2026 — cohérent avec URS v33). Version 22 : ajout §4.13/URS-F-130 — exécution d'un Test approuvé, Phase 7b, 25/08/2026 — cohérent avec URS v32). Version 21 : ajout §4.12/URS-F-120 — chaîne de définition Requirement → TestObjective → TestCandidate → Test, Phase 7a, 25/08/2026 — cohérent avec URS v31). Version 20 : intégration des exigences manquantes, 25/08/2026 : ajout §4.6quater/URS-F-058 — Parameter/CriticalParameter/CPP/CQA, Phase 2, oublié au moment de son implémentation — et §4.11/URS-F-110 — Quality Events, Phase 5 — cohérent avec URS v30. Version 19 : ajout §4.10bis/URS-F-103, Phase 4. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -415,6 +415,15 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - `Conflict` : désaccord explicite entre deux `KnowledgeItem`, reste `ouvert` tant qu'aucune `resolution` n'est fournie — vérifié explicitement par test — URS-F-150quater.
 - Aucun appel IA réel dans ce module : `valeur_interpretee` est toujours fournie par l'appelant (humain, ou une couche de suggestion câblée séparément plus tard) — URS-F-150quinquies.
 - **Limite assumée** : sous-phase 8b (compréhension de schémas techniques complexes — P&ID, électrique) non engagée, per TD-004 ("seulement après retour d'expérience réel").
+
+### 4.16 ContentPlan — planification d'un livrable (répond à URS-F-160 à 160quinquies, nouveau v25 — Phase 9)
+
+- `ContentPlan` : gabarit visé (`template_id`, référence le `TemplateType` existant, moteur de rendu KEEP), contexte d'actif/procédé optionnel, profil de méthode résolu optionnel (`method_profile_id`/`method_profile_type`, pas de type `Method` générique unifié — cohérent avec la décision Phase 3) — URS-F-160.
+- **Garde-fou non négociable** : `context_snapshot` figé une seule fois à la création (JSON), immutable ensuite — vérifié explicitement (modifier le profil de méthode référencé après coup ne modifie jamais le snapshot déjà pris) — URS-F-160bis.
+- **Garde-fou non négociable** : cycle de vie `brouillon → valide → gele`, un `ContentPlan` ne peut être gelé qu'après avoir été validé — URS-F-160ter.
+- **Garde-fou non négociable** : immutabilité totale après `gele`, même règle que `Execution` (§4.13) — URS-F-160quater.
+- Aucune génération/validation/gel automatique par IA — URS-F-160quinquies.
+- **Limite assumée** : ne couvre que `Request → Resolve → Context Snapshot → Content Plan` — `Generate → Validate → Review → Render → Approve → Freeze` (intégration avec `DefinitionGabarit`/`RenduGabarit.vue` et le cycle de vie de `Section`) reste un chantier distinct, non engagé ici. La résolution "Example" (Method/Template/Example) n'est pas fabriquée, aucune source locale ne la détaillant.
 
 ## 5. Spécification des exigences non fonctionnelles
 
