@@ -11,6 +11,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   quality-gate:
     name: Lint, typecheck, tests
@@ -30,3 +33,51 @@ jobs:
         run: npm run typecheck
       - name: Tests (Vitest — Couche Logique métier, SDS §9)
         run: npm run test
+
+  # Déploiement GitHub Pages (SDS §10bis) : jobs dépendants (`needs:`) du
+  # même workflow plutôt qu'un déclenchement `workflow_run` inter-fichiers
+  # — ce dernier s'est révélé peu fiable en pratique (le second push n'a
+  # jamais redéclenché le workflow séparé), alors qu'un `needs:` dans le
+  # même fichier est garanti par GitHub Actions. Ne s'exécute jamais sur
+  # une pull_request, uniquement sur push vers main, et seulement après
+  # succès du portail de qualité ci-dessus — jamais un déploiement direct
+  # non vérifié.
+  deploy-pages-build:
+    name: Déploiement Pages — build
+    needs: quality-gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      administration: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build (base path GitHub Pages)
+        run: npm run build
+        env:
+          BASE_PATH: /validapharm/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy-pages-deploy:
+    name: Déploiement Pages — publication
+    needs: deploy-pages-build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
