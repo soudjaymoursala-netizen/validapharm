@@ -641,3 +641,116 @@ export interface ReferenceQualityEvent {
   quality_event_cible_id: string
   created_at: string
 }
+
+/**
+ * Phase 7a de convergence architecturale (`docs/convergence/
+ * CONVERGENCE_PLAN.md`) — première sous-étape du Test/Execution/Evidence
+ * engine (marqué "risque élevé... à séquencer en sous-étapes, jamais en un
+ * seul commit" par le plan) : uniquement la chaîne de **définition**
+ * `Requirement → TestObjective → TestCandidate → Test`, jamais
+ * l'exécution (Execution/ExecutionStep/Measurement/ExecutionEvent,
+ * sous-étape 7b) ni l'Evidence (7c). Aucune génération IA ici — DEC-038 à
+ * DEC-041 (Test Design Engine assisté par IA, critique IA, NEEDS_REVIEW)
+ * restent hors périmètre tant qu'aucun module de génération IA n'existe
+ * encore pour ce domaine (même prudence que Parameter/CPP/CQA, Phase 2).
+ *
+ * `Requirement` n'existait pas encore comme entité (`GAP.md`/
+ * `03_DOMAIN_DATA_MODEL.md` du package Target la liste sous "Quality" —
+ * gap non comblé par les phases précédentes) : ajoutée ici en tant que
+ * fondation minimale de la chaîne de traçabilité exigée par l'acceptance
+ * criteria de la Phase 7.
+ *
+ * @requirement Target Architecture, domaine "Test" (`03_DOMAIN_DATA_MODEL.md`)
+ */
+export interface Requirement {
+  id: string
+  client_id: string
+  reference: string
+  titre: string
+  description: string
+  asset_node_id: string | null
+  process_id: string | null
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Ce qu'il faut démontrer pour une `Requirement` donnée — en amont des
+ * idées de test concrètes (`TestCandidate`). Un `Requirement` peut avoir
+ * plusieurs `TestObjective` (ex. un aspect fonctionnel et un aspect
+ * sécurité du même requirement).
+ */
+export interface TestObjective {
+  id: string
+  client_id: string
+  requirement_id: string
+  titre: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+export type StatutTestCandidate = 'propose' | 'retenu' | 'ecarte'
+
+/**
+ * Une idée de test répondant à un `TestObjective`, avant d'être retenue
+ * comme `Test` formel. `statut`/`motif_ecart` tracent la décision humaine
+ * de retenir ou écarter un candidat — jamais une suppression silencieuse
+ * (cohérent avec le principe de traçabilité déjà appliqué partout
+ * ailleurs dans ce projet).
+ */
+export interface TestCandidate {
+  id: string
+  client_id: string
+  test_objective_id: string
+  titre: string
+  description: string
+  statut: StatutTestCandidate
+  motif_ecart: string | null
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+export interface EtapeTest {
+  id: string
+  ordre: number
+  action: string
+  resultat_attendu: string
+}
+
+/**
+ * Le test formel, issu d'un `TestCandidate` retenu — `etapes[]` porte les
+ * `TestStep` du package Target, embarqués (même pattern que
+ * `Section.revisions[]`) plutôt qu'en table séparée : aucune source ne
+ * démontre de besoin de les interroger indépendamment de leur `Test`.
+ */
+export interface Test {
+  id: string
+  client_id: string
+  test_candidate_id: string
+  titre: string
+  description: string
+  etapes: EtapeTest[]
+  statut: 'brouillon' | 'approuve'
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * `Coverage` (package Target) — déclaration explicite qu'un `Test` couvre
+ * une `Requirement`, distincte du lien `TestObjective.requirement_id` :
+ * un `Test` approuvé peut couvrir, de façon démontrée, une exigence
+ * au-delà de celle qui a motivé sa création (ex. un test IQ couvre aussi
+ * une exigence d'intégrité des données constatée a posteriori). N:M —
+ * jamais déduite automatiquement, toujours une déclaration explicite.
+ */
+export interface Couverture {
+  id: string
+  client_id: string
+  requirement_id: string
+  test_id: string
+  created_at: string
+}

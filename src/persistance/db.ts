@@ -18,12 +18,17 @@ import type {
   MethodProfileACFC,
   MethodProfileImpactAssessment,
   Parameter,
+  Couverture,
   Process,
   Project,
   ProjectDocument,
   QualityEvent,
   ReferenceQualityEvent,
+  Requirement,
   Section,
+  Test,
+  TestCandidate,
+  TestObjective,
 } from '../logique-metier/domaine/types'
 
 export interface EnregistrementVersionSchema {
@@ -141,6 +146,11 @@ export class ValidaPharmDatabase extends Dexie {
   manufacturingContexts!: EntityTable<ManufacturingContext, 'id'>
   qualityEvents!: EntityTable<QualityEvent, 'id'>
   referencesQualityEvent!: EntityTable<ReferenceQualityEvent, 'id'>
+  requirements!: EntityTable<Requirement, 'id'>
+  testObjectives!: EntityTable<TestObjective, 'id'>
+  testCandidates!: EntityTable<TestCandidate, 'id'>
+  tests!: EntityTable<Test, 'id'>
+  couvertures!: EntityTable<Couverture, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -196,6 +206,13 @@ export class ValidaPharmDatabase extends Dexie {
     })
     this.version(11).stores({
       connexionRelaisOCR: 'id',
+    })
+    this.version(12).stores({
+      requirements: 'id, client_id, asset_node_id, process_id',
+      testObjectives: 'id, client_id, requirement_id',
+      testCandidates: 'id, client_id, test_objective_id, statut',
+      tests: 'id, client_id, test_candidate_id, statut',
+      couvertures: 'id, client_id, requirement_id, test_id',
     })
   }
 }

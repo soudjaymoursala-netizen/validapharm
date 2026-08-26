@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 20 (intégration des exigences manquantes, 25/08/2026 : ajout §4.6quater/URS-F-058 — Parameter/CriticalParameter/CPP/CQA, Phase 2, oublié au moment de son implémentation — et §4.11/URS-F-110 — Quality Events, Phase 5 — cohérent avec URS v30. Version 19 : ajout §4.10bis/URS-F-103, Phase 4. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
+| **Version** | 21 (ajout §4.12/URS-F-120 — chaîne de définition Requirement → TestObjective → TestCandidate → Test, Phase 7a, 25/08/2026 — cohérent avec URS v31). Version 20 : intégration des exigences manquantes, 25/08/2026 : ajout §4.6quater/URS-F-058 — Parameter/CriticalParameter/CPP/CQA, Phase 2, oublié au moment de son implémentation — et §4.11/URS-F-110 — Quality Events, Phase 5 — cohérent avec URS v30. Version 19 : ajout §4.10bis/URS-F-103, Phase 4. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -374,6 +374,18 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - Références optionnelles entre événements (ex. Déviation → Investigation → CAPA), jamais un workflow à étapes obligatoires — URS-F-110quater.
 - Rattachement optionnel à un nœud du référentiel/`Process`/`ManufacturingContext` (§4.10/§4.10bis) — URS-F-110quinquies.
 - Aucune classification/priorisation/clôture automatique par IA — URS-F-110sexies.
+
+### 4.12 Chaîne de définition Requirement → TestObjective → TestCandidate → Test (répond à URS-F-120 à 120septies, nouveau v21 — Phase 7a)
+
+- Périmètre strict de cette sous-étape : **définition** seulement (Requirement, TestObjective, TestCandidate, Test, Couverture) — ni exécution (`Execution`/`ExecutionStep`/`Measurement`, Phase 7b), ni preuve (`Evidence`, Phase 7c). Décomposition volontaire du domaine Test/Execution/Evidence en sous-phases distinctes, chacune commitée séparément — URS-F-120 à 120septies, cohérent avec le risque identifié pour ce domaine dans `docs/convergence/CONVERGENCE_PLAN.md`.
+- `Requirement` : entité minimale (référence, titre, description), rattachement optionnel à un nœud du référentiel d'actifs ou à un `Process` — jamais une obligation — URS-F-120. N'existait dans aucune phase précédente ; ajoutée ici car intrinsèque à la chaîne de traçabilité que cette sous-phase établit.
+- `TestObjective` rattaché à un `Requirement` unique — URS-F-120bis.
+- `TestCandidate` avec statut explicite `propose | retenu | ecarte` — URS-F-120ter.
+- **Garde-fou non négociable** : un `Test` ne peut être créé qu'à partir d'un `TestCandidate` au statut `retenu` — vérifié explicitement par test (tentative depuis un candidat `propose` → erreur typée, aucune création silencieuse) — URS-F-120quater.
+- **Garde-fou non négociable** : écarter un candidat exige un `motif_ecart` tracé dans `audit_log` — jamais de suppression, cohérent avec la convention d'immutabilité déjà appliquée aux autres domaines (QualityEvent, ManufacturingContext) — URS-F-120quinquies.
+- `TestStep` (`EtapeTest`) modélisé en tableau imbriqué dans `Test` plutôt qu'en table séparée — même logique que `Section.revisions[]` : pas de sur-normalisation sans besoin démontré.
+- `Couverture` : entité N:M distincte et dédiée, déclarée explicitement (jamais déduite) entre un `Requirement` et un `Test` approuvé ; un même `Test` peut couvrir plusieurs `Requirement` — distinct du lien `TestObjective.requirement_id` qui ne capture que le requirement d'origine du test — URS-F-120sexies, idempotence vérifiée par test.
+- Aucune génération, rétention ou approbation automatique par IA — URS-F-120septies.
 
 ## 5. Spécification des exigences non fonctionnelles
 

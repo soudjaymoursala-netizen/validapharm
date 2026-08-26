@@ -98,11 +98,14 @@
 
 ---
 
-## Phase 7 — Test / Execution / Evidence engine
+## Phase 7 — Test / Execution / Evidence engine — **EN COURS (sous-étape 7a terminée le 25/08/2026)**
 - **Objective** : remplacer les tableaux libres FAT/SAT/IQ/OQ/PQ par de vraies entités traçables.
 - **Dependencies** : Phase 3 (Assessment/Requirement/Risk doivent exister pour que la couverture de test ait un sens).
 - **Risk** : Élevé (chantier long, cf. `GAP.md`) — à séquencer en sous-étapes, jamais en un seul commit.
 - **Acceptance Criteria** : traçabilité Requirement→Test→Execution→Evidence démontrable sur au moins un cas réel.
+- **Sous-étape 7a — Terminée (25/08/2026)** : chaîne de définition `Requirement → TestObjective → TestCandidate → Test` + `Couverture` (N:M Requirement↔Test). `Requirement` n'existait dans aucune entité préexistante — ajouté ici car intrinsèque à cette sous-étape. Garde-fous testés explicitement : un `Test` ne peut être créé que depuis un `TestCandidate` retenu ; écarter un candidat exige un motif tracé (jamais de suppression silencieuse) ; `Couverture` est une déclaration explicite et idempotente, jamais déduite. N'inclut ni exécution (7b) ni Evidence (7c). Voir `01-URS-outil.md` §4.12/URS-F-120, `03-specifications-fonctionnelles.md` §4.12.
+- **Sous-étape 7b — Execution** (Execution/ExecutionStep/Measurement/ExecutionEvent) : non engagée.
+- **Sous-étape 7c — Evidence** (Evidence/EvidenceLocation/ProvenanceLink, démonstration complète Requirement→Test→Execution→Evidence) : non engagée.
 
 ## Phase 8 — Source/Document Intelligence (séquencé selon TD-004)
 - **Dependencies** : Phase 6 tranchée (l'hébergement de cette capacité en dépend directement).
@@ -140,6 +143,7 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèl
 | 4 | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v29 (§4.10bis/URS-F-103), `03-specifications-fonctionnelles.md` v19 |
 | 5 | Terminée (25/08/2026) | `2605667` | `01-URS-outil.md` v30 (§4.11/URS-F-110 + backfill §4.6quater/URS-F-058 pour la Phase 2, oublié à l'époque), `03-specifications-fonctionnelles.md` v20 |
 | 6 | Code terminé (25/08/2026) ; déploiement réel par l'utilisateur | voir historique git de la branche | `TECHNICAL_DECISIONS.md` (TD-001 complété : fournisseur Azure AI Vision), `workers/ocr-relay/README.md` |
-| 7-11 | Non engagées | — | — |
+| 7a | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v31 (§4.12/URS-F-120), `03-specifications-fonctionnelles.md` v21 |
+| 7b-7c, 8-11 | Non engagées | — | — |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.
