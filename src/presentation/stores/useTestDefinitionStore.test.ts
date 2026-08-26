@@ -37,7 +37,7 @@ describe('useTestDefinitionStore — chaîne de définition de base', () => {
     })
     expect(candidat.statut).toBe('propose')
 
-    await store.retenirTestCandidate('client-1', candidat.id)
+    await store.accepterTestCandidate('client-1', candidat.id)
     const test = await store.creerTestDepuisCandidat('client-1', candidat.id, {
       titre: 'Test isolation référentiel',
       description: '',
@@ -55,7 +55,7 @@ describe('useTestDefinitionStore — chaîne de définition de base', () => {
 })
 
 describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
-  test("un Test ne peut être créé qu'à partir d'un candidat retenu, jamais un candidat proposé", async () => {
+  test("un Test ne peut être créé qu'à partir d'un candidat accepté, jamais un candidat proposé", async () => {
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {
@@ -72,7 +72,7 @@ describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
     })
     const candidat = await store.creerTestCandidate('client-1', {
       testObjectiveId: objectif.id,
-      titre: 'Candidat non retenu',
+      titre: 'Candidat non accepté',
       description: '',
     })
 
@@ -81,10 +81,10 @@ describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
       description: '',
       etapes: [],
     })
-    expect(resultat).toEqual({ erreur: 'candidat_non_retenu' })
+    expect(resultat).toEqual({ erreur: 'candidat_non_accepte' })
   })
 
-  test('un candidat écarté DOIT porter un motif tracé, jamais une suppression silencieuse', async () => {
+  test('un candidat rejeté DOIT porter un motif tracé, jamais une suppression silencieuse', async () => {
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {
@@ -105,18 +105,67 @@ describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
       description: '',
     })
 
-    const ecarte = await store.ecarterTestCandidate(
+    const rejete = await store.rejeterTestCandidate(
       'client-1',
       candidat.id,
-      'Redondant avec un autre test déjà retenu',
+      'Redondant avec un autre test déjà accepté',
     )
-    expect(ecarte?.statut).toBe('ecarte')
-    expect(ecarte?.motif_ecart).toBe('Redondant avec un autre test déjà retenu')
-    expect(ecarte?.audit_log).toHaveLength(2)
+    expect(rejete?.statut).toBe('rejete')
+    expect(rejete?.motif_rejet).toBe('Redondant avec un autre test déjà accepté')
+    expect(rejete?.audit_log).toHaveLength(2)
     expect(store.testCandidates).toHaveLength(1)
 
     const relu = await db.testCandidates.get(candidat.id)
-    expect(relu?.statut).toBe('ecarte')
+    expect(relu?.statut).toBe('rejete')
+  })
+
+  test('un candidat peut être marqué besoin_information, besoin_revue, doublon ou remplace, chacun tracé', async () => {
+    const store = useTestDefinitionStore()
+    await store.charger('client-1')
+    const requirement = await store.creerRequirement('client-1', {
+      reference: 'URS-F-001',
+      titre: 'Test',
+      description: '',
+      assetNodeId: null,
+      processId: null,
+    })
+    const objectif = await store.creerTestObjective('client-1', {
+      requirementId: requirement.id,
+      titre: 'Objectif',
+      description: '',
+    })
+    const original = await store.creerTestCandidate('client-1', {
+      testObjectiveId: objectif.id,
+      titre: 'Candidat original',
+      description: '',
+    })
+    const remplacant = await store.creerTestCandidate('client-1', {
+      testObjectiveId: objectif.id,
+      titre: 'Candidat remplaçant',
+      description: '',
+    })
+
+    const besoinInfo = await store.marquerBesoinInformation(
+      'client-1',
+      original.id,
+      'Manque la valeur limite attendue',
+    )
+    expect(besoinInfo?.statut).toBe('besoin_information')
+
+    const besoinRevue = await store.marquerBesoinRevue(
+      'client-1',
+      original.id,
+      'Critère d’acceptation ambigu',
+    )
+    expect(besoinRevue?.statut).toBe('besoin_revue')
+
+    const doublon = await store.marquerDoublon('client-1', original.id, remplacant.id)
+    expect(doublon?.statut).toBe('doublon')
+    expect(doublon?.duplique_de_id).toBe(remplacant.id)
+
+    const remplace = await store.marquerRemplace('client-1', original.id, remplacant.id)
+    expect(remplace?.statut).toBe('remplace')
+    expect(remplace?.remplace_par_id).toBe(remplacant.id)
   })
 
   test("approuverTest journalise l'approbation", async () => {
@@ -139,7 +188,7 @@ describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
       titre: 'Candidat',
       description: '',
     })
-    await store.retenirTestCandidate('client-1', candidat.id)
+    await store.accepterTestCandidate('client-1', candidat.id)
     const test = await store.creerTestDepuisCandidat('client-1', candidat.id, {
       titre: 'Test',
       description: '',
@@ -181,7 +230,7 @@ describe('useTestDefinitionStore — Couverture (N:M Requirement <-> Test)', () 
       titre: 'Candidat',
       description: '',
     })
-    await store.retenirTestCandidate('client-1', candidat.id)
+    await store.accepterTestCandidate('client-1', candidat.id)
     const test = await store.creerTestDepuisCandidat('client-1', candidat.id, {
       titre: 'Test IQ couvrant aussi une exigence DI',
       description: '',
@@ -217,7 +266,7 @@ describe('useTestDefinitionStore — Couverture (N:M Requirement <-> Test)', () 
       titre: 'Candidat',
       description: '',
     })
-    await store.retenirTestCandidate('client-1', candidat.id)
+    await store.accepterTestCandidate('client-1', candidat.id)
     const test = await store.creerTestDepuisCandidat('client-1', candidat.id, {
       titre: 'Test',
       description: '',

@@ -8,11 +8,13 @@ import type {
   Client,
   ClientConfig,
   ClassificationCriticiteParametre,
+  Confirmation,
   Conflict,
   ContentPlan,
   CPP,
   CQA,
   Extraction,
+  ExtractionItem,
   EvaluationACFC,
   EvaluationCSVAssessment,
   EvaluationImpactAssessment,
@@ -23,6 +25,7 @@ import type {
   ExecutionStep,
   FonctionActif,
   KnowledgeItem,
+  KnowledgeRelation,
   ManufacturingContext,
   Measurement,
   MethodProfileACFC,
@@ -38,6 +41,8 @@ import type {
   Requirement,
   Section,
   Source,
+  SourceLocation,
+  SourceVersion,
   Test,
   TestCandidate,
   TestObjective,
@@ -171,8 +176,13 @@ export class ValidaPharmDatabase extends Dexie {
   evidenceLocations!: EntityTable<EvidenceLocation, 'id'>
   provenanceLinks!: EntityTable<ProvenanceLink, 'id'>
   sources!: EntityTable<Source, 'id'>
+  sourceVersions!: EntityTable<SourceVersion, 'id'>
+  sourceLocations!: EntityTable<SourceLocation, 'id'>
   extractions!: EntityTable<Extraction, 'id'>
+  extractionItems!: EntityTable<ExtractionItem, 'id'>
   knowledgeItems!: EntityTable<KnowledgeItem, 'id'>
+  confirmations!: EntityTable<Confirmation, 'id'>
+  knowledgeRelations!: EntityTable<KnowledgeRelation, 'id'>
   conflicts!: EntityTable<Conflict, 'id'>
   contentPlans!: EntityTable<ContentPlan, 'id'>
 
@@ -257,6 +267,23 @@ export class ValidaPharmDatabase extends Dexie {
     })
     this.version(16).stores({
       contentPlans: 'id, client_id, template_id, asset_node_id, process_id, statut',
+    })
+    /**
+     * Réalignement Phase 8a (25/08/2026) sur le vrai modèle cible après
+     * lecture directe du package source : Source → SourceVersion →
+     * Extraction → ExtractionItem → KnowledgeItem, pas Source → Extraction
+     * → KnowledgeItem. `extractions`/`knowledgeItems` redéclarés avec leurs
+     * nouveaux index ; aucune donnée réelle n'existait encore sur ce schéma
+     * pré-version (chantier introduit dans cette même session).
+     */
+    this.version(17).stores({
+      sourceVersions: 'id, client_id, source_id',
+      sourceLocations: 'id, client_id, source_id',
+      extractions: 'id, client_id, source_version_id',
+      extractionItems: 'id, client_id, extraction_id',
+      knowledgeItems: 'id, client_id, extraction_item_id, statut',
+      confirmations: 'id, client_id, knowledge_item_id',
+      knowledgeRelations: 'id, client_id, knowledge_item_source_id, knowledge_item_cible_id',
     })
   }
 }

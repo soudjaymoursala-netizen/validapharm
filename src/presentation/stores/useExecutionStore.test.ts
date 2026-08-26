@@ -40,7 +40,7 @@ async function creerTestApprouve(clientId: string) {
     titre: 'Candidat',
     description: '',
   })
-  await definition.retenirTestCandidate(clientId, candidat.id)
+  await definition.accepterTestCandidate(clientId, candidat.id)
   const test = await definition.creerTestDepuisCandidat(clientId, candidat.id, {
     titre: 'Test IQ',
     description: '',
@@ -124,7 +124,7 @@ describe('useExecutionStore — garde-fous', () => {
       titre: 'Candidat',
       description: '',
     })
-    await definition.retenirTestCandidate('client-1', candidat.id)
+    await definition.accepterTestCandidate('client-1', candidat.id)
     const testBrouillon = await definition.creerTestDepuisCandidat('client-1', candidat.id, {
       titre: 'Test non approuvé',
       description: '',
@@ -203,7 +203,7 @@ describe('useExecutionStore — garde-fous', () => {
       observation: 'Écart',
     })
     await store.consignerEvenement('client-1', execution.id, {
-      type: 'anomalie',
+      type: 'deviation',
       description: 'Résultat non conforme constaté',
       qualityEventId: null,
     })
@@ -222,7 +222,7 @@ describe('useExecutionStore — garde-fous', () => {
     if ('erreur' in execution) throw new Error('unreachable')
 
     const evenement = await store.consignerEvenement('client-1', execution.id, {
-      type: 'anomalie',
+      type: 'deviation',
       description: 'Écart constaté',
       qualityEventId: 'qe-existant-123',
     })

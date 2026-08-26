@@ -126,7 +126,9 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       titre: input.titre,
       description: input.description,
       statut: 'propose',
-      motif_ecart: null,
+      motif_rejet: null,
+      duplique_de_id: null,
+      remplace_par_id: null,
       audit_log: [
         { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
       ],
@@ -138,42 +140,81 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     return candidat
   }
 
-  async function retenirTestCandidate(
+  async function accepterTestCandidate(
     clientId: string,
     testCandidateId: string,
   ): Promise<TestCandidate | null> {
-    return changerStatutCandidate(clientId, testCandidateId, 'retenu', null)
+    return changerStatutCandidate(clientId, testCandidateId, 'accepte', {})
   }
 
-  /** Écarter un candidat DOIT toujours être justifié — jamais une suppression silencieuse. */
-  async function ecarterTestCandidate(
+  /** Rejeter un candidat DOIT toujours être justifié — jamais une suppression silencieuse. */
+  async function rejeterTestCandidate(
     clientId: string,
     testCandidateId: string,
     motif: string,
   ): Promise<TestCandidate | null> {
-    return changerStatutCandidate(clientId, testCandidateId, 'ecarte', motif)
+    return changerStatutCandidate(clientId, testCandidateId, 'rejete', { motifRejet: motif })
+  }
+
+  async function marquerBesoinInformation(
+    clientId: string,
+    testCandidateId: string,
+    motif: string,
+  ): Promise<TestCandidate | null> {
+    return changerStatutCandidate(clientId, testCandidateId, 'besoin_information', {
+      motifRejet: motif,
+    })
+  }
+
+  async function marquerBesoinRevue(
+    clientId: string,
+    testCandidateId: string,
+    motif: string,
+  ): Promise<TestCandidate | null> {
+    return changerStatutCandidate(clientId, testCandidateId, 'besoin_revue', { motifRejet: motif })
+  }
+
+  /** Marque ce candidat comme doublon d'un autre — trace explicitement lequel, jamais une simple suppression. */
+  async function marquerDoublon(
+    clientId: string,
+    testCandidateId: string,
+    dupliqueDeId: string,
+  ): Promise<TestCandidate | null> {
+    return changerStatutCandidate(clientId, testCandidateId, 'doublon', { dupliqueDeId })
+  }
+
+  /** Marque ce candidat comme remplacé par un autre, plus récent — trace explicitement lequel. */
+  async function marquerRemplace(
+    clientId: string,
+    testCandidateId: string,
+    remplaceParId: string,
+  ): Promise<TestCandidate | null> {
+    return changerStatutCandidate(clientId, testCandidateId, 'remplace', { remplaceParId })
   }
 
   async function changerStatutCandidate(
     clientId: string,
     testCandidateId: string,
     statut: TestCandidate['statut'],
-    motifEcart: string | null,
+    options: { motifRejet?: string; dupliqueDeId?: string; remplaceParId?: string },
   ): Promise<TestCandidate | null> {
     const existant = await db.testCandidates.get(testCandidateId)
     if (!existant || existant.client_id !== clientId) return null
     const maintenant = new Date().toISOString()
+    const motifRejet = options.motifRejet ?? null
     const misAJour: TestCandidate = {
       ...existant,
       statut,
-      motif_ecart: motifEcart,
+      motif_rejet: motifRejet,
+      duplique_de_id: options.dupliqueDeId ?? null,
+      remplace_par_id: options.remplaceParId ?? null,
       updated_at: maintenant,
       audit_log: [
         ...existant.audit_log,
         {
           timestamp: maintenant,
           actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
-          action: `changement de statut : ${statut}${motifEcart ? ` (${motifEcart})` : ''}`,
+          action: `changement de statut : ${statut}${motifRejet ? ` (${motifRejet})` : ''}`,
         },
       ],
     }
@@ -184,15 +225,15 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     return misAJour
   }
 
-  /** Un `Test` ne peut être créé qu'à partir d'un candidat retenu — jamais depuis un candidat proposé ou écarté. */
+  /** Un `Test` ne peut être créé qu'à partir d'un candidat accepté — jamais depuis un candidat proposé, rejeté, ou en attente. */
   async function creerTestDepuisCandidat(
     clientId: string,
     testCandidateId: string,
     input: NouveauTestInput,
-  ): Promise<Test | { erreur: 'candidat_non_retenu' | 'candidat_introuvable' }> {
+  ): Promise<Test | { erreur: 'candidat_non_accepte' | 'candidat_introuvable' }> {
     const candidat = testCandidates.value.find((c) => c.id === testCandidateId)
     if (!candidat) return { erreur: 'candidat_introuvable' }
-    if (candidat.statut !== 'retenu') return { erreur: 'candidat_non_retenu' }
+    if (candidat.statut !== 'accepte') return { erreur: 'candidat_non_accepte' }
 
     const maintenant = new Date().toISOString()
     const etapes: EtapeTest[] = input.etapes.map((e, index) => ({
@@ -283,8 +324,12 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     creerRequirement,
     creerTestObjective,
     creerTestCandidate,
-    retenirTestCandidate,
-    ecarterTestCandidate,
+    accepterTestCandidate,
+    rejeterTestCandidate,
+    marquerBesoinInformation,
+    marquerBesoinRevue,
+    marquerDoublon,
+    marquerRemplace,
     creerTestDepuisCandidat,
     approuverTest,
     declarerCouverture,

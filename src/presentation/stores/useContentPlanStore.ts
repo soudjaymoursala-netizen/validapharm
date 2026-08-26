@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
   ContentPlan,
+  ReadinessContentPlan,
   TemplateType,
   TypeMethodProfileReference,
 } from '../../logique-metier/domaine/types'
@@ -15,10 +16,11 @@ export interface NouveauContentPlanInput {
   methodProfileId: string | null
   methodProfileType: TypeMethodProfileReference | null
   contextSnapshot: unknown
+  readiness: ReadinessContentPlan
 }
 
 export type ErreurEcritureContentPlan = {
-  erreur: 'introuvable' | 'non_valide' | 'deja_gele'
+  erreur: 'introuvable' | 'non_valide' | 'deja_gele' | 'donnees_non_pretes'
 }
 
 /**
@@ -60,6 +62,7 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
       method_profile_id: input.methodProfileId,
       method_profile_type: input.methodProfileType,
       context_snapshot: JSON.stringify(input.contextSnapshot),
+      readiness: input.readiness,
       statut: 'brouillon',
       audit_log: [
         { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
@@ -83,7 +86,13 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     return changerStatut(existant, 'valide')
   }
 
-  /** Garde-fou non négociable : DOIT être `valide` au préalable — pas de saut direct depuis `brouillon`. */
+  /**
+   * Garde-fous non négociables : DOIT être `valide` au préalable (pas de
+   * saut direct depuis `brouillon`) ET `readiness` DOIT être `pret` — un
+   * plan dont les données sont encore incomplètes (`besoin_information`/
+   * `besoin_revue`/`bloque`) ne peut jamais être gelé, cohérent avec le
+   * principe fondateur n°1 (aucune promotion automatique/prématurée).
+   */
   async function gelerContentPlan(
     clientId: string,
     contentPlanId: string,
@@ -92,6 +101,7 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     if (!existant || existant.client_id !== clientId) return { erreur: 'introuvable' }
     if (existant.statut === 'gele') return { erreur: 'deja_gele' }
     if (existant.statut !== 'valide') return { erreur: 'non_valide' }
+    if (existant.readiness !== 'pret') return { erreur: 'donnees_non_pretes' }
 
     return changerStatut(existant, 'gele')
   }

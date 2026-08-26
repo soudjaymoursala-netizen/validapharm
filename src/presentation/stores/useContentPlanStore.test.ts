@@ -21,6 +21,7 @@ describe('useContentPlanStore — cycle nominal', () => {
       methodProfileId: 'profil-acfc-1',
       methodProfileType: 'acfc',
       contextSnapshot: { version_profil: 'v3', questions: ['Q1', 'Q2'] },
+      readiness: 'pret',
     })
     expect(plan.statut).toBe('brouillon')
     const snapshotOrigine = plan.context_snapshot
@@ -48,10 +49,28 @@ describe('useContentPlanStore — garde-fous', () => {
       methodProfileId: null,
       methodProfileType: null,
       contextSnapshot: {},
+      readiness: 'pret',
     })
 
     const resultat = await store.gelerContentPlan('client-1', plan.id)
     expect(resultat).toEqual({ erreur: 'non_valide' })
+  })
+
+  test('un ContentPlan dont les données ne sont pas prêtes ne peut jamais être gelé, même validé', async () => {
+    const store = useContentPlanStore()
+    const plan = await store.creerContentPlan('client-1', {
+      templateId: 'urs',
+      assetNodeId: null,
+      processId: null,
+      methodProfileId: null,
+      methodProfileType: null,
+      contextSnapshot: {},
+      readiness: 'besoin_information',
+    })
+    await store.validerContentPlan('client-1', plan.id)
+
+    const resultat = await store.gelerContentPlan('client-1', plan.id)
+    expect(resultat).toEqual({ erreur: 'donnees_non_pretes' })
   })
 
   test('un ContentPlan gelé est totalement immutable — aucune revalidation ni regel possible', async () => {
@@ -63,6 +82,7 @@ describe('useContentPlanStore — garde-fous', () => {
       methodProfileId: null,
       methodProfileType: null,
       contextSnapshot: {},
+      readiness: 'pret',
     })
     await store.validerContentPlan('client-1', plan.id)
     await store.gelerContentPlan('client-1', plan.id)
@@ -92,6 +112,7 @@ describe('useContentPlanStore — isolation stricte par client', () => {
       methodProfileId: null,
       methodProfileType: null,
       contextSnapshot: {},
+      readiness: 'pret',
     })
     await store.charger('client-B')
     expect(store.contentPlans).toHaveLength(0)

@@ -691,14 +691,23 @@ export interface TestObjective {
   updated_at: string
 }
 
-export type StatutTestCandidate = 'propose' | 'retenu' | 'ecarte'
+/**
+ * Réaligné (25/08/2026) sur le vrai statut cible (`10_TEST_ENGINE.md` :
+ * PROPOSED/NEEDS_INFORMATION/NEEDS_REVIEW/ACCEPTED/REJECTED/DUPLICATE/
+ * SUPERSEDED) après lecture directe du package source — remplace le
+ * modèle à 3 états (propose/retenu/ecarte) fabriqué en 7a faute de
+ * source disponible à l'époque.
+ */
+export type StatutTestCandidate =
+  'propose' | 'besoin_information' | 'besoin_revue' | 'accepte' | 'rejete' | 'doublon' | 'remplace'
 
 /**
- * Une idée de test répondant à un `TestObjective`, avant d'être retenue
- * comme `Test` formel. `statut`/`motif_ecart` tracent la décision humaine
- * de retenir ou écarter un candidat — jamais une suppression silencieuse
- * (cohérent avec le principe de traçabilité déjà appliqué partout
- * ailleurs dans ce projet).
+ * Une idée de test répondant à un `TestObjective`, avant d'être acceptée
+ * comme `Test` formel. `statut`/`motif_rejet` tracent la décision humaine
+ * — jamais une suppression silencieuse (cohérent avec le principe de
+ * traçabilité déjà appliqué partout ailleurs dans ce projet).
+ * `duplique_de_id`/`remplace_par_id` ne sont renseignés que pour les
+ * statuts `doublon`/`remplace` respectivement.
  */
 export interface TestCandidate {
   id: string
@@ -707,7 +716,9 @@ export interface TestCandidate {
   titre: string
   description: string
   statut: StatutTestCandidate
-  motif_ecart: string | null
+  motif_rejet: string | null
+  duplique_de_id: string | null
+  remplace_par_id: string | null
   audit_log: EntreeJournalAudit[]
   created_at: string
   updated_at: string
@@ -821,14 +832,31 @@ export interface Measurement {
 }
 
 /**
- * Journal d'événements *pendant* une exécution (anomalie, pause, reprise,
- * commentaire) — distinct du `QualityEvent` (Phase 5), qui est l'objet de
- * gestion qualité formel. `quality_event_id` référence *optionnellement*
- * un `QualityEvent` déjà existant, jamais créé automatiquement (DEC-002 :
- * aucun couplage bloquant/automatique entre modules, déjà appliqué en
- * Phase 5).
+ * Journal d'événements *pendant* une exécution — distinct du `QualityEvent`
+ * (Phase 5), qui est l'objet de gestion qualité formel. `quality_event_id`
+ * référence *optionnellement* un `QualityEvent` déjà existant, jamais créé
+ * automatiquement (DEC-002 : aucun couplage bloquant/automatique entre
+ * modules, déjà appliqué en Phase 5).
+ *
+ * **Réaligné (25/08/2026) sur le vrai modèle cible** (`10_TEST_ENGINE.md`,
+ * `01_ARCHITECTURE_MASTER_FINAL.md` §29, DEC-056/057) après lecture directe
+ * du package source (Google Drive reconnecté en cours de session) : un
+ * résultat inattendu suit `ExecutionEvent → Assessment → Decision →
+ * Continue/Action/Retest/Deviation/Change/Stop/External` — ce type reflète
+ * cette décision, jamais un type libre inventé sans base. `commentaire` est
+ * conservé en plus de ces 7 décisions pour une observation qui n'appelle
+ * aucune décision (classe "Human : Observations/Manual entries",
+ * `08_SOURCE_DOCUMENT_MULTIMODAL.md`).
  */
-export type TypeExecutionEvent = 'anomalie' | 'pause' | 'reprise' | 'commentaire'
+export type TypeExecutionEvent =
+  | 'continuer'
+  | 'action'
+  | 'retest'
+  | 'deviation'
+  | 'changement'
+  | 'arret'
+  | 'externe'
+  | 'commentaire'
 
 export interface ExecutionEvent {
   id: string
@@ -901,55 +929,104 @@ export interface ProvenanceLink {
 
 /**
  * Phase 8a (`docs/convergence/PHASE_8A_SOURCE_INTELLIGENCE_SPEC.md`) —
- * document/image d'origine. Pointeur déclaratif (même limite assumée
- * qu'`EvidenceLocation`, 7c) : aucun stockage de fichier binaire réel
- * construit dans ce périmètre.
+ * document/image d'origine.
+ *
+ * **Réaligné (25/08/2026) sur le vrai modèle cible**
+ * (`03_DOMAIN_DATA_MODEL.md`, domaine "Source Intelligence" :
+ * `Source, SourceVersion, SourceLocation, Extraction, ExtractionItem`)
+ * après lecture directe du package source (Google Drive reconnecté en
+ * cours de session) : la chaîne complète est
+ * `Source → SourceVersion → Extraction → ExtractionItem → KnowledgeItem`,
+ * pas `Source → Extraction → KnowledgeItem` (version fabriquée en 8a
+ * faute de source disponible à l'époque). `SourceLocation` est un pointeur
+ * déclaratif séparé de `Source` — un même `Source` peut avoir plusieurs
+ * localisations (ex. miroir Drive + référence externe) ; même limite
+ * assumée qu'`EvidenceLocation` (7c) : aucun stockage de fichier binaire
+ * réel construit dans ce périmètre.
  */
 export type TypeSource = 'document' | 'image'
-export type SystemeLocalisationSource = 'github' | 'drive' | 'externe'
 
 export interface Source {
   id: string
   client_id: string
   type: TypeSource
   titre: string
+  created_at: string
+}
+
+export type SystemeLocalisationSource = 'github' | 'drive' | 'externe'
+
+export interface SourceLocation {
+  id: string
+  client_id: string
+  source_id: string
   systeme: SystemeLocalisationSource
   reference: string
+}
+
+/**
+ * Une révision d'une `Source` (détection de révision, DEC — scénario
+ * "source revision" de `11_USE_CASES_70_SCENARIOS.md`) — une `Extraction`
+ * porte toujours sur une version précise, jamais sur la `Source`
+ * directement (`Relationship Matrix` : `SourceVersion produces Extraction`).
+ */
+export interface SourceVersion {
+  id: string
+  client_id: string
+  source_id: string
+  numero_version: number
   created_at: string
 }
 
 /**
- * Texte brut obtenu à partir d'une `Source` (OCR via le relais Phase 6,
- * ou saisie manuelle directe) — immutable, la "preuve de premier niveau"
- * (ce que `GAP.md` nomme "Evidence" dans ce pipeline ; nommé
- * `contenu_brut` ici pour éviter toute collision avec l'`Evidence` de
- * traçabilité Test/Execution, Phase 7c, qui est un concept distinct).
+ * Une exécution d'extraction (OCR via le relais Phase 6, ou saisie
+ * manuelle directe) sur une `SourceVersion` précise. Ne porte plus le
+ * texte brut directement — celui-ci est désormais porté par
+ * `ExtractionItem` (0..N par `Extraction`), cohérent avec
+ * `Relationship Matrix` : `Extraction produces ExtractionItem 1:N`.
  */
 export type MethodeExtraction = 'ocr_azure' | 'saisie_manuelle'
 
 export interface Extraction {
   id: string
   client_id: string
-  source_id: string
+  source_version_id: string
   methode: MethodeExtraction
-  contenu_brut: string
   horodatage: string
 }
 
 /**
- * Interprétation structurée candidate d'une `Extraction`. **Garde-fou non
- * négociable** : toujours créé au statut `a_valider` (NEEDS_REVIEW),
+ * Fragment de texte brut granulaire produit par une `Extraction` —
+ * immutable, la "preuve de premier niveau" (ce que `GAP.md` nomme
+ * "Evidence" dans ce pipeline, pour éviter toute collision avec
+ * l'`Evidence` de traçabilité Test/Execution, Phase 7c, qui est un
+ * concept distinct).
+ */
+export interface ExtractionItem {
+  id: string
+  client_id: string
+  extraction_id: string
+  contenu: string
+  position: number
+}
+
+/**
+ * Interprétation structurée candidate d'un `ExtractionItem`. **Garde-fou
+ * non négociable** : toujours créé au statut `a_valider` (NEEDS_REVIEW),
  * jamais `valide` à la création, quel que soit le contenu — cohérent
  * avec le principe fondateur n°1 et l'Acceptance Criteria de la Phase 8.
  * Aucun appel IA n'est fait par ce module : `valeur_interpretee` est
- * toujours fournie par l'appelant.
+ * toujours fournie par l'appelant. `extraction_item_id` est une
+ * simplification N:1 du N:M réel du modèle cible (un `KnowledgeItem`
+ * pourrait en théorie être synthétisé de plusieurs `ExtractionItem`) —
+ * limite assumée et documentée plutôt que fabriquée.
  */
 export type StatutKnowledgeItem = 'a_valider' | 'valide' | 'rejete'
 
 export interface KnowledgeItem {
   id: string
   client_id: string
-  extraction_id: string
+  extraction_item_id: string
   libelle: string
   valeur_interpretee: string
   statut: StatutKnowledgeItem
@@ -957,6 +1034,39 @@ export interface KnowledgeItem {
   audit_log: EntreeJournalAudit[]
   created_at: string
   updated_at: string
+}
+
+/**
+ * Enregistrement auditable et distinct de la validation/rejet d'un
+ * `KnowledgeItem` (domaine "Knowledge" de `03_DOMAIN_DATA_MODEL.md` :
+ * `KnowledgeItem, KnowledgeRelation, Conflict, Confirmation`) — plutôt
+ * qu'une simple mutation de `KnowledgeItem.statut`/`valide_par` sans
+ * trace dédiée. `KnowledgeItem.statut`/`valide_par` restent une copie
+ * dénormalisée pratique (même pattern que `Test.statut` + `audit_log`
+ * ailleurs dans ce projet) ; `Confirmation` est la source de vérité de
+ * l'historique des décisions.
+ */
+export interface Confirmation {
+  id: string
+  client_id: string
+  knowledge_item_id: string
+  decision: 'confirme' | 'rejete'
+  confirme_par: string
+  horodatage: string
+}
+
+/**
+ * Relation explicite entre deux `KnowledgeItem` qui ne se contredisent
+ * pas (contrairement à `Conflict`) — ex. un `KnowledgeItem` qui précise
+ * ou complète un autre. Jamais déduite automatiquement.
+ */
+export interface KnowledgeRelation {
+  id: string
+  client_id: string
+  knowledge_item_source_id: string
+  knowledge_item_cible_id: string
+  type: string
+  created_at: string
 }
 
 /**
@@ -989,9 +1099,19 @@ export interface Conflict {
  * `method_profile_type` distingue la table réellement référencée, car il
  * n'existe pas de type `Method` générique unifiant `MethodProfileACFC`/
  * `MethodProfileImpactAssessment` (décision déjà actée en Phase 3).
+ *
+ * `readiness` (ajouté 25/08/2026, réalignement après lecture directe de
+ * `01_ARCHITECTURE_MASTER_FINAL.md` §26 et `09_DELIVERABLE_ENGINE.md`) :
+ * reflète si les **données** résolues sont suffisantes pour générer
+ * (READY/NEEDS_INFORMATION/NEEDS_REVIEW/BLOCKED) — un concept distinct de
+ * `statut`, qui reflète le cycle de vie de **validation du plan lui-même**
+ * (brouillon/valide/gele). Fourni explicitement par l'appelant à la
+ * création, jamais calculé automatiquement par ce module (pas de
+ * mécanisme d'évaluation de complétude construit ici).
  */
 export type StatutContentPlan = 'brouillon' | 'valide' | 'gele'
 export type TypeMethodProfileReference = 'acfc' | 'impact_assessment'
+export type ReadinessContentPlan = 'pret' | 'besoin_information' | 'besoin_revue' | 'bloque'
 
 export interface ContentPlan {
   id: string
@@ -1002,6 +1122,7 @@ export interface ContentPlan {
   method_profile_id: string | null
   method_profile_type: TypeMethodProfileReference | null
   context_snapshot: string
+  readiness: ReadinessContentPlan
   statut: StatutContentPlan
   audit_log: EntreeJournalAudit[]
   created_at: string

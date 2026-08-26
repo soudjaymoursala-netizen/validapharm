@@ -43,7 +43,7 @@ async function creerExecutionEnCours(clientId: string) {
     titre: 'Candidat',
     description: '',
   })
-  await definition.retenirTestCandidate(clientId, candidat.id)
+  await definition.accepterTestCandidate(clientId, candidat.id)
   const test = await definition.creerTestDepuisCandidat(clientId, candidat.id, {
     titre: 'Test IQ',
     description: '',
