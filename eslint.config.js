@@ -3,16 +3,39 @@
 import js from '@eslint/js'
 import vue from 'eslint-plugin-vue'
 import tseslint from 'typescript-eslint'
+import globals from 'globals'
+import vuePrettierConfig from '@vue/eslint-config-prettier'
 
 export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.strict,
   ...vue.configs['flat/recommended'],
+  // Désactive les règles stylistiques d'eslint-plugin-vue qui entrent en
+  // conflit avec Prettier (§7 : "Prettier : formatage automatique, pas de
+  // débat de style en revue de code" — un seul outil doit trancher le
+  // style, jamais deux qui se contredisent).
+  vuePrettierConfig,
   {
     files: ['**/*.{ts,vue}'],
+    languageOptions: {
+      // Application PWA exclusivement navigateur (conventions §2) — jamais
+      // de globales Node (`process`, `require`, ...) dans `src/`.
+      globals: globals.browser,
+    },
     rules: {
       // 08-conventions-codage.md §3 : `any` interdit.
       '@typescript-eslint/no-explicit-any': 'error',
+    },
+  },
+  {
+    // Sans ce réglage, le parseur Vue par défaut (espree) rejette la
+    // syntaxe TypeScript à l'intérieur de <script setup lang="ts"> — resté
+    // non détecté tant qu'aucun composant n'utilisait de syntaxe TS réelle.
+    files: ['**/*.vue'],
+    languageOptions: {
+      parserOptions: {
+        parser: tseslint.parser,
+      },
     },
   },
   {

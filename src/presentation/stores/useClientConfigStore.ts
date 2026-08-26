@@ -1,0 +1,101 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import type { ClientConfig } from '../../logique-metier/domaine/types'
+import { db } from '../../persistance/db'
+
+export interface SaisieQualification {
+  date: string
+  resultat: string
+  qualification_test_set_id: string
+  qualification_test_set_version: string
+  moteur_version_qualifiee: string | null
+}
+
+const FOURNISSEUR_PAR_DEFAUT = 'claude'
+
+function configParDefaut(clientId: string): ClientConfig {
+  return {
+    client_id: clientId,
+    ai_provider: FOURNISSEUR_PAR_DEFAUT,
+    ai_provider_conditions_acquittees: null,
+    ai_provider_reliability_qualification: null,
+    export_template_id: null,
+    consent_telemetry: { granted: false, date: null, revocable_at_any_time: true },
+  }
+}
+
+/**
+ * Store de configuration IA par client (FS §4.4, `client_config`) — choix
+ * du fournisseur, accusé des conditions de traitement (URS-F-032ter),
+ * qualification de fiabilité (URS-F-032quater). Isolé par `client_id`,
+ * comme `useConnexionDriveStore` — jamais un enregistrement global,
+ * contrairement au relais lui-même (`useConnexionRelaisIAStore`).
+ */
+export const useClientConfigStore = defineStore('clientConfig', () => {
+  const config = ref<ClientConfig | null>(null)
+  const enChargement = ref(false)
+
+  async function charger(clientId: string): Promise<void> {
+    enChargement.value = true
+    try {
+      config.value = (await db.clientConfigs.get(clientId)) ?? configParDefaut(clientId)
+    } finally {
+      enChargement.value = false
+    }
+  }
+
+  async function obtenirOuCreer(clientId: string): Promise<ClientConfig> {
+    return (await db.clientConfigs.get(clientId)) ?? configParDefaut(clientId)
+  }
+
+  /**
+   * Changer de fournisseur invalide l'accusé de conditions précédent
+   * (propre à l'ancien fournisseur) — jamais réinterprété comme valable
+   * pour le nouveau (URS-F-032ter, FS §3 v15) ; la qualification de
+   * fiabilité est également remise à zéro, une qualification ne valant
+   * que pour le fournisseur qu'elle a évalué (URS-F-032quater).
+   */
+  async function definirFournisseur(clientId: string, fournisseur: string): Promise<void> {
+    const actuel = await obtenirOuCreer(clientId)
+    const misAJour: ClientConfig = {
+      ...actuel,
+      ai_provider: fournisseur,
+      ai_provider_conditions_acquittees: null,
+      ai_provider_reliability_qualification: null,
+    }
+    await db.clientConfigs.put(misAJour)
+    config.value = misAJour
+  }
+
+  async function acquitterConditions(clientId: string, fournisseur: string): Promise<void> {
+    const actuel = await obtenirOuCreer(clientId)
+    const misAJour: ClientConfig = {
+      ...actuel,
+      ai_provider_conditions_acquittees: { fournisseur, date: new Date().toISOString() },
+    }
+    await db.clientConfigs.put(misAJour)
+    config.value = misAJour
+  }
+
+  async function enregistrerQualification(
+    clientId: string,
+    saisie: SaisieQualification,
+  ): Promise<void> {
+    const actuel = await obtenirOuCreer(clientId)
+    const misAJour: ClientConfig = {
+      ...actuel,
+      ai_provider_reliability_qualification: { ...saisie },
+    }
+    await db.clientConfigs.put(misAJour)
+    config.value = misAJour
+  }
+
+  return {
+    config,
+    enChargement,
+    charger,
+    definirFournisseur,
+    acquitterConditions,
+    enregistrerQualification,
+  }
+})

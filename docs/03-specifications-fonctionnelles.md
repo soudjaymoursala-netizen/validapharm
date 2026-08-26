@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 11 (architecture web pure sans installation — API GitHub, contrainte du poste de travail professionnel) |
+| **Version** | 29 (ajout §4.10 câblage Workspace étape 1 — URS-F-100undecies/duodecies, 26/08/2026 — cohérent avec URS v39, premier incrément réel du chantier de câblage annoncé en Phase 11). Version 28 : ajout §4.18/URS-F-180 — Organization/Workspace, Phase 11, 25/08/2026 — cohérent avec URS v38). Version 27 : ajout §4.17/URS-F-170 — Integration Gateway générique, Phase 10, 25/08/2026 — cohérent avec URS v37). Version 26 : **réalignement des Phases 7a/7b/8a/9 sur le vrai modèle cible**, 25/08/2026, cohérent avec URS v36 — Google Drive reconnecté en cours de session, lecture directe intégrale du package source). Version 25 : ajout §4.16/URS-F-160 — ContentPlan, planification d'un livrable, Phase 9, 25/08/2026 — cohérent avec URS v35). Version 24 : ajout §4.15/URS-F-150 — Source/Document Intelligence, structuration assistée, Phase 8a, 25/08/2026 — cohérent avec URS v34). Version 23 : ajout §4.14/URS-F-140 — Evidence, dernière sous-étape de la Phase 7, 25/08/2026 — cohérent avec URS v33). Version 22 : ajout §4.13/URS-F-130 — exécution d'un Test approuvé, Phase 7b, 25/08/2026 — cohérent avec URS v32). Version 21 : ajout §4.12/URS-F-120 — chaîne de définition Requirement → TestObjective → TestCandidate → Test, Phase 7a, 25/08/2026 — cohérent avec URS v31). Version 20 : intégration des exigences manquantes, 25/08/2026 : ajout §4.6quater/URS-F-058 — Parameter/CriticalParameter/CPP/CQA, Phase 2, oublié au moment de son implémentation — et §4.11/URS-F-110 — Quality Events, Phase 5 — cohérent avec URS v30. Version 19 : ajout §4.10bis/URS-F-103, Phase 4. Version 18 : §4.6 corrigé, ajout §4.6bis/§4.6ter, Phase 1/3) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -100,7 +100,7 @@ Ce document ne couvre pas le contenu réglementaire détaillé de chaque type de
     "values": { "...champs du gabarit...": "..." },
     "tables": { "...tableaux dynamiques du gabarit...": [] },
     "generation_source": { "source_document_id": "uuid | null", "generated_fields": ["…"] },
-    "audit_log": [{ "timestamp": "…", "actor": "…", "action": "création | modification | export | changement_statut | export_force" }],
+    "audit_log": [{ "timestamp": "…", "actor": "…", "action": "création | modification | export | changement_statut | export_force | import" }],
     "created_at": "ISO-8601",
     "updated_at": "ISO-8601"
   },
@@ -112,13 +112,39 @@ Ce document ne couvre pas le contenu réglementaire détaillé de chaque type de
     "uploaded_at": "ISO-8601",
     "uploaded_by": "…"
   },
+  "client": {
+    "id": "uuid",
+    "name": "string",
+    "created_at": "ISO-8601"
+  },
   "client_config": {
     "client_id": "uuid",
     "ai_provider": "claude | openai | copilot | deepseek | …",
-    "ai_provider_reliability_qualification": { "date": "…", "resultat": "…", "qualification_test_set_id": "uuid", "qualification_test_set_version": "semver" },
+    "ai_provider_conditions_acquittees": "{ fournisseur: string, date: ISO-8601 } | null (accusé de réception des conditions de traitement des données de ce fournisseur — ajouté v15, un par fournisseur activé, jamais un simple booléen global)",
+    "ai_provider_reliability_qualification": { "date": "…", "resultat": "…", "qualification_test_set_id": "uuid", "qualification_test_set_version": "semver", "moteur_version_qualifiee": "string | null (identifiant de version de modèle exposé par le fournisseur au moment de cette qualification — ajouté v14)" },
     "export_template_id": "uuid | null",
     "consent_telemetry": { "granted": "bool", "date": "…", "revocable_at_any_time": true },
     "qms_connectors": [{ "id": "uuid", "connector_type": "veeva | sap | trackwise", "active": "bool", "tenant_ref": "…" }]
+  },
+  "export_template": {
+    "id": "uuid",
+    "client_id": "uuid (isolation stricte par client — URS-F-024 ; ajouté v17)",
+    "format": "word | pdf | excel",
+    "nom": "string",
+    "mapping_checklist_valide": "bool (checklist de correspondance — bloc de rôles, historique des révisions — validée avant activation, URS-F-026)",
+    "checksum_semantique_reference": "string | null (empreinte du contenu extrait du gabarit par défaut au moment de la dernière vérification d'équivalence, indépendante de la mise en forme — URS-F-025 ; null tant qu'aucune vérification n'a eu lieu)",
+    "created_at": "ISO-8601",
+    "updated_at": "ISO-8601"
+  },
+  "ai_chat_session_log": {
+    "id": "uuid",
+    "client_id": "uuid (une session hérite du fournisseur actif de ce client — ajouté v16)",
+    "started_at": "ISO-8601",
+    "ended_at": "ISO-8601 | null (renseigné à la fermeture du panneau ou à l'expiration d'inactivité)",
+    "mode": "chat_normatif | audit_simule",
+    "ai_provider": "string",
+    "moteur_version": "string | null (dernière version de moteur observée dans une réponse de cette session)",
+    "document_joint": "bool (au moins un message de la session a joint le contenu d'une section)"
   },
   "asset_hierarchy_schema": {
     "client_id": "uuid",
@@ -150,6 +176,12 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 **Clarification ALCOA+ (ajoutée v04 — audit Swissmedic simulé, OBS-01)** : pour une section issue de §4.1bis, `revisions[]` DOIT distinguer explicitement l'entrée horodatant la génération par l'IA (motif "génération assistée", auteur = système + fournisseur utilisé) de l'entrée horodatant chaque validation humaine ultérieure section par section (motif "validation utilisateur", auteur = utilisateur) — jamais une seule entrée fusionnant les deux, pour rester cohérent avec le principe "Contemporaneous" d'ALCOA+ (cadrage, principe n°2).
 
 **Clarification terminologique (ajoutée v03 — revue FS, E5)** : ce modèle distingue deux notions à ne jamais confondre en conception détaillée. Le **multi-client** (`client_config`, isolation des gabarits d'export et des fournisseurs IA par `client_id`) est une capacité **Must dès la Phase 1** — un même professionnel travaille pour plusieurs clients/organisations. Le **multi-utilisateur** (`owner_id`, `shared_with`, comptes/rôles multiples) est une capacité dont le modèle de données est préparé dès la Phase 1 mais dont l'**activation reste hors périmètre** jusqu'à la Phase 3 (URS §8). Un client (organisation externe) n'est jamais un utilisateur (compte humain) de l'outil.
+
+**`client` (ajouté v12 — gap trouvé en conception, connecteur Drive)** : toutes les versions précédentes référençaient `client_id` (dans `project`, `client_config`, `asset_hierarchy_schema`, `asset_node`) comme s'appliquant à une entité `client` déjà modélisée — or aucune version antérieure de cette FS ne définissait cette entité elle-même (seulement ses réglages, `client_config`). Gap resté invisible tant qu'aucun écran ne nécessitait de créer/lister des clients ; révélé en construisant la configuration Drive par client (SDS §5bis/§7, qui exige l'isolation par `client_id`). `client` est volontairement minimal (identité seule — nom) : c'est `client_config` qui porte les réglages, pas l'inverse.
+
+**`ai_chat_session_log` (ajouté v16 — gap trouvé en construisant le panneau Chat expert)** : URS-F-037 exige que chaque session de chat soit journalisée (horodatage début/fin, fournisseur, moteur exact, indication qu'un document a été joint), mais aucune entité de ce modèle ne pouvait porter cette information — `section.audit_log` est scopé à une section précise, or une session de chat peut se dérouler sans qu'aucun document ne soit jamais joint. Ajoutée comme entité de premier niveau, rattachée au `client_id` (le fournisseur actif d'une session dépend de `client_config`, propre au client).
+
+**`export_template` (ajouté v17 — gap trouvé en analysant §4.3bis pour implémentation)** : `client_config.export_template_id` référençait une entité `export_template` depuis la toute première version de ce modèle sans jamais la définir elle-même — même nature de gap que `client` (v12), resté invisible tant qu'aucun écran n'avait besoin de créer/lister des gabarits d'export personnalisés. Volontairement minimal (identité, isolation par client, les deux garde-fous non négociables déjà exigés par le texte — checklist de mapping URS-F-026 et empreinte d'équivalence sémantique URS-F-025) : la représentation du contenu du gabarit personnalisé lui-même (DSL, emplacements, format de saisie) reste une décision de conception ouverte, non tranchée par cette version.
 
 ## 4. Spécifications fonctionnelles par module
 
@@ -243,9 +275,28 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 
 ### 4.6 Assistant de stratégie de qualification (répond à URS-F-050 à 055)
 
-- Grille de critères **déterministe** (ASTM E2500 / EudraLex Annexe 15 §43 / ICH Q9), alimentée manuellement ou depuis un Change Control joint (via URS-F-031) ; conclusion parmi une liste fermée (Aucun impact / Revue documentaire / FAT / SAT / IQ / IQ+OQ / IQ+OQ+PQ / Autre) — URS-F-050.
-- **Garde-fou non négociable (mitige AR-R-15/R-16)** : l'IA peut proposer des réponses aux critères à partir d'un Change Control joint, mais chaque réponse individuelle doit être validée/corrigée par l'utilisateur ; la conclusion résulte exclusivement du calcul déterministe sur les réponses validées, jamais d'une génération libre — URS-F-050bis.
+- Méthode ACFC **configurable par client** (`MethodProfileACFC` : questions Oui/Non définies par le client, conservées mot pour mot, versionnée et immuable — aucune valeur figée dans le code), alimentée manuellement ou depuis un Change Control joint (via URS-F-031) ; le verdict de criticité (critique/non_critique), combiné à la complexité, produit une conclusion parmi une liste fermée (Aucun impact / Revue documentaire / FAT / SAT / IQ / IQ+OQ / IQ+OQ+PQ / Autre) — URS-F-050. **(Corrigé v18 — Phase 1 de convergence architecturale, 25/08/2026)** Remplace la précédente description "grille de critères déterministe ASTM E2500/EudraLex Annexe 15 §43/ICH Q9", qui décrivait à tort un barème de critères pondérés fixe et universel ; confirmé sur 4 sources indépendantes (Ferring, Sanofi Marcy, Sanofi Lyon-Gerland, ISPE Baseline Guide) qu'il s'agit en réalité d'un questionnaire propre à chaque client, avec une règle de décision elle-même configurable ("au moins un Oui → critique" est la seule règle confirmée à ce jour, pas une règle universelle codée en dur).
+- **Garde-fou non négociable (mitige AR-R-15/R-16)** : l'IA peut proposer des réponses aux questions de la méthode active à partir d'un Change Control joint, mais chaque réponse individuelle doit être validée/corrigée par l'utilisateur ; le verdict résulte exclusivement du calcul déterministe sur les réponses validées, jamais d'une génération libre — URS-F-050bis.
 - La référence et la version du Change Control utilisé comme contexte sont affichées et conservées — URS-F-050ter.
+- Tant qu'aucune méthode ACFC n'a été configurée pour un client, aucune question par défaut n'est proposée : l'écran l'indique explicitement et invite à saisir les questions réelles de la procédure du client — URS-F-050quater.
+
+### 4.6quater Paramètres de procédé et attributs qualité — Parameter/CriticalParameter/CPP/CQA (répond à URS-F-058 à 058ter, nouveau v20 — Phase 2, requirement intégré v20 après coup)
+
+- `Parameter` : entité de base, rattachable optionnellement à un nœud du référentiel d'actifs, sans notion de criticité intrinsèque — URS-F-058.
+- **Garde-fou non négociable** : classer un `Parameter` comme important/critique pour le procédé ne crée jamais automatiquement un CPP — un CPP est une déclaration humaine explicite et séparée — URS-F-058bis.
+- CPP/CQA contextuels : une déclaration existante n'est jamais mutée lors d'un changement de contexte (nouvelle recette/produit) — elle est désactivée explicitement (motif tracé) et une nouvelle est créée si applicable, historique préservé — URS-F-058ter.
+
+### 4.6bis Impact Assessment / System Classification (répond à URS-F-056, nouveau v18 — Phase 3)
+
+- Méthode configurable par client (`MethodProfileImpactAssessment` : questions Oui/Non définies par le client, conservées mot pour mot, versionnée et immuable — même principe que `MethodProfileACFC`), appliquée à chaque système **avant** toute analyse de risque ACFC (F2) — URS-F-056.
+- Verdict strictement binaire (Direct Impact / Not Direct Impact), jamais un troisième niveau "impact indirect" — URS-F-056.
+- Aucune question par défaut proposée tant qu'aucune méthode n'est configurée — même garde-fou que §4.6, URS-F-056ter.
+- Un système Not Direct Impact n'est pas bloqué : seul le chemin de qualification complète ne s'applique pas — URS-F-056quater.
+
+### 4.6ter Computer System Assessment (répond à URS-F-057, nouveau v18 — Phase 3)
+
+- Évaluation d'un système informatisé selon 3 axes indépendants : catégorie GAMP5 (grille fixe à 5 valeurs, non modulable par client), pertinence GxP, pertinence ERES/Part 11 — chaque axe justifié par du texte libre — URS-F-057.
+- Contrairement à la méthode ACFC ou Impact Assessment, aucun `MethodProfile` associé : la catégorie GAMP5 est sélectionnée, jamais configurée — URS-F-057bis.
 - Avertissement renforcé systématique : "aide à la décision, non une décision de qualification" — URS-F-053.
 - L'assistant est accessible directement depuis une section Change Control en cours de rédaction, en plus de son accès en module indépendant — URS-F-054.
 - Lorsqu'une évaluation ACFC ou Computer System Assessment (catalogue §10.F) conclut à la nécessité d'un dossier complet, ses réponses pré-remplissent automatiquement les champs correspondants du gabarit cible (ex. section "Généralités" du CSV) — pas de double saisie — URS-F-055.
@@ -290,6 +341,10 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - **Garde-fou** : le code d'un nœud est vérifié unique au sein du référentiel du client à la création/modification, rejet explicite en cas de doublon — URS-F-100nonies, mitige AR-R-53.
 - **Garde-fou (data integrity)** : le lien projet↔nœud capture un **instantané** (`project.asset_links[].node_name_snapshot`, `node_code_snapshot`) au moment de la liaison — un renommage ultérieur du nœud ne modifie jamais le contenu déjà affiché/exporté d'un livrable existant ; le lien vif vers l'`asset_node.id` reste conservé pour la navigation — URS-F-100decies, mitige AR-R-52.
 
+**Câblage Workspace, étape 1 (répond à URS-F-100undecies/duodecies, nouveau v29 — 26/08/2026)**
+
+Premier incrément du chantier "câblage effectif" de la Phase 11 (`docs/convergence/CABLAGE_ETAPE_1_STRUCTURE_SYSTEME_SPEC.md`) : `asset_node.workspace_id : string | null` — un actif appartient à un site précis (`Workspace`) de l'organisation du client, `null` signifiant "non encore assigné" (compatibilité ascendante totale, aucune régression sur les 431 tests préexistants) — URS-F-100undecies. Garde-fou : `creerNoeud` avec un `workspace_id` inconnu, ou appartenant à une autre organisation, est rejeté explicitement (`workspace_introuvable`) — URS-F-100duodecies. Lecture par héritage descendant : `noeudsVisiblesDepuisWorkspace(workspaceId)` retourne les nœuds assignés à ce `Workspace` ou à l'un de ses ancêtres (remontée d'arbre via `ancetresWorkspace`, extraite de `resoudreRegleEffective` pour éviter toute duplication de logique), plus tous les nœuds legacy non assignés — un actif de Site A n'est jamais visible depuis Site B, un actif "global" est visible depuis tous les sites. **Limite assumée, documentée comme telle** : `codeDejaUtilise`/`introduitUnCycle` restent à l'échelle de toute l'organisation (pas par site) — aucune source ne justifie de restreindre cette portée, et le faire serait un changement de comportement non demandé. Aucun écran de sélection de site construit dans cet incrément (pas de consommateur UI, même discipline que le reste du projet).
+
 **Dossier vivant (répond à URS-F-101 à 101septies)**
 
 - Depuis un `asset_node`, un onglet "Dossier vivant" liste tous les livrables (sections) qui le concernent, à travers tous les projets du client — URS-F-101.
@@ -307,6 +362,94 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - Passage automatique à "Requalification requise"/"Requalification en retard" selon `periodic_qualification.deadline`, réutilisant le mécanisme d'alerte déjà posé (URS-F-072) — URS-F-102ter, mitige AR-R-57.
 - **Garde-fou (avertissement, jamais blocage)** : sélectionner un nœud en statut "Requalification en retard" ou "Suspendu" à l'étape URS-F-100quinquies affiche un avertissement explicite, sans empêcher la sélection — URS-F-102quater, mitige AR-R-58.
 - Tout changement de statut (automatique ou manuel) journalisé (`asset_node.audit_log`) — URS-F-102quinquies.
+
+### 4.10bis Function / Process / ManufacturingContext (répond à URS-F-103 à 103ter, nouveau v19 — Phase 4)
+
+- `Process` générique par client (type parmi fabrication/conditionnement/installation/digital/CSV/workflow documentaire/métier/EHS/logistique/support/autre), indépendant de la hiérarchie du référentiel d'actifs — URS-F-103.
+- `Function` indépendante du type de `Process`, associable à plusieurs nœuds du référentiel et à plusieurs `Process` via des relations N:M dédiées, jamais un champ unique — URS-F-103bis.
+- `ManufacturingContext` relie un nœud du référentiel à un `Process`, un produit et, le cas échéant, une recette/un format/une configuration. Un même nœud (ex. système numérique type SCADA) peut être rattaché à plusieurs `ManufacturingContext` distincts sans qu'aucune relation ne soit déduite comme universelle — URS-F-103ter.
+- EXTEND pur : `asset_node`/`asset_hierarchy_schema` (§4.10) ne sont ni modifiés ni mutés par ce module.
+
+### 4.11 Quality Events (répond à URS-F-110 à 110sexies, nouveau v20 — Phase 5)
+
+- `QualityEvent` unique avec discriminant de type (Change Control/Déviation/Investigation/CAPA/Constat d'audit/Revue périodique) — aucune source ne documente de champs distincts par sous-type au-delà du nom, pas de duplication d'interface sans justification — URS-F-110.
+- **Garde-fou non négociable** : `origine` (interne/externe/mixte) ; un événement externe/mixte est référencé (système, identifiant), jamais dupliqué comme contenu officiel — URS-F-110bis.
+- **Garde-fou non négociable** : aucun mécanisme de blocage automatique basé sur le statut d'un événement externe — vérifié explicitement par test (un Change Control externe ouvert ne bloque jamais une opération indépendante sur le même équipement) — URS-F-110ter.
+- Références optionnelles entre événements (ex. Déviation → Investigation → CAPA), jamais un workflow à étapes obligatoires — URS-F-110quater.
+- Rattachement optionnel à un nœud du référentiel/`Process`/`ManufacturingContext` (§4.10/§4.10bis) — URS-F-110quinquies.
+- Aucune classification/priorisation/clôture automatique par IA — URS-F-110sexies.
+
+### 4.12 Chaîne de définition Requirement → TestObjective → TestCandidate → Test (répond à URS-F-120 à 120septies, nouveau v21 — Phase 7a)
+
+- Périmètre strict de cette sous-étape : **définition** seulement (Requirement, TestObjective, TestCandidate, Test, Couverture) — ni exécution (`Execution`/`ExecutionStep`/`Measurement`, Phase 7b), ni preuve (`Evidence`, Phase 7c). Décomposition volontaire du domaine Test/Execution/Evidence en sous-phases distinctes, chacune commitée séparément — URS-F-120 à 120septies, cohérent avec le risque identifié pour ce domaine dans `docs/convergence/CONVERGENCE_PLAN.md`.
+- `Requirement` : entité minimale (référence, titre, description), rattachement optionnel à un nœud du référentiel d'actifs ou à un `Process` — jamais une obligation — URS-F-120. N'existait dans aucune phase précédente ; ajoutée ici car intrinsèque à la chaîne de traçabilité que cette sous-phase établit.
+- `TestObjective` rattaché à un `Requirement` unique — URS-F-120bis.
+- `TestCandidate` avec statut explicite `propose | besoin_information | besoin_revue | accepte | rejete | doublon | remplace` (7 états — **réaligné v26** sur `10_TEST_ENGINE.md` après lecture directe du package source ; remplace le modèle à 3 états fabriqué en 7a faute de source disponible à l'époque) — URS-F-120ter. `duplique_de_id`/`remplace_par_id` tracent explicitement quel candidat pour `doublon`/`remplace`.
+- **Garde-fou non négociable** : un `Test` ne peut être créé qu'à partir d'un `TestCandidate` au statut `accepte` — vérifié explicitement par test (tentative depuis un candidat `propose` → erreur typée, aucune création silencieuse) — URS-F-120quater.
+- **Garde-fou non négociable** : rejeter un candidat exige un `motif_rejet` tracé dans `audit_log` — jamais de suppression, cohérent avec la convention d'immutabilité déjà appliquée aux autres domaines (QualityEvent, ManufacturingContext) — URS-F-120quinquies.
+- `TestStep` (`EtapeTest`) modélisé en tableau imbriqué dans `Test` plutôt qu'en table séparée — même logique que `Section.revisions[]` : pas de sur-normalisation sans besoin démontré.
+- `Couverture` : entité N:M distincte et dédiée, déclarée explicitement (jamais déduite) entre un `Requirement` et un `Test` approuvé ; un même `Test` peut couvrir plusieurs `Requirement` — distinct du lien `TestObjective.requirement_id` qui ne capture que le requirement d'origine du test — URS-F-120sexies, idempotence vérifiée par test.
+- Aucune génération, rétention ou approbation automatique par IA — URS-F-120septies.
+
+### 4.13 Exécution d'un Test approuvé (répond à URS-F-130 à 130septies, nouveau v22 — Phase 7b)
+
+- Garde-fou non négociable : `Execution` créée uniquement depuis un `Test` au statut `approuve` — URS-F-130. Un même `Test` peut être exécuté plusieurs fois (retest, plusieurs actifs) ; `asset_node_id` optionnel précise l'actif concerné.
+- `ExecutionStep` : résultat constaté (conforme/non conforme/non applicable) par étape, référence `test_step_id` vers l'`EtapeTest` réellement présente dans le `Test` exécuté — vérifié explicitement (aucun résultat orphelin) — URS-F-130bis.
+- `Measurement` : zéro-à-plusieurs mesures par étape, `valeur` en texte (pas de type numérique imposé, même choix que `Parameter`/`CPP`) — URS-F-130ter.
+- **Garde-fou non négociable** : immutabilité post-clôture — une fois `Execution.statut = terminee`, plus aucun `ExecutionStep`/`Measurement`/`ExecutionEvent` ne peut être ajouté (ALCOA+) — vérifié explicitement par test — URS-F-130quater.
+- **Garde-fou non négociable** : `cloturerExecution` exige un `verdict` explicite, jamais déduit des `ExecutionStep` — cohérent avec le principe fondateur n°1 — URS-F-130quinquies.
+- `ExecutionEvent` : journal d'événements pendant l'exécution — décision face à un résultat inattendu (`continuer`/`action`/`retest`/`deviation`/`changement`/`arret`/`externe`, **réaligné v26** sur `01_ARCHITECTURE_MASTER_FINAL.md` §29/DEC-056 après lecture directe du package source) ou simple `commentaire` — distinct du `QualityEvent` (§4.11) ; référence optionnelle `quality_event_id` vers un `QualityEvent` déjà existant, jamais créé automatiquement — vérifié explicitement (un `ExecutionStep` non conforme ne crée aucun `QualityEvent`) — URS-F-130sexies.
+- Aucune génération/validation/clôture automatique par IA — URS-F-130septies.
+
+### 4.14 Evidence — preuve rattachée à une exécution (répond à URS-F-140 à 140sexies, nouveau v23 — Phase 7c, dernière sous-étape de la Phase 7)
+
+- `Evidence` : `type native` (constat direct de l'exécutant, sans document source) ou `document` (renvoie à un fichier externe) — URS-F-140.
+- **Garde-fou non négociable** : immutabilité post-clôture, même règle que `ExecutionStep`/`Measurement` (§4.13) — URS-F-140bis.
+- `execution_step_id` optionnel, DOIT appartenir à l'exécution référencée si fourni — vérifié explicitement — URS-F-140ter.
+- `EvidenceLocation` : pointeur déclaratif (système `github`/`drive`/`externe` + référence) pour une preuve de type `document` uniquement — jamais un stockage de fichier réel (limite assumée, cohérente avec le stub `ProjectDocument` non consommé) — URS-F-140quater.
+- `ProvenanceLink` : déclaration explicite et idempotente Evidence↔Requirement, même logique que `Couverture` (§4.12) — URS-F-140quinquies.
+- Aucune génération/qualification automatique par IA — URS-F-140sexies.
+- **Traçabilité complète démontrée par test** : `Requirement → TestObjective → TestCandidate → Test → Couverture → Execution → ExecutionStep → Evidence → ProvenanceLink`, interrogeable via `preuvesPourRequirement` — clôt l'Acceptance Criteria de la Phase 7 (`CONVERGENCE_PLAN.md`).
+
+### 4.15 Source/Document Intelligence — structuration assistée (répond à URS-F-150 à 150sexies, nouveau v24 — Phase 8a, TD-004 ; **réaligné v26** sur `03_DOMAIN_DATA_MODEL.md` après lecture directe du package source)
+
+- `Source` (document/image) → `SourceLocation` (pointeur déclaratif, 0..N par Source) et `SourceVersion` (révision numérotée séquentiellement, 0..N par Source) → `Extraction` (exécution d'extraction sur une version précise, OCR via le relais Phase 6 ou saisie manuelle) → `ExtractionItem` (fragment de texte brut, immutable, 0..N par Extraction) → `KnowledgeItem` (interprétation structurée candidate) — URS-F-150. Remplace la chaîne simplifiée `Source → Extraction → KnowledgeItem` fabriquée en 8a faute de source disponible à l'époque.
+- **Garde-fou non négociable** : `KnowledgeItem` toujours créé au statut `a_valider` (NEEDS_REVIEW) — vérifié explicitement par test, aucun chemin ne permet une création directe à `valide` — URS-F-150bis.
+- **Garde-fou non négociable** : `validerKnowledgeItem`/`rejeterKnowledgeItem` créent un enregistrement `Confirmation` auditable distinct (decision `confirme`/`rejete`, validateur, horodatage), en plus de la mise à jour dénormalisée de `KnowledgeItem.statut`/`valide_par` — URS-F-150ter.
+- `Conflict` : désaccord explicite entre deux `KnowledgeItem`, reste `ouvert` tant qu'aucune `resolution` n'est fournie — vérifié explicitement par test — URS-F-150quater.
+- Aucun appel IA réel dans ce module : `valeur_interpretee` est toujours fournie par l'appelant (humain, ou une couche de suggestion câblée séparément plus tard) — URS-F-150quinquies.
+- `KnowledgeRelation` : lien explicite non conflictuel entre deux `KnowledgeItem` (ex. l'un précise l'autre), jamais déduit, idempotent — distinct de `Conflict` — URS-F-150sexies.
+- **Limite assumée** : sous-phase 8b (compréhension de schémas techniques complexes — `Diagram`/`DiagramNode`/`DiagramEdge`, P&ID/électrique) non engagée, per TD-004 ("seulement après retour d'expérience réel").
+
+### 4.16 ContentPlan — planification d'un livrable (répond à URS-F-160 à 160septies, nouveau v25 — Phase 9 ; **réaligné v26**)
+
+- `ContentPlan` : gabarit visé (`template_id`, référence le `TemplateType` existant, moteur de rendu KEEP), contexte d'actif/procédé optionnel, profil de méthode résolu optionnel (`method_profile_id`/`method_profile_type`, pas de type `Method` générique unifié — cohérent avec la décision Phase 3) — URS-F-160.
+- **Garde-fou non négociable** : `context_snapshot` figé une seule fois à la création (JSON), immutable ensuite — vérifié explicitement (modifier le profil de méthode référencé après coup ne modifie jamais le snapshot déjà pris) — URS-F-160bis.
+- **Garde-fou non négociable** : cycle de vie `brouillon → valide → gele`, un `ContentPlan` ne peut être gelé qu'après avoir été validé — URS-F-160ter.
+- **Garde-fou non négociable** : immutabilité totale après `gele`, même règle que `Execution` (§4.13) — URS-F-160quater.
+- Aucune génération/validation/gel automatique par IA — URS-F-160quinquies.
+- `readiness` (**nouveau v26**, réalignement sur `01_ARCHITECTURE_MASTER_FINAL.md` §26) : `pret | besoin_information | besoin_revue | bloque` (READY/NEEDS_INFORMATION/NEEDS_REVIEW/BLOCKED) — reflète si les données résolues sont suffisantes pour générer, distinct de `statut` qui reflète le cycle de vie de validation du plan lui-même. Fourni explicitement par l'appelant, jamais calculé automatiquement — URS-F-160sexies.
+- **Garde-fou non négociable** : `gelerContentPlan` exige `readiness = pret`, en plus de `statut = valide` — vérifié explicitement par test (un plan validé mais `besoin_information` ne peut jamais être gelé) — URS-F-160septies.
+- **Limite assumée** : ne couvre que `Request → Resolve → Context Snapshot → Content Plan` — `Generate → Validate → Review → Render → Approve → Freeze` (intégration avec `DefinitionGabarit`/`RenduGabarit.vue` et le cycle de vie de `Section`) reste un chantier distinct, non engagé ici. La résolution "Example" (Method/Template/Example) n'est pas fabriquée dans ce périmètre, `DeliverableRequest`/`ContentElement`/`DeliverableVersion` (domaine "Deliverable" complet) non plus.
+
+### 4.17 Integration Gateway — connecteurs documentaires génériques (répond à URS-F-170 à 170quinquies, nouveau v27 — Phase 10)
+
+- `Connector` : configuration typée par type (`github | google_drive | veeva_vault | sharepoint | dossier_reseau | edms_generique`) — URS-F-170.
+- `SyncJob` : une tentative de synchronisation, statut `en_attente | indisponible | nouvelle_tentative | echec | reussi`, compteur `tentative` — URS-F-170bis.
+- **Garde-fou non négociable** : aucun code de ce module ne conditionne une opération métier indépendante (ex. `declarerReference`) au statut d'un `SyncJob` — vérifié explicitement par test (un `SyncJob` en échec/indisponible n'empêche jamais une déclaration de référence) — URS-F-170ter, cohérent avec DEC-002/055 déjà appliqué à `QualityEvent` (§4.11).
+- `ExternalReference` : pointeur vers un document externe (identifiant + libellé), jamais son contenu dupliqué — même principe que `EvidenceLocation`/`SourceLocation` (§4.14/§4.15) — URS-F-170quater.
+- Aucune synchronisation/résolution automatique par IA — URS-F-170quinquies.
+- **Interface générique `ConnecteurDocumentaire`** (`tester()`/`listerDocuments()`/`lireDocument()`, même pattern swappable que `FournisseurOcr`, Phase 6) : implémentations concrètes pour `github`/`google_drive` (ADAPT, TD-005 — enveloppent `GitHubConnector`/`DriveConnector` déjà existants et testés, sans réécrire leur logique validée ; le connecteur Drive reste volontairement écriture seule, `listerDocuments`/`lireDocument` y lèvent `OperationNonSupporteeError`, cohérent avec URS-NF-010) et pour `veeva_vault` (squelette basé sur le flux d'authentification réel et vérifié par recherche web le 25/08/2026 — session ID + header `Authorization` — **non testé en conditions réelles**, chemins d'endpoints à revérifier avant déploiement, même limite que le relais OCR Azure, Phase 6).
+- **Limite assumée** : `sharepoint`/`dossier_reseau`/`edms_generique` sont des types reconnus et modélisés (config + store) mais **sans adaptateur concret implémenté** — un dossier réseau n'est pas accessible depuis un navigateur sans relais serveur (aucun point d'accès concret fourni), et aucune source vérifiée n'est disponible pour SharePoint/EDMS générique dans cette session. `AssetNode.qms_connector_id` (déjà présent, Structure Système) référence désormais un `Connector` de ce domaine.
+
+### 4.18 Organization/Workspace — hiérarchie organisationnelle (répond à URS-F-180 à 180septies, nouveau v28 — Phase 11, migration la plus risquée du plan TD-006)
+
+- **Décision structurante** : `Organization.id` reprend exactement l'`id` du `Client` migré — aucune des ~25 tables existantes indexées par `client_id` n'a été modifiée dans cet incrément (vérifié : les 419 tests préexistants restent verts sans modification). `Client` devient ainsi littéralement "un cas particulier à un seul niveau d'Organization" (TD-006), sans Big Bang — URS-F-180/180bis.
+- **Garde-fou non négociable** : `migrerClient` est idempotente — migrer deux fois le même client ne duplique jamais l'`Organization` ni son `Workspace` racine — vérifié explicitement par test — URS-F-180ter.
+- `Workspace` : arbre auto-référencé (`parent_workspace_id`), un seul type discriminant `global | site` — cohérent avec le principe déjà retenu pour `AssetHierarchySchema` ("Global et site ne sont pas des modèles différents"). `Facility`/`Area` ne sont pas des types distincts fabriqués sans source : ce sont simplement des `Workspace` plus profonds dans l'arbre — URS-F-180quater.
+- **Garde-fou non négociable** : `resoudreRegleEffective` (fonction pure, `logique-metier/organisation/resolutionEffective.ts`) remonte l'arbre depuis le `Workspace` demandé et retourne toujours l'origine exacte (`workspaceIdOrigine`) de la règle trouvée — jamais une valeur sans provenance. Un site sans règle propre hérite silencieusement du parent ; un site avec sa propre règle la voit toujours prévaloir — **scénario obligatoire "Global + N sites" démontré par test** (un global + 2 sites, l'un hérite, l'autre surcharge explicitement) — URS-F-180quinquies.
+- Aucune migration automatique/silencieuse (ex. au démarrage) — toujours un appel explicite (`migrerClient`/`migrerTousLesClients`) — URS-F-180sexies.
+- **Limite assumée** : la réécriture des ~25 tables existantes pour interroger explicitement par `Workspace`/site reste un chantier ultérieur, phase par phase, non engagé ici (TD-006, "jamais un Big Bang") — URS-F-180septies. Pas d'écran de gestion Organization/Workspace (aucun consommateur réel construit dans ce périmètre). L'effectivity (date d'entrée en vigueur d'une règle) n'est pas ajoutée à `Workspace` — elle appartient aux objets de règles concrets, à câbler quand un premier cas d'usage réel se présentera.
 
 ## 5. Spécification des exigences non fonctionnelles
 
@@ -483,4 +626,4 @@ Le Plan de validation (VMP) et les protocoles IQ/OQ/PQ de l'outil devront être 
 | URS-NF-010/030/044/044bis/055 amendés (architecture web pure) | §2, §5.2, §5.3, §5.4, §10 |
 
 ---
-*Document vivant, version 11 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS. v07 intégrait 3 clarifications de la revue multi-experts. v08 intégrait 2 constats d'audits Swissmedic et FDA simulés. v09 intègre la charte graphique et identité visuelle. v10 résorbe les trois gaps mineurs de la checklist §6ter. **v11 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel (IT bloque les logiciels non autorisés). Diagramme d'architecture (§2) et interfaces (§9) réécrits : API GitHub/Drive au lieu de Git local, cache navigateur (IndexedDB). URS-NF-010/030/044/055 amendés, URS-NF-044bis nouveau. Nouvelle contrainte de plateforme C-05 (dépendance à `api.github.com`, AR-R-62, non vérifiée). Couvre l'intégralité de l'URS v23. Prête pour la mise à jour de la FDS et de la SDS.*
+*Document vivant, version 11 — v06 intégrait les cinq besoins Structure Système/connecteurs QMS. v07 intégrait 3 clarifications de la revue multi-experts. v08 intégrait 2 constats d'audits Swissmedic et FDA simulés. v09 intègre la charte graphique et identité visuelle. v10 résorbe les trois gaps mineurs de la checklist §6ter. **v11 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel (IT bloque les logiciels non autorisés). Diagramme d'architecture (§2) et interfaces (§9) réécrits : API GitHub/Drive au lieu de Git local, cache navigateur (IndexedDB). URS-NF-010/030/044/055 amendés, URS-NF-044bis nouveau. Nouvelle contrainte de plateforme C-05 (dépendance à `api.github.com`, AR-R-62, non vérifiée). Couvre l'intégralité de l'URS v23. Prête pour la mise à jour de la FDS et de la SDS. **v12 (24/08/2026, gap trouvé en construisant le connecteur Drive)** : ajout de l'entité `client` (§3) — `client_id` était référencé partout (project, client_config, asset_hierarchy_schema, asset_node) sans jamais être lui-même modélisé comme entité ; nécessaire dès qu'un écran doit créer/lister des clients (config Drive par client, SDS §5bis/§7). **v13 (24/08/2026, gap trouvé en construisant l'export §4.3)** : `section.audit_log.action` documentait "création | modification | export | changement_statut | export_force" mais pas "import" — alors que URS-F-021 (export/import JSON, "transfert entre postes") exige une piste d'audit distincte pour un enregistrement recréé par import plutôt que rédigé (ALCOA+ "Attributable"/"Original", cadrage principe n°2) ; utiliser "création" pour un import aurait masqué cette origine. **v14 (24/08/2026, gap trouvé en construisant le routeur IA §4.4)** : ajout de `moteur_version_qualifiee` à `ai_provider_reliability_qualification` — URS-F-032quinquies exige de comparer "la version de moteur journalisée" à "la version enregistrée dans [la qualification]", mais le schéma ne portait que `qualification_test_set_version` (la version du **jeu de test**, pas celle du **moteur/modèle** évalué par ce jeu de test) : deux versions distinctes confondues sous un seul champ, rendant la comparaison exigée par F-032quinquies irréalisable telle quelle. **v15 (24/08/2026, gap trouvé en construisant l'écran de configuration IA)** : ajout de `ai_provider_conditions_acquittees` — URS-F-032ter exige un accusé de réception des conditions de traitement des données **avant activation** d'un nouveau fournisseur, mais rien dans `client_config` ne conservait la preuve que cet accusé avait eu lieu ; modélisé par fournisseur (pas un booléen global) car changer de fournisseur exige un nouvel accusé, les conditions différant d'un fournisseur à l'autre. **v16 (24/08/2026, gap trouvé en construisant le panneau Chat expert §4.4)** : ajout de l'entité `ai_chat_session_log` — URS-F-037 exige la journalisation de chaque session de chat (horodatage début/fin, fournisseur, moteur exact, document joint O/N), mais aucune entité existante ne pouvait porter cette information : `section.audit_log` est scopé à une section précise, or une session de chat peut se dérouler sans qu'aucun document ne soit jamais joint. **v17 (24/08/2026, gap trouvé en analysant §4.3bis pour implémentation)** : ajout de l'entité `export_template` — `client_config.export_template_id` référençait cette entité depuis la première version de ce modèle sans jamais la définir elle-même, même nature de gap que `client` (v12).*

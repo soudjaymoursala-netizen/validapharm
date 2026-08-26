@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | SDS-VALIDAPHARM-2026-001 |
-| **Version** | 12 (architecture détaillée — stratégie Git Trees API/quota, hébergement GitHub Pages confirmé, `09-architecture-detaillee.md`) |
+| **Version** | 14 (relais IA de production et plafond de dépense, test réseau vérifié — `REV-URS-VALIDAPHARM-2026-010`, 24/08/2026) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v24, `03-specifications-fonctionnelles.md` v11, `16-FDS-outil.md` v14, `08-conventions-codage.md` v02, `09-architecture-detaillee.md` v01, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v25, `02-analyse-de-risque-outil.md` v27, `03-specifications-fonctionnelles.md` v11, `16-FDS-outil.md` v14, `08-conventions-codage.md` v02, `09-architecture-detaillee.md` v03, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -183,9 +183,20 @@ La FDS (v04) décrit le comportement fonctionnel détaillé : écrans, flux, mac
 
 **GitHub Pages** (`*.github.io`), confirmé par un test réseau réel effectué par l'utilisateur depuis le poste de travail professionnel concerné (mitige AR-R-62, clos) — cohérent avec le reste de l'écosystème déjà autorisé (`api.github.com`). Déploiement automatisé depuis la branche principale, uniquement après succès du portail de qualité (§4) — jamais un déploiement direct non vérifié. Aucun secret dans le bundle buildé (le jeton est saisi à l'exécution par l'utilisateur, jamais injecté au build), répond à URS-NF-044/044bis.
 
+**Déploiement effectivement construit (26/08/2026)** : `.github/workflows/deploy-pages.yml`, déclenché en `workflow_run` sur la réussite du portail de qualité (`quality-gate.yml`) sur `main` — jamais indépendamment. `vite.config.ts` fixe `base` via la variable d'environnement `BASE_PATH` (`/validapharm/` uniquement dans ce workflow, racine `/` inchangée en local et en test). Vue Router étant en mode `history`, GitHub Pages ne réécrivant aucune route côté serveur : redirection SPA standard (`public/404.html` + décodage dans `index.html`, pattern rafgraph/spa-github-pages) ajoutée pour que l'accès direct ou le rafraîchissement d'une route profonde (ex. `/clients/:clientId/...`) fonctionne. Aucune variable d'environnement requise au build (confirmé : le jeton GitHub/la config IA/Drive sont saisis à l'exécution, jamais au build).
+
 ## 10ter. Hors périmètre de cette SDS
 
 - HDS (pas de matériel dédié) et Data Migration Plan (dépôt vierge, décision du 22/08/2026).
+
+## 10quater. Relais IA de production et plafond de dépense — résolu (ajouté v13, `REV-URS-VALIDAPHARM-2026-010`, 24/08/2026)
+
+Complète le routeur IA (§6) et la sécurité technique (§7) : conception détaillée en `09-architecture-detaillee.md` §10.
+
+- **Relais** : Cloudflare Workers, endpoint HTTPS unique, sans état (aucune persistance du contenu — répond à URS-NF-044ter), clé API en secret du Worker. Le `ProviderAdapter` (§6) appelle ce relais plutôt que le fournisseur IA directement — le fournisseur n'est donc jamais dans la liste des origines CSP du navigateur (corrige `09-architecture-detaillee.md` §8 v01).
+- **Modèle par mode d'usage (répond à URS-F-038bis)** : le relais accepte un paramètre `mode` (`chat_normatif` | `audit_simule`) et route vers un modèle configuré indépendamment pour chacun côté `client_config` — un chat normatif à forte volumétrie n'a pas le même profil coût/qualité qu'un mode audit simulé à faible volumétrie mais où la qualité du débat contradictoire multi-angles est la valeur du produit. Chaque combinaison (mode × modèle) suit la qualification de fiabilité déjà exigée (URS-F-032quater), consignée séparément par mode.
+- **Plafond de dépense (répond à AR-R-65, complète le quota applicatif déjà spécifié §7)** : deux niveaux de garde-fou, pas un seul — (1) quota applicatif déjà décrit §7 (URS-NF-048, seuil configurable par `client_config`, blocage des nouveaux appels) ; (2) plafond de dépense configuré **côté tableau de bord du fournisseur IA lui-même** (ex. limite mensuelle + alerte de consommation), indépendant de l'application — un défaut de conception ou un contournement du garde-fou applicatif ne peut alors pas produire une facture illimitée. Le second niveau DOIT être configuré avant toute mise en production, pas seulement documenté.
+- **Test de joignabilité réseau (AR-R-64)** : porte exclusivement sur le domaine du relais (`*.workers.dev`), pas sur celui du fournisseur — **vérifié et clos le 24/08/2026** par l'utilisateur depuis son poste professionnel (Workers déjà actifs sur ce compte, chargement de leur URL confirmé réussi).
 
 ## 11. Matrice de traçabilité FDS → SDS
 
@@ -206,7 +217,7 @@ La FDS (v04) décrit le comportement fonctionnel détaillé : écrans, flux, mac
 | FS §2/§5.2 (miroir Drive, URS-NF-010/011/047) | §5bis |
 | FS §5.1/§5.2/§5.5 (perf/rollback/lecteur d'écran) | §8ter, §3, §9 |
 | FS §2/§9/§10 (architecture web pure, API GitHub) | §2, §5, §5bis, §7, §10 |
-| `09-architecture-detaillee.md` (bibliothèques, quota API, hébergement) | §5, §10, §10bis |
+| `09-architecture-detaillee.md` (bibliothèques, quota API, hébergement, relais IA) | §5, §10, §10bis, §10quater |
 
 ---
-*Document vivant, version 12 — historique v02-v10 : voir corps du document. v11 (23/08/2026) : architecture web pure sans installation. **v12 (23-24/08/2026) : architecture détaillée** — stratégie Git Trees API pour éviter l'épuisement du quota GitHub (5000 req/h), trouvée en rédigeant `09-architecture-detaillee.md` avant tout code écrit (nouveau risque AR-R-63, mitigé dès la conception) ; hébergement GitHub Pages confirmé après vérification réseau réelle par l'utilisateur depuis son poste de travail (AR-R-62 clos) ; bibliothèques complémentaires actées (Pinia, Vue Router, Dexie.js, vite-plugin-pwa). Cascade de conception URS→FS→FDS→SDS complète, architecture entièrement vérifiée (réseau) et détaillée (bibliothèques, quotas, hébergement) — prête pour l'écriture du code.*
+*Document vivant, version 15 — historique v02-v10 : voir corps du document. v11 (23/08/2026) : architecture web pure sans installation. v12 (23-24/08/2026) : architecture détaillée — stratégie Git Trees API pour éviter l'épuisement du quota GitHub (5000 req/h), trouvée en rédigeant `09-architecture-detaillee.md` avant tout code écrit (nouveau risque AR-R-63, mitigé dès la conception) ; hébergement GitHub Pages confirmé après vérification réseau réelle par l'utilisateur depuis son poste de travail (AR-R-62 clos) ; bibliothèques complémentaires actées (Pinia, Vue Router, Dexie.js, vite-plugin-pwa). v13 (24/08/2026, `REV-URS-VALIDAPHARM-2026-010`) : relais IA de production — conception du relais (Cloudflare Workers, sans état, §10quater), routage de modèle par mode d'usage (chat normatif/audit simulé, répond à URS-F-038bis), plafond de dépense à deux niveaux (applicatif + tableau de bord fournisseur, mitige AR-R-65). **v14 (24/08/2026) : test de joignabilité réseau du domaine du relais vérifié et clos** (AR-R-64) — Workers Cloudflare déjà actifs sur le poste professionnel de l'utilisateur, `*.workers.dev` confirmé accessible. Cascade de conception URS→FS→FDS→SDS complète, architecture entièrement vérifiée (réseau GitHub et relais IA) et détaillée (bibliothèques, quotas, hébergement, relais IA) — prête pour l'écriture du code, plus aucun point réseau bloquant. **v15 (26/08/2026) : déploiement GitHub Pages effectivement construit** (`.github/workflows/deploy-pages.yml`, `base` conditionnel, redirection SPA `public/404.html`) — §10bis passe de décision documentée à mécanisme réel.*
