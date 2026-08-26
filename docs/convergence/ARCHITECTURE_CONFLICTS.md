@@ -31,7 +31,8 @@
   1. Garder l'URS telle quelle et construire l'assessment fusionné.
   2. Corriger l'URS (3 étapes distinctes, modèle binaire) avant toute construction.
 - **Recommendation** : **Option 2**, sans ambiguïté. Trois sources indépendantes convergent (Target Architecture, document Ferring réel, guide ISPE de référence) contre une seule (l'URS actuelle, déjà identifiée comme erronée avant même la lecture de ce package).
-- **Decision Required** : NON au sens arbitrage — c'est déjà tranché par convergence de preuves. Reste une action documentaire à faire (corriger l'URS), déjà notée dans `docs/CONTEXTE-REPRISE-SESSION.md` §5.2 depuis le 25/08 matin.
+- **Decision Required** : NON au sens arbitrage — c'est déjà tranché par convergence de preuves.
+- **Statut** : **RÉSOLU.** Correction documentaire faite en Phase 0bis (URS v26, commit `fc08890`). Distinction réellement codée en Phase 3 (25/08/2026) : `EvaluationACFC` (CriticalityAssessment, Phase 1), `MethodProfileImpactAssessment`/`EvaluationImpactAssessment` (ImpactAssessment, F1), `EvaluationCSVAssessment` (CSVAssessment, F3) sont 3 tables Dexie et 3 stores Pinia distincts, pas de fusion. `GxPAssessment` (4ᵉ type du package) reste **non implémenté, volontairement** : aucune source lue à ce jour (URS, Ferring FSMP, ISPE Baseline Guide) ne détaille son périmètre au-delà de ce que couvre déjà `CSVAssessment` (pertinence GxP/ERES) — le construire maintenant obligerait à fabriquer un contenu non sourcé, ce que le projet interdit. Reporté tant qu'une source réelle n'en précise pas le contenu.
 
 ---
 

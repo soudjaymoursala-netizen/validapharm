@@ -46,7 +46,7 @@
 
 ---
 
-## Phase 3 — Moteur d'Assessment générique (CriticalityAssessment/ImpactAssessment/CSVAssessment/GxPAssessment)
+## Phase 3 — Moteur d'Assessment générique (CriticalityAssessment/ImpactAssessment/CSVAssessment/GxPAssessment) — **TERMINÉE PARTIELLEMENT (25/08/2026)**
 - **Objective** : remplacer l'assistant fermé §4.6 par un moteur d'assessment générique, dont la stratégie de qualification devient un type parmi d'autres.
 - **Current State** : un seul assistant, sortie fermée.
 - **Target State** : 4 types d'assessment distincts partageant un moteur commun, rattachables à un nœud réel de Structure Système.
@@ -55,7 +55,7 @@
 - **Risk** : Moyen.
 - **Tests** : scénarios obligatoires "Criticality" au complet (§11_USE_CASES).
 - **Rollback** : l'assistant §4.6 actuel reste en service jusqu'à bascule.
-- **Acceptance Criteria** : les 3 briques d'Impact Assessment/CSV Assessment/Risk Analysis (Phase 0bis) sont réellement 3 modules distincts dans le code, pas seulement dans la documentation.
+- **Acceptance Criteria** : les 3 briques d'Impact Assessment/CSV Assessment/Risk Analysis (Phase 0bis) sont réellement 3 modules distincts dans le code, pas seulement dans la documentation. **Atteint** pour ces 3 briques (F1/F2/F3). `GxPAssessment` (4ᵉ type nommé dans `03_DOMAIN_DATA_MODEL.md` du package Target) reste **non implémenté** : aucune source lue ne détaille son périmètre au-delà de ce que `CSVAssessment` couvre déjà (pertinence GxP/ERES) — le construire aurait exigé de fabriquer un contenu non sourcé. Rouvrir ce point si une source réelle en précise le contenu.
 
 ---
 
@@ -136,6 +136,7 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le schém
 | 0bis | Terminée (25/08/2026) | `fc08890` | `01-URS-outil.md` v26 |
 | 1 | Terminée (25/08/2026) | `a8f7f83` | `01-URS-outil.md` v27, `03-specifications-fonctionnelles.md` v18, `16-FDS-outil.md` v15, `02-analyse-de-risque-outil.md` v28 |
 | 2 | Terminée (25/08/2026) | `c6391ca` | Aucune correction de doc réglementaire requise (Phase 2 est un ajout pur, sans description contradictoire préexistante) |
-| 3-11 | Non engagées | — | — |
+| 3 | Terminée partiellement (25/08/2026) | voir historique git de la branche | `GAP.md`, `ARCHITECTURE_CONFLICTS.md` (CONFLICT-002 marqué résolu, GxPAssessment noté non implémenté) |
+| 4-11 | Non engagées | — | — |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.

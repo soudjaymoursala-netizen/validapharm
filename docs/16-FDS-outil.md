@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FDS-VALIDAPHARM-2026-001 |
-| **Version** | 15 (§4.6/URS-F-050 corrigé : la stratégie de qualification repose sur la méthode ACFC configurable par client réellement implémentée en Phase 1 de convergence architecturale, 25/08/2026, jamais une grille de critères pondérés fixe — cohérent avec URS v27, FS v18) |
+| **Version** | 15 (§4.6/URS-F-050 corrigé : la stratégie de qualification repose sur la méthode ACFC configurable par client réellement implémentée en Phase 1 de convergence architecturale, 25/08/2026, jamais une grille de critères pondérés fixe ; ajout Impact Assessment (URS-F-056) et Computer System Assessment (URS-F-057), Phase 3, 25/08/2026 — cohérent avec URS v28, FS v18) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `03-specifications-fonctionnelles.md` v11, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) |
@@ -30,6 +30,8 @@ Toute règle déjà énoncée en FS n'est pas reformulée ici sauf si elle néce
 | Panneau Chat expert | Conversation, sélection fournisseur, bandeau d'avertissement | URS-F-030 à 037 |
 | Bibliothèque de normes | Consultation/association de normes | URS-F-040/041 |
 | Assistant de stratégie de qualification | Méthode ACFC configurable par client, conclusion | URS-F-050 à 055 |
+| Impact Assessment / System Classification | Méthode configurable par client, verdict Direct/Not Direct Impact | URS-F-056 (nouveau v15) |
+| Computer System Assessment | Catégorie GAMP5 (fixe) + pertinence GxP/ERES | URS-F-057 (nouveau v15) |
 | Analyse de documents / Challenge de dossier | Chargement de document, constats affichés | URS-F-080 à 083 |
 | Configuration client | Fournisseur IA, gabarit d'export, consentement télémétrie, qualification de fiabilité | `client_config` |
 | Export | Choix de format, avertissements de blocage | URS-F-020 à 028ter |
@@ -345,6 +347,8 @@ Un gabarit est défini par une structure JSON déclarative, versionnée indépen
 |---|---|---|
 | IPR (AMDEC/ICH Q9) | IPR = S × O × D | S,O,D ∈ [1,5] ou [1,10] selon échelle du gabarit ; valeurs vides → IPR non calculé, aucune erreur ; hors plage → rejet de saisie avant calcul |
 | Stratégie de qualification (URS-F-050) | Calcul en deux étapes, chacune versionnée indépendamment (même principe que `template_engine_version`) : (1) verdict ACFC binaire critique/non_critique, calculé par `evaluerVerdictACFC()` à partir des réponses Oui/Non/Inconnu/Sans objet au `MethodProfileACFC` actif du client (règle de décision elle-même une donnée de la méthode, ex. "au moins un Oui → critique" — jamais universelle) ; (2) table de décision fermée combinant ce verdict × complexité (catalogue/spécifique) → une conclusion parmi la liste fermée (§4.6 FS). **(Corrigé v15 — Phase 1 de convergence architecturale, 25/08/2026)** Remplace la précédente description "combinaison de réponses aux N critères ASTM E2500/Annexe 15 §43", qui décrivait à tort un barème de critères pondérés fixe et non un questionnaire client configurable. La table de décision (2) reste couverte par des tests unitaires exhaustifs des combinaisons, sa version enregistrée dans les métadonnées de chaque section utilisant l'assistant. | Toute combinaison non couverte explicitement par la table → conclusion "Autre — à définir par l'expert", jamais d'extrapolation. Aucune méthode ACFC configurée pour le client → aucun verdict calculable, aucune question par défaut proposée (URS-F-050quater) |
+| Impact Assessment (URS-F-056) | Même mécanisme générique que la stratégie de qualification, étape (1) — extrait en un moteur partagé `assessment/moteurQuestionsOuiNon.ts` (Phase 3, 25/08/2026) confirmé applicable aux deux (Ferring FSMP, ISPE Baseline Guide) : `evaluerVerdictImpactAssessment()` sur les réponses au `MethodProfileImpactAssessment` actif du client → Direct Impact / Not Direct Impact | Aucune méthode configurée → aucun verdict calculable, aucune question par défaut (URS-F-056ter) |
+| Computer System Assessment (URS-F-057) | Pas de calcul déterministe : sélection directe d'une catégorie GAMP5 (1 à 5, fixe) + 2 booléens (pertinence GxP, pertinence ERES/Part 11), chacun justifié en texte libre | Aucun — pas de règle de décision, une saisie humaine directe |
 | Détection de dérive de version fournisseur (URS-F-032quinquies) | `session.engine_version ≠ qualification.version` → alerte | Absence de qualification préalable → activation bloquée en amont (pas un cas de "dérive", couvert par F-032quater) |
 | Détection de liens manquants (§4.8 FS, F-082) | Parcours du graphe `project.links[]` ; pour chaque exigence-cible attendue par le gabarit (`required_link_type`), vérifie l'existence d'au moins un lien entrant du type requis | Lien existant mais vers une section non pertinente (erreur humaine) → non détectable algorithmiquement, reste sous constat IA non déterministe (F-082) |
 

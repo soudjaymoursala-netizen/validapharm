@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FS-VALIDAPHARM-2026-001 |
-| **Version** | 18 (§4.6 corrigé : la "grille de critères déterministe" est remplacée par la méthode ACFC configurable par client réellement implémentée en Phase 1 de convergence architecturale, 25/08/2026, cohérent avec URS v27) |
+| **Version** | 18 (§4.6 corrigé : la "grille de critères déterministe" est remplacée par la méthode ACFC configurable par client réellement implémentée en Phase 1 de convergence architecturale, 25/08/2026 ; ajout §4.6bis/URS-F-056 Impact Assessment et §4.6ter/URS-F-057 Computer System Assessment, Phase 3, 25/08/2026 — cohérent avec URS v28) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) pour le moteur de gabarits, le routeur IA et la synchronisation ; catégorie 3/4 pour les composants tiers (bibliothèques, modèle local) |
 | **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `00-cadrage-projet.md` v3, `13-revue-multi-experts-FS.md` v01, `14-audit-swissmedic-FS.md` v01, `15-audit-fda-FS.md` v01, `31-revue-multi-experts-FS-v06.md` v01, `32-audit-swissmedic-FS-v07.md` v01, `33-audit-fda-FS-v07.md` v01 (closes) |
@@ -279,6 +279,18 @@ Traçabilité vers l'URS : `project` répond à URS-F-000/000bis/000ter/000quate
 - **Garde-fou non négociable (mitige AR-R-15/R-16)** : l'IA peut proposer des réponses aux questions de la méthode active à partir d'un Change Control joint, mais chaque réponse individuelle doit être validée/corrigée par l'utilisateur ; le verdict résulte exclusivement du calcul déterministe sur les réponses validées, jamais d'une génération libre — URS-F-050bis.
 - La référence et la version du Change Control utilisé comme contexte sont affichées et conservées — URS-F-050ter.
 - Tant qu'aucune méthode ACFC n'a été configurée pour un client, aucune question par défaut n'est proposée : l'écran l'indique explicitement et invite à saisir les questions réelles de la procédure du client — URS-F-050quater.
+
+### 4.6bis Impact Assessment / System Classification (répond à URS-F-056, nouveau v18 — Phase 3)
+
+- Méthode configurable par client (`MethodProfileImpactAssessment` : questions Oui/Non définies par le client, conservées mot pour mot, versionnée et immuable — même principe que `MethodProfileACFC`), appliquée à chaque système **avant** toute analyse de risque ACFC (F2) — URS-F-056.
+- Verdict strictement binaire (Direct Impact / Not Direct Impact), jamais un troisième niveau "impact indirect" — URS-F-056.
+- Aucune question par défaut proposée tant qu'aucune méthode n'est configurée — même garde-fou que §4.6, URS-F-056ter.
+- Un système Not Direct Impact n'est pas bloqué : seul le chemin de qualification complète ne s'applique pas — URS-F-056quater.
+
+### 4.6ter Computer System Assessment (répond à URS-F-057, nouveau v18 — Phase 3)
+
+- Évaluation d'un système informatisé selon 3 axes indépendants : catégorie GAMP5 (grille fixe à 5 valeurs, non modulable par client), pertinence GxP, pertinence ERES/Part 11 — chaque axe justifié par du texte libre — URS-F-057.
+- Contrairement à la méthode ACFC ou Impact Assessment, aucun `MethodProfile` associé : la catégorie GAMP5 est sélectionnée, jamais configurée — URS-F-057bis.
 - Avertissement renforcé systématique : "aide à la décision, non une décision de qualification" — URS-F-053.
 - L'assistant est accessible directement depuis une section Change Control en cours de rédaction, en plus de son accès en module indépendant — URS-F-054.
 - Lorsqu'une évaluation ACFC ou Computer System Assessment (catalogue §10.F) conclut à la nécessité d'un dossier complet, ses réponses pré-remplissent automatiquement les champs correspondants du gabarit cible (ex. section "Généralités" du CSV) — pas de double saisie — URS-F-055.

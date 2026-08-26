@@ -1,4 +1,8 @@
 import type { MethodProfileACFC, QuestionACFC, ReponseQuestionACFC } from '../domaine/types'
+import {
+  auMoinsUneReponseOui,
+  questionsCompletementRepondues,
+} from '../assessment/moteurQuestionsOuiNon'
 
 /**
  * Moteur de décision ACFC (FS §4.6bis, remplace `grilleCriticite.ts` —
@@ -11,6 +15,12 @@ import type { MethodProfileACFC, QuestionACFC, ReponseQuestionACFC } from '../do
  * critique**, jamais moyennée ni pondérée. `sans_objet`/`inconnu` ne
  * comptent jamais comme un "oui".
  *
+ * **(Phase 3, 25/08/2026)** Délègue au moteur générique
+ * `assessment/moteurQuestionsOuiNon.ts`, extrait une fois confirmé que le
+ * même mécanisme s'applique aussi à l'Impact Assessment (F1) — voir
+ * `evaluerVerdictImpactAssessment.ts`. Comportement et signature publique
+ * inchangés.
+ *
  * @requirement URS-F-050 (F2, Analyse de risque)
  */
 export function evaluerVerdictACFC(
@@ -20,7 +30,12 @@ export function evaluerVerdictACFC(
 ): 'critique' | 'non_critique' {
   switch (decisionRule) {
     case 'au_moins_un_oui_critique':
-      return questions.some((q) => reponses[q.id] === 'oui') ? 'critique' : 'non_critique'
+      return auMoinsUneReponseOui(
+        questions.map((q) => q.id),
+        reponses,
+      )
+        ? 'critique'
+        : 'non_critique'
   }
 }
 
@@ -29,5 +44,8 @@ export function methodeCompletementRepondue(
   questions: readonly QuestionACFC[],
   reponses: Readonly<Record<string, ReponseQuestionACFC>>,
 ): boolean {
-  return questions.every((q) => reponses[q.id] !== undefined)
+  return questionsCompletementRepondues(
+    questions.map((q) => q.id),
+    reponses,
+  )
 }

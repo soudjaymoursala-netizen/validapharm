@@ -61,10 +61,10 @@ Le cadrage complet (vision, architecture par phases, sécurité, trajectoire de 
 | Document | Version actuelle |
 |---|---|
 | Cadrage | `docs/00-cadrage-projet.md`, notes de cohérence jusqu'au 24/08/2026 |
-| URS | **v27** (`01-URS-outil.md`) — §4.6/URS-F-050 corrigé Phase 1 (25/08/2026) |
+| URS | **v28** (`01-URS-outil.md`) — §4.6/URS-F-050 corrigé Phase 1 ; §4.6bis/URS-F-056 (Impact Assessment) et §4.6ter/URS-F-057 (Computer System Assessment) ajoutés Phase 3 |
 | Analyse de risque (AR) | **v28** (`02-analyse-de-risque-outil.md`) — R-15/R-16 terminologie corrigée Phase 1 |
-| FS | **v18** (`03-specifications-fonctionnelles.md`) — §4.6 corrigé Phase 1 |
-| FDS | **v15** (`16-FDS-outil.md`) — algorithme de stratégie de qualification corrigé Phase 1 |
+| FS | **v18** (`03-specifications-fonctionnelles.md`) — §4.6 corrigé Phase 1, §4.6bis/§4.6ter ajoutés Phase 3 |
+| FDS | **v15** (`16-FDS-outil.md`) — algorithme de stratégie de qualification corrigé Phase 1, Impact Assessment/CSV Assessment ajoutés Phase 3 |
 | SDS | **v14** (`22-SDS-outil.md`) |
 | Conventions de codage | `docs/08-conventions-codage.md` v02 |
 | Architecture détaillée | `docs/09-architecture-detaillee.md` v03 |
@@ -76,8 +76,8 @@ VMP + protocoles IQ/OQ/PQ de l'outil lui-même (`docs/04` à `07`) : toujours re
 
 - Dépôt : `soudjaymoursala-netizen/validapharm`, branche de travail **`claude/contexte-reprise-session-tin77u`**, à jour avec `origin`, working tree propre.
 - **PR #1 ouverte** : "Relais IA de production : conception, correction CSP et clôture réseau" — https://github.com/soudjaymoursala-netizen/validapharm/pull/1 — accumule tous les incréments depuis son ouverture, jamais mergée. CI ("Lint, typecheck, tests") verte sur le dernier commit à chaque vérification.
-- **298 tests, 41 fichiers de test, tous verts** (`npx vitest run`, vérifié le 25/08/2026).
-- Toolchain : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js (IndexedDB, schéma **v7**) + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint.
+- **321 tests, 45 fichiers de test, tous verts** (`npx vitest run`, vérifié le 25/08/2026).
+- Toolchain : TypeScript strict + Vue 3 + Pinia + Vue Router + Dexie.js (IndexedDB, schéma **v8**) + Vitest + ESLint/Prettier. Structure en couches stricte (`presentation/` / `logique-metier/` / `connecteurs/` / `persistance/`), imposée par une règle ESLint.
 - **Modules construits et testés (unitaire + navigateur réel via Playwright quand pertinent)**, dans l'ordre logique du catalogue :
   - Fondations : modèle de données pivot, garde de compatibilité de schéma, machine à états du cycle de vie d'une section, garde-fous de finalisation (U-01/U-02/U-03), calcul IPR (S×O×D), persistance Dexie (schéma v1→v7, migrations vérifiées sans perte de données).
   - Écrans : Tableau de bord, Fiche Projet, Éditeur de section, Blocage d'incompatibilité (U-12), Configuration client (GitHub + Drive), Résolution de conflit champ par champ, Gestion des clients, Configuration IA par client, Panneau Chat expert, Assistant de stratégie de qualification (client-scopé, `/clients/:clientId/...`), Structure Système.
@@ -88,6 +88,8 @@ VMP + protocoles IQ/OQ/PQ de l'outil lui-même (`docs/04` à `07`) : toujours re
   - Structure Système — fondation référentiel d'actifs (§4.10) : hiérarchie configurable par client, CRUD de nœuds, détection de cycle, unicité de code, journal d'audit par nœud.
   - **Méthode ACFC configurable par client (`MethodProfileACFC`/`EvaluationACFC`, Phase 1 de convergence, 25/08/2026)** : remplace l'ancienne grille de criticité codée en dur (9 critères fixes, supprimée) — questions Oui/Non définies par le client, conservées mot pour mot, versionnées et immuables, aucune question par défaut fabriquée. Voir §5.
   - **`Parameter`/`ClassificationCriticiteParametre`/`CPP`/`CQA` distincts (Phase 2 de convergence, 25/08/2026)** : un paramètre classé critique ne devient jamais un CPP automatiquement — garde-fou testé explicitement. Pas d'écran dédié pour l'instant (pas de contexte réel encore construit — Process/ManufacturingContext, Phase 4). Voir §5.
+  - **Impact Assessment / System Classification (F1) et Computer System Assessment (F3), Phase 3 de convergence, 25/08/2026** : `useImpactAssessmentStore` (même mécanisme que l'ACFC, moteur partagé extrait dans `assessment/moteurQuestionsOuiNon.ts`) et `useCSVAssessmentStore` (catégorie GAMP5 fixe + pertinence GxP/ERES, pas de `MethodProfile`). Nouveau requirements URS-F-056/057. `GxPAssessment` (4ᵉ type nommé par le package Target) **non implémenté**, faute de source réelle en détaillant le périmètre — pas d'écran dédié, même raison qu'en Phase 2. Voir §5.
+  - **Bug corrigé en Phase 3** : le calcul du "profil de méthode actif" (ACFC et Impact Assessment) triait par `created_at`, instable quand deux versions sont créées dans la même milliseconde (le tri redevenait alors le profil le plus ANCIEN). Corrigé par tri sur le numéro de version (`vN`, strictement croissant) — `numeroVersion()` dans `logique-metier/versionnage/`. Test de régression ajouté dans les deux stores.
 - **Backlog explicite restant (tâches #27 à #32, jamais commencées)** :
   - #27 — Gabarits d'export personnalisés par client (§4.3bis, URS-F-023 à 026) — décision de conception "DSL de contenu" volontairement laissée ouverte, documentée dans la FS v17.
   - #28 — Mode audit simulé (§4.4bis, URS-F-038 à 040) + qualification séparée par mode — **bloqué par une décision d'architecture non tranchée** : faut-il une qualification/consentement séparés par mode de chat (normatif vs audit simulé) ? Lié à #29.
@@ -117,6 +119,7 @@ Le master prompt impose une séquence obligatoire avant tout code : Lire la cibl
 - **Phase 0bis** (commit `fc08890`) : URS v26 — corrige la fusion erronée ACFC/Computer System Assessment et le modèle d'impact à 3 niveaux, déjà repérée le 24/08 (§5.2 de l'ancienne version de ce fichier).
 - **Phase 1** (commit `a8f7f83`) : `grilleCriticite.ts` (grille de 9 critères codée en dur) **supprimé**, remplacé par `MethodProfileACFC`/`EvaluationACFC` (`src/logique-metier/acfc/`, `useMethodProfileACFCStore`) — questions Oui/Non définies par le client, conservées mot pour mot, versionnées et immuables, **aucune question par défaut fabriquée** (l'écran affiche explicitement "non configuré" sinon). `grilleDecision.ts` adapté au verdict binaire. Écran devenu client-scopé. URS/FS/FDS/AR corrigés en conséquence (v27/v18/v15/v28) — la description "grille de critères déterministe ASTM E2500/EudraLex/ICH Q9" qui y figurait était devenue fausse une fois le vrai modèle ACFC confirmé sur 4 sources réelles indépendantes (Ferring, Sanofi Marcy, Sanofi Lyon-Gerland, ISPE Baseline Guide).
 - **Phase 2** (commit `c6391ca`) : `Parameter`, `ClassificationCriticiteParametre` (important/critique), `CPP`, `CQA` comme objets distincts (`useParameterStore`) — garde-fou central testé explicitement : classifier un paramètre critique ne crée jamais de CPP automatiquement (interdiction explicite de la cible, DEC-019). Pas d'écran dédié : aucun contexte réel (Process/ManufacturingContext, Phase 4) n'existe encore auquel le rattacher sans fabriquer un usage artificiel.
+- **Phase 3, partielle** (25/08/2026) : moteur d'Assessment générique. `ImpactAssessment` (F1) et `CSVAssessment` (F3) construits — `CriticalityAssessment` (F2/ACFC) existait déjà depuis la Phase 1. Le mécanisme Oui/Non "au moins un oui" partagé par ACFC et Impact Assessment a été extrait dans `assessment/moteurQuestionsOuiNon.ts` (confirmé applicable aux deux sur les mêmes sources réelles). `GxPAssessment` (4ᵉ type du package) **non construit** : aucune source lue ne détaille son périmètre au-delà de ce que `CSVAssessment` couvre déjà — décision documentée dans `ARCHITECTURE_CONFLICTS.md` CONFLICT-002 plutôt que de fabriquer un contenu. URS/FS/FDS mis à jour en conséquence (v28/v18/v15, nouveaux URS-F-056/057 — ces deux briques n'avaient encore aucun requirement détaillé, seulement une ligne de catalogue). **Bug trouvé et corrigé au passage** : `profilActif` (ACFC et Impact Assessment) triait sur `created_at`, instable si deux versions sont créées dans la même milliseconde — corrigé par tri sur le numéro de version, avec test de régression.
 
 Chaque phase a été vérifiée avant commit : suite complète de tests (`npx vitest run`), typecheck (`vue-tsc -b --noEmit`), lint (`eslint . --max-warnings 0`), et vérification navigateur réelle via Playwright quand un écran existe (persistance IndexedDB après rechargement, zéro erreur console — ce projet a déjà rencontré deux fois un bug `DataCloneError` Dexie/réactivité Vue, d'où cette vérification systématique).
 
@@ -128,9 +131,9 @@ Chaque phase a été vérifiée avant commit : suite complète de tests (`npx vi
 
 **L'alignement documentaire n'est pas une étape de fin de projet reportée : c'est une porte de sortie de chaque phase**, au même titre que les tests — appliqué pour la première fois rétroactivement à la Phase 1 le 25/08/2026 (URS/FS/FDS/AR corrigés après-coup) et à appliquer nativement dès la Phase 3.
 
-### 5.5 Prochaine étape : Phase 3
+### 5.5 Prochaine étape : Phase 4
 
-**Phase 3 — Moteur d'Assessment générique** (`CriticalityAssessment`/`ImpactAssessment`/`CSVAssessment`/`GxPAssessment`), débloquée (Phases 1 et 2 dont elle dépend sont terminées). Détail complet dans `CONVERGENCE_PLAN.md`. C'est un chantier structurant (remplace l'assistant fermé §4.6 par un moteur configurable commun à 4 types d'assessment) — à traiter avec la même discipline que ci-dessus.
+**Phase 4 — Extension de Structure Système : `Function` + `Process`/`ManufacturingContext`.** Détail complet dans `CONVERGENCE_PLAN.md`. Risque faible (extension pure, `AssetNode` non touché). Une fois faite, `CPP`/`CQA` (Phase 2) et les 3 Assessments (Phase 3) auront un vrai contexte réel auquel se rattacher — ce qui débloquera enfin la question d'un écran dédié, volontairement reportée jusqu'ici pour ne pas fabriquer un usage artificiel.
 
 ---
 

@@ -8,6 +8,7 @@ import type {
   ReponseQuestionACFC,
 } from '../../logique-metier/domaine/types'
 import { evaluerVerdictACFC } from '../../logique-metier/acfc/evaluerVerdictACFC'
+import { numeroVersion } from '../../logique-metier/versionnage/numeroVersion'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
@@ -43,10 +44,21 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
   const evaluations = ref<EvaluationACFC[]>([])
   const enChargement = ref(false)
 
-  /** Le profil le plus récent (le seul utilisé pour de nouvelles évaluations). Aucun défaut fabriqué : `null` tant que le client n'a rien configuré. */
+  /**
+   * Le profil le plus récent (le seul utilisé pour de nouvelles évaluations).
+   * Aucun défaut fabriqué : `null` tant que le client n'a rien configuré.
+   * Tri sur le numéro de version (`vN`), jamais sur `created_at` : deux
+   * versions créées dans la même milliseconde produisent le même
+   * timestamp ISO, ce qui rendait le tri par date instable (bug trouvé en
+   * Phase 3, 25/08/2026, en écrivant le test équivalent pour
+   * `useImpactAssessmentStore`).
+   */
   const profilActif = computed<MethodProfileACFC | null>(() => {
     if (profils.value.length === 0) return null
-    return [...profils.value].sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null
+    return (
+      [...profils.value].sort((a, b) => numeroVersion(b.version) - numeroVersion(a.version))[0] ??
+      null
+    )
   })
 
   async function charger(clientId: string): Promise<void> {

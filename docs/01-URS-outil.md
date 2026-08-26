@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | URS-VALIDAPHARM-2026-001 |
-| **Version** | 27 (§4.6/URS-F-050 corrigé pour refléter la méthode ACFC réellement implémentée en Phase 1 — questionnaire Oui/Non configurable par client, jamais une grille de critères pondérés fixe ; ajout URS-F-050quater, absence de question par défaut fabriquée — Phase 1 de convergence architecturale, 25/08/2026. Version 26 : correction famille F — séparation Impact Assessment/System Classification, Analyse de risque (ACFC/AMDEC/FRA), Computer System Assessment en 3 briques séquentielles distinctes, modèle d'impact binaire ; retrait de la référence à un gabarit CSV non implémenté — Phase 0 de convergence architecturale, 25/08/2026) |
+| **Version** | 28 (ajout §4.6bis/URS-F-056 — Impact Assessment/System Classification — et §4.6ter/URS-F-057 — Computer System Assessment —, désormais réellement implémentés (Phase 3 de convergence architecturale, 25/08/2026) ; aucun requirement n'existait encore pour ces 2 briques du catalogue §10, seulement une ligne descriptive. Version 27 : §4.6/URS-F-050 corrigé pour refléter la méthode ACFC réellement implémentée en Phase 1 — questionnaire Oui/Non configurable par client, jamais une grille de critères pondérés fixe ; ajout URS-F-050quater. Version 26 : correction famille F — séparation Impact Assessment/System Classification, Analyse de risque (ACFC/AMDEC/FRA), Computer System Assessment en 3 briques séquentielles distinctes, modèle d'impact binaire ; retrait de la référence à un gabarit CSV non implémenté — Phase 0 de convergence architecturale, 25/08/2026) |
 | **Statut** | En rédaction |
 | **Système concerné** | ValidaPharm (assistant de rédaction qualité CQV/CSV/QA — pharma & dispositifs médicaux) |
 | **Catégorie GAMP 5 envisagée** | Catégorie 5 — Logiciel sur mesure (bespoke), avec composants de catégorie 3/4 (bibliothèques, éventuel LLM local) — confirmée par revue multi-experts |
@@ -170,6 +170,26 @@ L'utilisateur (professionnel qualité/validation en pharma et dispositifs médic
 | URS-F-053 | Le système DOIT afficher, pour ce mode, un avertissement renforcé rappelant que la proposition est une aide à la décision et non une décision de qualification, à valider par un expert qualité qualifié. | Must |
 | URS-F-054 | Cet assistant DOIT être accessible depuis le contexte d'un Change Control en cours de rédaction (pas seulement comme module indépendant). | Should |
 | URS-F-055 | *(nouveau — délimitation ACFC / Computer System Assessment vs CSV)* Lorsqu'une évaluation ACFC ou Computer System Assessment conclut à la nécessité d'un dossier de qualification/validation complet, ses réponses DOIVENT pré-remplir les champs correspondants du gabarit cible (ex. section "Généralités" du CSV), sans nécessiter de double saisie. | Should |
+
+### 4.6bis Impact Assessment / System Classification *(nouveau v27 — Phase 3 de convergence architecturale, 25/08/2026)*
+
+Brique F1 du catalogue §10, en amont de l'ACFC (F2) — jamais fusionnée avec elle (URS v26, CONFLICT-002).
+
+| ID | Exigence | Priorité |
+|---|---|---|
+| URS-F-056 | Le système DOIT évaluer si un système entre dans le périmètre GMP qualifiable ("Direct Impact") via une **méthode configurable par client** (questions Oui/Non définies par le client, conservées mot pour mot, aucune valeur figée dans le code — même principe que URS-F-050/F2), appliquée à chaque système avant toute Analyse de risque (F2). Verdict strictement binaire : Direct Impact / Not Direct Impact — aucun troisième niveau "impact indirect" (confirmé sur source réelle : ISPE Baseline Guide 2ᵉ édition retire ce concept de sa 1ʳᵉ édition). | Should |
+| URS-F-056bis | La règle de décision (ex. "au moins un Oui → Direct Impact") est elle-même une donnée de la méthode, jamais une règle universelle codée en dur — même principe que URS-F-050. | Must |
+| URS-F-056ter | Tant qu'aucune méthode Impact Assessment n'a été configurée pour un client, le système NE DOIT proposer aucune question par défaut — même garde-fou que URS-F-050quater. | Must |
+| URS-F-056quater | Un système classé Not Direct Impact n'est pas bloqué : il reste utilisable, seul le chemin de qualification complète (F2/F3) ne s'applique pas — cohérent avec le principe "non-blocking by default" du package Target Architecture (DEC-002). | Should |
+
+### 4.6ter Computer System Assessment *(nouveau v27 — Phase 3 de convergence architecturale, 25/08/2026)*
+
+Brique F3 du catalogue §10, distincte de F1 et F2 (URS v26, CONFLICT-002) — dédiée aux systèmes informatisés.
+
+| ID | Exigence | Priorité |
+|---|---|---|
+| URS-F-057 | Le système DOIT permettre d'évaluer un système informatisé selon : sa **catégorie GAMP5** (1 Infrastructure, 2 Firmware, 3 Logiciel standard non configuré, 4 Logiciel configurable, 5 Sur mesure — grille normative fixe, PIC/S PI 011-3, **non modulable par client**), sa pertinence GxP, et sa pertinence ERES/Part 11 — chaque évaluation justifiée par du texte libre. | Should |
+| URS-F-057bis | Contrairement à la méthode ACFC (F2) ou Impact Assessment (F1), la catégorie GAMP5 n'est **jamais** configurable par client : elle est sélectionnée parmi les 5 valeurs fixes, jamais saisie librement. | Must |
 
 ### 4.7 Vue portefeuille et opérations transverses *(nouveau — issu de la revue littéraire eQMS/Kneat/ValGenesis)*
 

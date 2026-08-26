@@ -10,6 +10,7 @@
  * §4).
  */
 import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
+import type { ReponseQuestionOuiNon } from '../assessment/moteurQuestionsOuiNon'
 
 export type Langue = 'fr' | 'en' | 'de'
 
@@ -385,6 +386,91 @@ export interface CQA {
   contexte: string
   justification: string
   actif: boolean
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Impact Assessment / System Classification (F1 du catalogue §10, URS v27
+ * — Phase 3 de convergence architecturale, `docs/convergence/
+ * CONVERGENCE_PLAN.md`). Étape **en amont** de l'ACFC (F2), pas la même
+ * chose : détermine si un système entre dans le périmètre GMP qualifiable
+ * ("Direct Impact") avant toute analyse de risque. Même mécanisme que
+ * `MethodProfileACFC` (questionnaire Oui/Non configurable par client,
+ * questions conservées mot pour mot, immuable/versionné) — confirmé sur
+ * les mêmes sources réelles (Ferring FSMP : 7 questions ; ISPE Baseline
+ * Guide "System Classification" : 8 questions), d'où la réutilisation du
+ * moteur `assessment/moteurQuestionsOuiNon.ts`. Type volontairement
+ * distinct de `MethodProfileACFC`/`EvaluationACFC` en base : F1 et F2 sont
+ * deux briques séquentielles distinctes (URS v26/v27), jamais fusionnées.
+ *
+ * @requirement URS-F-050 (F1, Impact Assessment / System Classification)
+ */
+export interface QuestionImpactAssessment {
+  id: string
+  texte: Partial<Record<Langue, string>>
+}
+
+export type OrigineMethodeImpactAssessment =
+  'procedure_client' | 'defini_utilisateur' | 'baseline_validapharm'
+
+export interface MethodProfileImpactAssessment {
+  id: string
+  client_id: string
+  version: string
+  effective_date: string
+  source: string
+  origin: OrigineMethodeImpactAssessment
+  questions: QuestionImpactAssessment[]
+  decision_rule: 'au_moins_un_oui_impact_direct'
+  created_at: string
+}
+
+export interface EvaluationImpactAssessment {
+  id: string
+  client_id: string
+  method_profile_id: string
+  method_profile_version: string
+  asset_node_id: string | null
+  nom_element: string
+  reponses: Record<string, ReponseQuestionOuiNon>
+  verdict: 'impact_direct' | 'non_impact_direct' | null
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Catégorisation GAMP5 (PIC/S PI 011-3) — grille normative **fixe à 5
+ * catégories**, confirmée sur source réelle le 24-25/08/2026 :
+ * 1 Infrastructure, 2 Firmware, 3 Logiciel standard non configuré,
+ * 4 Logiciel configurable, 5 Sur mesure. **Non modulable par client**,
+ * à la différence de `MethodProfileACFC`/`MethodProfileImpactAssessment` —
+ * c'est délibérément un type sans `MethodProfile` associé : il n'y a rien
+ * à configurer, seulement une catégorie à sélectionner et justifier.
+ */
+export type CategorieGAMP5 = 1 | 2 | 3 | 4 | 5
+
+/**
+ * Computer System Assessment (F3 du catalogue §10, URS v27) — évaluation
+ * dédiée aux systèmes informatisés (catégorie GAMP5, pertinence GxP,
+ * pertinence ERES/Part 11), brique distincte de F1 et F2, jamais fusionnée
+ * avec elles (erreur documentée et corrigée en Phase 0bis, `docs/
+ * convergence/ARCHITECTURE_CONFLICTS.md` CONFLICT-002).
+ *
+ * @requirement URS-F-050 (F3, Computer System Assessment)
+ */
+export interface EvaluationCSVAssessment {
+  id: string
+  client_id: string
+  asset_node_id: string | null
+  nom_systeme: string
+  categorie_gamp5: CategorieGAMP5
+  justification_categorie: string
+  pertinence_gxp: boolean
+  pertinence_eres_part11: boolean
+  justification_pertinence: string
   audit_log: EntreeJournalAudit[]
   created_at: string
   updated_at: string

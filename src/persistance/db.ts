@@ -9,7 +9,10 @@ import type {
   CPP,
   CQA,
   EvaluationACFC,
+  EvaluationCSVAssessment,
+  EvaluationImpactAssessment,
   MethodProfileACFC,
+  MethodProfileImpactAssessment,
   Parameter,
   Project,
   ProjectDocument,
@@ -108,6 +111,9 @@ export class ValidaPharmDatabase extends Dexie {
   classificationsCriticiteParametre!: EntityTable<ClassificationCriticiteParametre, 'id'>
   cpps!: EntityTable<CPP, 'id'>
   cqas!: EntityTable<CQA, 'id'>
+  methodProfilesImpactAssessment!: EntityTable<MethodProfileImpactAssessment, 'id'>
+  evaluationsImpactAssessment!: EntityTable<EvaluationImpactAssessment, 'id'>
+  evaluationsCSVAssessment!: EntityTable<EvaluationCSVAssessment, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -144,6 +150,11 @@ export class ValidaPharmDatabase extends Dexie {
       classificationsCriticiteParametre: 'id, client_id, parameter_id, created_at',
       cpps: 'id, client_id, parameter_id, actif',
       cqas: 'id, client_id, actif',
+    })
+    this.version(8).stores({
+      methodProfilesImpactAssessment: 'id, client_id, created_at',
+      evaluationsImpactAssessment: 'id, client_id, method_profile_id, created_at',
+      evaluationsCSVAssessment: 'id, client_id, asset_node_id, created_at',
     })
   }
 }
