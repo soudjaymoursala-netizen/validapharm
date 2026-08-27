@@ -55,7 +55,7 @@ Catégories de la checklist déjà vérifiées sur le code réel (types, moteurs
 
 **P0 — bloquants architecturaux** (sans eux aucun scénario complet de la vision n'est démontrable) :
 1. **Phase 18 — Architecture Technique** (relations typées AssetNode↔AssetNode) — **Terminée**, voir `PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md`.
-2. **Phase 19 — Ingestion Office native** (lecture `.docx`) — **Terminée**, voir `PHASE_19_INGESTION_OFFICE_SPEC.md`/TD-014. Excel reste bloqué faute de librairie saine (limite assumée, pas un oubli).
+2. **Phase 19 — Ingestion Office native** (lecture `.docx` + images incorporées) — **Terminée**, voir `PHASE_19_INGESTION_OFFICE_SPEC.md`/TD-014/TD-015. Complétée le même jour suite à une observation de l'utilisateur (schémas/photos incorporés, SOP scannées avec/sans filigrane) : `extraireImagesDocx` combiné à l'OCR existant ; aucune détection/correction de filigrane construite (limite assumée). Excel reste bloqué faute de librairie saine (limite assumée, pas un oubli).
 3. Cerveau procédural (Procedure Ingestion + Execution) — non engagée. Peut désormais s'appuyer sur une SOP `.docx` réellement lue (Phase 19), ou une SOP saisie/collée en texte en attendant une couverture Excel/PDF.
 4. Template Intelligence généralisée + génération au format client réel — non engagée. `docxtemplater`+`pizzip` pré-choisis (TD-014), non installés.
 
