@@ -1,9 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import {
+  chaineTechniqueDepuis,
+  type EtapeChaineTechnique,
+} from '../../logique-metier/architecture-technique/chaineTechnique'
 import type {
   AssetHierarchySchema,
   AssetNode,
   Langue,
+  RelationTechnique,
+  TypeRelationTechnique,
   Workspace,
 } from '../../logique-metier/domaine/types'
 import { noeudsVisiblesDepuisWorkspace as calculerNoeudsVisibles } from '../../logique-metier/organisation/noeudsVisiblesDepuisWorkspace'
@@ -33,6 +39,11 @@ export type ResultatActionNoeud =
   | { ok: false; raison: 'cycle_introduit' }
   | { ok: false; raison: 'workspace_introuvable' }
 
+export type ResultatCreationRelationTechnique =
+  | { ok: true; relation: RelationTechnique }
+  | { ok: false; raison: 'noeud_introuvable' }
+  | { ok: false; raison: 'clients_differents' }
+
 /**
  * Store de la Couche Présentation pour le référentiel d'actifs (FS §4.10,
  * URS-F-100 à 100decies) — premier incrément : hiérarchie configurable +
@@ -46,6 +57,7 @@ export type ResultatActionNoeud =
 export const useStructureSystemeStore = defineStore('structureSysteme', () => {
   const schema = ref<AssetHierarchySchema | null>(null)
   const noeuds = ref<AssetNode[]>([])
+  const relationsTechniques = ref<RelationTechnique[]>([])
   const enChargement = ref(false)
 
   async function charger(clientId: string): Promise<void> {
@@ -56,6 +68,10 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
         levels: [],
       }
       noeuds.value = await db.assetNodes.where('client_id').equals(clientId).toArray()
+      relationsTechniques.value = await db.relationsTechniques
+        .where('client_id')
+        .equals(clientId)
+        .toArray()
     } finally {
       enChargement.value = false
     }
@@ -173,14 +189,55 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     return calculerNoeudsVisibles(workspaceId, arbre, noeuds.value)
   }
 
+  /**
+   * Relation typée et dirigée entre deux `AssetNode` (Phase 18, TD-013) —
+   * garde-fou : les deux nœuds doivent exister et appartenir au même
+   * client, jamais silencieusement tolérée (même discipline que
+   * `creerNoeud`/`workspace_introuvable`). Aucune détection de cycle
+   * (voir `chaineTechniqueDepuis`/TD-013).
+   */
+  async function creerRelationTechnique(
+    clientId: string,
+    typeRelation: TypeRelationTechnique,
+    noeudSourceId: string,
+    noeudCibleId: string,
+  ): Promise<ResultatCreationRelationTechnique> {
+    const source = await db.assetNodes.get(noeudSourceId)
+    const cible = await db.assetNodes.get(noeudCibleId)
+    if (!source || !cible) return { ok: false, raison: 'noeud_introuvable' }
+    if (source.client_id !== clientId || cible.client_id !== clientId) {
+      return { ok: false, raison: 'clients_differents' }
+    }
+
+    const relation: RelationTechnique = {
+      id: crypto.randomUUID(),
+      client_id: clientId,
+      type_relation: typeRelation,
+      noeud_source_id: noeudSourceId,
+      noeud_cible_id: noeudCibleId,
+      created_at: new Date().toISOString(),
+    }
+    await db.relationsTechniques.put(relation)
+    relationsTechniques.value = [...relationsTechniques.value, relation]
+    return { ok: true, relation }
+  }
+
+  /** Délègue à la fonction pure `chaineTechniqueDepuis` (Phase 18). */
+  function chaineTechniqueDepuisNoeud(noeudDepartId: string): EtapeChaineTechnique[] {
+    return chaineTechniqueDepuis(noeudDepartId, relationsTechniques.value, noeuds.value)
+  }
+
   return {
     schema,
     noeuds,
+    relationsTechniques,
     enChargement,
     charger,
     ajouterNiveau,
     creerNoeud,
     reparenterNoeud,
     noeudsVisiblesDepuisWorkspace,
+    creerRelationTechnique,
+    chaineTechniqueDepuisNoeud,
   }
 })

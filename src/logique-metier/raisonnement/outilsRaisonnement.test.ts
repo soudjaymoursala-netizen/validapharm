@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'vitest'
 import type {
+  AssetNode,
   Couverture,
   Evidence,
   Execution,
   KnowledgeItem,
+  RelationTechnique,
   Requirement,
   Test as TestEntity,
+  TypeRelationTechnique,
 } from '../domaine/types'
 import {
   type DonneesOutilsRaisonnement,
@@ -14,6 +17,7 @@ import {
   listerKnowledgeItemsValides,
   listerRequirementsPourActif,
   listerTestsPourRequirement,
+  tracerChaineTechnique,
 } from './outilsRaisonnement'
 
 function requirement(id: string, assetNodeId: string | null): Requirement {
@@ -102,6 +106,41 @@ function knowledgeItem(id: string, statut: KnowledgeItem['statut']): KnowledgeIt
   }
 }
 
+function assetNode(code: string): AssetNode {
+  return {
+    id: code,
+    client_id: 'client-1',
+    workspace_id: null,
+    level_key: 'equipement',
+    name: code,
+    code,
+    parent_id: null,
+    associated_nodes: [],
+    source: 'manuel',
+    qms_connector_id: null,
+    periodic_qualification: { applicable: false, deadline: null },
+    qualification_status: 'non_qualifie',
+    audit_log: [],
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+  }
+}
+
+function relationTechnique(
+  type: TypeRelationTechnique,
+  sourceId: string,
+  cibleId: string,
+): RelationTechnique {
+  return {
+    id: `${sourceId}-${type}-${cibleId}`,
+    client_id: 'client-1',
+    type_relation: type,
+    noeud_source_id: sourceId,
+    noeud_cible_id: cibleId,
+    created_at: '2026-01-01T00:00:00.000Z',
+  }
+}
+
 const donnees: DonneesOutilsRaisonnement = {
   requirements: [requirement('req-1', 'granulateur-01'), requirement('req-2', 'autre-actif')],
   couvertures: [couverture('req-1', 'test-1')],
@@ -109,6 +148,8 @@ const donnees: DonneesOutilsRaisonnement = {
   executions: [execution('exec-1', 'test-1')],
   evidences: [evidence('ev-1', 'exec-1')],
   knowledgeItems: [knowledgeItem('ki-1', 'valide'), knowledgeItem('ki-2', 'a_valider')],
+  assetNodes: [assetNode('granulateur-01'), assetNode('plc-01')],
+  relationsTechniques: [relationTechnique('controle_par', 'granulateur-01', 'plc-01')],
 }
 
 describe('listerRequirementsPourActif', () => {
@@ -137,6 +178,17 @@ describe('listerEvidencePourTest', () => {
 describe('listerKnowledgeItemsValides', () => {
   test('ne retourne que le statut valide', () => {
     expect(listerKnowledgeItemsValides(donnees).map((k) => k.id)).toEqual(['ki-1'])
+  })
+})
+
+describe('tracerChaineTechnique (Phase 18, TD-013)', () => {
+  test('trace la relation sortante et son type', () => {
+    const chaine = tracerChaineTechnique('granulateur-01', donnees)
+    expect(chaine).toEqual([{ noeud: assetNode('plc-01'), typeRelation: 'controle_par' }])
+  })
+
+  test('un nœud sans relation sortante retourne une chaîne vide', () => {
+    expect(tracerChaineTechnique('plc-01', donnees)).toEqual([])
   })
 })
 
@@ -171,5 +223,14 @@ describe('executerOutil', () => {
       donnees,
     )
     expect(resultat.resultat).toBe('Aucun résultat.')
+  })
+
+  test('tracer_chaine_technique retourne le nœud cible et son type de relation', () => {
+    const resultat = executerOutil(
+      { nom: 'tracer_chaine_technique', parametres: { asset_node_id: 'granulateur-01' } },
+      donnees,
+    )
+    expect(resultat.idsObtenus).toEqual(['plc-01'])
+    expect(resultat.resultat).toContain('controle_par')
   })
 })

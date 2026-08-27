@@ -138,4 +138,14 @@
 
 ---
 
-*Dernier livrable de la Phase 0 : `CONVERGENCE_PLAN.md` (ordre de mise en œuvre synthétisant les 6 documents précédents). TD-007 à TD-009 ajoutées le 26/08/2026, hors Phase 0 — revue panel dédiée déclenchée par une clarification de vision produit de l'utilisateur. TD-010 à TD-012 ajoutées le 26/08/2026 — revue panel déclenchée par un second document de vision approfondi ("Validation Engineering Platform") accompagné d'un benchmark UX concurrent réel.*
+### TD-013 — Architecture Technique (PLC/SCADA/Server) : relations typées entre `AssetNode` existants, jamais une nouvelle entité d'équipement parallèle
+- **Statut** : **ACTÉE** (revue panel E1-E7 condensée, 27/08/2026, `PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md` §4, en réponse au document "VALIDAPHARM MASTER PRODUCT VISION / NORTH STAR").
+- **Context** : la vision demande de modéliser Equipment/System/Subsystem/PLC/HMI/SCADA/Server/Database/Network/Software/Application/Interface et de tracer les relations belongs_to/controlled_by/connected_to/hosted_on/used_by entre eux.
+- **Problem** : construire une nouvelle famille d'entités parallèle à `AssetNode` pour porter PLC/SCADA/Server dupliquerait un modèle d'équipement déjà générique et configurable — `AssetHierarchySchema.levels[]` (Phase 4/16) accepte déjà des niveaux nommés librement par le client (`level_key: string`, jamais une énumération figée dans le code), donc un client peut déjà créer des nœuds "PLC"/"SCADA"/"Serveur" sans aucun changement de code. Le vrai manquant est plus étroit : aucune relation *typée et dirigée* n'existe entre deux `AssetNode` (`associated_nodes[]` est un graphe libre non typé, incapable de distinguer "contrôlé par" de "connecté à").
+- **Recommendation** : ajouter uniquement `RelationTechnique` (jointure explicite `AssetNode → AssetNode`, `type_relation: 'controle_par' | 'connecte_a' | 'heberge_sur'`, union de chaînes extensible sans migration), même pattern que `AssociationFonctionAssetNode`. Aucune nouvelle entité de nœud. Aucune détection de cycle (cohérent avec la tolérance déjà documentée d'`associated_nodes[]`).
+- **Impact** : Structurant pour la Phase 18 — un seul ajout de table Dexie (v24), extension du Reasoning Engine avec un nouvel outil de traversal, aucune structure existante modifiée.
+- **Reversibility** : Élevée — purement additif, aucune table existante modifiée, type de relation extensible sans migration future.
+
+---
+
+*Dernier livrable de la Phase 0 : `CONVERGENCE_PLAN.md` (ordre de mise en œuvre synthétisant les 6 documents précédents). TD-007 à TD-009 ajoutées le 26/08/2026, hors Phase 0 — revue panel dédiée déclenchée par une clarification de vision produit de l'utilisateur. TD-010 à TD-012 ajoutées le 26/08/2026 — revue panel déclenchée par un second document de vision approfondi ("Validation Engineering Platform") accompagné d'un benchmark UX concurrent réel. TD-013 ajoutée le 27/08/2026 — revue panel déclenchée par un troisième document de vision ("MASTER PRODUCT VISION / NORTH STAR") et sa checklist d'audit de capacités associée, ouvrant le plan de convergence `VISION_NORTH_STAR_CONVERGENCE.md`.*

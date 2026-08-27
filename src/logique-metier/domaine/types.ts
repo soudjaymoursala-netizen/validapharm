@@ -561,6 +561,33 @@ export interface AssociationFonctionProcess {
 }
 
 /**
+ * Relation typée et dirigée entre deux `AssetNode` (Phase 18 de convergence
+ * architecturale, TD-013 — domaine "Architecture Technique"). Contrairement
+ * à `associated_nodes[]` (graphe libre non typé), cette jointure explicite
+ * distingue "contrôlé par" de "connecté à" de "hébergé sur" — condition
+ * nécessaire pour répondre à "quel PLC contrôle cet équipement ?" plutôt
+ * qu'à "quels nœuds sont vaguement associés à celui-ci ?".
+ *
+ * Aucune nouvelle entité d'équipement (PLC/SCADA/Server) : ces objets sont
+ * déjà des `AssetNode` avec un `level_key` approprié
+ * (`AssetHierarchySchema.levels[]` est libre par client, TD-013). Aucune
+ * détection de cycle ici, même tolérance qu'`associated_nodes[]`
+ * (documentée comme "graphe libre, cycles acceptés").
+ *
+ * @requirement docs/convergence/PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md, TD-013
+ */
+export type TypeRelationTechnique = 'controle_par' | 'connecte_a' | 'heberge_sur'
+
+export interface RelationTechnique {
+  id: string
+  client_id: string
+  type_relation: TypeRelationTechnique
+  noeud_source_id: string
+  noeud_cible_id: string
+  created_at: string
+}
+
+/**
  * ManufacturingContext (Phase 4) — relie explicitement un `AssetNode`
  * (Equipment/DigitalSystem) à un `Process`, un produit et, le cas échéant,
  * une recette/un format (Target Architecture §7). Empêche de déduire
@@ -1524,7 +1551,7 @@ export interface AIResponse {
  * pas de `'requirement_evidence_provenance_link'` distinct tant qu'aucun
  * outil ne le produit directement.
  */
-export type TypeObjetCitable = 'requirement' | 'test' | 'evidence' | 'knowledge_item'
+export type TypeObjetCitable = 'requirement' | 'test' | 'evidence' | 'knowledge_item' | 'asset_node'
 
 /**
  * Jointure explicite et polymorphe "citations obligatoires vers

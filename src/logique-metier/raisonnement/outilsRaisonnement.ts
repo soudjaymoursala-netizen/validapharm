@@ -1,8 +1,11 @@
+import { chaineTechniqueDepuis } from '../architecture-technique/chaineTechnique'
 import type {
+  AssetNode,
   Couverture,
   Evidence,
   Execution,
   KnowledgeItem,
+  RelationTechnique,
   Requirement,
   Test,
 } from '../domaine/types'
@@ -16,6 +19,9 @@ import type { DefinitionOutilRaisonnement } from './protocoleRaisonnement'
  *
  * `Risk`/`Hazard`/`Control` (domaine Quality cible) volontairement
  * absents : non construits dans ce projet à ce jour.
+ *
+ * `assetNodes`/`relationsTechniques` (Phase 18, TD-013) : outillent la
+ * traversée de l'Architecture Technique (Equipment→PLC→SCADA→Server).
  */
 export interface DonneesOutilsRaisonnement {
   requirements: readonly Requirement[]
@@ -24,6 +30,8 @@ export interface DonneesOutilsRaisonnement {
   executions: readonly Execution[]
   evidences: readonly Evidence[]
   knowledgeItems: readonly KnowledgeItem[]
+  assetNodes: readonly AssetNode[]
+  relationsTechniques: readonly RelationTechnique[]
 }
 
 export const CATALOGUE_OUTILS_RAISONNEMENT: readonly DefinitionOutilRaisonnement[] = [
@@ -44,6 +52,11 @@ export const CATALOGUE_OUTILS_RAISONNEMENT: readonly DefinitionOutilRaisonnement
   {
     nom: 'lister_knowledge_items_valides',
     description: 'Liste les KnowledgeItem au statut validé. Aucun paramètre.',
+  },
+  {
+    nom: 'tracer_chaine_technique',
+    description:
+      'Trace la chaîne de relations techniques sortantes depuis un AssetNode (ex. Equipment contrôlé par un PLC, connecté à un SCADA, hébergé sur un serveur). Paramètre : asset_node_id.',
   },
 ]
 
@@ -76,6 +89,15 @@ export function listerEvidencePourTest(
 
 export function listerKnowledgeItemsValides(donnees: DonneesOutilsRaisonnement): KnowledgeItem[] {
   return donnees.knowledgeItems.filter((k) => k.statut === 'valide')
+}
+
+export function tracerChaineTechnique(
+  assetNodeId: string,
+  donnees: DonneesOutilsRaisonnement,
+): Array<{ noeud: AssetNode; typeRelation: string }> {
+  return chaineTechniqueDepuis(assetNodeId, donnees.relationsTechniques, donnees.assetNodes).map(
+    (etape) => ({ noeud: etape.noeud, typeRelation: etape.relation.type_relation }),
+  )
 }
 
 export interface ResultatExecutionOutil {
@@ -119,6 +141,14 @@ export function executerOutil(
     case 'lister_knowledge_items_valides': {
       const resultats = listerKnowledgeItemsValides(donnees)
       return formaterResultat(resultats.map((k) => ({ id: k.id, libelle: k.libelle })))
+    }
+    case 'tracer_chaine_technique': {
+      const assetNodeId = appel.parametres.asset_node_id
+      if (!assetNodeId) return { resultat: 'Paramètre asset_node_id manquant.', idsObtenus: [] }
+      const resultats = tracerChaineTechnique(assetNodeId, donnees)
+      return formaterResultat(
+        resultats.map((r) => ({ id: r.noeud.id, libelle: `${r.noeud.name} (${r.typeRelation})` })),
+      )
     }
     default:
       return { resultat: `Outil inconnu : ${appel.nom}.`, idsObtenus: [] }

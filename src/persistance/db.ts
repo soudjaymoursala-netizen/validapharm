@@ -51,6 +51,7 @@ import type {
   ProjectDocument,
   QualityEvent,
   ReferenceQualityEvent,
+  RelationTechnique,
   Requirement,
   Section,
   Source,
@@ -215,6 +216,7 @@ export class ValidaPharmDatabase extends Dexie {
   aiRequests!: EntityTable<AIRequest, 'id'>
   aiResponses!: EntityTable<AIResponse, 'id'>
   citationsAIResponse!: EntityTable<CitationAIResponse, 'id'>
+  relationsTechniques!: EntityTable<RelationTechnique, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -368,6 +370,15 @@ export class ValidaPharmDatabase extends Dexie {
       aiRequests: 'id, client_id, mission_id, context_snapshot_id, ai_configuration_id',
       aiResponses: 'id, client_id, ai_request_id, etat_confiance',
       citationsAIResponse: 'id, client_id, ai_response_id, type_objet_cite, objet_id',
+    })
+    /**
+     * Phase 18 (`docs/convergence/PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md`,
+     * TD-013) — domaine "Architecture Technique" : relation typée et
+     * dirigée entre deux `AssetNode` existants (aucune nouvelle entité
+     * d'équipement, voir TD-013).
+     */
+    this.version(24).stores({
+      relationsTechniques: 'id, client_id, type_relation, noeud_source_id, noeud_cible_id',
     })
   }
 }

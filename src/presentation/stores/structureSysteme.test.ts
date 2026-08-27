@@ -17,6 +17,7 @@ beforeEach(async () => {
   await db.assetNodes.clear()
   await db.organizations.clear()
   await db.workspaces.clear()
+  await db.relationsTechniques.clear()
 })
 
 describe('useStructureSystemeStore — charger', () => {
@@ -292,5 +293,113 @@ describe('useStructureSystemeStore — câblage Workspace, étape 1 (CABLAGE_ETA
     expect(store.noeudsVisiblesDepuisWorkspace(siteA.id, carte).map((n) => n.code)).toEqual([
       'LEGACY-1',
     ])
+  })
+})
+
+describe('useStructureSystemeStore — Architecture Technique (Phase 18, TD-013)', () => {
+  test('crée une relation techniquement typée entre deux AssetNode existants', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.creerNoeud('client-1', {
+      level_key: 'equipement',
+      name: 'Granulateur',
+      code: 'GRANULATEUR-01',
+      parent_id: null,
+    })
+    await store.creerNoeud('client-1', {
+      level_key: 'plc',
+      name: 'PLC granulateur',
+      code: 'PLC-01',
+      parent_id: null,
+    })
+    const equipementId = idDuNoeud(store.noeuds, 'GRANULATEUR-01')
+    const plcId = idDuNoeud(store.noeuds, 'PLC-01')
+
+    const resultat = await store.creerRelationTechnique(
+      'client-1',
+      'controle_par',
+      equipementId,
+      plcId,
+    )
+
+    expect(resultat.ok).toBe(true)
+    expect(store.relationsTechniques).toHaveLength(1)
+    expect(store.relationsTechniques[0]?.type_relation).toBe('controle_par')
+  })
+
+  test('refuse une relation entre deux nœuds de clients différents', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-A')
+    await store.creerNoeud('client-A', {
+      level_key: 'equipement',
+      name: 'Equip A',
+      code: 'EQ-A',
+      parent_id: null,
+    })
+    const equipementAId = idDuNoeud(store.noeuds, 'EQ-A')
+
+    await store.charger('client-B')
+    await store.creerNoeud('client-B', {
+      level_key: 'plc',
+      name: 'PLC B',
+      code: 'PLC-B',
+      parent_id: null,
+    })
+    const plcBId = idDuNoeud(store.noeuds, 'PLC-B')
+
+    const resultat = await store.creerRelationTechnique(
+      'client-B',
+      'controle_par',
+      equipementAId,
+      plcBId,
+    )
+
+    expect(resultat).toEqual({ ok: false, raison: 'clients_differents' })
+    expect(store.relationsTechniques).toHaveLength(0)
+  })
+
+  test('refuse une relation vers un nœud introuvable', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.creerNoeud('client-1', {
+      level_key: 'equipement',
+      name: 'Equip',
+      code: 'EQ-1',
+      parent_id: null,
+    })
+    const equipementId = idDuNoeud(store.noeuds, 'EQ-1')
+
+    const resultat = await store.creerRelationTechnique(
+      'client-1',
+      'controle_par',
+      equipementId,
+      'id-inconnu',
+    )
+
+    expect(resultat).toEqual({ ok: false, raison: 'noeud_introuvable' })
+  })
+
+  test('trace la chaîne Equipment→PLC→SCADA→Server via chaineTechniqueDepuisNoeud', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    for (const [levelKey, code] of [
+      ['equipement', 'GRANULATEUR-01'],
+      ['plc', 'PLC-01'],
+      ['scada', 'SCADA-01'],
+      ['serveur', 'SERVEUR-01'],
+    ] as const) {
+      await store.creerNoeud('client-1', { level_key: levelKey, name: code, code, parent_id: null })
+    }
+    const equipementId = idDuNoeud(store.noeuds, 'GRANULATEUR-01')
+    const plcId = idDuNoeud(store.noeuds, 'PLC-01')
+    const scadaId = idDuNoeud(store.noeuds, 'SCADA-01')
+    const serveurId = idDuNoeud(store.noeuds, 'SERVEUR-01')
+
+    await store.creerRelationTechnique('client-1', 'controle_par', equipementId, plcId)
+    await store.creerRelationTechnique('client-1', 'connecte_a', plcId, scadaId)
+    await store.creerRelationTechnique('client-1', 'heberge_sur', scadaId, serveurId)
+
+    const chaine = store.chaineTechniqueDepuisNoeud(equipementId)
+    expect(chaine.map((etape) => etape.noeud.code)).toEqual(['PLC-01', 'SCADA-01', 'SERVEUR-01'])
   })
 })

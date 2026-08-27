@@ -7,6 +7,7 @@ import type {
   ProviderAdapter,
   Reponse,
 } from '../../connecteurs/ia/ProviderAdapter'
+import type { AssetNode } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
 import { useReasoningEngineStore } from './useReasoningEngineStore'
 
@@ -33,6 +34,8 @@ beforeEach(async () => {
   await db.requirements.clear()
   await db.couvertures.clear()
   await db.tests.clear()
+  await db.assetNodes.clear()
+  await db.relationsTechniques.clear()
 })
 
 describe('useReasoningEngineStore — assurerConfiguration (versionnée, condition E4)', () => {
@@ -115,6 +118,68 @@ describe('useReasoningEngineStore — scénario réel : changement de recette (s
     // La vérification déterministe de la boucle a déjà rétrogradé la confiance.
     expect(response.etat_confiance).toBe('a_verifier')
     expect(store.citationsDeReponse(response.id)).toHaveLength(0)
+  })
+})
+
+describe('useReasoningEngineStore — scénario réel : traversée Architecture Technique (Phase 18, TD-013)', () => {
+  test('exécute tracer_chaine_technique et résout une citation de type asset_node', async () => {
+    const maintenant = '2026-01-01T00:00:00.000Z'
+    function noeud(id: string): AssetNode {
+      return {
+        id,
+        client_id: 'client-1',
+        workspace_id: null,
+        level_key: 'equipement',
+        name: id,
+        code: id,
+        parent_id: null,
+        associated_nodes: [],
+        source: 'manuel',
+        qms_connector_id: null,
+        periodic_qualification: { applicable: false, deadline: null },
+        qualification_status: 'non_qualifie',
+        audit_log: [],
+        created_at: maintenant,
+        updated_at: maintenant,
+      }
+    }
+    await db.assetNodes.bulkPut([noeud('granulateur-01'), noeud('plc-01')])
+    await db.relationsTechniques.put({
+      id: 'rel-1',
+      client_id: 'client-1',
+      type_relation: 'controle_par',
+      noeud_source_id: 'granulateur-01',
+      noeud_cible_id: 'plc-01',
+      created_at: maintenant,
+    })
+
+    const store = useReasoningEngineStore()
+    await store.charger('client-1')
+
+    const fournisseur = fournisseurMock()
+    fournisseur.envoyerMessage
+      .mockResolvedValueOnce(
+        reponse(
+          'APPEL_OUTIL: {"nom": "tracer_chaine_technique", "parametres": {"asset_node_id": "granulateur-01"}}',
+        ),
+      )
+      .mockResolvedValueOnce(
+        reponse(
+          'REPONSE_FINALE: {"texte": "Le granulateur est contrôlé par PLC-01", "etat_confiance": "connu", "citations": ["plc-01"]}',
+        ),
+      )
+
+    const { response } = await store.executerRaisonnement('client-1', {
+      objectif: 'Quel PLC contrôle le granulateur ?',
+      missionId: null,
+      contextSnapshotId: null,
+      fournisseur,
+      mode: 'chat_normatif',
+    })
+
+    expect(response.etat_confiance).toBe('connu')
+    expect(response.trace_appels_outils[0]?.outil).toBe('tracer_chaine_technique')
+    expect(store.citationsDeReponse(response.id)[0]?.type_objet_cite).toBe('asset_node')
   })
 })
 

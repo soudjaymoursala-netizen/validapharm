@@ -96,22 +96,41 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
   ): Promise<ResultatRaisonnement> {
     const configuration = await assurerConfiguration(clientId)
 
-    const [requirements, couvertures, tests, executions, evidences, knowledgeItems] =
-      await Promise.all([
-        db.requirements.where('client_id').equals(clientId).toArray(),
-        db.couvertures.where('client_id').equals(clientId).toArray(),
-        db.tests.where('client_id').equals(clientId).toArray(),
-        db.executions.where('client_id').equals(clientId).toArray(),
-        db.evidences.where('client_id').equals(clientId).toArray(),
-        db.knowledgeItems.where('client_id').equals(clientId).toArray(),
-      ])
+    const [
+      requirements,
+      couvertures,
+      tests,
+      executions,
+      evidences,
+      knowledgeItems,
+      assetNodes,
+      relationsTechniques,
+    ] = await Promise.all([
+      db.requirements.where('client_id').equals(clientId).toArray(),
+      db.couvertures.where('client_id').equals(clientId).toArray(),
+      db.tests.where('client_id').equals(clientId).toArray(),
+      db.executions.where('client_id').equals(clientId).toArray(),
+      db.evidences.where('client_id').equals(clientId).toArray(),
+      db.knowledgeItems.where('client_id').equals(clientId).toArray(),
+      db.assetNodes.where('client_id').equals(clientId).toArray(),
+      db.relationsTechniques.where('client_id').equals(clientId).toArray(),
+    ])
 
     const resultat = await executerBoucleRaisonnement({
       objectif: entrees.objectif,
       fournisseur: entrees.fournisseur,
       mode: entrees.mode,
       maxIterations: entrees.maxIterations,
-      donnees: { requirements, couvertures, tests, executions, evidences, knowledgeItems },
+      donnees: {
+        requirements,
+        couvertures,
+        tests,
+        executions,
+        evidences,
+        knowledgeItems,
+        assetNodes,
+        relationsTechniques,
+      },
     })
 
     const maintenant = new Date().toISOString()
@@ -145,7 +164,7 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
     // visible dans `etat_confiance: 'a_verifier'` (rétrogradée par la
     // vérification déterministe) ; lui fabriquer un `type_objet_cite`
     // deviné serait une donnée inventée (spec §4).
-    const donneesConnues = { requirements, tests, evidences, knowledgeItems }
+    const donneesConnues = { requirements, tests, evidences, knowledgeItems, assetNodes }
     const nouvellesCitations: CitationAIResponse[] = resultat.reponse.citations.flatMap(
       (objetId) => {
         const type = determinerTypeObjetCite(objetId, donneesConnues)
@@ -194,11 +213,13 @@ function determinerTypeObjetCite(
     tests: { id: string }[]
     evidences: { id: string }[]
     knowledgeItems: { id: string }[]
+    assetNodes: { id: string }[]
   },
 ): TypeObjetCitable | null {
   if (donnees.requirements.some((r) => r.id === objetId)) return 'requirement'
   if (donnees.tests.some((t) => t.id === objetId)) return 'test'
   if (donnees.evidences.some((e) => e.id === objetId)) return 'evidence'
   if (donnees.knowledgeItems.some((k) => k.id === objetId)) return 'knowledge_item'
+  if (donnees.assetNodes.some((a) => a.id === objetId)) return 'asset_node'
   return null
 }
