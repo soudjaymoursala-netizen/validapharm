@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useClientActifStore } from '../stores/useClientActifStore'
 
 /**
  * Routeur applicatif — un composant par écran (FDS §2), chargement
@@ -16,6 +17,14 @@ export const router = createRouter({
   routes: [
     {
       path: '/',
+      name: 'accueil',
+      component: () => import('../screens/AccueilQueVoulezVousFaire.vue'),
+    },
+    {
+      // Déplacée de `/` vers `/tableau-de-bord` (Phase 16) — le nom de
+      // route est inchangé, toutes les références existantes par nom
+      // (`RouterLink :to="{ name: 'tableau-de-bord' }"`) restent valides.
+      path: '/tableau-de-bord',
       name: 'tableau-de-bord',
       component: () => import('../screens/TableauDeBord.vue'),
     },
@@ -77,4 +86,18 @@ export const router = createRouter({
       props: true,
     },
   ],
+})
+
+/**
+ * Mémorise le dernier client visité (Phase 16, spec §2) — une commodité de
+ * navigation, jamais une donnée métier. Toute route portant un paramètre
+ * `clientId` met à jour `useClientActifStore`, pour que la `Sidebar`
+ * propose un accès direct aux outils de ce client sans qu'aucun concept
+ * de "client actif" ne soit fabriqué côté domaine.
+ */
+router.afterEach((to) => {
+  const clientId = to.params.clientId
+  if (typeof clientId === 'string') {
+    useClientActifStore().definirClientActif(clientId)
+  }
 })

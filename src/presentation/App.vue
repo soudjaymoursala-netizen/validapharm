@@ -8,6 +8,7 @@ import {
   verifierCompatibiliteAvantAcces,
 } from '../persistance/demarrage'
 import BlocageIncompatibilite from './screens/BlocageIncompatibilite.vue'
+import CoquilleApplication from './composants/CoquilleApplication.vue'
 
 type EtatDemarrage = 'verification' | 'bloque' | 'pret'
 const etatDemarrage = ref<EtatDemarrage>('verification')
@@ -25,5 +26,5 @@ onMounted(async () => {
 
 <template>
   <BlocageIncompatibilite v-if="etatDemarrage === 'bloque'" />
-  <RouterView v-else-if="etatDemarrage === 'pret'" />
+  <CoquilleApplication v-else-if="etatDemarrage === 'pret'" />
 </template>
