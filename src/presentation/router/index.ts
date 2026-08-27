@@ -97,6 +97,12 @@ export const router = createRouter({
       component: () => import('../screens/MissionWorkspace.vue'),
       props: true,
     },
+    {
+      path: '/clients/:clientId/procedures',
+      name: 'revue-structure-procedure',
+      component: () => import('../screens/RevueStructureProcedure.vue'),
+      props: true,
+    },
   ],
 })
 

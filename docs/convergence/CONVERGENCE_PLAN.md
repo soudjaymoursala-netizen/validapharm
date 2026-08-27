@@ -238,6 +238,14 @@ L'utilisateur a transmis un troisième document de vision ("VALIDAPHARM MASTER P
 - **Décision de portée (TD-022)** : garde-fou TD-016 inchangé — aucune écriture directe dans `Procedure`/`ProcedureStep` sans confirmation humaine. Aucun déclenchement automatique ni écran de revue construits dans ce lot.
 - Vérifié : suite complète 84 fichiers/583 tests verte, typecheck et lint propres.
 
+## Phase 25 — Écran de revue de structure procédurale + déclenchement du repli — **Terminée (27/08/2026)**
+- **Dependencies** : Phase 24 (repli IA appelable), Phases 21-22 (parseur déterministe).
+- **Contexte** : dernier point ouvert de TD-022 ("aucun déclenchement automatique ni écran de revue construits dans ce lot") — l'utilisateur confirme explicitement ("D'accord continue") vouloir le clore.
+- **Portée réellement construite** (spec `docs/convergence/PHASE_25_ECRAN_REVUE_STRUCTURE_PROCEDURE_SPEC.md`, TD-023) : `proposerStructureProcedureAvecRepli` (`src/logique-metier/procedures/proposerStructureProcedureAvecRepli.ts`) orchestre déterministe-puis-IA (repli seulement si strictement rien trouvé), type discriminé `PropositionAvecSource` (jamais de mélange de provenance). `useProcedureStore` étendu (`genererProposition`/`annulerProposition`/`confirmerProposition`). Nouvel écran `RevueStructureProcedure.vue` (route `/clients/:clientId/procedures`, lien sidebar "Procédures") : import `.docx`/`.pdf` ou collage de texte, revue éditable des sections/étapes proposées (badge de confiance IA réutilisant le style de `MissionWorkspace.vue`), confirmation créant réellement `Procedure`/`ProcedureStep`.
+- **Vérification navigateur réelle** (Playwright, Chromium préinstallé) : chemin déterministe complet (création client → génération → confirmation → procédure visible dans la liste persistée), annulation (aucune écriture), repli IA sans fournisseur cloud configuré (erreur réseau affichée proprement, jamais un plantage silencieux).
+- **Divergences identifiées et différées explicitement** : aucune réconciliation avec une `Procedure` existante de même référence (confirmer crée toujours une nouvelle version) ; aucune sauvegarde de brouillon entre sessions.
+- Vérifié : suite complète 85 fichiers/589 tests verte, typecheck et lint propres.
+
 ---
 
 ## Ce qui reste volontairement "OPEN" (non planifié ici)
@@ -284,8 +292,7 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèl
 | 23 (Ingestion PDF native) | **Terminée (27/08/2026)** | voir historique git de la branche | `01-URS-outil.md` v52 (§4.28/URS-F-280 à quater), `03-specifications-fonctionnelles.md` v42, `docs/convergence/PHASE_23_INGESTION_PDF_SPEC.md`, `TECHNICAL_DECISIONS.md` (TD-021) |
 | 24 (Repli IA-assisté de structuration procédurale) | **Terminée (27/08/2026)** | voir historique git de la branche | `01-URS-outil.md` v53 (§4.29/URS-F-290 à quater), `03-specifications-fonctionnelles.md` v43, `docs/convergence/PHASE_24_REPLI_IA_STRUCTURE_PROCEDURE_SPEC.md`, `TECHNICAL_DECISIONS.md` (TD-022) |
 | 8b, 9 (Generate/Render/Approve/Freeze), 12 (étapes 2 à ~42) | Non engagées | — | — |
-| 25 (Template Intelligence généralisée — génération `docxtemplater`, ingestion Excel) | Non engagée — chantier P0 suivant du plan Vision North Star, voir `VISION_NORTH_STAR_CONVERGENCE.md` §4 | — | — |
-| Déclenchement automatique du repli IA + écran de revue humaine | **Non engagé** — le repli IA (Phase 24) est construit comme fonction appelable, mais rien ne l'invoque encore automatiquement ni ne présente sa proposition à un humain pour confirmation | — | — |
-| Ingestion PDF réelle dans la PWA (`pdfjs-dist` candidat identifié) | **Non engagée** — nécessaire pour que le repli Document Intelligence (Phase 22) soit exploitable sur un vrai scan/PDF, chantier séparé | — | — |
+| 25 (Écran de revue de structure procédurale + déclenchement du repli) | **Terminée (27/08/2026)** | voir historique git de la branche | `01-URS-outil.md` v54 (§4.30/URS-F-300 à quater), `03-specifications-fonctionnelles.md` v44, `docs/convergence/PHASE_25_ECRAN_REVUE_STRUCTURE_PROCEDURE_SPEC.md`, `TECHNICAL_DECISIONS.md` (TD-023) |
+| 26 (Template Intelligence généralisée — génération `docxtemplater`, ingestion Excel) | Non engagée — chantier P0 suivant du plan Vision North Star, voir `VISION_NORTH_STAR_CONVERGENCE.md` §4 | — | — |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.

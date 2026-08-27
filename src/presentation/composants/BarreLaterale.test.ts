@@ -38,6 +38,11 @@ function routeurDeTest(): Router {
         name: 'configuration-drive',
         component: { template: '<div />' },
       },
+      {
+        path: '/clients/:clientId/procedures',
+        name: 'revue-structure-procedure',
+        component: { template: '<div />' },
+      },
     ],
   })
 }

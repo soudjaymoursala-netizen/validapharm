@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Procedure, ProcedureStep } from '../../logique-metier/domaine/types'
+import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
+import type { Procedure, ProcedureStep, TableauDocx } from '../../logique-metier/domaine/types'
+import type { PropositionAvecSource } from '../../logique-metier/procedures/proposerStructureProcedureAvecRepli'
+import { proposerStructureProcedureAvecRepli } from '../../logique-metier/procedures/proposerStructureProcedureAvecRepli'
 import { db } from '../../persistance/db'
 
 export interface NouvelleProcedureInput {
@@ -38,6 +41,8 @@ export const useProcedureStore = defineStore('procedure', () => {
   const procedures = ref<Procedure[]>([])
   const procedureSteps = ref<ProcedureStep[]>([])
   const enChargement = ref(false)
+  /** Dernière proposition générée (Phase 25, TD-023) — jamais persistée telle quelle, simple état d'écran en attente de confirmation humaine. */
+  const derniereProposition = ref<PropositionAvecSource | null>(null)
 
   async function charger(clientId: string): Promise<void> {
     enChargement.value = true
@@ -117,14 +122,60 @@ export const useProcedureStore = defineStore('procedure', () => {
     )
   }
 
+  /**
+   * Génère une proposition de structure (Phase 25, TD-023) — parseur
+   * déterministe d'abord (Phases 21-22), repli IA (Phase 24) seulement si
+   * celui-ci ne trouve strictement rien. Stockée dans `derniereProposition`
+   * pour affichage, **jamais persistée** sans confirmation humaine
+   * explicite via `confirmerProposition`.
+   */
+  async function genererProposition(
+    texte: string,
+    tableaux: readonly TableauDocx[],
+    provider: ProviderAdapter,
+  ): Promise<PropositionAvecSource> {
+    const proposition = await proposerStructureProcedureAvecRepli(texte, tableaux, provider)
+    derniereProposition.value = proposition
+    return proposition
+  }
+
+  /** Efface la proposition en attente sans rien écrire — l'utilisateur a annulé ou changé de document. */
+  function annulerProposition(): void {
+    derniereProposition.value = null
+  }
+
+  /**
+   * Confirme une proposition : crée la `Procedure` puis chaque étape
+   * retenue, dans l'ordre fourni par l'appelant — jamais l'ordre brut de
+   * la proposition (l'écran a pu réordonner/exclure des éléments avant
+   * confirmation). Efface `derniereProposition` une fois la confirmation
+   * réussie.
+   */
+  async function confirmerProposition(
+    clientId: string,
+    procedureInput: NouvelleProcedureInput,
+    etapesRetenues: NouvelleEtapeProcedureInput[],
+  ): Promise<Procedure> {
+    const procedure = await creerProcedure(clientId, procedureInput)
+    for (const etape of etapesRetenues) {
+      await ajouterEtape(clientId, procedure.id, etape)
+    }
+    derniereProposition.value = null
+    return procedure
+  }
+
   return {
     procedures,
     procedureSteps,
     enChargement,
+    derniereProposition,
     charger,
     creerProcedure,
     ajouterEtape,
     etapesDeProcedure,
     derniereVersion,
+    genererProposition,
+    annulerProposition,
+    confirmerProposition,
   }
 })

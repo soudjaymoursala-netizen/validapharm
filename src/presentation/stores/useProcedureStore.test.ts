@@ -1,8 +1,24 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+import type {
+  ContexteEnvoi,
+  ModeUsageIA,
+  ProviderAdapter,
+  Reponse,
+} from '../../connecteurs/ia/ProviderAdapter'
 import { db } from '../../persistance/db'
 import { useProcedureStore } from './useProcedureStore'
+
+function providerMock(texteReponse: string): ProviderAdapter {
+  return {
+    nomAffiche: 'Fournisseur simulé',
+    estCloud: true,
+    envoyerMessage: vi
+      .fn<(mode: ModeUsageIA, contexte: ContexteEnvoi, question: string) => Promise<Reponse>>()
+      .mockResolvedValue({ texte: texteReponse, version_moteur: 'v-test', citations: [] }),
+  }
+}
 
 beforeEach(async () => {
   setActivePinia(createPinia())
@@ -143,5 +159,60 @@ describe('useProcedureStore — derniereVersion', () => {
     const store = useProcedureStore()
     await store.charger('client-1')
     expect(store.derniereVersion('INCONNUE')).toBeNull()
+  })
+})
+
+describe('useProcedureStore — genererProposition/annulerProposition/confirmerProposition (Phase 25, TD-023)', () => {
+  test('genererProposition stocke la proposition déterministe dans derniereProposition, sans jamais persister', async () => {
+    const store = useProcedureStore()
+    await store.charger('client-1')
+    const texte = ['1 But', 'Décrire la procédure.', '2 Procédure', '- Étape unique.'].join('\n')
+
+    const proposition = await store.genererProposition(texte, [], providerMock('jamais utilisé'))
+
+    expect(store.derniereProposition).toEqual(proposition)
+    expect(proposition.source).toBe('deterministe')
+    expect(store.procedures).toHaveLength(0)
+    expect(store.procedureSteps).toHaveLength(0)
+  })
+
+  test('annulerProposition efface la proposition en attente sans rien écrire', async () => {
+    const store = useProcedureStore()
+    await store.charger('client-1')
+    await store.genererProposition(
+      ['1 But', 'Décrire la procédure.', '2 Procédure', '- Étape unique.'].join('\n'),
+      [],
+      providerMock('jamais utilisé'),
+    )
+    expect(store.derniereProposition).not.toBeNull()
+
+    store.annulerProposition()
+
+    expect(store.derniereProposition).toBeNull()
+    expect(store.procedures).toHaveLength(0)
+  })
+
+  test('confirmerProposition crée la Procedure puis les étapes retenues, dans l’ordre fourni par l’appelant, et efface la proposition', async () => {
+    const store = useProcedureStore()
+    await store.charger('client-1')
+
+    const procedure = await store.confirmerProposition(
+      'client-1',
+      { reference: 'SOP-QA-020', titre: 'Structuration confirmée', effectiveDate: '2026-01-01' },
+      [
+        { description: 'Première étape retenue', obligatoire: true },
+        { description: 'Deuxième étape retenue', obligatoire: false, responsable: 'QA' },
+      ],
+    )
+
+    expect(procedure.reference).toBe('SOP-QA-020')
+    expect(store.etapesDeProcedure(procedure.id).map((e) => e.description)).toEqual([
+      'Première étape retenue',
+      'Deuxième étape retenue',
+    ])
+    expect(store.derniereProposition).toBeNull()
+
+    const procedureRelue = await db.procedures.get(procedure.id)
+    expect(procedureRelue).toBeDefined()
   })
 })

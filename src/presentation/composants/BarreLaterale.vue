@@ -21,6 +21,7 @@ const outilsClientActif = computed(() => {
       route: { name: 'assistant-strategie-qualification', params: { clientId } },
     },
     { nom: 'Assistant IA', route: { name: 'panneau-chat', params: { clientId } } },
+    { nom: 'Procédures', route: { name: 'revue-structure-procedure', params: { clientId } } },
     { nom: 'Miroir Drive', route: { name: 'configuration-drive', params: { clientId } } },
   ]
 })
