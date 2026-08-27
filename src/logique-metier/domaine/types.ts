@@ -1620,3 +1620,56 @@ export interface ProcedureStep {
   responsable: string | null
   created_at: string
 }
+
+/**
+ * Rôle sémantique d'une section de SOP, indépendant du libellé exact
+ * choisi par un client donné (Phase 21, `PHASE_21_PARSEUR_STRUCTURE_
+ * PROCEDURE_SPEC.md`) — établi en confrontant deux SOP pharma réelles de
+ * clients différents (Sanofi Lyon, Ferring International Center) : les
+ * deux suivent le même enchaînement sémantique (objectif → périmètre →
+ * responsabilités → définitions → corps de procédure → références →
+ * historique/annexes) sous des libellés lexicalement différents
+ * ("OBJECTIF" vs "But", "CHAMP D'APPLICATION" vs "Domaine d'application"...).
+ * `'autre'` couvre un intitulé numéroté reconnu comme en-tête (forme
+ * courte, numérotation séquentielle) mais absent du dictionnaire connu —
+ * jamais silencieusement écarté.
+ */
+export type SectionCanoniqueProcedure =
+  | 'objectif'
+  | 'perimetre'
+  | 'responsabilites'
+  | 'definitions'
+  | 'procedure'
+  | 'references'
+  | 'gestion_ecarts'
+  | 'documentation'
+  | 'annexes'
+  | 'autre'
+
+/** Une section détectée dans le texte brut d'une SOP, avec son libellé d'origine conservé (jamais remplacé silencieusement par le nom canonique). */
+export interface SectionDetectee {
+  canon: SectionCanoniqueProcedure
+  titreDetecte: string
+  texte: string
+}
+
+/**
+ * Une étape candidate extraite (par motif, jamais par IA) du corps de la
+ * section canonique `'procedure'`. Reste une **proposition** : rien ici
+ * n'est écrit dans `ProcedureStep` sans confirmation humaine explicite
+ * via `useProcedureStore.ajouterEtape` (même garde-fou que TD-016).
+ * `conditionDetectee`/`responsableDetecte` restent `null` plutôt que
+ * d'être devinés quand aucun motif clair ne matche.
+ */
+export interface EtapeProposee {
+  ordre: number
+  description: string
+  conditionDetectee: string | null
+  responsableDetecte: string | null
+}
+
+/** Résultat complet de `proposerStructureProcedure` — jamais persisté tel quel. */
+export interface PropositionStructureProcedure {
+  sections: SectionDetectee[]
+  etapesProposees: EtapeProposee[]
+}

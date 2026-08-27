@@ -43,7 +43,7 @@ Catégories de la checklist déjà vérifiées sur le code réel (types, moteurs
 | 6 Context Engine | `ContextSnapshot` (Phase 14) — liste d'objets résolus, pas un narratif WHY/WHAT/WHERE/HOW/IMPACT |
 | 7 Process Engine | `Process`/`Parameter`/`CPP`/`CQA` (Phase 2/4) — solide |
 | 8 Technical Architecture Engine | `AssetNode` + (à ajouter) relations typées — Phase 18 |
-| 9 Procedural Knowledge Engine | Absent — futur chantier P0 |
+| 9 Procedural Knowledge Engine | `Procedure`/`ProcedureStep` (Phase 20, saisie humaine) + `detecterSections`/`proposerStructureProcedure` (Phase 21, détection déterministe, proposition soumise à confirmation) |
 | 10 Template Intelligence Engine | `MethodProfileACFC` (précédent étroit) — à généraliser |
 | 11 Reasoning Engine | Boucle textuelle à appel d'outils (Phase 15) — 4 outils, à étendre |
 | 12 Deliverable Engine | Absent (`ContentPlan` planifie un livrable déjà décidé, ne détermine pas lesquels sont nécessaires) |
@@ -56,8 +56,9 @@ Catégories de la checklist déjà vérifiées sur le code réel (types, moteurs
 **P0 — bloquants architecturaux** (sans eux aucun scénario complet de la vision n'est démontrable) :
 1. **Phase 18 — Architecture Technique** (relations typées AssetNode↔AssetNode) — **Terminée**, voir `PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md`.
 2. **Phase 19 — Ingestion Office native** (lecture `.docx` + images incorporées) — **Terminée**, voir `PHASE_19_INGESTION_OFFICE_SPEC.md`/TD-014/TD-015. Complétée le même jour suite à une observation de l'utilisateur (schémas/photos incorporés, SOP scannées avec/sans filigrane) : `extraireImagesDocx` combiné à l'OCR existant ; aucune détection/correction de filigrane construite (limite assumée). Excel reste bloqué faute de librairie saine (limite assumée, pas un oubli).
-3. **Phase 20 — Cerveau procédural** (structuration humaine versionnée d'une SOP) — **Terminée**, voir `PHASE_20_PROCEDURAL_KNOWLEDGE_SPEC.md`/TD-016. L'extraction automatique de structure (SOP brute → étapes suggérées par IA) reste un **point ouvert explicite**, non engagé — décision produit à trancher avec l'utilisateur, pas une lacune silencieuse.
-4. Template Intelligence généralisée + génération au format client réel — non engagée. `docxtemplater`+`pizzip` pré-choisis (TD-014), non installés.
+3. **Phase 20 — Cerveau procédural** (structuration humaine versionnée d'une SOP) — **Terminée**, voir `PHASE_20_PROCEDURAL_KNOWLEDGE_SPEC.md`/TD-016.
+4. **Phase 21 — Parseur déterministe de structure procédurale** — **Terminée**, voir `PHASE_21_PARSEUR_STRUCTURE_PROCEDURE_SPEC.md`/TD-017. En réponse directe à la demande utilisateur de trancher le point ouvert de la Phase 20 en commençant par le chemin sans IA : deux SOP réelles de clients différents (Sanofi, Ferring), lues intégralement dans Google Drive, confirment un même enchaînement sémantique (objectif/périmètre/responsabilités/procédure/références) sous un vocabulaire différent — détection 100% déterministe, aucun appel IA. Reste une proposition, jamais écrite sans confirmation humaine. Un repli IA-assisté pour les documents hors couverture reste un **point ouvert explicite**, à engager seulement si un cas réel le réclame.
+5. Template Intelligence généralisée + génération au format client réel — non engagée. `docxtemplater`+`pizzip` pré-choisis (TD-014), non installés.
 
 **P1 — critique** : Context Engine enrichi (narratif WHY/WHAT/WHERE/HOW/IMPACT), Deliverable Intelligence, Compliance Engine généralisé, Risk/Impact Assessment à méthodologie client généralisée, Knowledge Graph générique.
 
@@ -80,8 +81,9 @@ Parmi les 4 chantiers P0, l'Architecture Technique est la seule à ne nécessite
 - Aucune détection de cycle sur les relations techniques : `associated_nodes[]` (graphe libre) tolère déjà les cycles par conception documentée ; les relations typées suivent la même tolérance, pour ne pas imposer une contrainte que la vision ne demande pas.
 - Aucun écran dédié dans ce lot (même discipline que les Phases 5/8a/9/10/13 : domaine + persistance + store + outil de raisonnement d'abord, écran quand un cas d'usage réel le réclame).
 
-## 7. Prochaine étape après la Phase 20
+## 7. Prochaine étape après la Phase 21
 
-Deux options, non tranchées :
-- **Continuer sur le plan documenté** : Template Intelligence généralisée (item 4 du §4) — génération de documents au format client réel, `docxtemplater`+`pizzip` déjà pré-choisis (TD-014).
-- **Trancher le point ouvert de la Phase 20** : engager l'extraction automatique de structure procédurale (SOP brute → étapes suggérées par IA, avec confirmation humaine explicite) — un saut d'ambition réel qui doit être explicitement validé par l'utilisateur avant d'être conçu, per TD-016.
+Le point ouvert de la Phase 20 a été tranché par l'utilisateur : chemin déterministe (sans IA) d'abord, IA en repli seulement si la couverture réelle le réclame (TD-017). La Phase 21 livre ce chemin déterministe, calibré sur 2 SOP réelles de clients différents. Reste, non planifié ici :
+
+- **Repli IA-assisté pour la structuration procédurale** — à engager seulement si un usage réel démontre que `detecterSections`/`proposerStructureProcedure` ne couvre pas suffisamment (ex. genre "instruction technique illustrée", voir §5 de la spec Phase 21) — jamais par anticipation.
+- **Continuer sur le plan documenté** : Template Intelligence généralisée (item 5 du §4) — génération de documents au format client réel, `docxtemplater`+`pizzip` déjà pré-choisis (TD-014).
