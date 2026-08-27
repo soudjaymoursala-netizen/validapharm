@@ -36,6 +36,8 @@ beforeEach(async () => {
   await db.tests.clear()
   await db.assetNodes.clear()
   await db.relationsTechniques.clear()
+  await db.procedures.clear()
+  await db.procedureSteps.clear()
 })
 
 describe('useReasoningEngineStore — assurerConfiguration (versionnée, condition E4)', () => {
@@ -180,6 +182,61 @@ describe('useReasoningEngineStore — scénario réel : traversée Architecture 
     expect(response.etat_confiance).toBe('connu')
     expect(response.trace_appels_outils[0]?.outil).toBe('tracer_chaine_technique')
     expect(store.citationsDeReponse(response.id)[0]?.type_objet_cite).toBe('asset_node')
+  })
+})
+
+describe('useReasoningEngineStore — scénario réel : lecture de procédure (Phase 20, TD-016)', () => {
+  test('exécute lister_etapes_procedure et résout une citation de type procedure_step', async () => {
+    const maintenant = '2026-01-01T00:00:00.000Z'
+    await db.procedures.put({
+      id: 'proc-1',
+      client_id: 'client-1',
+      reference: 'SOP-QA-012',
+      numero_version: 1,
+      titre: 'Impact Assessment',
+      effective_date: '2026-01-01',
+      source_id: null,
+      created_at: maintenant,
+    })
+    await db.procedureSteps.put({
+      id: 'step-1',
+      client_id: 'client-1',
+      procedure_id: 'proc-1',
+      ordre: 1,
+      description: 'Vérifier le contexte',
+      obligatoire: true,
+      condition: null,
+      responsable: null,
+      created_at: maintenant,
+    })
+
+    const store = useReasoningEngineStore()
+    await store.charger('client-1')
+
+    const fournisseur = fournisseurMock()
+    fournisseur.envoyerMessage
+      .mockResolvedValueOnce(
+        reponse(
+          'APPEL_OUTIL: {"nom": "lister_etapes_procedure", "parametres": {"reference": "SOP-QA-012"}}',
+        ),
+      )
+      .mockResolvedValueOnce(
+        reponse(
+          'REPONSE_FINALE: {"texte": "La première étape est de vérifier le contexte", "etat_confiance": "connu", "citations": ["step-1"]}',
+        ),
+      )
+
+    const { response } = await store.executerRaisonnement('client-1', {
+      objectif: 'Applique la SOP-QA-012 à ce changement',
+      missionId: null,
+      contextSnapshotId: null,
+      fournisseur,
+      mode: 'chat_normatif',
+    })
+
+    expect(response.etat_confiance).toBe('connu')
+    expect(response.trace_appels_outils[0]?.outil).toBe('lister_etapes_procedure')
+    expect(store.citationsDeReponse(response.id)[0]?.type_objet_cite).toBe('procedure_step')
   })
 })
 

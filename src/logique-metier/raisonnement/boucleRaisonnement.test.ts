@@ -32,6 +32,8 @@ const donneesVides: DonneesOutilsRaisonnement = {
   knowledgeItems: [],
   assetNodes: [],
   relationsTechniques: [],
+  procedures: [],
+  procedureSteps: [],
 }
 
 const donneesScenario: DonneesOutilsRaisonnement = {
@@ -77,6 +79,8 @@ const donneesScenario: DonneesOutilsRaisonnement = {
   knowledgeItems: [],
   assetNodes: [],
   relationsTechniques: [],
+  procedures: [],
+  procedureSteps: [],
 }
 
 describe('executerBoucleRaisonnement — réponse finale directe', () => {

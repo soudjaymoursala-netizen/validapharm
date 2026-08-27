@@ -5,6 +5,8 @@ import type {
   Evidence,
   Execution,
   KnowledgeItem,
+  Procedure,
+  ProcedureStep,
   RelationTechnique,
   Requirement,
   Test as TestEntity,
@@ -13,6 +15,7 @@ import type {
 import {
   type DonneesOutilsRaisonnement,
   executerOutil,
+  listerEtapesProcedure,
   listerEvidencePourTest,
   listerKnowledgeItemsValides,
   listerRequirementsPourActif,
@@ -141,6 +144,38 @@ function relationTechnique(
   }
 }
 
+function procedure(id: string, reference: string, numeroVersion: number): Procedure {
+  return {
+    id,
+    client_id: 'client-1',
+    reference,
+    numero_version: numeroVersion,
+    titre: `Procédure ${reference}`,
+    effective_date: '2026-01-01',
+    source_id: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+  }
+}
+
+function procedureStep(
+  id: string,
+  procedureId: string,
+  ordre: number,
+  description: string,
+): ProcedureStep {
+  return {
+    id,
+    client_id: 'client-1',
+    procedure_id: procedureId,
+    ordre,
+    description,
+    obligatoire: true,
+    condition: null,
+    responsable: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+  }
+}
+
 const donnees: DonneesOutilsRaisonnement = {
   requirements: [requirement('req-1', 'granulateur-01'), requirement('req-2', 'autre-actif')],
   couvertures: [couverture('req-1', 'test-1')],
@@ -150,6 +185,12 @@ const donnees: DonneesOutilsRaisonnement = {
   knowledgeItems: [knowledgeItem('ki-1', 'valide'), knowledgeItem('ki-2', 'a_valider')],
   assetNodes: [assetNode('granulateur-01'), assetNode('plc-01')],
   relationsTechniques: [relationTechnique('controle_par', 'granulateur-01', 'plc-01')],
+  procedures: [procedure('proc-v1', 'SOP-QA-012', 1), procedure('proc-v2', 'SOP-QA-012', 2)],
+  procedureSteps: [
+    procedureStep('step-v1-1', 'proc-v1', 1, 'Étape v1 (ancienne)'),
+    procedureStep('step-v2-1', 'proc-v2', 1, 'Vérifier le contexte'),
+    procedureStep('step-v2-2', 'proc-v2', 2, 'Identifier les impacts'),
+  ],
 }
 
 describe('listerRequirementsPourActif', () => {
@@ -189,6 +230,20 @@ describe('tracerChaineTechnique (Phase 18, TD-013)', () => {
 
   test('un nœud sans relation sortante retourne une chaîne vide', () => {
     expect(tracerChaineTechnique('plc-01', donnees)).toEqual([])
+  })
+})
+
+describe('listerEtapesProcedure (Phase 20, TD-016)', () => {
+  test('résout toujours la version la plus récente de la référence, jamais une version arbitraire', () => {
+    const etapes = listerEtapesProcedure('SOP-QA-012', donnees)
+    expect(etapes.map((e) => e.description)).toEqual([
+      'Vérifier le contexte',
+      'Identifier les impacts',
+    ])
+  })
+
+  test('une référence inconnue retourne une liste vide', () => {
+    expect(listerEtapesProcedure('INCONNUE', donnees)).toEqual([])
   })
 })
 
@@ -232,5 +287,14 @@ describe('executerOutil', () => {
     )
     expect(resultat.idsObtenus).toEqual(['plc-01'])
     expect(resultat.resultat).toContain('controle_par')
+  })
+
+  test('lister_etapes_procedure retourne les étapes de la dernière version, dans l’ordre', () => {
+    const resultat = executerOutil(
+      { nom: 'lister_etapes_procedure', parametres: { reference: 'SOP-QA-012' } },
+      donnees,
+    )
+    expect(resultat.idsObtenus).toEqual(['step-v2-1', 'step-v2-2'])
+    expect(resultat.resultat).toContain('Vérifier le contexte')
   })
 })

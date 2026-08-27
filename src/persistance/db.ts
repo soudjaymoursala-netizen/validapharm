@@ -45,6 +45,8 @@ import type {
   Organization,
   Parameter,
   Couverture,
+  Procedure,
+  ProcedureStep,
   Process,
   ProvenanceLink,
   Project,
@@ -217,6 +219,8 @@ export class ValidaPharmDatabase extends Dexie {
   aiResponses!: EntityTable<AIResponse, 'id'>
   citationsAIResponse!: EntityTable<CitationAIResponse, 'id'>
   relationsTechniques!: EntityTable<RelationTechnique, 'id'>
+  procedures!: EntityTable<Procedure, 'id'>
+  procedureSteps!: EntityTable<ProcedureStep, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -379,6 +383,16 @@ export class ValidaPharmDatabase extends Dexie {
      */
     this.version(24).stores({
       relationsTechniques: 'id, client_id, type_relation, noeud_source_id, noeud_cible_id',
+    })
+    /**
+     * Phase 20 (`docs/convergence/PHASE_20_PROCEDURAL_KNOWLEDGE_SPEC.md`,
+     * TD-016) — domaine "Procedure" : structuration humaine versionnée
+     * d'une SOP (`reference`+`numero_version`, même patron que
+     * `SourceVersion`), aucune extraction automatique de structure.
+     */
+    this.version(25).stores({
+      procedures: 'id, client_id, reference, numero_version',
+      procedureSteps: 'id, client_id, procedure_id, ordre',
     })
   }
 }

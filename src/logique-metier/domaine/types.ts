@@ -1560,7 +1560,8 @@ export interface AIResponse {
  * pas de `'requirement_evidence_provenance_link'` distinct tant qu'aucun
  * outil ne le produit directement.
  */
-export type TypeObjetCitable = 'requirement' | 'test' | 'evidence' | 'knowledge_item' | 'asset_node'
+export type TypeObjetCitable =
+  'requirement' | 'test' | 'evidence' | 'knowledge_item' | 'asset_node' | 'procedure_step'
 
 /**
  * Jointure explicite et polymorphe "citations obligatoires vers
@@ -1573,4 +1574,49 @@ export interface CitationAIResponse {
   ai_response_id: string
   type_objet_cite: TypeObjetCitable
   objet_id: string
+}
+
+/**
+ * Une procédure (SOP/WI) structurée par un humain — cerveau procédural
+ * (Phase 20, TD-016). `reference` est l'identifiant stable à travers les
+ * révisions (ex. "SOP-QA-012") ; `numero_version` est auto-incrémenté par
+ * référence, même patron que `SourceVersion` (Phase 8a) — immuable une
+ * fois créée : une nouvelle révision crée une nouvelle `Procedure`,
+ * jamais une mutation (répond à R-21, `02-analyse-de-risque-outil.md` :
+ * ne jamais confondre une révision obsolète avec la version applicable).
+ *
+ * **Garde-fou non négociable** : aucune structuration automatique par
+ * IA — `ProcedureStep` est toujours saisi par un humain ayant lu la
+ * procédure (assisté par `extraireTexteDocx`/`extraireImagesDocx`, Phase
+ * 19), même discipline que `KnowledgeItem.valeur_interpretee` (Phase 8a).
+ *
+ * @requirement docs/convergence/PHASE_20_PROCEDURAL_KNOWLEDGE_SPEC.md, TD-016
+ */
+export interface Procedure {
+  id: string
+  client_id: string
+  reference: string
+  numero_version: number
+  titre: string
+  effective_date: string
+  source_id: string | null
+  created_at: string
+}
+
+/**
+ * Étape d'une `Procedure` précise (une version) — immuable, jamais
+ * partagée entre versions (une nouvelle révision de la procédure
+ * recopie/ressaisit ses étapes, elles ne "flottent" jamais entre deux
+ * révisions).
+ */
+export interface ProcedureStep {
+  id: string
+  client_id: string
+  procedure_id: string
+  ordre: number
+  description: string
+  obligatoire: boolean
+  condition: string | null
+  responsable: string | null
+  created_at: string
 }

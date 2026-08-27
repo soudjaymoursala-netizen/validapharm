@@ -5,6 +5,8 @@ import type {
   Evidence,
   Execution,
   KnowledgeItem,
+  Procedure,
+  ProcedureStep,
   RelationTechnique,
   Requirement,
   Test,
@@ -22,6 +24,9 @@ import type { DefinitionOutilRaisonnement } from './protocoleRaisonnement'
  *
  * `assetNodes`/`relationsTechniques` (Phase 18, TD-013) : outillent la
  * traversée de l'Architecture Technique (Equipment→PLC→SCADA→Server).
+ *
+ * `procedures`/`procedureSteps` (Phase 20, TD-016) : outillent la
+ * lecture d'une procédure structurée par un humain (cerveau procédural).
  */
 export interface DonneesOutilsRaisonnement {
   requirements: readonly Requirement[]
@@ -32,6 +37,8 @@ export interface DonneesOutilsRaisonnement {
   knowledgeItems: readonly KnowledgeItem[]
   assetNodes: readonly AssetNode[]
   relationsTechniques: readonly RelationTechnique[]
+  procedures: readonly Procedure[]
+  procedureSteps: readonly ProcedureStep[]
 }
 
 export const CATALOGUE_OUTILS_RAISONNEMENT: readonly DefinitionOutilRaisonnement[] = [
@@ -57,6 +64,11 @@ export const CATALOGUE_OUTILS_RAISONNEMENT: readonly DefinitionOutilRaisonnement
     nom: 'tracer_chaine_technique',
     description:
       'Trace la chaîne de relations techniques sortantes depuis un AssetNode (ex. Equipment contrôlé par un PLC, connecté à un SCADA, hébergé sur un serveur). Paramètre : asset_node_id.',
+  },
+  {
+    nom: 'lister_etapes_procedure',
+    description:
+      "Liste les étapes de la version la plus récente d'une procédure (SOP/WI), dans l'ordre. Paramètre : reference.",
   },
 ]
 
@@ -98,6 +110,26 @@ export function tracerChaineTechnique(
   return chaineTechniqueDepuis(assetNodeId, donnees.relationsTechniques, donnees.assetNodes).map(
     (etape) => ({ noeud: etape.noeud, typeRelation: etape.relation.type_relation }),
   )
+}
+
+/**
+ * Résout la version la plus récente d'une `reference` (numéro le plus
+ * élevé) puis retourne ses étapes dans l'ordre — jamais une version
+ * arbitraire, même discipline que `useProcedureStore.derniereVersion`
+ * (Phase 20).
+ */
+export function listerEtapesProcedure(
+  reference: string,
+  donnees: DonneesOutilsRaisonnement,
+): ProcedureStep[] {
+  const versions = donnees.procedures.filter((p) => p.reference === reference)
+  if (versions.length === 0) return []
+  const derniere = versions.reduce((plusRecente, p) =>
+    p.numero_version > plusRecente.numero_version ? p : plusRecente,
+  )
+  return donnees.procedureSteps
+    .filter((e) => e.procedure_id === derniere.id)
+    .sort((a, b) => a.ordre - b.ordre)
 }
 
 export interface ResultatExecutionOutil {
@@ -148,6 +180,17 @@ export function executerOutil(
       const resultats = tracerChaineTechnique(assetNodeId, donnees)
       return formaterResultat(
         resultats.map((r) => ({ id: r.noeud.id, libelle: `${r.noeud.name} (${r.typeRelation})` })),
+      )
+    }
+    case 'lister_etapes_procedure': {
+      const reference = appel.parametres.reference
+      if (!reference) return { resultat: 'Paramètre reference manquant.', idsObtenus: [] }
+      const resultats = listerEtapesProcedure(reference, donnees)
+      return formaterResultat(
+        resultats.map((e) => ({
+          id: e.id,
+          libelle: `${e.ordre}. ${e.description}${e.obligatoire ? '' : ' (optionnelle)'}`,
+        })),
       )
     }
     default:
