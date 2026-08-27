@@ -1024,13 +1024,15 @@ export interface SourceVersion {
  *
  * `docx_natif` (Phase 19) : extraction locale (`connecteurs/office/
  * DocxNatifAdapter.ts`), aucun appel réseau, contrairement à `ocr_azure`.
+ * `pdf_natif` (Phase 23, TD-021) : extraction locale (`connecteurs/pdf/
+ * PdfNatifAdapter.ts`, `pdfjs-dist`), même absence d'appel réseau.
  * `xlsx_natif` volontairement absent à ce stade — aucune bibliothèque
  * d'ingestion Excel propre n'a été retenue (TD-014 : `xlsx`/SheetJS porte
  * une vulnérabilité haute sans correctif sur le registre npm ;
  * `exceljs` introduit une dépendance transitive vulnérable) — limite
  * assumée, jamais une valeur fabriquée sans implémentation réelle.
  */
-export type MethodeExtraction = 'ocr_azure' | 'docx_natif' | 'saisie_manuelle'
+export type MethodeExtraction = 'ocr_azure' | 'docx_natif' | 'pdf_natif' | 'saisie_manuelle'
 
 export interface Extraction {
   id: string
