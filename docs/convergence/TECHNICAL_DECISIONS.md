@@ -108,4 +108,34 @@
 
 ---
 
-*Dernier livrable de la Phase 0 : `CONVERGENCE_PLAN.md` (ordre de mise en œuvre synthétisant les 6 documents précédents). TD-007 à TD-009 ajoutées le 26/08/2026, hors Phase 0 — revue panel dédiée déclenchée par une clarification de vision produit de l'utilisateur.*
+### TD-010 — "Validation State" (état de validation vivant) : une vue calculée diagnostique, jamais un remplacement automatique de `qualification_status`
+- **Statut** : **ACTÉE** (revue panel E1-E7, 26/08/2026, `REVUE_PANEL_VISION_VALIDATION_ENGINEERING.md` Point A, en réponse au document de vision "Validation Engineering Platform" de l'utilisateur).
+- **Context** : la vision demande de savoir à tout moment "si un système est toujours dans un état validé et pourquoi", recalculé après un changement détecté (VALIDATED → CHANGE DETECTED → IMPACT ANALYSIS → REQUALIFICATION REQUIRED → ... → VALIDATED).
+- **Problem** : `AssetNode.qualification_status` (Structure Système) est aujourd'hui un statut saisi manuellement. Le dériver *automatiquement* d'une analyse d'impact reviendrait à faire prendre une décision réglementaire par une simple logique déterministe sans confirmation humaine — même erreur déjà interdite pour `CriticalParameter → CPP` (invariant #8, principe fondateur n°1).
+- **Recommendation** : "Validation State" est une **fonction de lecture pure/diagnostique** (candidat naturel : un nouvel outil du Reasoning Engine, Phase 15) qui répond "voici ce que je constate et pourquoi, avec citations vers le graphe" — jamais une écriture automatique de `qualification_status`. Le statut officiel reste un acte humain distinct, déjà tracé (même patron que `Confirmation`/`TestCandidate`).
+- **Impact** : Oriente une future extension du Reasoning Engine (au-delà de Phase 15) — n'introduit aucune nouvelle entité stockée dans l'immédiat.
+- **Reversibility** : Élevée — fonction de lecture pure, aucune migration de schéma engagée par cette décision elle-même.
+
+---
+
+### TD-011 — GxP-by-design (e-signature/RBAC) : limite assumée documentée, TD-001 non rouverte, aucun garde-fou de façade
+- **Statut** : **ACTÉE** (revue panel E1-E7, 26/08/2026, `REVUE_PANEL_VISION_VALIDATION_ENGINEERING.md` Point B).
+- **Context** : la vision liste electronic signatures/RBAC/segregation-of-duties comme propriétés attendues "dès l'architecture" — en tension directe avec TD-001 (25/08/2026, extension serverless plutôt que backend complet, PWA mono-utilisateur local, contrainte IT réelle).
+- **Problem** : rouvrir TD-001 maintenant serait prématuré (aucun besoin réel multi-utilisateur démontré à ce jour). Mais fabriquer un **semblant** de RBAC/signature électronique purement local (ex. mot de passe par rôle stocké côté client) serait activement dangereux : cela fabriquerait une fausse preuve de conformité 21 CFR Part 11/Annexe 11, pire que son absence honnête.
+- **Recommendation** : documenter explicitement cette limite (`00-cadrage-projet.md`) — l'outil, dans son état actuel, ne prétend pas satisfaire l'exigence e-signature/séparation des tâches multi-utilisateurs ; l'`audit_log` actuel (horodatage + acteur déclaré) est un premier niveau de traçabilité, pas une signature électronique réglementaire. Aucun RBAC/e-signature de façade construit. Un vrai service d'authentification serveur sera tranché quand un besoin réel (client multi-utilisateur) le démontrera.
+- **Impact** : Aucun changement de code — clarification documentaire pure, protège contre une fausse assurance de conformité.
+- **Reversibility** : Sans objet (décision documentaire) — TD-001 reste rouvrable plus tard sur besoin réel démontré.
+
+---
+
+### TD-012 — Prochaine capacité du Reasoning Engine : analyse d'impact de changement ancrée sur `QualityEvent`, pas un mode générique fourre-tout
+- **Statut** : **ACTÉE** (revue panel E1-E7, 26/08/2026, `REVUE_PANEL_VISION_VALIDATION_ENGINEERING.md` Point C).
+- **Context** : la vision détaille deux capacités IA non couvertes par les 4 outils actuels de Phase 15 : (1) analyse de qualité d'exigences (ambiguës/non-testables/doublons) ; (2) analyse d'impact de changement (Change → Composant → Requirement → Risk → Test → Evidence → Impact Assessment).
+- **Problem** : construire les deux d'un coup répéterait l'erreur déjà évitée en Phase 13 (construire plusieurs capacités non éprouvées simultanément). La première (qualité d'exigences) suppose un texte source non structuré — relève de Source Intelligence (Phase 8a), pas du Reasoning Engine actuel qui lit des données déjà structurées.
+- **Recommendation** : la prochaine capacité concrète du Reasoning Engine est une analyse d'impact de changement, directement câblable sur `QualityEvent` (Change Control, Phase 5)/`Requirement`/`Test`/`Evidence` déjà construits — prolonge exactement le scénario "changement de recette" déjà testé en Phase 15. L'analyse de qualité d'URS reste au backlog, dépendante de Source Intelligence, non engagée.
+- **Impact** : Oriente le prochain incrément du Reasoning Engine après la Phase 17 (Mission workspace).
+- **Reversibility** : Élevée — purement additif (nouveaux outils de lecture), aucune structure existante modifiée.
+
+---
+
+*Dernier livrable de la Phase 0 : `CONVERGENCE_PLAN.md` (ordre de mise en œuvre synthétisant les 6 documents précédents). TD-007 à TD-009 ajoutées le 26/08/2026, hors Phase 0 — revue panel dédiée déclenchée par une clarification de vision produit de l'utilisateur. TD-010 à TD-012 ajoutées le 26/08/2026 — revue panel déclenchée par un second document de vision approfondi ("Validation Engineering Platform") accompagné d'un benchmark UX concurrent réel.*

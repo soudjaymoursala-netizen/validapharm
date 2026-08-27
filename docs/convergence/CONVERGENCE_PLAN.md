@@ -167,9 +167,13 @@ L'utilisateur a clarifié explicitement que sa vision (« Que voulez-vous faire 
 - **Portée réellement construite** : `BarreLaterale.vue` (navigation groupée par intention : Accueil/Mon travail/Mon site/Clients & configuration) + `CoquilleApplication.vue` (enveloppe `RouterView`, jamais l'écran de blocage au démarrage) + `AccueilQueVoulezVousFaire.vue` (nouvel écran racine, `tableau-de-bord` déplacé sans casser aucune référence existante par nom) + `useModeAffichageStore` (bascule Expert/Assistant persistée). Vérifié dans un navigateur réel (Playwright) : démarrage, navigation, mémorisation du client actif après visite d'un outil client, aucune erreur console.
 - **Divergences identifiées et différées explicitement** : aucune différenciation comportementale réelle entre Mode Expert et Mode Assistant sur les écrans existants (suppose la Phase 17) ; aucun bandeau de navigation ad hoc retiré des écrans existants (nettoyage cosmétique différé) ; aucun concept de "client actif" persisté côté domaine.
 
+## Second document de vision — "Validation Engineering Platform" (26/08/2026)
+
+L'utilisateur a transmis un document de vision approfondi (21 sections : Digital Validation Model, graphe de traçabilité, Continuous Validation State, GxP-by-design, benchmark ValGenesis/Kneat/Veeva/MasterControl) accompagné d'un échantillon UX/UI concurrent réel (`Sample_UXUI.docx`, 14 captures). Une seconde revue panel E1-E7 (`docs/convergence/REVUE_PANEL_VISION_VALIDATION_ENGINEERING.md`) a confirmé que l'architecture déjà construite (Phases 0bis-16) reste alignée sans remise en cause, et tranché 3 points avant la Phase 17 : **TD-010** ("Validation State" = vue calculée diagnostique, jamais un remplacement automatique de `qualification_status`), **TD-011** (tension GxP e-signature/RBAC vs. TD-001 documentée comme limite assumée, TD-001 non rouverte, aucun garde-fou de façade), **TD-012** (prochaine capacité du Reasoning Engine après la Phase 17 : analyse d'impact de changement ancrée sur `QualityEvent`, pas un mode générique).
+
 ## Phase 17 — Mission workspace
 - **Dependencies** : Phase 16.
-- **Portée** : écran d'une Mission ouverte (contexte, scope, assessment, risques, requirements, stratégie, tests, evidence, livrables, historique) exposant enfin visuellement le raisonnement de la Phase 15.
+- **Portée** : écran d'une Mission ouverte (contexte, scope, assessment, risques, requirements, stratégie, tests, evidence, livrables, historique) exposant enfin visuellement le raisonnement de la Phase 15. Enrichie des clarifications TD-010 à TD-012 : si un indicateur de "Validation State" est présenté, il doit être visuellement distinct du statut de qualification officiel et systématiquement accompagné de sa justification (citations).
 
 ---
 
