@@ -1429,3 +1429,112 @@ export interface ContextSnapshotItem {
   type_objet: TypeObjetContexte
   objet_id: string
 }
+
+/**
+ * Phase 15 (`docs/convergence/PHASE_15_REASONING_ENGINE_SPEC.md`) — domaine
+ * "AI" de `03_DOMAIN_DATA_MODEL.md` (`AIRequest, AIResponse,
+ * AIConfiguration, AIModelVersion, AIEvaluation`). Décisions d'entrée :
+ * TD-007 (orchestration côté navigateur, relais reste un simple proxy sans
+ * état) et TD-008 (états de confiance discrets, jamais un score
+ * numérique).
+ *
+ * **États fermés et documentés mot pour mot** (même discipline que
+ * `StatutKnowledgeItem`) : `connu` (vérifié — au moins une citation
+ * résolvant réellement vers un objet obtenu par appel d'outil pendant la
+ * session, garde déterministe non négociable, voir spec §4) ; `infere`
+ * (déduction explicite du modèle, raisonnement visible mais non vérifié
+ * point par point) ; `inconnu` (le modèle indique explicitement ne pas
+ * savoir) ; `conflit` (informations contradictoires rencontrées) ;
+ * `a_verifier` (par défaut, y compris toute dégradation gracieuse — jamais
+ * un état par défaut plus confiant que celui-ci).
+ */
+export type EtatConfianceIA = 'connu' | 'infere' | 'inconnu' | 'conflit' | 'a_verifier'
+
+/**
+ * Un tour de la boucle d'orchestration ayant appelé un outil de lecture
+ * (`logique-metier/raisonnement/outilsRaisonnement.ts`) — embarqué
+ * directement dans `AIResponse.trace_appels_outils` (même pattern que
+ * `audit_log` ailleurs dans ce projet : un journal ordonné propre à un
+ * seul enregistrement, pas une relation N:M nécessitant sa propre table).
+ * Condition E1 de la revue panel (traçabilité des appels d'outils).
+ */
+export interface TraceAppelOutil {
+  outil: string
+  parametres: Record<string, string>
+  resultat: string
+  horodatage: string
+}
+
+/**
+ * Configuration versionnée du moteur de raisonnement (condition E4 de la
+ * revue panel — `PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md` : "sa
+ * configuration doit être versionnée pour qu'une décision passée reste
+ * reconstructible même après une évolution du moteur"). Immuable une fois
+ * créée — une évolution de l'ensemble d'outils disponibles crée une
+ * nouvelle version, jamais une modification en place.
+ */
+export interface AIConfiguration {
+  id: string
+  client_id: string
+  version: string
+  outils_disponibles: string[]
+  created_at: string
+}
+
+/**
+ * Une invocation du moteur de raisonnement — optionnellement rattachée à
+ * une `Mission` et/ou un `ContextSnapshot` déjà assemblé (Phases 13/14),
+ * référence toujours l'`AIConfiguration` exacte utilisée (reproductibilité,
+ * invariant #4 : "Effective configuration is deterministic and
+ * traceable"). Immuable une fois créée.
+ */
+export interface AIRequest {
+  id: string
+  client_id: string
+  mission_id: string | null
+  context_snapshot_id: string | null
+  ai_configuration_id: string
+  objectif: string
+  created_at: string
+}
+
+/**
+ * Résultat d'une `AIRequest`. **Garde-fou non négociable** : le contenu
+ * d'une `AIResponse` n'est jamais écrit directement dans
+ * `Requirement`/`Test`/`KnowledgeItem` par aucune fonction de ce domaine —
+ * même principe que `Confirmation` (Phase 8a), cohérent avec le principe
+ * fondateur n°1 (`00-cadrage-projet.md`) et l'invariant #8
+ * ("AI output is not canonical by confidence alone"). Immuable une fois
+ * créée.
+ */
+export interface AIResponse {
+  id: string
+  client_id: string
+  ai_request_id: string
+  texte: string
+  etat_confiance: EtatConfianceIA
+  trace_appels_outils: TraceAppelOutil[]
+  version_moteur: string | null
+  created_at: string
+}
+
+/**
+ * Type d'objet cité par une `AIResponse` — fermé, limité à ce qui est
+ * réellement produit par les outils de lecture de ce lot (spec §3) :
+ * pas de `'requirement_evidence_provenance_link'` distinct tant qu'aucun
+ * outil ne le produit directement.
+ */
+export type TypeObjetCitable = 'requirement' | 'test' | 'evidence' | 'knowledge_item'
+
+/**
+ * Jointure explicite et polymorphe "citations obligatoires vers
+ * Evidence/ProvenanceLink" (portée de la revue panel, Question A) — même
+ * pattern que `ContextSnapshotItem` (Phase 14).
+ */
+export interface CitationAIResponse {
+  id: string
+  client_id: string
+  ai_response_id: string
+  type_objet_cite: TypeObjetCitable
+  objet_id: string
+}

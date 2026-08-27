@@ -1,6 +1,9 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   Activity,
+  AIConfiguration,
+  AIRequest,
+  AIResponse,
   AiChatSessionLog,
   AssetHierarchySchema,
   AssetNode,
@@ -9,6 +12,7 @@ import type {
   AssociationMissionQualityEvent,
   Client,
   ClientConfig,
+  CitationAIResponse,
   ClassificationCriticiteParametre,
   Confirmation,
   Conflict,
@@ -207,6 +211,10 @@ export class ValidaPharmDatabase extends Dexie {
   dependencies!: EntityTable<Dependency, 'id'>
   contextSnapshots!: EntityTable<ContextSnapshot, 'id'>
   contextSnapshotItems!: EntityTable<ContextSnapshotItem, 'id'>
+  aiConfigurations!: EntityTable<AIConfiguration, 'id'>
+  aiRequests!: EntityTable<AIRequest, 'id'>
+  aiResponses!: EntityTable<AIResponse, 'id'>
+  citationsAIResponse!: EntityTable<CitationAIResponse, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -349,6 +357,17 @@ export class ValidaPharmDatabase extends Dexie {
     this.version(22).stores({
       contextSnapshots: 'id, client_id, workspace_id, asset_node_id',
       contextSnapshotItems: 'id, client_id, context_snapshot_id, type_objet, objet_id',
+    })
+    /**
+     * Phase 15 (`docs/convergence/PHASE_15_REASONING_ENGINE_SPEC.md`) —
+     * domaine "AI" : `AIConfiguration`/`AIRequest`/`AIResponse` +
+     * `CitationAIResponse` (jointure polymorphe). TD-007/TD-008.
+     */
+    this.version(23).stores({
+      aiConfigurations: 'id, client_id, version',
+      aiRequests: 'id, client_id, mission_id, context_snapshot_id, ai_configuration_id',
+      aiResponses: 'id, client_id, ai_request_id, etat_confiance',
+      citationsAIResponse: 'id, client_id, ai_response_id, type_objet_cite, objet_id',
     })
   }
 }
