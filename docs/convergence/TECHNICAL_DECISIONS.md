@@ -78,4 +78,34 @@
 
 ---
 
-*Dernier livrable de la Phase 0 : `CONVERGENCE_PLAN.md` (ordre de mise en œuvre synthétisant les 6 documents précédents).*
+### TD-007 — Le moteur de raisonnement (Mission→Context→AI) s'orchestre côté navigateur, jamais un nouveau backend
+- **Statut** : **ACTÉE** (revue panel E1-E7, 26/08/2026, `PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md` Question A).
+- **Context** : la vision utilisateur (raisonnement multi-étapes : changement→impact→risque→requirement→test manquant, avec questions ciblées) demande un raisonnement outillé sur les stores du domaine, pas un simple prompt.
+- **Problem** : un backend serveur avec état violerait TD-001 (extension serverless plutôt que backend complet, déjà actée) sans fait nouveau le justifiant.
+- **Recommendation** : la boucle d'orchestration (appeler l'IA, lire son besoin d'information, interroger les stores Dexie/Pinia existants comme des "outils", redonner la réponse, recommencer) s'exécute entièrement dans le navigateur ; le relais Cloudflare reste un simple proxy sans état masquant la clé (URS-NF-044ter, inchangé). Conditions posées par E1/E4 : `AIRequest` trace chaque appel d'outil (jamais seulement le prompt/réponse final) ; la configuration du moteur (prompts, outils, version de modèle) est versionnée (`AIConfiguration`/`AIModelVersion`) pour rester reconstructible a posteriori.
+- **Impact** : Structurant pour la Phase 15 — un seul nouveau module (`logique-metier/raisonnement/`), aucune nouvelle infrastructure d'hébergement.
+- **Reversibility** : Élevée — pas de backend introduit, donc pas de dette d'hébergement à défaire si le choix est révisé plus tard.
+
+---
+
+### TD-008 — Les propositions de l'IA portent un état de confiance discret (5 états), jamais un score numérique
+- **Statut** : **ACTÉE** (revue panel E1-E7, 26/08/2026, `PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md` Question B).
+- **Context** : le moteur de raisonnement doit pouvoir distinguer ce qu'il sait, ce qu'il déduit, ce qu'il ignore et ce qui est en conflit entre sources — jamais une seule couleur de confiance globale.
+- **Problem** : un score numérique (0-100 %) inviterait mécaniquement à fixer un seuil d'acceptation automatique — même erreur déjà interdite pour la promotion `Parameter`→`CPP` (§10 `01_ARCHITECTURE_MASTER_FINAL.md`) et contraire au principe fondateur n°1 (l'IA n'est jamais seule source de vérité).
+- **Recommendation** : type discriminant fermé `connu | inféré | inconnu | conflit | a_verifier`, même pattern que `StatutKnowledgeItem`/`StatutTestCandidate` déjà en place.
+- **Impact** : Structurant pour le type `AIResponse` (Phase 15) — condition non négociable, pas une option de configuration.
+- **Reversibility** : Élevée à ce stade (rien n'est encore codé) ; deviendrait faible une fois des données réelles créées avec ce schéma.
+
+---
+
+### TD-009 — Domaine "Work" limité à `Mission`/`Activity` pour ce lot ; `WorkflowDefinition`/`WorkflowInstance`/`Approval` différés
+- **Statut** : **ACTÉE** (revue panel E1-E7, 26/08/2026, `PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md` Question C).
+- **Context** : le modèle cible nomme cinq entités dans le domaine "Work" (`Mission, Activity, Dependency, WorkflowDefinition, WorkflowInstance, WorkflowStep, Approval`).
+- **Problem** : un workflow d'approbation générique construit sans cas réel pour le calibrer risquerait de fabriquer une mécanique ne correspondant à aucun processus qualité documenté (règle "ne jamais fabriquer de contenu réglementaire") — et un mécanisme d'approbation implicite existe déjà ailleurs (`QualityEvent`, `Confirmation`) tant qu'un besoin *générique transverse* n'est pas démontré.
+- **Recommendation** : construire `Mission`/`Activity` (Phase 13) — suffisant pour que le moteur de raisonnement (TD-007) ait un objet à référencer. `WorkflowDefinition`/`WorkflowInstance`/`Approval` restent nommés dans le modèle cible mais non engagés, même statut documentaire que `8b`/`9-Generate-Render-Approve-Freeze` déjà différés dans `CONVERGENCE_PLAN.md`.
+- **Impact** : Réduit le périmètre de la Phase 13 sans fermer la porte à un futur incrément dédié.
+- **Reversibility** : Élevée — purement additif si un besoin réel de workflow générique apparaît plus tard.
+
+---
+
+*Dernier livrable de la Phase 0 : `CONVERGENCE_PLAN.md` (ordre de mise en œuvre synthétisant les 6 documents précédents). TD-007 à TD-009 ajoutées le 26/08/2026, hors Phase 0 — revue panel dédiée déclenchée par une clarification de vision produit de l'utilisateur.*

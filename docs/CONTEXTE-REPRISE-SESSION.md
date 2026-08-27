@@ -4,7 +4,7 @@ Ce fichier n'est pas un livrable projet (pas d'ID de traçabilité) : c'est un *
 
 **Instruction pour la prochaine session Claude** : lis ce fichier en entier avant d'agir. Il complète (ne remplace pas) les documents vivants de `docs/`, qui restent la source de vérité pour le contenu métier normatif. Ce fichier remplace intégralement la version précédente — ne pas se fier à l'historique Git de ce fichier pour retrouver un état antérieur pertinent, tout ce qui compte encore est repris ci-dessous.
 
-**Priorité explicite pour la prochaine session (demande directe de l'utilisateur, 26/08/2026)** : câbler `Organization`/`Workspace` (Phase 11) dans les stores métier existants, un par un — **étape 1 (Structure Système/`AssetNode`) terminée le 26/08/2026**, voir §5.11. Il reste ~41 interfaces `client_id` à câbler (Test/Execution/Evidence, Source Intelligence, ContentPlan, Quality Events, Assessment, ACFC, etc.), chacune dans un incrément séparé (spec E1-E7 → implémentation → test "Global + N sites" dédié → commit). Ne pas repartir sur une nouvelle phase du catalogue métier (§4.x de l'URS) sans avoir d'abord avancé sur ce chantier ou sans instruction explicite contraire de l'utilisateur.
+**Priorité explicite pour la prochaine session (mise à jour 26/08/2026, en fin de session)** : le chantier prioritaire n'est plus le câblage `Workspace` store par store (§5.11, en pause après l'étape 1) — c'est la mise en œuvre du **Reasoning Engine / Mission-Context** clarifié en §5.12, Phases 13-17 de `CONVERGENCE_PLAN.md`, dont le plan et les décisions bloquantes (TD-007 à TD-009) sont tranchés mais dont **aucun code n'est encore écrit**. Lire §5.12 en entier avant d'agir. Ne pas repartir sur une nouvelle phase du catalogue métier (§4.x de l'URS) ni reprendre le câblage `Workspace` sans instruction explicite contraire de l'utilisateur.
 
 ---
 
@@ -223,27 +223,36 @@ Priorisé explicitement par l'utilisateur ("continue sur le câblage maintenant 
 - **Hors périmètre assumé** : `codeDejaUtilise`/`introduitUnCycle` restent à l'échelle de toute l'organisation (pas de changement de portée non demandé — le restreindre par site serait un changement de comportement, potentiellement une régression de sécurité).
 - URS v39 (URS-F-100undecies/duodecies), FS v29, schéma Dexie v20. 438/438 tests (431 préexistants inchangés + 7 nouveaux).
 
-**Prochaine étape — étape 2 (candidat à confirmer avec l'utilisateur, pas fixé à l'avance)** : câbler un deuxième store, même méthode (spec E1-E7 dédiée, ajout additif, test "Global + N sites" propre à ce store, un commit séparé). Aucun ordre de séquençage complet n'est arrêté pour les ~41 interfaces `client_id` restantes (`MethodProfileACFC`/`EvaluationACFC`, `Parameter`/`CPP`/`CQA`, les Assessments, `Process`/`FonctionActif`/`ManufacturingContext`, `QualityEvent`, toute la chaîne Requirement→Test→Execution→Evidence, `Source`→...→`KnowledgeItem`, `ContentPlan`, `Connector`/`SyncJob`/`ExternalReference`) — choisir le prochain candidat au fil de l'eau plutôt que de fabriquer un plan complet non validé.
+**Étape 2 (câblage d'un deuxième store) — dépriorisée temporairement (26/08/2026)** : voir §5.12. La clarification de vision produit de l'utilisateur (Mission/Context/Reasoning Engine) prend le pas sur la suite du câblage `Workspace` store par store — ce chantier reste valide et sera repris, mais après les Phases 13-17, sauf instruction contraire explicite. Points de méthode toujours valables pour quand il reprendra : jamais de Big Bang (un store par commit), `workspace_id` toujours additif, test "Global + N sites" dédié par store, pas d'écran avant un consommateur réel.
 
-Points de méthode qui restent valables pour toute étape suivante :
-- **Jamais de Big Bang** : un store (ou petit groupe fortement couplé) par commit.
-- **Ajout, pas de rupture** : `workspace_id` toujours nullable/optionnel au départ, coexistence temporaire avec `client_id`.
-- **Un test dédié "Global + N sites"** par store câblé, pas seulement le test générique de `useOrganizationStore`.
-- Pas d'écran `Organization`/`Workspace` avant qu'un store réel ne le justifie.
+### 5.12 Clarification de vision produit — Mission/Context/Reasoning Engine (26/08/2026)
 
-Ne pas redémarrer une nouvelle phase du catalogue métier (§4.x de l'URS, ex. #27-#32 du backlog) sans avoir avancé sur ce chantier ou sans instruction explicite contraire de l'utilisateur.
+L'utilisateur a testé le premier déploiement réel (voir §5.9 pour le déploiement, corrigé de deux bugs critiques le même jour — workflow `administration` invalide et `createWebHistory()` sans base, voir historique git) et a jugé l'écran d'accueil "pas intuitif ni pro" — puis, en creusant, a clarifié que le problème n'est pas visuel mais **architectural** : il ne veut pas d'une collection de modules (ACFC/Risk/CSV/IQ/OQ...) mais un environnement qui comprend un cas réel, reconstruit le contexte, raisonne (impact→risque→requirement→test manquant), dit explicitement "je ne sais pas", et produit le livrable dans le format du client.
+
+**Vérification déterminante** : cette vision n'est *pas* une nouvelle direction — elle correspond mot pour mot au domaine **Work** (`Mission, Activity, WorkflowDefinition, WorkflowInstance, Approval`) et au domaine **AI** (`AIRequest, AIResponse, AIConfiguration, AIEvaluation`) déjà nommés dans `03_DOMAIN_DATA_MODEL.md` (package Drive), jamais engagés jusqu'ici. Confirmé par recherche ciblée dans Drive (`01_ARCHITECTURE_MASTER_FINAL.md` §1-2, `04_RELATIONSHIP_MATRIX_FINAL.md`) — le chapô "REAL WORLD → SOURCES → EVIDENCE → KNOWLEDGE → CONTEXT → METHODS → ASSESSMENT → STRATEGY/MISSION → TEST → EVIDENCE → DELIVERABLE" et les "deux modes" (GMP complet / Assistant métier) sont dans le document source depuis le début.
+
+**Revue panel E1-E7 dédiée** (`docs/convergence/PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md`), convoquée sur demande explicite de l'utilisateur ("utilise des méthodes comme BMAD pour prendre la décision") pour trancher 3 points bloquants avant tout code :
+- **TD-007** : le moteur de raisonnement s'orchestre côté navigateur (boucle d'appels outillés sur les stores existants), jamais un nouveau backend — le relais Cloudflare reste un simple proxy sans état (cohérent TD-001).
+- **TD-008** : les propositions de l'IA portent un état de confiance discret (`connu|inféré|inconnu|conflit|a_verifier`), jamais un score numérique — cohérent avec le principe fondateur n°1 (l'IA n'est jamais seule source de vérité) et avec l'interdiction déjà actée de promotion automatique `Parameter`→`CPP` par score.
+- **TD-009** : le domaine Work est limité à `Mission`/`Activity` pour ce lot ; `WorkflowDefinition`/`WorkflowInstance`/`Approval` différés sur besoin réel démontré (même statut que 8b/9-Generate-Render déjà différés).
+
+**Plan révisé** (`docs/convergence/CONVERGENCE_PLAN.md`, Phases 13-17) : Mission/Activity → Context Engine généralisé → Reasoning Engine (domaine AI, testé sur un cas réel avant généralisation) → coquille UX (sidebar/Accueil/mode dual) → Mission workspace. Aucune fonctionnalité déjà construite n'est supprimée — les 12 phases précédentes restent le moteur, inchangées.
+
+**Statut au moment de cette clarification** : plan tranché et documenté, **aucun code des Phases 13-17 n'est encore écrit**. Deux points restaient à confirmer avec l'utilisateur avant de commencer : validation de la proposition technique TD-007, et confirmation de l'ordre des phases — voir la conversation pour la suite exacte de sa réponse.
+
+**Ressources supplémentaires signalées par l'utilisateur, à exploiter en complément de Drive** : ses dépôts GitHub favoris/starred, classés par thème — utiles pour la conception du Reasoning Engine (patterns d'orchestration IA, RAG, agents outillés) avant d'écrire le code des Phases 15+. Aucun outil GitHub de cette session ne liste les dépôts favoris d'un compte ; il faudra que l'utilisateur pointe des dépôts/thèmes précis (ou les ajoute via `add_repo`) pour que la session puisse les lire.
 
 ---
 
 ## 6. Repères pratiques
 
 - Dépôt local : `/home/user/validapharm`, remote `origin` = `https://github.com/soudjaymoursala-netizen/validapharm`.
-- Branche de travail active : `claude/contexte-reprise-session-tin77u` (pas `main`) — c'est elle qui porte la PR #1 ouverte.
-- PR ouverte : #1, https://github.com/soudjaymoursala-netizen/validapharm/pull/1 — jamais mergée, continuer à y committer. Session abonnée aux événements CI/review de cette PR (`subscribe_pr_activity`).
-- Tests : `npx vitest run` — 298 tests, 41 fichiers, tous verts au 25/08/2026.
-- Toute action risquée (push, suppression, écrasement, merge de PR) reste soumise à confirmation explicite au cas par cas.
+- **PR #1 fusionnée dans `main` le 26/08/2026** (à la demande explicite de l'utilisateur, pour permettre un déploiement réel testable) — ne plus la considérer comme "jamais mergée". Depuis, le travail continue par commits directs sur `main` (déploiement, fixes critiques) — la branche `claude/contexte-reprise-session-tin77u` existe toujours mais `main` est désormais la branche à jour de référence.
+- **Déploiement réel actif** : `https://soudjaymoursala-netizen.github.io/validapharm/` (GitHub Pages, `.github/workflows/quality-gate.yml` jobs `deploy-pages-build`/`deploy-pages-deploy`, `needs:` sur le job qualité). Fonctionnel et confirmé par l'utilisateur le 26/08/2026 après correction de deux bugs (permission `administration` invalide dans le workflow ; `createWebHistory()` sans base — voir SDS v16/v17 pour le détail).
+- Tests : `npx vitest run` — 438 tests, 62 fichiers, tous verts au 26/08/2026 (schéma Dexie v20).
+- Toute action risquée (push, suppression, écrasement, merge de PR) reste soumise à confirmation explicite au cas par cas — le merge de PR #1 et les commits directs sur `main` de cette session ont chacun été explicitement demandés/confirmés par l'utilisateur, ce n'est pas un changement de règle générale.
 - Fichiers Google Drive de référence : dossier `01 - Metiers Pharma / 00 - Normes et guidline GMP / Guide et normes CQV-CSV` (normes réelles, phase de recherche du 24/08) et dossier `10- Architecture détaillée / Nouvelle Architecture Cible` (19 fichiers, package Target Architecture v5.0 gouvernant le chantier de convergence actif — voir §5).
-- Le fichier de tâches interne de la session (`TaskList`) porte le détail phase par phase (tâches #50 à #53 pour la convergence architecturale) — utile pour retrouver l'état exact si ce fichier et le fichier de tâches divergent un jour ; en cas de divergence, `CONVERGENCE_PLAN.md` §"Suivi d'avancement" fait foi pour l'implémentation, ce fichier-ci pour le récit et le contexte.
+- Le fichier de tâches interne de la session (`TaskList`) porte le détail phase par phase — utile pour retrouver l'état exact si ce fichier et le fichier de tâches divergent un jour ; en cas de divergence, `CONVERGENCE_PLAN.md` §"Suivi d'avancement" fait foi pour l'implémentation, ce fichier-ci pour le récit et le contexte.
 
 ---
 *Fichier de continuité, pas un livrable projet — à réécrire entièrement (pas juste amender) la prochaine fois qu'un état des lieux complet est demandé, plutôt que de laisser les deux versions coexister.*

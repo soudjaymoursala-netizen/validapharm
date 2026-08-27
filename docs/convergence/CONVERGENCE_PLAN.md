@@ -138,6 +138,35 @@
 
 ---
 
+## Clarification de vision produit (26/08/2026) — d'où viennent les Phases 13-17
+
+L'utilisateur a clarifié explicitement que sa vision (« Que voulez-vous faire ? » plutôt qu'une liste de modules, raisonnement contextuel changement→impact→risque→test, IA capable de dire « je ne sais pas ») n'est **pas** une nouvelle direction : elle correspond mot pour mot au domaine **Work** (`Mission, Activity, WorkflowDefinition, WorkflowInstance, Approval`) et au domaine **AI** (`AIRequest, AIResponse, AIConfiguration, AIEvaluation`) déjà nommés dans `03_DOMAIN_DATA_MODEL.md`, jamais engagés jusqu'ici — le moteur construit en Phases 0bis-12 en est la matière première, pas ce qu'il faut remplacer. Une revue panel E1-E7 dédiée (`docs/convergence/PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md`) a tranché les 3 points bloquants avant d'engager le code — voir TD-007 à TD-009 dans `TECHNICAL_DECISIONS.md`.
+
+## Phase 13 — Domaine Work : `Mission` / `Activity`
+- **Dependencies** : Organization/Workspace (Phase 11), Requirement/Test/Assessment déjà construits (Phase 7/3).
+- **Décision d'entrée** : TD-009 — `Mission`/`Activity` seulement ; `WorkflowDefinition`/`WorkflowInstance`/`Approval` différés sur besoin réel démontré (même statut que 8b/9-Generate-Render-Approve-Freeze).
+- **Portée** : une `Mission` est un objet de liaison contextualisé (référence Organization/Workspace/AssetNode/Requirement/Assessment/Test/Evidence/Deliverable existants sans les dupliquer) — pas un moteur de raisonnement en soi.
+
+## Phase 14 — Context Engine généralisé
+- **Dependencies** : Phase 13, `resoudreRegleEffective`/`ancetresWorkspace` (Phase 11/12).
+- **Portée** : généralise la résolution Scope+Applicability+Effectivity+Override, aujourd'hui câblée sur un seul store (Structure Système), en un `ContextSnapshot` réutilisable par toute `Mission` — assemble automatiquement site/process/méthode applicable/documents/historique pertinents pour un objet donné.
+
+## Phase 15 — Reasoning Engine (domaine AI)
+- **Dependencies** : Phase 14 (ContextSnapshot), relais IA existant (Phase Chat expert), Source Intelligence (Phase 8a).
+- **Décisions d'entrée** : TD-007 (orchestration côté navigateur, relais reste un simple proxy sans état, jamais un nouveau backend) et TD-008 (états de confiance discrets `connu|inféré|inconnu|conflit|a_verifier`, jamais un score numérique).
+- **Portée** : `AIRequest`/`AIResponse` avec traçabilité des appels d'outils, boucle d'orchestration lisant les stores existants (Requirement, Risk, Test, KnowledgeItem, Evidence) comme des outils, citations obligatoires vers `Evidence`/`ProvenanceLink`. Testé sur un seul scénario réel (changement de recette) avant généralisation — jamais un moteur générique non éprouvé.
+- **Garde-fou non négociable** : une `AIResponse` n'est jamais écrite directement dans `Requirement`/`Test`/`KnowledgeItem` sans confirmation humaine explicite (même principe que `Confirmation` en Phase 8a) — cohérent avec le principe fondateur n°1 (`00-cadrage-projet.md`).
+
+## Phase 16 — Coquille UX (sidebar + Accueil + mode dual)
+- **Dependencies** : Phases 13-15 éprouvées sur au moins un cas réel avant d'investir dans l'habillage.
+- **Portée** : nouvelle structure de navigation (sidebar par intention, écran d'accueil « Que voulez-vous faire ? », navigation contextuelle selon l'objet ouvert, Mode Expert / Mode Assistant coexistants sur le même moteur). Aucun écran existant supprimé — ils deviennent des vues atteignables depuis un contexte plutôt que des entrées de menu isolées.
+
+## Phase 17 — Mission workspace
+- **Dependencies** : Phase 16.
+- **Portée** : écran d'une Mission ouverte (contexte, scope, assessment, risques, requirements, stratégie, tests, evidence, livrables, historique) exposant enfin visuellement le raisonnement de la Phase 15.
+
+---
+
 ## Ce qui reste volontairement "OPEN" (non planifié ici)
 
 Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèle IA exact pour le multimodal, les tests de charge/pentest/sauvegarde-restauration ne sont **pas** tranchés dans ce plan (*mise à jour 25/08/2026 : le fournisseur OCR/parseur, lui, est désormais tranché — Azure AI Vision, décision explicite de l'utilisateur, TD-001*) — ils viennent après le GAP, comme le package le précise lui-même. *(Mise à jour 25/08/2026, clôture des points ouverts)* Le "schéma SQL physique si un backend est retenu" mentionné initialement ici est devenu **sans objet** : TD-001 (25/08/2026) a tranché qu'aucun backend relationnel n'est retenu (extension serverless à la place) — il n'y a donc pas de schéma SQL à concevoir tant que ce choix n'est pas révisé sur besoin réel démontré.
@@ -166,6 +195,8 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèl
 | 10 | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v37 (§4.17/URS-F-170), `03-specifications-fonctionnelles.md` v27, `docs/convergence/PHASE_10_INTEGRATION_GATEWAY_SPEC.md` |
 | 11 (Organization/Workspace) | Terminée (25/08/2026) | voir historique git de la branche | `01-URS-outil.md` v38 (§4.18/URS-F-180), `03-specifications-fonctionnelles.md` v28, `docs/convergence/PHASE_11_ORGANIZATION_MIGRATION_SPEC.md` |
 | 12 (câblage Workspace) — étape 1/~42 (Structure Système) | Terminée (26/08/2026) | voir historique git de la branche | `01-URS-outil.md` v39 (URS-F-100undecies/duodecies), `03-specifications-fonctionnelles.md` v29, `docs/convergence/CABLAGE_ETAPE_1_STRUCTURE_SYSTEME_SPEC.md` |
+| **Revue panel Moteur de raisonnement** | **Terminée (26/08/2026)** | — (documentaire) | `docs/convergence/PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md`, `TECHNICAL_DECISIONS.md` (TD-007 à TD-009) |
+| 13 à 17 (Mission/Context/Reasoning/UX/Mission workspace) | Non engagées — plan tranché, code non commencé | — | `docs/convergence/CONVERGENCE_PLAN.md` (sections dédiées ci-dessus) |
 | 8b, 9 (Generate/Render/Approve/Freeze), 12 (étapes 2 à ~42) | Non engagées | — | — |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.
