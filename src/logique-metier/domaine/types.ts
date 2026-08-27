@@ -1015,13 +1015,22 @@ export interface SourceVersion {
 }
 
 /**
- * Une exécution d'extraction (OCR via le relais Phase 6, ou saisie
- * manuelle directe) sur une `SourceVersion` précise. Ne porte plus le
- * texte brut directement — celui-ci est désormais porté par
- * `ExtractionItem` (0..N par `Extraction`), cohérent avec
- * `Relationship Matrix` : `Extraction produces ExtractionItem 1:N`.
+ * Une exécution d'extraction (OCR via le relais Phase 6, ingestion Office
+ * native Phase 19 — TD-014, ou saisie manuelle directe) sur une
+ * `SourceVersion` précise. Ne porte plus le texte brut directement —
+ * celui-ci est désormais porté par `ExtractionItem` (0..N par
+ * `Extraction`), cohérent avec `Relationship Matrix` : `Extraction
+ * produces ExtractionItem 1:N`.
+ *
+ * `docx_natif` (Phase 19) : extraction locale (`connecteurs/office/
+ * DocxNatifAdapter.ts`), aucun appel réseau, contrairement à `ocr_azure`.
+ * `xlsx_natif` volontairement absent à ce stade — aucune bibliothèque
+ * d'ingestion Excel propre n'a été retenue (TD-014 : `xlsx`/SheetJS porte
+ * une vulnérabilité haute sans correctif sur le registre npm ;
+ * `exceljs` introduit une dépendance transitive vulnérable) — limite
+ * assumée, jamais une valeur fabriquée sans implémentation réelle.
  */
-export type MethodeExtraction = 'ocr_azure' | 'saisie_manuelle'
+export type MethodeExtraction = 'ocr_azure' | 'docx_natif' | 'saisie_manuelle'
 
 export interface Extraction {
   id: string

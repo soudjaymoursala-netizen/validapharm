@@ -190,6 +190,13 @@ L'utilisateur a transmis un troisième document de vision ("VALIDAPHARM MASTER P
 - **Divergences identifiées et différées explicitement** : aucune détection de cycle sur `RelationTechnique` (même tolérance qu'`associated_nodes[]`) ; aucun écran dédié (domaine + persistance + store + outil de raisonnement seulement, même discipline que les Phases 5/8a/9/10/13) ; aucune extension `Database`/`Network` au-delà des 3 types de relation nommés.
 - Vérifié : suite complète 78 fichiers/527 tests verte, typecheck et lint propres. Aucune vérification navigateur (pas d'écran dans ce lot).
 
+## Phase 19 — Ingestion Office native (lecture `.docx`) — **Terminée (27/08/2026)**
+- **Dependencies** : Phase 18, aucune (recherche de librairie menée dans cette même phase, TD-014).
+- **Portée réellement construite** (spec `docs/convergence/PHASE_19_INGESTION_OFFICE_SPEC.md`, TD-014) : `connecteurs/office/DocxNatifAdapter.ts` (`extraireTexteDocx`, dézippage `jszip` + extraction de texte via `DOMParser` sur `word/document.xml`, entièrement local), `MethodeExtraction` étendu (`docx_natif`).
+- **Recherche documentée** : `mammoth` installé, testé sur un `.docx` réel construit avec `jszip`, puis **abandonné** — son champ `browser` de `package.json` (redirection Node/navigateur) n'est pas appliqué par la résolution de modules de Vitest, le code testé n'aurait jamais été celui exécuté en production. `xlsx`/SheetJS (npm) : vulnérabilité haute sans correctif. `exceljs` : dépendance transitive vulnérable. `docxtemplater`+`pizzip` retenus par anticipation pour une future phase de génération (Template Intelligence), non installés dans ce lot.
+- **Divergences identifiées et différées explicitement** : aucune ingestion Excel native (bloquée faute de librairie saine — limite assumée, pas un oubli) ; aucun wiring dans un écran ni dans `useSourceIntelligenceStore` (même discipline que l'OCR, Phase 6) ; texte brut uniquement, aucune conservation de formatage/tableaux.
+- Vérifié : suite complète 79 fichiers/531 tests verte, typecheck et lint propres, `npm audit` : 0 vulnérabilité sur les dépendances ajoutées.
+
 ---
 
 ## Ce qui reste volontairement "OPEN" (non planifié ici)
@@ -229,7 +236,8 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèl
 | 17 (Mission workspace) | **Terminée (27/08/2026)** | voir historique git de la branche | `01-URS-outil.md` v44 (§4.23/URS-F-230 à quinquies), `03-specifications-fonctionnelles.md` v34, `docs/convergence/PHASE_17_MISSION_WORKSPACE_SPEC.md` |
 | **Vision North Star + Capability & Gap Assessment Checklist** | **Terminée (27/08/2026)** | — (documentaire) | `docs/convergence/VISION_NORTH_STAR_CONVERGENCE.md`, `TECHNICAL_DECISIONS.md` (TD-013) |
 | 18 (Architecture Technique — relations typées `AssetNode`) | **Terminée (27/08/2026)** | voir historique git de la branche | `01-URS-outil.md` v45 (§4.24/URS-F-240 à quater), `03-specifications-fonctionnelles.md` v35, `docs/convergence/PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md` |
+| 19 (Ingestion Office native — lecture `.docx`) | **Terminée (27/08/2026)** | voir historique git de la branche | `01-URS-outil.md` v46 (§4.15/URS-F-150septies-octies), `03-specifications-fonctionnelles.md` v36, `docs/convergence/PHASE_19_INGESTION_OFFICE_SPEC.md`, `TECHNICAL_DECISIONS.md` (TD-014) |
 | 8b, 9 (Generate/Render/Approve/Freeze), 12 (étapes 2 à ~42) | Non engagées | — | — |
-| 19 (ingestion Office native), 20 (Procedure Ingestion/Execution), 21 (Template Intelligence généralisée) | Non engagées — chantiers P0 suivants du plan Vision North Star, voir `VISION_NORTH_STAR_CONVERGENCE.md` §4 | — | — |
+| 20 (Procedure Ingestion/Execution), 21 (Template Intelligence généralisée — génération `docxtemplater`, ingestion Excel) | Non engagées — chantiers P0 suivants du plan Vision North Star, voir `VISION_NORTH_STAR_CONVERGENCE.md` §4 | — | — |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.

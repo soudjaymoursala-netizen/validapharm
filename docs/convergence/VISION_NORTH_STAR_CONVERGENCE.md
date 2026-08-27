@@ -54,10 +54,10 @@ Catégories de la checklist déjà vérifiées sur le code réel (types, moteurs
 ## 4. Roadmap de convergence (priorités P0-P3, cf. audit du 27/08/2026)
 
 **P0 — bloquants architecturaux** (sans eux aucun scénario complet de la vision n'est démontrable) :
-1. **Phase 18 — Architecture Technique** (relations typées AssetNode↔AssetNode) — engagée dans cette même session, voir `PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md`.
-2. Ingestion Office native (Word/Excel, parsing réel) — non engagée, nécessite un choix de librairie (recherche à mener, aucune dépendance de ce type dans `package.json` à ce jour).
-3. Cerveau procédural (Procedure Ingestion + Execution) — non engagée, dépend conceptuellement de 2 (lire une SOP réelle) mais peut démarrer sur une SOP saisie/collée en texte en attendant.
-4. Template Intelligence généralisée + génération au format client réel — non engagée, dépend de 2.
+1. **Phase 18 — Architecture Technique** (relations typées AssetNode↔AssetNode) — **Terminée**, voir `PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md`.
+2. **Phase 19 — Ingestion Office native** (lecture `.docx`) — **Terminée**, voir `PHASE_19_INGESTION_OFFICE_SPEC.md`/TD-014. Excel reste bloqué faute de librairie saine (limite assumée, pas un oubli).
+3. Cerveau procédural (Procedure Ingestion + Execution) — non engagée. Peut désormais s'appuyer sur une SOP `.docx` réellement lue (Phase 19), ou une SOP saisie/collée en texte en attendant une couverture Excel/PDF.
+4. Template Intelligence généralisée + génération au format client réel — non engagée. `docxtemplater`+`pizzip` pré-choisis (TD-014), non installés.
 
 **P1 — critique** : Context Engine enrichi (narratif WHY/WHAT/WHERE/HOW/IMPACT), Deliverable Intelligence, Compliance Engine généralisé, Risk/Impact Assessment à méthodologie client généralisée, Knowledge Graph générique.
 
@@ -80,6 +80,6 @@ Parmi les 4 chantiers P0, l'Architecture Technique est la seule à ne nécessite
 - Aucune détection de cycle sur les relations techniques : `associated_nodes[]` (graphe libre) tolère déjà les cycles par conception documentée ; les relations typées suivent la même tolérance, pour ne pas imposer une contrainte que la vision ne demande pas.
 - Aucun écran dédié dans ce lot (même discipline que les Phases 5/8a/9/10/13 : domaine + persistance + store + outil de raisonnement d'abord, écran quand un cas d'usage réel le réclame).
 
-## 7. Prochaine étape après la Phase 18
+## 7. Prochaine étape après la Phase 19
 
-Sur confirmation de l'utilisateur, engager le chantier P0 suivant. La recherche de librairie d'ingestion Office (mammoth/xlsx ou équivalent, compatibilité PWA/bundle) est un préalable à documenter (nouvelle Technical Decision) avant tout code, cohérent avec la discipline déjà appliquée pour TD-001 (OCR) et TD-005 (connecteurs).
+Chantier P0 suivant : le cerveau procédural (Procedure Ingestion + Execution — item 3 du §4). Peut s'appuyer sur `extraireTexteDocx` (Phase 19) pour lire une SOP réelle fournie par l'utilisateur, en généralisant le patron déjà validé de `MethodProfileACFC` (versionné, immuable, appliqué pas à pas) à une entité `Procedure` structurant le texte en étapes/conditions/exceptions/responsabilités.
