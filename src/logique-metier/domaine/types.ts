@@ -1374,3 +1374,58 @@ export interface Dependency {
   activity_cible_id: string
   created_at: string
 }
+
+/**
+ * Phase 14 (`docs/convergence/PHASE_14_CONTEXT_ENGINE_SPEC.md`) — domaine
+ * "Context" de `03_DOMAIN_DATA_MODEL.md` (`ContextView, ContextSnapshot,
+ * Applicability, Effectivity, Override`). Généralise la résolution
+ * Scope+Applicability+Effectivity+Override (`resoudreRegleEffective`,
+ * `ancetresWorkspace`, Phase 11/12), jusqu'ici câblée sur le seul store
+ * Structure Système, en une entité réutilisable par toute `Mission`.
+ *
+ * **Immutable** (invariant #12 de `03_DOMAIN_DATA_MODEL.md` : "ContextSnapshot
+ * is immutable") : aucune fonction de mise à jour n'est exposée par
+ * `useContextEngineStore` — pas d'`audit_log`/`updated_at`, il n'y a rien à
+ * journaliser après création. `workspace_id`/`asset_node_id` sont l'ancre
+ * fournie à l'assemblage (au moins l'un des deux non nul en pratique, non
+ * imposé au niveau du type pour rester cohérent avec le pattern déjà
+ * utilisé sur `Mission`/`QualityEvent`).
+ *
+ * Résolution de "méthode applicable" et de "documents pertinents"
+ * volontairement **non construite** ici (spec §2) : `MethodProfileACFC`/
+ * `MethodProfileImpactAssessment` et `Source` n'ont aujourd'hui aucun
+ * rattachement `Workspace`/`AssetNode` — les y ajouter sans cas réel
+ * fabriquerait une résolution non éprouvée.
+ */
+export interface ContextSnapshot {
+  id: string
+  client_id: string
+  workspace_id: string | null
+  asset_node_id: string | null
+  created_at: string
+}
+
+/**
+ * Type d'objet référencé par un `ContextSnapshotItem` — fermé et
+ * documenté mot pour mot (même discipline que `StatutKnowledgeItem`),
+ * limité à ce qui est réellement résoluble aujourd'hui (spec §2) : pas de
+ * `'method_profile'` ni `'source'` tant qu'aucun rattachement
+ * `Workspace`/`AssetNode` n'existe sur ces entités.
+ */
+export type TypeObjetContexte = 'asset_node' | 'manufacturing_context' | 'quality_event'
+
+/**
+ * Jointure explicite et **polymorphe** réalisant "`ContextSnapshot`
+ * includes Versioned Objects N:M" (`04_RELATIONSHIP_MATRIX_FINAL.md`) —
+ * un seul type de jointure générique (discriminé par `type_objet`) plutôt
+ * qu'une jointure dédiée par type cible, cohérent avec l'invariant #5
+ * ("N:M relationships needing context/provenance are explicit objects")
+ * et le pattern déjà utilisé pour `ExternalReference` (pointeur générique).
+ */
+export interface ContextSnapshotItem {
+  id: string
+  client_id: string
+  context_snapshot_id: string
+  type_objet: TypeObjetContexte
+  objet_id: string
+}

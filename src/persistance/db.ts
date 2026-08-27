@@ -14,6 +14,8 @@ import type {
   Conflict,
   Connector,
   ContentPlan,
+  ContextSnapshot,
+  ContextSnapshotItem,
   CPP,
   CQA,
   Dependency,
@@ -203,6 +205,8 @@ export class ValidaPharmDatabase extends Dexie {
   associationsMissionQualityEvent!: EntityTable<AssociationMissionQualityEvent, 'id'>
   activities!: EntityTable<Activity, 'id'>
   dependencies!: EntityTable<Dependency, 'id'>
+  contextSnapshots!: EntityTable<ContextSnapshot, 'id'>
+  contextSnapshotItems!: EntityTable<ContextSnapshotItem, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -336,6 +340,15 @@ export class ValidaPharmDatabase extends Dexie {
       associationsMissionQualityEvent: 'id, client_id, mission_id, quality_event_id',
       activities: 'id, client_id, mission_id, statut',
       dependencies: 'id, client_id, activity_source_id, activity_cible_id',
+    })
+    /**
+     * Phase 14 (`docs/convergence/PHASE_14_CONTEXT_ENGINE_SPEC.md`) —
+     * domaine "Context" : `ContextSnapshot` généralisé, réutilisable par
+     * toute `Mission` (jusqu'ici câblé sur le seul store Structure Système).
+     */
+    this.version(22).stores({
+      contextSnapshots: 'id, client_id, workspace_id, asset_node_id',
+      contextSnapshotItems: 'id, client_id, context_snapshot_id, type_objet, objet_id',
     })
   }
 }

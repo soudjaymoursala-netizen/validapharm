@@ -6,7 +6,7 @@ import type {
   Langue,
   Workspace,
 } from '../../logique-metier/domaine/types'
-import { ancetresWorkspace } from '../../logique-metier/organisation/ancetresWorkspace'
+import { noeudsVisiblesDepuisWorkspace as calculerNoeudsVisibles } from '../../logique-metier/organisation/noeudsVisiblesDepuisWorkspace'
 import { introduitUnCycle } from '../../logique-metier/structure-systeme/detectionCycle'
 import { codeDejaUtilise } from '../../logique-metier/structure-systeme/validerCodeUnique'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
@@ -160,13 +160,17 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
    * §E1/E7) : un nœud est visible depuis `workspaceId` s'il y est assigné,
    * s'il est assigné à l'un de ses ancêtres (héritage descendant), ou s'il
    * n'a pas encore été assigné (`workspace_id: null`, non-régression).
+   *
+   * Délègue à la fonction pure extraite en Phase 14
+   * (`logique-metier/organisation/noeudsVisiblesDepuisWorkspace.ts`),
+   * réutilisée par l'assemblage de `ContextSnapshot` sans dupliquer la
+   * logique — signature et comportement inchangés pour ce store.
    */
   function noeudsVisiblesDepuisWorkspace(
     workspaceId: string,
     arbre: ReadonlyMap<string, Pick<Workspace, 'id' | 'parent_workspace_id'>>,
   ): AssetNode[] {
-    const ancetres = new Set(ancetresWorkspace(workspaceId, arbre))
-    return noeuds.value.filter((n) => n.workspace_id === null || ancetres.has(n.workspace_id))
+    return calculerNoeudsVisibles(workspaceId, arbre, noeuds.value)
   }
 
   return {
