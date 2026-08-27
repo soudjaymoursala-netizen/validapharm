@@ -14,6 +14,11 @@ function routeurDeTest(): Router {
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
       { path: '/configuration', name: 'configuration-client', component: { template: '<div />' } },
       {
+        path: '/clients/:clientId/missions',
+        name: 'liste-missions',
+        component: { template: '<div />' },
+      },
+      {
         path: '/clients/:clientId/structure-systeme',
         name: 'structure-systeme',
         component: { template: '<div />' },

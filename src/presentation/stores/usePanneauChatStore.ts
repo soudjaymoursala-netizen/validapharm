@@ -1,33 +1,26 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { OllamaProviderAdapter } from '../../connecteurs/ia/OllamaProviderAdapter'
 import type {
   ContexteEnvoi,
   ModeUsageIA,
   ProviderAdapter,
   Reponse,
 } from '../../connecteurs/ia/ProviderAdapter'
-import { RelayProviderAdapter } from '../../connecteurs/ia/RelayProviderAdapter'
 import type { AiChatSessionLog } from '../../logique-metier/domaine/types'
 import { envoyerAvecBascule } from '../../logique-metier/routeur-ia/envoyerAvecBascule'
 import { deriveVersionDetectee } from '../../logique-metier/routeur-ia/qualificationFiabilite'
 import { db } from '../../persistance/db'
+import { construireAdaptateursIA } from './construireAdaptateursIA'
 import { useClientConfigStore } from './useClientConfigStore'
 import { useConnexionRelaisIAStore } from './useConnexionRelaisIAStore'
 
-const NOMS_FOURNISSEURS: Record<string, string> = {
+export const NOMS_FOURNISSEURS: Record<string, string> = {
   claude: 'Claude',
   openai: 'OpenAI',
   copilot: 'Copilot',
   deepseek: 'DeepSeek',
   local: 'Modèle local (Ollama)',
 }
-
-// Aucun écran de sélection du modèle local n'est spécifié à ce stade ;
-// valeur par défaut documentée plutôt que silencieusement câblée en dur
-// sans trace (backlog : rendre configurable si un client utilise un
-// modèle Ollama différent).
-const MODELE_OLLAMA_PAR_DEFAUT = 'llama3'
 
 export interface SectionDisponibleAJoindre {
   id: string
@@ -101,16 +94,12 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
   }
 
   function construireAdaptateurs(): { principal: ProviderAdapter; local: ProviderAdapter } {
-    const local = new OllamaProviderAdapter({ modele: MODELE_OLLAMA_PAR_DEFAUT })
-    if (!estFournisseurCloud.value) {
-      return { principal: local, local }
-    }
-    const principal = new RelayProviderAdapter({
-      relayUrl: relaisStore.connexion?.relayUrl ?? '',
-      jeton: relaisStore.connexion?.jeton,
-      nomAffiche: nomFournisseurActuel.value,
+    return construireAdaptateursIA({
+      estFournisseurCloud: estFournisseurCloud.value,
+      nomFournisseurActuel: nomFournisseurActuel.value,
+      relayUrl: relaisStore.connexion?.relayUrl,
+      jetonRelais: relaisStore.connexion?.jeton,
     })
-    return { principal, local }
   }
 
   async function envoyerQuestion(

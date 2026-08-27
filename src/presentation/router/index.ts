@@ -85,6 +85,18 @@ export const router = createRouter({
       component: () => import('../screens/StructureSysteme.vue'),
       props: true,
     },
+    {
+      path: '/clients/:clientId/missions',
+      name: 'liste-missions',
+      component: () => import('../screens/ListeMissions.vue'),
+      props: true,
+    },
+    {
+      path: '/clients/:clientId/missions/:missionId',
+      name: 'mission-workspace',
+      component: () => import('../screens/MissionWorkspace.vue'),
+      props: true,
+    },
   ],
 })
 

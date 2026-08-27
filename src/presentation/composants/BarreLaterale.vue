@@ -14,6 +14,7 @@ const outilsClientActif = computed(() => {
   const clientId = clientActifStore.clientActifId
   if (!clientId) return null
   return [
+    { nom: 'Missions', route: { name: 'liste-missions', params: { clientId } } },
     { nom: 'Structure Système', route: { name: 'structure-systeme', params: { clientId } } },
     {
       nom: 'Stratégie de qualification',
