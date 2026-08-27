@@ -1,5 +1,10 @@
+import type { TableauDocx } from '../domaine/types'
 import { describe, expect, it } from 'vitest'
-import { detecterSections, proposerStructureProcedure } from './parseurStructureProcedure'
+import {
+  detecterSections,
+  proposerEtapesDepuisTableaux,
+  proposerStructureProcedure,
+} from './parseurStructureProcedure'
 
 describe('detecterSections (Phase 21, TD-017)', () => {
   it("reconnaît les en-têtes canoniques d'une SOP gabarit 'Sanofi' (en-têtes en MAJUSCULES, point après le numéro)", () => {
@@ -178,5 +183,98 @@ describe('proposerStructureProcedure — étapes candidates (Phase 21, TD-017)',
 
     expect(proposition.etapesProposees).toHaveLength(2)
     expect(proposition.etapesProposees[0]?.contexteDetecte).toBeNull()
+  })
+})
+
+describe('proposerEtapesDepuisTableaux (Phase 22, TD-019) — étapes sous tableau, calibré sur le manuel Markem-Imaje C350 réel', () => {
+  it('extrait les étapes numérotées et combine le titre le plus proche et les préconditions du tableau en contexte', () => {
+    const tableaux: TableauDocx[] = [
+      {
+        titreProchePrecedent: 'Powering on the controller',
+        lignes: [
+          ['Previous achievement', 'Printer is fully installed and configured.'],
+          ['Required time:', '>1.5 minutes'],
+          [
+            '1',
+            'Connect the printer power cable to a universal AC mains supply (120/240 VAC @ 50-60 Hz).',
+          ],
+          ['2', 'Turn the switch key to the "I" (ON) position.'],
+        ],
+      },
+    ]
+
+    const etapes = proposerEtapesDepuisTableaux(tableaux)
+
+    expect(etapes).toHaveLength(2)
+    expect(etapes[0]).toMatchObject({
+      ordre: 1,
+      description:
+        'Connect the printer power cable to a universal AC mains supply (120/240 VAC @ 50-60 Hz).',
+      contexteDetecte:
+        'Powering on the controller — Previous achievement : Printer is fully installed and configured. — Required time : >1.5 minutes',
+    })
+    expect(etapes[1]?.ordre).toBe(2)
+  })
+
+  it('ne fabrique aucune précondition absente et se limite au titre le plus proche quand le tableau ne contient ni "Previous achievement" ni "Required time"', () => {
+    const tableaux: TableauDocx[] = [
+      {
+        titreProchePrecedent: 'Powering off the head',
+        lignes: [
+          ['1', 'Press stop if in the Execute state.'],
+          ['2', 'The printer will be in the Held state.'],
+        ],
+      },
+    ]
+
+    const etapes = proposerEtapesDepuisTableaux(tableaux)
+
+    expect(etapes.every((e) => e.contexteDetecte === 'Powering off the head')).toBe(true)
+  })
+
+  it("ignore une ligne dont la première cellule n'est pas un numéro d'étape exact, sans planter", () => {
+    const tableaux: TableauDocx[] = [
+      {
+        titreProchePrecedent: null,
+        lignes: [
+          ['', ''],
+          ['Note:', 'To restart the head, follow the steps above.'],
+          ['1', 'Press the emission stop button.'],
+        ],
+      },
+    ]
+
+    const etapes = proposerEtapesDepuisTableaux(tableaux)
+
+    expect(etapes).toHaveLength(1)
+    expect(etapes[0]?.description).toBe('Press the emission stop button.')
+  })
+
+  it("s'ajoute aux étapes textuelles de proposerStructureProcedure sans écraser leur numérotation, chaque tableau gardant la sienne", () => {
+    const texte = [
+      '1 But',
+      'Décrire la procédure.',
+      '2 Procédure',
+      '- Étape textuelle unique.',
+    ].join('\n')
+    const tableaux: TableauDocx[] = [
+      {
+        titreProchePrecedent: 'Powering on the head',
+        lignes: [['1', 'Press start.']],
+      },
+    ]
+
+    const proposition = proposerStructureProcedure(texte, tableaux)
+
+    expect(proposition.etapesProposees).toHaveLength(2)
+    expect(proposition.etapesProposees[0]).toMatchObject({
+      ordre: 1,
+      description: 'Étape textuelle unique.',
+    })
+    expect(proposition.etapesProposees[1]).toMatchObject({
+      ordre: 1,
+      description: 'Press start.',
+      contexteDetecte: 'Powering on the head',
+    })
   })
 })

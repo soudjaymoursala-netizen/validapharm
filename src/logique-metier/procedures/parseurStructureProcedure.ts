@@ -3,6 +3,7 @@ import type {
   PropositionStructureProcedure,
   SectionCanoniqueProcedure,
   SectionDetectee,
+  TableauDocx,
 } from '../domaine/types'
 
 /**
@@ -221,6 +222,61 @@ function collecterLignesSection(texteSection: string): {
   return { strictes, toutes }
 }
 
+/** Une des deux étiquettes de préconditions observées dans les tableaux d'étapes réels (SOP Markem-Imaje) — jamais une valeur devinée si absente. */
+const LIBELLES_PRECONDITION_TABLEAU: Record<string, string> = {
+  'PREVIOUS ACHIEVEMENT': 'Previous achievement',
+  'REQUIRED TIME': 'Required time',
+}
+
+/**
+ * Propose des étapes candidates à partir de tableaux extraits d'un
+ * `.docx` (`extraireTableauxDocx`, Phase 22, TD-019) — genre "étapes sous
+ * tableau" (manuel équipement Markem-Imaje réel : "Previous achievement"/
+ * "Required time" en préconditions, puis une ligne par étape numérotée
+ * en première colonne, instruction en deuxième), laissé hors couverture
+ * par TD-017/TD-018 (texte à en-têtes numérotés uniquement).
+ *
+ * Une ligne est une étape candidate seulement si sa première cellule est
+ * *exactement* un nombre — jamais un texte partiellement numérique deviné
+ * comme un numéro d'étape. `contexteDetecte` combine le titre le plus
+ * proche précédant le tableau (`titreProchePrecedent`) et les
+ * préconditions trouvées dans ce même tableau — jamais fabriqué si le
+ * tableau n'en contient aucune.
+ */
+export function proposerEtapesDepuisTableaux(tableaux: readonly TableauDocx[]): EtapeProposee[] {
+  const etapes: EtapeProposee[] = []
+
+  for (const tableau of tableaux) {
+    const preconditions: string[] = []
+    for (const ligne of tableau.lignes) {
+      const libelle = LIBELLES_PRECONDITION_TABLEAU[normaliser((ligne[0] ?? '').trim())]
+      const valeur = (ligne[1] ?? '').trim()
+      if (libelle && valeur.length > 0) preconditions.push(`${libelle} : ${valeur}`)
+    }
+
+    const partiesContexte = [tableau.titreProchePrecedent, ...preconditions].filter(
+      (partie): partie is string => partie !== null && partie.length > 0,
+    )
+    const contexteDetecte = partiesContexte.length > 0 ? partiesContexte.join(' — ') : null
+
+    for (const ligne of tableau.lignes) {
+      const premiereCellule = (ligne[0] ?? '').trim()
+      if (!/^\d{1,2}$/.test(premiereCellule)) continue
+      const description = (ligne[1] ?? '').trim()
+      if (description.length === 0) continue
+      etapes.push({
+        ordre: Number(premiereCellule),
+        description,
+        conditionDetectee: detecterCondition(description),
+        responsableDetecte: detecterResponsable(description),
+        contexteDetecte,
+      })
+    }
+  }
+
+  return etapes
+}
+
 /**
  * Propose une structure (sections + étapes candidates) à partir du texte
  * brut d'une SOP — jamais écrite en base : une simple proposition que
@@ -236,8 +292,18 @@ function collecterLignesSection(texteSection: string): {
  * plutôt que de renvoyer une liste vide sur un document dont la structure
  * est réelle mais moins formatée. Toujours une proposition, jamais une
  * vérité auto-validée.
+ *
+ * `tableaux` (Phase 22, TD-019, optionnel) : étapes candidates
+ * supplémentaires extraites de tableaux `.docx` (`extraireTableauxDocx`)
+ * — un canal structurellement distinct du texte, jamais fusionné avec
+ * la numérotation des étapes textuelles (chaque tableau réel garde sa
+ * propre numérotation d'origine, fidèle à la source plutôt qu'un compteur
+ * global fabriqué).
  */
-export function proposerStructureProcedure(texte: string): PropositionStructureProcedure {
+export function proposerStructureProcedure(
+  texte: string,
+  tableaux: readonly TableauDocx[] = [],
+): PropositionStructureProcedure {
   const sections = detecterSections(texte)
   const etapesProposees: EtapeProposee[] = []
   let ordre = 1
@@ -257,6 +323,8 @@ export function proposerStructureProcedure(texte: string): PropositionStructureP
       })
     }
   }
+
+  etapesProposees.push(...proposerEtapesDepuisTableaux(tableaux))
 
   return { sections, etapesProposees }
 }

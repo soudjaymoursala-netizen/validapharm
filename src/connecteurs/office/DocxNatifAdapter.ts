@@ -1,4 +1,5 @@
 import JSZip from 'jszip'
+import type { TableauDocx } from '../../logique-metier/domaine/types'
 import { DocumentInvalideError } from './erreurs'
 
 const ESPACE_NOMS_WORDPROCESSING = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -58,7 +59,7 @@ async function ouvrirDocx(fichier: ArrayBuffer): Promise<JSZip> {
   }
 }
 
-export async function extraireTexteDocx(fichier: ArrayBuffer): Promise<ResultatExtractionDocx> {
+async function chargerDocumentXml(fichier: ArrayBuffer): Promise<Document> {
   const zip = await ouvrirDocx(fichier)
 
   const documentXml = zip.file('word/document.xml')
@@ -73,17 +74,77 @@ export async function extraireTexteDocx(fichier: ArrayBuffer): Promise<ResultatE
   if (doc.getElementsByTagName('parsererror').length > 0) {
     throw new DocumentInvalideError('word/document.xml est illisible (XML invalide).')
   }
+  return doc
+}
 
+/** Concatène les runs de texte `<w:t>` d'un élément (paragraphe ou cellule), dans l'ordre du document. */
+function texteDeRuns(element: Element): string {
+  return Array.from(element.getElementsByTagNameNS(ESPACE_NOMS_WORDPROCESSING, 't'))
+    .map((run) => run.textContent ?? '')
+    .join('')
+}
+
+/** Enfants *directs* d'un élément portant un nom local donné, dans l'espace de noms WordprocessingML — évite de remonter les lignes/cellules d'un tableau imbriqué dans une cellule (non traité, voir `extraireTableauxDocx`). */
+function enfantsNommes(element: Element, nomLocal: string): Element[] {
+  return Array.from(element.children).filter(
+    (enfant) => enfant.namespaceURI === ESPACE_NOMS_WORDPROCESSING && enfant.localName === nomLocal,
+  )
+}
+
+export async function extraireTexteDocx(fichier: ArrayBuffer): Promise<ResultatExtractionDocx> {
+  const doc = await chargerDocumentXml(fichier)
   const paragraphes = Array.from(doc.getElementsByTagNameNS(ESPACE_NOMS_WORDPROCESSING, 'p'))
-  const texte = paragraphes
-    .map((paragraphe) =>
-      Array.from(paragraphe.getElementsByTagNameNS(ESPACE_NOMS_WORDPROCESSING, 't'))
-        .map((run) => run.textContent ?? '')
-        .join(''),
-    )
-    .join('\n')
-
+  const texte = paragraphes.map(texteDeRuns).join('\n')
   return { texte }
+}
+
+/**
+ * Extrait les tableaux d'un `.docx` en grille de cellules brutes (Phase
+ * 22, TD-019) — calibré sur un manuel équipement réel lu dans Google
+ * Drive (Markem-Imaje, SOP C350) dont **la quasi-totalité des étapes
+ * sont sous forme de tableau** ("Previous achievement"/"Required time"/
+ * numéro d'étape en première colonne, instruction en deuxième) plutôt
+ * qu'en texte à puces — le genre explicitement laissé hors couverture
+ * par TD-017/TD-018.
+ *
+ * Seuls les tableaux **de premier niveau** (enfants directs de `<w:body>`)
+ * sont extraits — un tableau imbriqué dans une cellule n'est pas
+ * reconstruit dans cette version (aucune preuve d'un tel cas dans les
+ * documents réels consultés ; limite assumée plutôt que silencieuse).
+ * Une cellule fusionnée verticalement apparaît vide sur ses lignes de
+ * continuation, jamais un contenu deviné.
+ */
+export async function extraireTableauxDocx(fichier: ArrayBuffer): Promise<TableauDocx[]> {
+  const doc = await chargerDocumentXml(fichier)
+  const corps = doc.getElementsByTagNameNS(ESPACE_NOMS_WORDPROCESSING, 'body')[0]
+  if (!corps) return []
+
+  const tableaux: TableauDocx[] = []
+  let texteProche: string | null = null
+
+  for (const enfant of Array.from(corps.children)) {
+    if (enfant.namespaceURI !== ESPACE_NOMS_WORDPROCESSING) continue
+
+    if (enfant.localName === 'p') {
+      const texte = texteDeRuns(enfant).trim()
+      if (texte.length > 0) texteProche = texte
+      continue
+    }
+
+    if (enfant.localName === 'tbl') {
+      const lignes = enfantsNommes(enfant, 'tr').map((ligne) =>
+        enfantsNommes(ligne, 'tc').map((cellule) => {
+          const paragraphes = Array.from(
+            cellule.getElementsByTagNameNS(ESPACE_NOMS_WORDPROCESSING, 'p'),
+          )
+          return paragraphes.map(texteDeRuns).join('\n').trim()
+        }),
+      )
+      tableaux.push({ lignes, titreProchePrecedent: texteProche })
+    }
+  }
+
+  return tableaux
 }
 
 /** Types d'image raster que le relais OCR (Phase 6) sait traiter. */

@@ -14,10 +14,17 @@
  * seul un nouveau fichier `fournisseurs/*.ts` implémentant ce contrat est
  * nécessaire.
  */
+/** Un tableau reconstruit par un fournisseur capable de structure (Document Intelligence) — grille de cellules brutes, aucune interprétation ici (Phase 22, TD-020). */
+export interface TableauOcr {
+  lignes: string[][]
+}
+
 export interface ResultatExtractionOcr {
   texte: string
   fournisseur: string
   version_moteur: string | null
+  /** `undefined` pour un fournisseur qui ne reconstruit pas de structure de tableau (ex. Azure Vision Read) — jamais un tableau vide fabriqué pour un fournisseur qui n'en fournit pas. */
+  tableaux?: TableauOcr[]
 }
 
 export interface FournisseurOcr {

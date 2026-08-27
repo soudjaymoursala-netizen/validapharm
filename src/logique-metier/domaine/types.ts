@@ -1677,3 +1677,19 @@ export interface PropositionStructureProcedure {
   sections: SectionDetectee[]
   etapesProposees: EtapeProposee[]
 }
+
+/**
+ * Un tableau brut extrait d'un `.docx` (`extraireTableauxDocx`, Phase 22,
+ * TD-019) — fait structurel du document, sans interprétation. Grille de
+ * cellules telle quelle : une cellule fusionnée verticalement apparaît
+ * vide sur ses lignes de continuation (jamais un contenu deviné), une
+ * fusion horizontale réduit simplement le nombre de cellules de la ligne
+ * (limite assumée — aucune reconstruction de fusion dans cette version).
+ * `titreProchePrecedent` est le texte du paragraphe non vide le plus
+ * proche précédant ce tableau dans le document — un fait de position,
+ * pas une classification sémantique.
+ */
+export interface TableauDocx {
+  lignes: string[][]
+  titreProchePrecedent: string | null
+}

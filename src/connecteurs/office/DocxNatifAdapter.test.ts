@@ -1,6 +1,6 @@
 import JSZip from 'jszip'
 import { describe, expect, test } from 'vitest'
-import { extraireImagesDocx, extraireTexteDocx } from './DocxNatifAdapter'
+import { extraireImagesDocx, extraireTableauxDocx, extraireTexteDocx } from './DocxNatifAdapter'
 import { DocumentInvalideError } from './erreurs'
 
 /**
@@ -43,6 +43,35 @@ async function construireDocxMinimal(
   for (const media of medias) {
     zip.file(`word/media/${media.nom}`, media.contenu)
   }
+  return zip.generateAsync({ type: 'arraybuffer' })
+}
+
+/** Même structure OOXML minimale que `construireDocxMinimal`, mais avec un `<w:body>` fourni tel quel — pour construire des tableaux `<w:tbl>` réels dans les tests. */
+async function construireDocxAvecCorps(corpsXml: string): Promise<ArrayBuffer> {
+  const zip = new JSZip()
+  zip.file(
+    '[Content_Types].xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`,
+  )
+  zip.file(
+    '_rels/.rels',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`,
+  )
+  zip.file(
+    'word/document.xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>${corpsXml}</w:body>
+</w:document>`,
+  )
   return zip.generateAsync({ type: 'arraybuffer' })
 }
 
@@ -150,5 +179,89 @@ describe("extraireImagesDocx — schémas/photos incorporés (constat de l'utili
   test("un fichier qui n'est pas un zip lève DocumentInvalideError", async () => {
     const donneesInvalides = new TextEncoder().encode("ceci n'est pas un docx").buffer
     await expect(extraireImagesDocx(donneesInvalides)).rejects.toThrow(DocumentInvalideError)
+  })
+})
+
+describe('extraireTableauxDocx — étapes sous tableau (Phase 22, TD-019, calibré sur le manuel Markem-Imaje réel)', () => {
+  test('extrait la grille de cellules et le titre le plus proche précédant le tableau', async () => {
+    const docx = await construireDocxAvecCorps(`
+      <w:p><w:r><w:t>Powering on the controller</w:t></w:r></w:p>
+      <w:tbl>
+        <w:tr>
+          <w:tc><w:p><w:r><w:t>Previous achievement</w:t></w:r></w:p></w:tc>
+          <w:tc><w:p><w:r><w:t>Printer is fully installed and configured.</w:t></w:r></w:p></w:tc>
+        </w:tr>
+        <w:tr>
+          <w:tc><w:p><w:r><w:t>Required time:</w:t></w:r></w:p></w:tc>
+          <w:tc><w:p><w:r><w:t>&gt;1.5 minutes</w:t></w:r></w:p></w:tc>
+        </w:tr>
+        <w:tr>
+          <w:tc><w:p><w:r><w:t>1</w:t></w:r></w:p></w:tc>
+          <w:tc><w:p><w:r><w:t>Connect the printer power cable.</w:t></w:r></w:p></w:tc>
+        </w:tr>
+        <w:tr>
+          <w:tc><w:p><w:r><w:t>2</w:t></w:r></w:p></w:tc>
+          <w:tc><w:p><w:r><w:t>Turn the switch key to the ON position.</w:t></w:r></w:p></w:tc>
+        </w:tr>
+      </w:tbl>
+    `)
+
+    const tableaux = await extraireTableauxDocx(docx)
+
+    expect(tableaux).toHaveLength(1)
+    expect(tableaux[0]?.titreProchePrecedent).toBe('Powering on the controller')
+    expect(tableaux[0]?.lignes).toEqual([
+      ['Previous achievement', 'Printer is fully installed and configured.'],
+      ['Required time:', '>1.5 minutes'],
+      ['1', 'Connect the printer power cable.'],
+      ['2', 'Turn the switch key to the ON position.'],
+    ])
+  })
+
+  test('plusieurs tableaux dans le même document sont rattachés chacun à leur propre titre le plus proche', async () => {
+    const docx = await construireDocxAvecCorps(`
+      <w:p><w:r><w:t>Powering on the head</w:t></w:r></w:p>
+      <w:tbl>
+        <w:tr><w:tc><w:p><w:r><w:t>1</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Press start.</w:t></w:r></w:p></w:tc></w:tr>
+      </w:tbl>
+      <w:p><w:r><w:t>Powering off the head</w:t></w:r></w:p>
+      <w:tbl>
+        <w:tr><w:tc><w:p><w:r><w:t>1</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Press stop.</w:t></w:r></w:p></w:tc></w:tr>
+      </w:tbl>
+    `)
+
+    const tableaux = await extraireTableauxDocx(docx)
+
+    expect(tableaux).toHaveLength(2)
+    expect(tableaux[0]?.titreProchePrecedent).toBe('Powering on the head')
+    expect(tableaux[1]?.titreProchePrecedent).toBe('Powering off the head')
+  })
+
+  test('une cellule sur plusieurs paragraphes est jointe par un saut de ligne', async () => {
+    const docx = await construireDocxAvecCorps(`
+      <w:tbl>
+        <w:tr>
+          <w:tc><w:p><w:r><w:t>2</w:t></w:r></w:p></w:tc>
+          <w:tc>
+            <w:p><w:r><w:t>Le voyant vert s'allume.</w:t></w:r></w:p>
+            <w:p><w:r><w:t>Attendre 10 secondes.</w:t></w:r></w:p>
+          </w:tc>
+        </w:tr>
+      </w:tbl>
+    `)
+
+    const tableaux = await extraireTableauxDocx(docx)
+
+    expect(tableaux[0]?.lignes[0]?.[1]).toBe("Le voyant vert s'allume.\nAttendre 10 secondes.")
+  })
+
+  test('un .docx sans tableau retourne une liste vide, jamais une erreur', async () => {
+    const docx = await construireDocxMinimal('Procédure sans tableau.')
+    expect(await extraireTableauxDocx(docx)).toEqual([])
+  })
+
+  test("un fichier qui n'est pas un zip lève DocumentInvalideError", async () => {
+    const donneesInvalides = new TextEncoder().encode("ceci n'est pas un docx").buffer
+    await expect(extraireTableauxDocx(donneesInvalides)).rejects.toThrow(DocumentInvalideError)
   })
 })
