@@ -6,7 +6,13 @@ import { createRouter, createWebHistory } from 'vue-router'
  * (09-architecture-detaillee.md §6).
  */
 export const router = createRouter({
-  history: createWebHistory(),
+  // `import.meta.env.BASE_URL` DOIT être passé explicitement : Vue Router
+  // ne lit jamais automatiquement le `base` de Vite (contrairement à une
+  // idée reçue) — sans ça, le routeur cherche les routes à la racine du
+  // domaine, ce qui échoue silencieusement (aucune erreur, RouterView ne
+  // rend rien) dès que l'app est servie sous un sous-chemin, comme sur
+  // GitHub Pages (`/validapharm/`) — constaté le 26/08/2026.
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
