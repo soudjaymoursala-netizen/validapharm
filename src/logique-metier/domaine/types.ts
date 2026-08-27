@@ -1658,14 +1658,18 @@ export interface SectionDetectee {
  * section canonique `'procedure'`. Reste une **proposition** : rien ici
  * n'est écrit dans `ProcedureStep` sans confirmation humaine explicite
  * via `useProcedureStore.ajouterEtape` (même garde-fou que TD-016).
- * `conditionDetectee`/`responsableDetecte` restent `null` plutôt que
- * d'être devinés quand aucun motif clair ne matche.
+ * `conditionDetectee`/`responsableDetecte`/`contexteDetecte` restent
+ * `null` plutôt que d'être devinés quand aucun motif clair ne matche.
+ * `contexteDetecte` (Phase 21 extension, TD-018) porte le dernier
+ * sous-titre numéroté ("2.1 Pre-requisites") rencontré avant cette étape,
+ * quand le document en a un — jamais fabriqué si absent.
  */
 export interface EtapeProposee {
   ordre: number
   description: string
   conditionDetectee: string | null
   responsableDetecte: string | null
+  contexteDetecte: string | null
 }
 
 /** Résultat complet de `proposerStructureProcedure` — jamais persisté tel quel. */

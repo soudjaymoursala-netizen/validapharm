@@ -47,6 +47,22 @@ Avant d'écrire une seule règle, deux SOP réelles de deux clients pharma diff�
 
 Tests sur `detecterSections`/`proposerStructureProcedure` (`src/logique-metier/procedures/parseurStructureProcedure.test.ts`) : reconnaissance des deux lexiques réels (Sanofi, Ferring), non-confusion sous-section/section, en-tête de forme reconnue mais inconnu classé en `'autre'`, absence totale d'en-tête → tableau vide, extraction d'étapes avec condition/responsable détectés ou `null` si absent. Suite complète (`npx vitest run` — 81 fichiers/554 tests, `npm run typecheck`, `npm run lint`) verte avant commit.
 
-## 7. Prochaine étape
+## 7. Prochaine étape (initiale)
 
 Le repli IA-assisté (documents non couverts par ce parseur) reste un point ouvert distinct — à engager seulement si un cas réel le réclame, jamais par anticipation. Item suivant du plan de convergence (§4 de `VISION_NORTH_STAR_CONVERGENCE.md`) : Template Intelligence généralisée (génération au format client réel).
+
+## 8. Extension du même jour (TD-018) — maximiser la couverture avant tout repli IA
+
+L'utilisateur pose directement la question : "et tu n'as pas de parseur capable de couvrir tous les types de SOP document ?". Réponse vérifiée, pas supposée : un **troisième** document réel du corpus Drive, jamais lu jusqu'ici — IMA "4915BRP"/"LA1028BRP" (procédures Back-up/Restore PLC/PC, pour Ferring) — testé tel quel contre le parseur de la Phase 21 initiale, produit **0 section reconnue, 0 étape proposée**. Le document a un vrai plan ("1. INTRODUCTION / 2. PLC Procedures / 2.1 Pre-requisites / ...") mais aucun libellé n'égale exactement une clé du dictionnaire TD-017, et ses instructions sont une phrase par ligne sans puce ni numéro.
+
+L'utilisateur demande alors explicitement : "Concevoir ou étendre tous les champs passible de parseur sans l'IA avant de passer au repli IA" — pousser le chemin déterministe à son maximum réel, evidence-based, avant d'envisager la couche IA. Trois extensions ajoutées (TD-018), chacune directement motivée par ce document, aucune spéculative :
+
+1. **Repli par mot-clé** (`MOTS_CLES_SECTIONS`) : un mot fort à l'intérieur du titre suffit quand la phrase complète ne correspond à aucune clé exacte — "PLC Procedures" et "PC Procedures (for HMI ima xface)" contiennent "Procedures" → `procedure` ; "INTRODUCTION" seul → `objectif`. Essayé seulement après la correspondance exacte (priorité à la plus haute confiance).
+2. **Sous-titre comme contexte** (`RE_SOUS_TITRE` + `EtapeProposee.contexteDetecte`, nouveau champ) : "2.1 Pre-requisites" ou "2.2 Back-Up - Uploading the Old Program from the PLC" ne deviennent ni une section ni une étape, mais leur texte est retenu et attaché comme contexte aux étapes qui suivent — sans quoi deux procédures distinctes dans la même section ("Back-Up" vs "Restore") produiraient une liste plate indifférenciée.
+3. **Repli ligne-par-ligne** (`collecterLignesSection`, deux niveaux) : les lignes à puce/numéro explicites restent utilisées en priorité (haute confiance, comportement Phase 21 initiale inchangé) ; une section `'procedure'` qui n'en contient **aucune** utilise désormais chaque ligne non vide comme étape candidate, plutôt que de renvoyer une liste vide sur un document dont la structure est réelle mais moins formatée.
+
+**Résultat vérifié** : le document IMA teste maintenant 3 sections reconnues (`objectif`/`procedure`/`procedure`) et des étapes extraites avec leur contexte de sous-titre. Les deux SOP déjà couvertes (Sanofi/Ferring) sont retestées sans régression.
+
+**Ce qui reste, honnêtement, hors de portée d'un système de règles** : le genre "instruction technique illustrée par tableaux d'étapes" (Markem-Imaje, §5) n'est toujours pas couvert par ces extensions — elles répondent au genre "procédure numérotée sans plan qualité", pas à celui-là. Une couverture déterministe de "tous les types" de SOP reste, par construction, hors de portée : les frontières sémantiques d'un document en langage naturel ne sont pas un ensemble fini de motifs syntaxiques. C'est la limite de fond déjà actée en TD-017, confirmée et non contredite par cette extension — le repli IA-assisté reste la seule façon de la fermer réellement, et reste un point ouvert distinct, non engagé.
+
+Vérification : 10 tests sur `parseurStructureProcedure.test.ts` (dont 3 nouveaux : mot-clé, repli ligne-par-ligne avec contexte, priorité puces/numéros sur le repli). Suite complète (81 fichiers/557 tests), typecheck et lint verts avant commit.

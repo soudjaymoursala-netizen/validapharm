@@ -87,6 +87,21 @@ describe('detecterSections (Phase 21, TD-017)', () => {
 
     expect(detecterSections(texte)).toEqual([])
   })
+
+  it("reconnaît un en-tête par mot-clé (TD-018) quand le titre complet ne correspond à aucune entrée exacte du dictionnaire — cas réel d'une SOP IMA (4915BRP/LA1028BRP, Ferring) sans plan qualité", () => {
+    const texte = [
+      '1. INTRODUCTION',
+      'This document contains the Backup / Restore Procedures.',
+      '2. PLC Procedures',
+      'Connect the MPI/serial cable to the CPU port of the PLC.',
+      '3. PC Procedures (for HMI ima xface)',
+      'Machine ON and not working.',
+    ].join('\n')
+
+    const sections = detecterSections(texte)
+
+    expect(sections.map((s) => s.canon)).toEqual(['objectif', 'procedure', 'procedure'])
+  })
 })
 
 describe('proposerStructureProcedure — étapes candidates (Phase 21, TD-017)', () => {
@@ -124,5 +139,44 @@ describe('proposerStructureProcedure — étapes candidates (Phase 21, TD-017)',
 
     expect(proposition.etapesProposees).toEqual([])
     expect(proposition.sections.map((s) => s.canon)).toEqual(['objectif', 'references'])
+  })
+
+  it("replie sur une étape par ligne (TD-018) quand la section 'procédure' ne contient aucune puce/numéro explicite — cas réel de la SOP IMA, et rattache le sous-titre traversé comme contexte", () => {
+    const texte = [
+      '1. INTRODUCTION',
+      'This document contains the Backup / Restore Procedures.',
+      '2. PLC Procedures',
+      '2.1 Pre-requisites',
+      'PC for programming with a Siemens Step 7 software installed.',
+      '2.2 Back-Up - Uploading the Old Program from the PLC',
+      'Connect the MPI/serial cable to the CPU port of the PLC.',
+      'Create a copy of the PLC program and save it in the PC.',
+    ].join('\n')
+
+    const proposition = proposerStructureProcedure(texte)
+
+    expect(proposition.etapesProposees).toHaveLength(3)
+    expect(proposition.etapesProposees[0]).toMatchObject({
+      description: 'PC for programming with a Siemens Step 7 software installed.',
+      contexteDetecte: 'Pre-requisites',
+    })
+    expect(proposition.etapesProposees[1]).toMatchObject({
+      description: 'Connect the MPI/serial cable to the CPU port of the PLC.',
+      contexteDetecte: 'Back-Up - Uploading the Old Program from the PLC',
+    })
+    expect(proposition.etapesProposees[2]?.contexteDetecte).toBe(
+      'Back-Up - Uploading the Old Program from the PLC',
+    )
+  })
+
+  it("préfère les puces/numéros explicites au repli ligne-par-ligne quand les deux sont présents dans la même section, et n'attache aucun contexte en l'absence de sous-titre", () => {
+    const texte = ['1 Procédure', '- Vérifier que la vanne est fermée.', '- Ouvrir la purge.'].join(
+      '\n',
+    )
+
+    const proposition = proposerStructureProcedure(texte)
+
+    expect(proposition.etapesProposees).toHaveLength(2)
+    expect(proposition.etapesProposees[0]?.contexteDetecte).toBeNull()
   })
 })
