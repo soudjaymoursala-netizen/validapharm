@@ -1,10 +1,12 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
+  Activity,
   AiChatSessionLog,
   AssetHierarchySchema,
   AssetNode,
   AssociationFonctionAssetNode,
   AssociationFonctionProcess,
+  AssociationMissionQualityEvent,
   Client,
   ClientConfig,
   ClassificationCriticiteParametre,
@@ -14,6 +16,7 @@ import type {
   ContentPlan,
   CPP,
   CQA,
+  Dependency,
   Extraction,
   ExtractionItem,
   EvaluationACFC,
@@ -32,6 +35,7 @@ import type {
   Measurement,
   MethodProfileACFC,
   MethodProfileImpactAssessment,
+  Mission,
   Organization,
   Parameter,
   Couverture,
@@ -195,6 +199,10 @@ export class ValidaPharmDatabase extends Dexie {
   externalReferences!: EntityTable<ExternalReference, 'id'>
   organizations!: EntityTable<Organization, 'id'>
   workspaces!: EntityTable<Workspace, 'id'>
+  missions!: EntityTable<Mission, 'id'>
+  associationsMissionQualityEvent!: EntityTable<AssociationMissionQualityEvent, 'id'>
+  activities!: EntityTable<Activity, 'id'>
+  dependencies!: EntityTable<Dependency, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -318,6 +326,16 @@ export class ValidaPharmDatabase extends Dexie {
      */
     this.version(20).stores({
       assetNodes: 'id, client_id, parent_id, code, workspace_id',
+    })
+    /**
+     * Phase 13 (`docs/convergence/PHASE_13_MISSION_ACTIVITY_SPEC.md`) —
+     * domaine "Work" : `Mission`/`Activity` seulement (TD-009).
+     */
+    this.version(21).stores({
+      missions: 'id, client_id, workspace_id, asset_node_id, statut',
+      associationsMissionQualityEvent: 'id, client_id, mission_id, quality_event_id',
+      activities: 'id, client_id, mission_id, statut',
+      dependencies: 'id, client_id, activity_source_id, activity_cible_id',
     })
   }
 }

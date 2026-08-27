@@ -1278,3 +1278,99 @@ export interface Workspace {
   parent_workspace_id: string | null
   created_at: string
 }
+
+/**
+ * Phase 13 (`docs/convergence/PHASE_13_MISSION_ACTIVITY_SPEC.md`) — domaine
+ * "Work" de `03_DOMAIN_DATA_MODEL.md` (`Mission, Activity, Dependency,
+ * WorkflowDefinition, WorkflowInstance, WorkflowStep, Approval`),
+ * décision d'entrée TD-009 : `Mission`/`Activity` seulement,
+ * `WorkflowDefinition`/`WorkflowInstance`/`Approval` différés sur besoin
+ * réel démontré.
+ *
+ * Une `Mission` est un conteneur de travail contextualisé (§8 de
+ * `01_ARCHITECTURE_MASTER_FINAL.md` : ex. workstreams CQV/CSV partageant
+ * Context/Sources/Evidence/Risk/Traceability) — pas un moteur de
+ * raisonnement en soi. `workspace_id` suit exactement le pattern déjà
+ * établi sur `AssetNode` (`null` = hérité/non assigné, visible depuis tout
+ * `Workspace` de l'organisation). `asset_node_id` est une ancre optionnelle
+ * unique, même pattern que `QualityEvent.asset_node_id` — pas un lien
+ * polymorphe générique vers "l'objet concerné".
+ *
+ * Référence directe `Requirement`/`Assessment`/`Test`/`Evidence`/
+ * `Deliverable` volontairement **non construite** ici (voir spec §3,
+ * NEEDS ADAPTATION) : ce rôle appartient à l'entité cible `Strategy`
+ * (`Strategy derives_from Assessment`/`addresses Requirement`/
+ * `plans Test`, contexte "mission"), qui n'existe pas encore comme entité
+ * persistée (`strategie-qualification/grilleDecision.ts` reste une
+ * fonction déterministe pure, jamais une table).
+ */
+export type StatutMission = 'ouverte' | 'en_cours' | 'cloturee'
+
+export interface Mission {
+  id: string
+  client_id: string
+  workspace_id: string | null
+  asset_node_id: string | null
+  titre: string
+  description: string
+  statut: StatutMission
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Relation N:M `Mission ↔ QualityEvent` (`04_RELATIONSHIP_MATRIX_FINAL.md` :
+ * "Mission relates_to QualityEvent") — jointure explicite, même pattern que
+ * `ReferenceQualityEvent`/`Couverture` : jamais un tableau d'IDs
+ * dénormalisé sur `Mission` ou `QualityEvent`.
+ */
+export interface AssociationMissionQualityEvent {
+  id: string
+  client_id: string
+  mission_id: string
+  quality_event_id: string
+  created_at: string
+}
+
+/**
+ * Unité de travail à l'intérieur d'une `Mission` (relation 1:N
+ * `Mission contains Activity`, `mission_id` toujours renseigné — une
+ * `Activity` n'existe jamais hors d'une `Mission`).
+ *
+ * `Activity produces Evidence` (matrice cible) volontairement **non
+ * construit** ici (voir spec §3, CONFLICT) : contredirait le garde-fou
+ * non négociable déjà testé d'`Evidence` (Phase 7c — "jamais une preuve
+ * orpheline", `execution_id` non nul). Résolution différée à un incrément
+ * qui la traitera explicitement.
+ */
+export type StatutActivity = 'a_faire' | 'en_cours' | 'terminee' | 'bloquee'
+
+export interface Activity {
+  id: string
+  client_id: string
+  mission_id: string
+  titre: string
+  description: string
+  statut: StatutActivity
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Relation N:M `Activity depends_on Activity` (`04_RELATIONSHIP_MATRIX_
+ * FINAL.md`) — jointure explicite, même pattern que `Dependency` nommée
+ * dans le domaine "Work" de `03_DOMAIN_DATA_MODEL.md`. Une dépendance
+ * exprime seulement un ordre attendu, jamais un verrou bloquant (aucune
+ * fonction de ce module n'empêche de démarrer/terminer une `Activity`
+ * dont une dépendance n'est pas encore terminée — même discipline que
+ * DEC-002/055 déjà appliquée à `QualityEvent`/`Connector`).
+ */
+export interface Dependency {
+  id: string
+  client_id: string
+  activity_source_id: string
+  activity_cible_id: string
+  created_at: string
+}
