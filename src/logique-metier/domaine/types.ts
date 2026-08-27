@@ -1681,6 +1681,42 @@ export interface PropositionStructureProcedure {
 }
 
 /**
+ * Repli IA-assisté de structuration procédurale (Phase 24, TD-022) — pour
+ * un document hors couverture du parseur déterministe (Phases 21-22 :
+ * aucun en-tête numéroté ni tableau reconnu, ex. genre Nordson, en-têtes
+ * en gras sans numérotation). Même garde-fou non négociable que partout
+ * ailleurs (TD-016) : `PropositionStructureProcedureIA` n'est **jamais**
+ * écrite dans `Procedure`/`ProcedureStep` sans confirmation humaine
+ * explicite.
+ *
+ * `etat_confiance` par élément (`EtatConfianceIA`) résulte d'une
+ * vérification déterministe d'ancrage — le texte proposé doit
+ * effectivement apparaître (normalisé) dans le document source ; sinon
+ * `'a_verifier'`, jamais un état plus confiant sur la seule affirmation
+ * du modèle (même discipline que la vérification de citation
+ * déterministe du Reasoning Engine, Phase 15 — ici appliquée au texte
+ * source plutôt qu'à un objet du domaine, faute d'objet préexistant à
+ * citer pour une structure encore proposée).
+ */
+export interface SectionDetecteeIA {
+  canon: SectionCanoniqueProcedure
+  titreDetecte: string
+  etat_confiance: EtatConfianceIA
+}
+
+export interface EtapeProposeeIA {
+  description: string
+  etat_confiance: EtatConfianceIA
+}
+
+/** `texteReponseBrute` : réponse brute du modèle, jamais rejetée même si le parsing échoue — traçabilité minimale même en cas d'échec (même discipline qu'`AIResponse.texte`, Phase 15). */
+export interface PropositionStructureProcedureIA {
+  sections: SectionDetecteeIA[]
+  etapesProposees: EtapeProposeeIA[]
+  texteReponseBrute: string
+}
+
+/**
  * Un tableau brut extrait d'un `.docx` (`extraireTableauxDocx`, Phase 22,
  * TD-019) — fait structurel du document, sans interprétation. Grille de
  * cellules telle quelle : une cellule fusionnée verticalement apparaît
