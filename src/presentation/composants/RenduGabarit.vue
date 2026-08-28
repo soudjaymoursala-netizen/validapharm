@@ -3,7 +3,7 @@
 // QUE le schéma déclaratif (`DefinitionGabarit`) : ajouter un gabarit ne
 // nécessite jamais de le modifier, seulement un nouveau fichier dans
 // logique-metier/gabarits/catalogue/ (règle de conception FDS §4).
-import { reactive } from 'vue'
+import { reactive, toRaw } from 'vue'
 import { evaluerColonneCalculee } from '../../logique-metier/gabarits/evaluerColonneCalculee'
 import type {
   ChampNombre,
@@ -93,8 +93,19 @@ function saisirChamp(champ: DefinitionChamp, brut: string): void {
   emit('maj-valeurs', { ...valeursLocales })
 }
 
+/**
+ * Retourne toujours des lignes dé-proxifiées (`toRaw`), jamais les Proxy
+ * réactifs Vue imbriqués dans `tablesLocales` — un tableau à plusieurs
+ * lignes fait courir chaque ligne non modifiée à travers cette fonction
+ * lors d'un ajout/suppression/édition d'une AUTRE ligne (`.map`/spread la
+ * recopie telle quelle) ; passée ainsi à `db.sections.put()`, IndexedDB
+ * rejette le Proxy avec `DataCloneError` et l'écriture échoue en silence
+ * (aucun catch dans la chaîne d'appel), sans que l'état local affiché ne
+ * le laisse voir — bug réel trouvé en navigateur (perte de toute ligne
+ * au-delà de la première dans un tableau dynamique).
+ */
 function lignesTable(cleTable: string): Ligne[] {
-  return tablesLocales[cleTable] ?? []
+  return (tablesLocales[cleTable] ?? []).map((ligne) => ({ ...toRaw(ligne) }))
 }
 
 function ajouterLigne(champ: DefinitionChamp): void {
