@@ -35,6 +35,7 @@ import type {
   ExecutionStep,
   ExternalReference,
   FonctionActif,
+  GabaritExportClient,
   KnowledgeItem,
   KnowledgeRelation,
   ManufacturingContext,
@@ -221,6 +222,7 @@ export class ValidaPharmDatabase extends Dexie {
   relationsTechniques!: EntityTable<RelationTechnique, 'id'>
   procedures!: EntityTable<Procedure, 'id'>
   procedureSteps!: EntityTable<ProcedureStep, 'id'>
+  gabaritsExportClient!: EntityTable<GabaritExportClient, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -393,6 +395,14 @@ export class ValidaPharmDatabase extends Dexie {
     this.version(25).stores({
       procedures: 'id, client_id, reference, numero_version',
       procedureSteps: 'id, client_id, procedure_id, ordre',
+    })
+    /**
+     * Phase 26 (`docs/convergence/PHASE_26_GABARITS_EXPORT_CLIENT_SPEC.md`,
+     * TD-024) — gabarits d'export `.docx` personnalisés par client
+     * (URS-F-023 à 026), isolés par `client_id`.
+     */
+    this.version(26).stores({
+      gabaritsExportClient: 'id, client_id, nom',
     })
   }
 }

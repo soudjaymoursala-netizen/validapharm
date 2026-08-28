@@ -13,3 +13,13 @@ export class DocumentInvalideError extends Error {
     this.name = 'DocumentInvalideError'
   }
 }
+
+/** Gabarit d'export client (Phase 26, TD-024) illisible, ou dont les balises `docxtemplater` sont incompatibles avec les données à injecter (balise mal fermée, boucle non refermée…). */
+export class GabaritDocxInvalideError extends Error {
+  constructor(
+    message = "Le gabarit fourni n'est pas un .docx valide ou contient des balises invalides.",
+  ) {
+    super(message)
+    this.name = 'GabaritDocxInvalideError'
+  }
+}

@@ -6,21 +6,32 @@
 // logique-metier/gabarits/catalogue/index.ts). Transitions de statut avec
 // garde-fous fidèles (FDS §3.2/§3.3), sauvegarde automatique (URS-F-009).
 import { computed, onMounted, ref, watch } from 'vue'
+import { GabaritDocxInvalideError } from '../../connecteurs/office/erreurs'
+import { genererDocxPersonnalise } from '../../connecteurs/office/GenerationDocxAdapter'
+import { construireDonneesExportGabarit } from '../../logique-metier/export/donneesExportGabarit'
 import { genererExportCSV } from '../../logique-metier/export/genererExportCSV'
 import { genererExportJSON } from '../../logique-metier/export/genererExportJSON'
 import { genererExportWord } from '../../logique-metier/export/genererExportWord'
 import { verifierBlocageExport } from '../../logique-metier/export/verifierBlocageExport'
 import { obtenirDefinitionGabarit } from '../../logique-metier/gabarits/catalogue'
 import type { ChampTableauDynamique } from '../../logique-metier/gabarits/definitionGabarit'
-import type { Section } from '../../logique-metier/domaine/types'
+import type { Project, Section } from '../../logique-metier/domaine/types'
 import RenduGabarit from '../composants/RenduGabarit.vue'
 import { libelleStatut, messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
+import { useGabaritExportStore } from '../stores/useGabaritExportStore'
+import { useProjectsStore } from '../stores/useProjectsStore'
 import { useSectionsStore, type ResultatActionSection } from '../stores/useSectionsStore'
 
 const props = defineProps<{ projectId: string; sectionId: string }>()
 
 const sectionsStore = useSectionsStore()
+const projetsStore = useProjectsStore()
+const gabaritExportStore = useGabaritExportStore()
 const section = ref<Section | undefined>(undefined)
+const projet = ref<Project | undefined>(undefined)
+const gabaritSelectionneId = ref<string>('')
+const nomNouveauGabarit = ref('')
+const erreurGabaritExport = ref<string | null>(null)
 const contenu = ref('')
 const motifRejet = ref('')
 const motifForcage = ref('')
@@ -43,7 +54,13 @@ async function recharger(): Promise<void> {
   contenu.value = typeof trouvee?.values.contenu === 'string' ? trouvee.values.contenu : ''
 }
 
-onMounted(recharger)
+onMounted(async () => {
+  await recharger()
+  projet.value = await projetsStore.obtenirProjet(props.projectId)
+  if (projet.value?.client_id) {
+    await gabaritExportStore.charger(projet.value.client_id)
+  }
+})
 
 // Sauvegarde automatique locale, debounce court (URS-F-009) — uniquement
 // pour le repli générique (pas de gabarit défini pour ce template_type) ;
@@ -121,6 +138,76 @@ async function exporterWord(): Promise<void> {
     'application/msword',
   )
   await journaliserEtReinitialiser()
+}
+
+/**
+ * Import d'un gabarit `.docx` client (Phase 26, TD-024, URS-F-023/024) —
+ * refusé par le store lui-même (`importerGabarit`) si les éléments
+ * obligatoires (bloc de signatures, historique des révisions) ne sont pas
+ * mappés (URS-F-026), jamais enregistré "à corriger plus tard".
+ */
+async function importerGabaritExport(evenement: Event): Promise<void> {
+  erreurGabaritExport.value = null
+  const fichier = (evenement.target as HTMLInputElement).files?.[0]
+  if (!fichier || !projet.value?.client_id) return
+  if (nomNouveauGabarit.value.trim().length === 0) {
+    erreurGabaritExport.value = 'Donnez un nom au gabarit avant de l’importer.'
+    return
+  }
+
+  try {
+    const tampon = await fichier.arrayBuffer()
+    const resultat = await gabaritExportStore.importerGabarit(
+      projet.value.client_id,
+      nomNouveauGabarit.value.trim(),
+      tampon,
+    )
+    if (!resultat.ok) {
+      erreurGabaritExport.value = `Gabarit refusé — balises obligatoires manquantes : ${resultat.tagsManquants.join(', ')}.`
+      return
+    }
+    nomNouveauGabarit.value = ''
+    gabaritSelectionneId.value = resultat.gabarit.id
+  } catch (e) {
+    erreurGabaritExport.value =
+      e instanceof GabaritDocxInvalideError
+        ? e.message
+        : 'Erreur inconnue lors de l’import du gabarit.'
+  } finally {
+    ;(evenement.target as HTMLInputElement).value = ''
+  }
+}
+
+/** Exporte au format `.docx` OOXML réel du gabarit client sélectionné — équivalence de contenu avec `exporterWord` garantie par `construireDonneesExportGabarit` (URS-F-025). */
+async function exporterWordGabaritClient(): Promise<void> {
+  erreurGabaritExport.value = null
+  if (!section.value) return
+  const gabarit = gabaritExportStore.gabarits.find((g) => g.id === gabaritSelectionneId.value)
+  if (!gabarit) return
+
+  try {
+    const donnees = construireDonneesExportGabarit(
+      section.value,
+      definitionGabarit.value,
+      section.value.language,
+    )
+    const docx = await genererDocxPersonnalise(gabarit.fichier, donnees)
+    const blob = new Blob([docx], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    const url = URL.createObjectURL(blob)
+    const lien = document.createElement('a')
+    lien.href = url
+    lien.download = `${section.value.meta.ref || section.value.id}.docx`
+    lien.click()
+    URL.revokeObjectURL(url)
+    await journaliserEtReinitialiser()
+  } catch (e) {
+    erreurGabaritExport.value =
+      e instanceof GabaritDocxInvalideError
+        ? e.message
+        : 'Erreur inconnue lors de la génération du document.'
+  }
 }
 
 async function exporterCSV(champ: ChampTableauDynamique): Promise<void> {
@@ -369,6 +456,41 @@ async function ajouterAvisRelecteur(): Promise<void> {
           Exporter « {{ champ.labels[section.language] ?? champ.labels.fr }} » en CSV
         </button>
       </div>
+
+      <div v-if="projet?.client_id" class="gabarit-export-client">
+        <h3>Gabarit d'export personnalisé (URS-F-023 à 026)</h3>
+        <p v-if="erreurGabaritExport" class="bandeau-erreur" role="alert">
+          {{ erreurGabaritExport }}
+        </p>
+
+        <div v-if="gabaritExportStore.gabarits.length > 0" class="selection-gabarit">
+          <label>
+            Gabarit
+            <select v-model="gabaritSelectionneId">
+              <option value="">— Gabarit par défaut —</option>
+              <option v-for="g in gabaritExportStore.gabarits" :key="g.id" :value="g.id">
+                {{ g.nom }}
+              </option>
+            </select>
+          </label>
+          <button
+            v-if="gabaritSelectionneId"
+            type="button"
+            :disabled="blocageExport.bloque && !exportForce"
+            @click="exporterWordGabaritClient"
+          >
+            Exporter en Word (gabarit client, .docx)
+          </button>
+        </div>
+
+        <div class="import-gabarit">
+          <input v-model="nomNouveauGabarit" type="text" placeholder="Nom du gabarit à importer" />
+          <label class="bouton-fichier">
+            Importer un gabarit (.docx)
+            <input type="file" accept=".docx" @change="importerGabaritExport" />
+          </label>
+        </div>
+      </div>
     </section>
   </main>
   <p v-else>Chargement…</p>
@@ -469,6 +591,37 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.gabarit-export-client {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--vp-bordure);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.selection-gabarit,
+.import-gabarit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.bouton-fichier {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  cursor: pointer;
+}
+
+.bandeau-erreur {
+  color: var(--vp-statut-requalification-en-retard);
 }
 
 /* Impression / export PDF (FS §4.3) : uniquement le contenu du livrable,

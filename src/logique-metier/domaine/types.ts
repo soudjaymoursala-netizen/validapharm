@@ -1731,3 +1731,22 @@ export interface TableauDocx {
   lignes: string[][]
   titreProchePrecedent: string | null
 }
+
+/**
+ * Gabarit d'export personnalisé fourni par un client (Phase 26 de
+ * convergence architecturale, TD-024, URS-F-023 à 026) — isolé strictement
+ * par `client_id`, jamais partagé entre deux clients (propriété
+ * intellectuelle du client, même principe que URS-F-024/`AssetNode`).
+ * `tags_trouves`/`tags_obligatoires_manquants` sont figés au moment de
+ * l'import (`verifierGabaritExportClient`) — un gabarit dont il manque un
+ * élément obligatoire (bloc de signatures, historique des révisions) est
+ * **refusé à l'import**, jamais enregistré "à corriger plus tard".
+ */
+export interface GabaritExportClient {
+  id: string
+  client_id: string
+  nom: string
+  fichier: ArrayBuffer
+  tags_trouves: string[]
+  created_at: string
+}
