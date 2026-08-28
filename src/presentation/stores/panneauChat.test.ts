@@ -85,6 +85,24 @@ describe('usePanneauChatStore — envoyerQuestion (fournisseur cloud)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  test('mode audit_simule avec questionAffichee distincte -> le message affiché conserve la question brute, jamais le prompt engineered envoyé', async () => {
+    fetchMock.mockResolvedValueOnce(reponseMock({ texte: 'Réponse audit', citations: [] }))
+    const store = usePanneauChatStore()
+    await store.demarrerSession('client-1')
+    await store.envoyerQuestion(
+      'MODE AUDIT SIMULÉ — [prompt engineered long]\nQUESTION :\nLa section est-elle prête ?',
+      'audit_simule',
+      { contenu_joint: false },
+      null,
+      'La section est-elle prête ?',
+    )
+
+    expect(store.messages[0]?.question).toBe('La section est-elle prête ?')
+    expect(store.messages[0]?.mode).toBe('audit_simule')
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(options.body as string).question).toContain('MODE AUDIT SIMULÉ')
+  })
+
   test('document joint -> contenu transmis et titre conservé pour affichage', async () => {
     fetchMock.mockResolvedValueOnce(reponseMock({ texte: 'x', citations: [] }))
     const store = usePanneauChatStore()
@@ -137,24 +155,27 @@ describe('usePanneauChatStore — fermerSession (URS-F-037)', () => {
   })
 })
 
-describe('usePanneauChatStore — alerteDerive (URS-F-032quinquies)', () => {
+describe('usePanneauChatStore — alerteDerive (URS-F-032quinquies, séparée par mode depuis URS-F-038bis)', () => {
   test('aucune session antérieure connue -> pas de fausse alerte', async () => {
     const store = usePanneauChatStore()
     await store.demarrerSession('client-1')
-    expect(store.alerteDerive).toBe(false)
+    expect(store.alerteDerive('chat_normatif')).toBe(false)
   })
 
-  test('version antérieure journalisée diffère de la qualification -> alerte', async () => {
+  test('version antérieure journalisée diffère de la qualification du mode chat_normatif -> alerte', async () => {
     await db.clientConfigs.put({
       client_id: 'client-1',
       ai_provider: 'claude',
       ai_provider_conditions_acquittees: null,
       ai_provider_reliability_qualification: {
-        date: '2026-01-01',
-        resultat: 'favorable',
-        qualification_test_set_id: 'set-1',
-        qualification_test_set_version: '1.0.0',
-        moteur_version_qualifiee: 'claude-v1',
+        chat_normatif: {
+          date: '2026-01-01',
+          resultat: 'favorable',
+          qualification_test_set_id: 'set-1',
+          qualification_test_set_version: '1.0.0',
+          moteur_version_qualifiee: 'claude-v1',
+        },
+        audit_simule: null,
       },
       export_template_id: null,
       consent_telemetry: { granted: false, date: null, revocable_at_any_time: true },
@@ -172,6 +193,40 @@ describe('usePanneauChatStore — alerteDerive (URS-F-032quinquies)', () => {
 
     const store = usePanneauChatStore()
     await store.demarrerSession('client-1')
-    expect(store.alerteDerive).toBe(true)
+    expect(store.alerteDerive('chat_normatif')).toBe(true)
+  })
+
+  test('qualification chat_normatif renseignée mais mode audit_simule non qualifié -> aucune alerte de dérive côté audit_simule (rien à comparer)', async () => {
+    await db.clientConfigs.put({
+      client_id: 'client-1',
+      ai_provider: 'claude',
+      ai_provider_conditions_acquittees: null,
+      ai_provider_reliability_qualification: {
+        chat_normatif: {
+          date: '2026-01-01',
+          resultat: 'favorable',
+          qualification_test_set_id: 'set-1',
+          qualification_test_set_version: '1.0.0',
+          moteur_version_qualifiee: 'claude-v1',
+        },
+        audit_simule: null,
+      },
+      export_template_id: null,
+      consent_telemetry: { granted: false, date: null, revocable_at_any_time: true },
+    })
+    await db.aiChatSessionLogs.add({
+      id: 'session-anterieure',
+      client_id: 'client-1',
+      started_at: '2026-02-01T00:00:00.000Z',
+      ended_at: '2026-02-01T00:05:00.000Z',
+      mode: 'audit_simule',
+      ai_provider: 'claude',
+      moteur_version: 'claude-v2',
+      document_joint: false,
+    })
+
+    const store = usePanneauChatStore()
+    await store.demarrerSession('client-1')
+    expect(store.alerteDerive('audit_simule')).toBe(false)
   })
 })

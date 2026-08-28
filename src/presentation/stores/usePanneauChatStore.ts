@@ -30,6 +30,7 @@ export interface SectionDisponibleAJoindre {
 
 export interface MessageChatAffiche {
   question: string
+  mode: ModeUsageIA
   reponse: Reponse
   fournisseurUtilise: string
   bascule: boolean
@@ -63,13 +64,18 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
     () => NOMS_FOURNISSEURS[fournisseurActuel.value] ?? fournisseurActuel.value,
   )
 
-  /** URS-F-032quinquies : dérive détectée entre le dernier moteur journalisé et la version qualifiée. */
-  const alerteDerive = computed(() =>
-    deriveVersionDetectee(
+  /**
+   * URS-F-032quinquies : dérive détectée entre le dernier moteur journalisé
+   * et la version qualifiée — **pour le mode donné** (URS-F-038bis, Phase
+   * 32) : la qualification de chat_normatif ne dit rien de la fiabilité du
+   * mode audit_simule, et réciproquement.
+   */
+  function alerteDerive(mode: ModeUsageIA): boolean {
+    return deriveVersionDetectee(
       dernierMoteurVersion.value,
-      configStore.config?.ai_provider_reliability_qualification ?? null,
-    ),
-  )
+      configStore.config?.ai_provider_reliability_qualification[mode] ?? null,
+    )
+  }
 
   function rafraichirConnectivite(): void {
     enLigne.value = navigator.onLine
@@ -102,11 +108,21 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
     })
   }
 
+  /**
+   * @param question Texte réellement envoyé au fournisseur — pour le mode
+   * `audit_simule`, l'appelant y passe le prompt déjà construit par
+   * `construirePromptAuditSimule` (Phase 32), jamais la question brute.
+   * @param questionAffichee Texte affiché dans l'historique du panneau —
+   * par défaut identique à `question` ; permet à l'écran de conserver la
+   * question brute de l'utilisateur à l'affichage même quand `question`
+   * porte un prompt engineered plus long (mode audit simulé).
+   */
   async function envoyerQuestion(
     question: string,
     mode: ModeUsageIA,
     contexte: ContexteEnvoi,
     titreDocumentJoint: string | null,
+    questionAffichee: string = question,
   ): Promise<void> {
     rafraichirConnectivite()
     envoiEnCours.value = true
@@ -124,7 +140,8 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
       messages.value = [
         ...messages.value,
         {
-          question,
+          question: questionAffichee,
+          mode,
           reponse: resultat.reponse,
           fournisseurUtilise: resultat.fournisseurUtilise.nomAffiche,
           bascule: resultat.bascule,

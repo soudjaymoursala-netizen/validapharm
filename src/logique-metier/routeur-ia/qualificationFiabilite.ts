@@ -1,8 +1,12 @@
-import type { ClientConfig } from '../domaine/types'
+import type { QualificationFiabiliteIA } from '../domaine/types'
 
-export type QualificationFiabilite = NonNullable<
-  ClientConfig['ai_provider_reliability_qualification']
->
+/**
+ * Depuis la Phase 32 (TD-030), `ClientConfig.ai_provider_reliability_
+ * qualification` est indexé par mode d'usage (URS-F-038bis) — ce module
+ * continue d'opérer sur **une** qualification à la fois, l'appelant
+ * sélectionnant déjà l'entrée du bon mode avant d'appeler ces fonctions.
+ */
+export type QualificationFiabilite = QualificationFiabiliteIA
 
 /**
  * Garde-fou non négociable : l'activation d'un fournisseur pour un usage

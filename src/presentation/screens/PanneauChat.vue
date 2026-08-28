@@ -1,19 +1,38 @@
 <script setup lang="ts">
 // Panneau Chat expert (FDS §3.4, FS §4.4) — panneau séparé de l'espace de
-// rédaction (URS-F-030). Mode "audit simulé" (URS-F-038/039/040) hors
-// périmètre de cet incrément : seul le mode `chat_normatif` est câblé ici
-// (backlog séparé, cf. tâche #14).
+// rédaction (URS-F-030). Mode "audit simulé" (URS-F-038/039/039bis/038bis,
+// Phase 32, TD-030) : bascule explicite entre `chat_normatif` et
+// `audit_simule`, sélection de persona(s) d'auditeur simulé, bandeau de
+// rappel non négociable affiché à chaque activation.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { messageSysteme } from '../i18n/messages'
+import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
 import { genererExportJSON } from '../../logique-metier/export/genererExportJSON'
+import {
+  construirePromptAuditSimule,
+  LIBELLES_PERSONA_AUDIT_SIMULE,
+  type PersonaAuditSimule,
+} from '../../logique-metier/audit-simule/construirePromptAuditSimule'
 import { useClientsStore } from '../stores/useClientsStore'
 import { usePanneauChatStore, type SectionDisponibleAJoindre } from '../stores/usePanneauChatStore'
 
 const DELAI_INACTIVITE_MS = 5 * 60 * 1000
 const VERIFICATION_INACTIVITE_MS = 30 * 1000
-const MODE_ACTUEL = 'chat_normatif' as const
+const MODES: ReadonlyArray<{ id: ModeUsageIA; nom: string }> = [
+  { id: 'chat_normatif', nom: 'Chat normatif' },
+  { id: 'audit_simule', nom: 'Audit simulé' },
+]
+const PERSONAS: readonly PersonaAuditSimule[] = [
+  'swissmedic',
+  'fda',
+  'cabinet_conseil_gxp',
+  'qa_specialisee',
+]
 
 const props = defineProps<{ clientId: string }>()
+
+const modeActuel = ref<ModeUsageIA>('chat_normatif')
+const personasChoisies = ref<PersonaAuditSimule[]>([])
 
 const clientsStore = useClientsStore()
 const chatStore = usePanneauChatStore()
@@ -39,7 +58,7 @@ function signalerActivite(): void {
 async function verifierInactivite(): Promise<void> {
   if (sessionFermeePourInactivite.value) return
   if (Date.now() - derniereActivite >= DELAI_INACTIVITE_MS) {
-    await chatStore.fermerSession(MODE_ACTUEL)
+    await chatStore.fermerSession(modeActuel.value)
     sessionFermeePourInactivite.value = true
   }
 }
@@ -61,7 +80,7 @@ onMounted(async () => {
 onBeforeUnmount(async () => {
   if (minuteurInactivite) clearInterval(minuteurInactivite)
   if (!sessionFermeePourInactivite.value) {
-    await chatStore.fermerSession(MODE_ACTUEL)
+    await chatStore.fermerSession(modeActuel.value)
   }
 })
 
@@ -75,6 +94,20 @@ function demanderEnvoi(): void {
   }
 }
 
+/**
+ * Mode audit_simule (URS-F-038/039bis, Phase 32) : la question réellement
+ * envoyée au fournisseur porte le prompt engineered (débat contradictoire +
+ * personas), jamais la question brute — celle-ci reste ce qui s'affiche
+ * dans l'historique via `questionAffichee`.
+ */
+function texteAEnvoyer(texteQuestion: string): string {
+  if (modeActuel.value !== 'audit_simule') return texteQuestion
+  return construirePromptAuditSimule({
+    question: texteQuestion,
+    personas: personasChoisies.value,
+  })
+}
+
 async function envoyer(): Promise<void> {
   confirmationEnvoiOuverte.value = false
   const texteQuestion = question.value.trim()
@@ -86,19 +119,26 @@ async function envoyer(): Promise<void> {
     sectionAJoindreId.value = ''
     if (sectionComplete) {
       await chatStore.envoyerQuestion(
-        texteQuestion,
-        MODE_ACTUEL,
+        texteAEnvoyer(texteQuestion),
+        modeActuel.value,
         {
           contenu_joint: true,
           contenu: genererExportJSON(sectionComplete),
           titre_document: section.titre,
         },
         section.titre,
+        texteQuestion,
       )
       return
     }
   }
-  await chatStore.envoyerQuestion(texteQuestion, MODE_ACTUEL, { contenu_joint: false }, null)
+  await chatStore.envoyerQuestion(
+    texteAEnvoyer(texteQuestion),
+    modeActuel.value,
+    { contenu_joint: false },
+    null,
+    texteQuestion,
+  )
 }
 
 async function reouvrirSession(): Promise<void> {
@@ -118,7 +158,7 @@ async function reouvrirSession(): Promise<void> {
     </p>
 
     <p
-      v-if="chatStore.estFournisseurCloud && chatStore.alerteDerive"
+      v-if="chatStore.estFournisseurCloud && chatStore.alerteDerive(modeActuel)"
       class="bandeau-avertissement"
       role="alert"
     >
@@ -127,6 +167,29 @@ async function reouvrirSession(): Promise<void> {
     </p>
 
     <p class="bandeau-disclaimer">Aide, pas avis opposable.</p>
+
+    <fieldset class="bloc-mode">
+      <legend>Mode</legend>
+      <label v-for="m in MODES" :key="m.id">
+        <input v-model="modeActuel" type="radio" :value="m.id" />
+        {{ m.nom }}
+      </label>
+    </fieldset>
+
+    <template v-if="modeActuel === 'audit_simule'">
+      <p class="bandeau-avertissement" role="alert">
+        ⚠ Mode audit simulé : débat contradictoire multi-angles et, si des profils sont
+        sélectionnés, simulation de persona(s) d'auditeur. Cette simulation ne constitue en aucun
+        cas un audit réglementaire réel ni un avis opposable (URS-F-039bis).
+      </p>
+      <fieldset class="bloc-personas">
+        <legend>Persona(s) d'auditeur simulé (optionnel)</legend>
+        <label v-for="p in PERSONAS" :key="p">
+          <input v-model="personasChoisies" type="checkbox" :value="p" />
+          {{ LIBELLES_PERSONA_AUDIT_SIMULE[p] }}
+        </label>
+      </fieldset>
+    </template>
 
     <section v-if="sessionFermeePourInactivite" class="bloc-inactivite">
       <p>Session fermée pour cause d'inactivité — consignée au journal (URS-F-037).</p>
@@ -137,6 +200,9 @@ async function reouvrirSession(): Promise<void> {
       <ul class="messages">
         <li v-for="(m, index) in chatStore.messages" :key="index" class="message">
           <p class="question">{{ m.question }}</p>
+          <p class="mode-message">
+            Mode : {{ m.mode === 'audit_simule' ? 'Audit simulé' : 'Chat normatif' }}
+          </p>
           <p v-if="m.documentJoint" class="document-joint">
             Document joint : « {{ m.titreDocumentJoint }} »
           </p>
@@ -235,6 +301,31 @@ async function reouvrirSession(): Promise<void> {
 
 .bandeau-bascule {
   color: var(--vp-statut-requalification-en-retard);
+}
+
+.bloc-mode,
+.bloc-personas {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.5rem 0.75rem;
+}
+
+.bloc-mode label,
+.bloc-personas label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.mode-message {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.85em;
+  margin: 0;
 }
 
 .bandeau-erreur {

@@ -13,6 +13,7 @@
 // donc pas de sens à lui appliquer et il est délibérément exempté ici.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { messageSysteme } from '../i18n/messages'
+import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
 import {
   conditionsTraitementAcquittees,
   peutActiverFournisseur,
@@ -35,7 +36,18 @@ const FOURNISSEURS_CLOUD = [
 ] as const
 const FOURNISSEUR_LOCAL = { id: 'local', nom: 'Modèle local (Ollama)' } as const
 
+/**
+ * Qualification de fiabilité séparée par mode d'usage (URS-F-038bis,
+ * Phase 32) — chat normatif et audit simulé n'ont pas le même profil de
+ * risque, jamais une qualification unique réputée valable pour les deux.
+ */
+const MODES_USAGE: ReadonlyArray<{ id: ModeUsageIA; nom: string }> = [
+  { id: 'chat_normatif', nom: 'Chat normatif' },
+  { id: 'audit_simule', nom: 'Audit simulé' },
+]
+
 const fournisseurChoisi = ref<string>('claude')
+const modeQualificationChoisi = ref<ModeUsageIA>('chat_normatif')
 
 const qualificationBrouillon = reactive({
   date: new Date().toISOString().slice(0, 10),
@@ -54,9 +66,13 @@ const conditionsAcquittees = computed(() =>
   ),
 )
 
-const peutActiverUsageReel = computed(() =>
-  peutActiverFournisseur(configStore.config?.ai_provider_reliability_qualification ?? null),
+const qualificationModeChoisi = computed(
+  () =>
+    configStore.config?.ai_provider_reliability_qualification[modeQualificationChoisi.value] ??
+    null,
 )
+
+const peutActiverUsageReel = computed(() => peutActiverFournisseur(qualificationModeChoisi.value))
 
 onMounted(async () => {
   const client = await clientsStore.obtenirClient(props.clientId)
@@ -77,7 +93,7 @@ async function acquitterConditions(): Promise<void> {
 }
 
 async function enregistrerQualification(): Promise<void> {
-  await configStore.enregistrerQualification(props.clientId, {
+  await configStore.enregistrerQualification(props.clientId, modeQualificationChoisi.value, {
     ...qualificationBrouillon,
     moteur_version_qualifiee: qualificationBrouillon.moteur_version_qualifiee.trim() || null,
   })
@@ -138,21 +154,24 @@ async function enregistrerQualification(): Promise<void> {
 
       <section class="bloc-qualification">
         <h2>Qualification de fiabilité (URS-F-032quater/quinquies)</h2>
+        <p class="rappel">
+          Une qualification distincte est requise pour chaque mode d'usage (URS-F-038bis) — le chat
+          normatif et le mode audit simulé n'ont pas le même profil de risque.
+        </p>
+        <fieldset>
+          <label v-for="m in MODES_USAGE" :key="m.id">
+            <input v-model="modeQualificationChoisi" type="radio" :value="m.id" />
+            {{ m.nom }}
+          </label>
+        </fieldset>
         <p v-if="!peutActiverUsageReel" class="avertissement" role="alert">
           {{ messageSysteme('U-05', 'fr') }}
         </p>
         <p v-else class="etat-favorable">
-          Qualifié le {{ configStore.config!.ai_provider_reliability_qualification!.date }} —
-          résultat : {{ configStore.config!.ai_provider_reliability_qualification!.resultat }}
-          <template
-            v-if="
-              configStore.config!.ai_provider_reliability_qualification!.moteur_version_qualifiee
-            "
-          >
-            (version moteur
-            {{
-              configStore.config!.ai_provider_reliability_qualification!.moteur_version_qualifiee
-            }})
+          Qualifié le {{ qualificationModeChoisi!.date }} — résultat :
+          {{ qualificationModeChoisi!.resultat }}
+          <template v-if="qualificationModeChoisi!.moteur_version_qualifiee">
+            (version moteur {{ qualificationModeChoisi!.moteur_version_qualifiee }})
           </template>
         </p>
 

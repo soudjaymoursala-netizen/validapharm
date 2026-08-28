@@ -128,6 +128,26 @@ export interface Client {
   created_at: string
 }
 
+/**
+ * Une qualification de fiabilité (FS §3 v14) — voir `ClientConfig.
+ * ai_provider_reliability_qualification` pour le garde-fou de séparation
+ * par mode d'usage (URS-F-038bis, Phase 32).
+ */
+export interface QualificationFiabiliteIA {
+  date: string
+  resultat: string
+  qualification_test_set_id: string
+  qualification_test_set_version: string
+  /**
+   * Identifiant de version de modèle exposé par le fournisseur au
+   * moment de cette qualification (FS §3 v14) — distinct de
+   * `qualification_test_set_version` (version du jeu de test, pas du
+   * moteur évalué). `null` si le fournisseur n'exposait aucune version
+   * au moment de la qualification.
+   */
+  moteur_version_qualifiee: string | null
+}
+
 export interface ClientConfig {
   client_id: string
   ai_provider: string
@@ -139,20 +159,15 @@ export interface ClientConfig {
    * l'autre.
    */
   ai_provider_conditions_acquittees: { fournisseur: string; date: string } | null
-  ai_provider_reliability_qualification: {
-    date: string
-    resultat: string
-    qualification_test_set_id: string
-    qualification_test_set_version: string
-    /**
-     * Identifiant de version de modèle exposé par le fournisseur au
-     * moment de cette qualification (FS §3 v14) — distinct de
-     * `qualification_test_set_version` (version du jeu de test, pas du
-     * moteur évalué). `null` si le fournisseur n'exposait aucune version
-     * au moment de la qualification.
-     */
-    moteur_version_qualifiee: string | null
-  } | null
+  /**
+   * Qualification de fiabilité, **une par mode d'usage** (Phase 32, TD-030,
+   * URS-F-038bis) — chat normatif et audit simulé n'ont pas le même profil
+   * de risque, une qualification unique ne couvre pas les deux. Avant la
+   * Phase 32, ce champ était un objet unique partagé entre modes ; migré
+   * vers un enregistrement indexé par `ModeUsageIA`, jamais réinterprété
+   * comme valable pour l'autre mode.
+   */
+  ai_provider_reliability_qualification: Record<ModeUsageIA, QualificationFiabiliteIA | null>
   export_template_id: string | null
   consent_telemetry: { granted: boolean; date: string | null; revocable_at_any_time: true }
 }

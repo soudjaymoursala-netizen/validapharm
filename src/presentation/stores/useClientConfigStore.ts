@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
 import type { ClientConfig } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
 
@@ -13,12 +14,17 @@ export interface SaisieQualification {
 
 const FOURNISSEUR_PAR_DEFAUT = 'claude'
 
+/** Aucune qualification pour aucun mode — jamais un mode oublié dans le `Record` (Phase 32, TD-030). */
+function qualificationVide(): ClientConfig['ai_provider_reliability_qualification'] {
+  return { chat_normatif: null, audit_simule: null }
+}
+
 function configParDefaut(clientId: string): ClientConfig {
   return {
     client_id: clientId,
     ai_provider: FOURNISSEUR_PAR_DEFAUT,
     ai_provider_conditions_acquittees: null,
-    ai_provider_reliability_qualification: null,
+    ai_provider_reliability_qualification: qualificationVide(),
     export_template_id: null,
     consent_telemetry: { granted: false, date: null, revocable_at_any_time: true },
   }
@@ -61,7 +67,7 @@ export const useClientConfigStore = defineStore('clientConfig', () => {
       ...actuel,
       ai_provider: fournisseur,
       ai_provider_conditions_acquittees: null,
-      ai_provider_reliability_qualification: null,
+      ai_provider_reliability_qualification: qualificationVide(),
     }
     await db.clientConfigs.put(misAJour)
     config.value = misAJour
@@ -77,14 +83,24 @@ export const useClientConfigStore = defineStore('clientConfig', () => {
     config.value = misAJour
   }
 
+  /**
+   * Enregistre la qualification de fiabilité **pour le mode donné
+   * uniquement** (URS-F-038bis, Phase 32) — la qualification de l'autre
+   * mode n'est jamais affectée, elles ne partagent pas le même profil de
+   * risque.
+   */
   async function enregistrerQualification(
     clientId: string,
+    mode: ModeUsageIA,
     saisie: SaisieQualification,
   ): Promise<void> {
     const actuel = await obtenirOuCreer(clientId)
     const misAJour: ClientConfig = {
       ...actuel,
-      ai_provider_reliability_qualification: { ...saisie },
+      ai_provider_reliability_qualification: {
+        ...actuel.ai_provider_reliability_qualification,
+        [mode]: { ...saisie },
+      },
     }
     await db.clientConfigs.put(misAJour)
     config.value = misAJour
