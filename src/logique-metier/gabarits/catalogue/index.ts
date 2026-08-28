@@ -40,3 +40,8 @@ export function obtenirDefinitionGabarit(
 ): DefinitionGabarit | undefined {
   return CATALOGUE[templateType]
 }
+
+/** Tous les gabarits réellement définis — utilisé par la bibliothèque de normes (§4.5) pour agréger `normes_associees` sans dupliquer le registre. */
+export function listerTousLesGabarits(): DefinitionGabarit[] {
+  return Object.values(CATALOGUE)
+}

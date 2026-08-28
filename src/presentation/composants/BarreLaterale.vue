@@ -58,6 +58,7 @@ function basculerMode(nouveauMode: ModeAffichage): void {
     <div class="sidebar__groupe">
       <p class="sidebar__titre-groupe">Mon travail</p>
       <RouterLink :to="{ name: 'tableau-de-bord' }">Mes projets</RouterLink>
+      <RouterLink :to="{ name: 'bibliotheque-normes' }">Bibliothèque de normes</RouterLink>
     </div>
 
     <div class="sidebar__groupe">

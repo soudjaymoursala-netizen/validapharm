@@ -4,8 +4,9 @@
 // de cet incrément : la vue de traçabilité (graphe des liens) et le
 // chargement de documents restent backlog (tâche #12).
 import { computed, onMounted, ref } from 'vue'
-import { analyserImportJSON } from '../../logique-metier/export/analyserImportJSON'
+import { detecterEcartsStructurels } from '../../logique-metier/analyse-projet/detecterEcartsStructurels'
 import type { Project, TemplateType } from '../../logique-metier/domaine/types'
+import { analyserImportJSON } from '../../logique-metier/export/analyserImportJSON'
 import { libelleStatut } from '../i18n/messages'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { useProjectsStore } from '../stores/useProjectsStore'
@@ -39,6 +40,20 @@ const CATALOGUE_DISPONIBLE: readonly TemplateType[] = [
 ]
 
 const sections = computed(() => sectionsStore.sectionsParProjet[props.projectId] ?? [])
+
+/**
+ * Analyse structurelle du dossier (§4.8, Phase 34, URS-F-082/083) —
+ * déterministe, jamais un appel IA. Recalculée à chaque changement de
+ * sections/liens plutôt que mise en cache, le volume de sections d'un
+ * projet restant modeste (cohérent avec le reste de l'écran).
+ */
+const ecartsStructurels = computed(() =>
+  detecterEcartsStructurels(sections.value, projet.value?.links ?? []),
+)
+
+function titreSection(sectionId: string): string {
+  return sections.value.find((s) => s.id === sectionId)?.meta.titre ?? sectionId
+}
 
 onMounted(async () => {
   projet.value = await projetsStore.obtenirProjet(props.projectId)
@@ -144,6 +159,27 @@ async function importerFichier(evenement: Event): Promise<void> {
         </li>
       </ul>
     </section>
+
+    <section v-if="ecartsStructurels.length > 0" class="analyse-structurelle">
+      <h2>Analyse structurelle du dossier (§4.8)</h2>
+      <p class="rappel">
+        Constats déterministes, jamais un verdict de conformité — à vérifier par l'utilisateur
+        (URS-F-083).
+      </p>
+      <ul class="liste-ecarts">
+        <li v-for="ecart in ecartsStructurels" :key="ecart.sectionId">
+          <RouterLink
+            :to="{
+              name: 'editeur-section',
+              params: { projectId: props.projectId, sectionId: ecart.sectionId },
+            }"
+          >
+            {{ titreSection(ecart.sectionId) }}
+          </RouterLink>
+          <p>{{ ecart.message }}</p>
+        </li>
+      </ul>
+    </section>
   </main>
   <p v-else>Chargement…</p>
 </template>
@@ -165,6 +201,40 @@ async function importerFichier(evenement: Event): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.analyse-structurelle {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.analyse-structurelle .rappel {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.9em;
+  margin: 0;
+}
+
+.liste-ecarts {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.liste-ecarts li {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.6rem 0.9rem;
+}
+
+.liste-ecarts p {
+  margin: 0.25rem 0 0;
+  color: var(--vp-texte-secondaire);
 }
 
 .actions-entete {

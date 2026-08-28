@@ -13,6 +13,7 @@ function routeurDeTest(): Router {
       { path: '/tableau-de-bord', name: 'tableau-de-bord', component: { template: '<div />' } },
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
       { path: '/configuration', name: 'configuration-client', component: { template: '<div />' } },
+      { path: '/normes', name: 'bibliotheque-normes', component: { template: '<div />' } },
       {
         path: '/clients/:clientId/missions',
         name: 'liste-missions',
@@ -60,6 +61,7 @@ describe('BarreLaterale — groupes de navigation', () => {
 
     expect(wrapper.text()).toContain('Que voulez-vous faire ?')
     expect(wrapper.text()).toContain('Mes projets')
+    expect(wrapper.text()).toContain('Bibliothèque de normes')
     expect(wrapper.text()).toContain('Clients')
     expect(wrapper.text()).toContain('Configuration GitHub')
   })

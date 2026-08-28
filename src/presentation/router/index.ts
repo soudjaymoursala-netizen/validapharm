@@ -46,6 +46,11 @@ export const router = createRouter({
       component: () => import('../screens/ConfigurationClient.vue'),
     },
     {
+      path: '/normes',
+      name: 'bibliotheque-normes',
+      component: () => import('../screens/BibliothequeNormes.vue'),
+    },
+    {
       path: '/resolution-conflit',
       name: 'resolution-conflit',
       component: () => import('../screens/ResolutionConflit.vue'),
