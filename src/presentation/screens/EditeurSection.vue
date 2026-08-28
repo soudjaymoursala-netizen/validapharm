@@ -6,8 +6,11 @@
 // logique-metier/gabarits/catalogue/index.ts). Transitions de statut avec
 // garde-fous fidèles (FDS §3.2/§3.3), sauvegarde automatique (URS-F-009).
 import { computed, onMounted, ref, watch } from 'vue'
+import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
 import { GabaritDocxInvalideError } from '../../connecteurs/office/erreurs'
 import { genererDocxPersonnalise } from '../../connecteurs/office/GenerationDocxAdapter'
+import { extraireTextePdf } from '../../connecteurs/pdf/PdfNatifAdapter'
+import type { Project, ProjectDocument, Section } from '../../logique-metier/domaine/types'
 import { construireDonneesExportGabarit } from '../../logique-metier/export/donneesExportGabarit'
 import { genererExportCSV } from '../../logique-metier/export/genererExportCSV'
 import { genererExportJSON } from '../../logique-metier/export/genererExportJSON'
@@ -15,10 +18,14 @@ import { genererExportWord } from '../../logique-metier/export/genererExportWord
 import { verifierBlocageExport } from '../../logique-metier/export/verifierBlocageExport'
 import { obtenirDefinitionGabarit } from '../../logique-metier/gabarits/catalogue'
 import type { ChampTableauDynamique } from '../../logique-metier/gabarits/definitionGabarit'
-import type { Project, Section } from '../../logique-metier/domaine/types'
 import RenduGabarit from '../composants/RenduGabarit.vue'
+import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { libelleStatut, messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
+import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
+import { useClientConfigStore } from '../stores/useClientConfigStore'
+import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 import { useGabaritExportStore } from '../stores/useGabaritExportStore'
+import { NOMS_FOURNISSEURS } from '../stores/usePanneauChatStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useSectionsStore, type ResultatActionSection } from '../stores/useSectionsStore'
 
@@ -27,6 +34,8 @@ const props = defineProps<{ projectId: string; sectionId: string }>()
 const sectionsStore = useSectionsStore()
 const projetsStore = useProjectsStore()
 const gabaritExportStore = useGabaritExportStore()
+const configStore = useClientConfigStore()
+const relaisStore = useConnexionRelaisIAStore()
 const section = ref<Section | undefined>(undefined)
 const projet = ref<Project | undefined>(undefined)
 const gabaritSelectionneId = ref<string>('')
@@ -41,8 +50,40 @@ const nouvelAvisRelecteurTexte = ref('')
 const dernierResultat = ref<ResultatActionSection | undefined>(undefined)
 let minuteurSauvegarde: ReturnType<typeof setTimeout> | undefined
 
+// Génération de brouillon par adaptation (§4.1bis, Phase 33, TD-031,
+// URS-F-060 à 064).
+const modeReference = ref<'coller' | 'uploader'>('coller')
+const texteDocumentReference = ref('')
+const nomDocumentReference = ref('')
+const contexteNouveauCas = ref('')
+const confirmationDroitUsage = ref(false)
+const enExtractionReference = ref(false)
+const erreurExtractionReference = ref<string | null>(null)
+const enGeneration = ref(false)
+const erreurGeneration = ref<string | null>(null)
+const documentReferenceUtilise = ref<ProjectDocument | undefined>(undefined)
+/**
+ * URS-F-061 : "jamais de validation globale en un clic" — chaque section
+ * du gabarit (au sens `DefinitionSection`, pas l'objet `Section` lui-même)
+ * doit être explicitement relue avant que le bouton de validation ne
+ * s'active. Volontairement non persisté : recharger la page en cours de
+ * revue doit forcer une nouvelle relecture complète, jamais réutiliser
+ * silencieusement une confirmation d'une visite précédente.
+ */
+const sousSectionsRevues = ref<Set<string>>(new Set())
+
 const definitionGabarit = computed(() =>
   section.value ? obtenirDefinitionGabarit(section.value.template_type) : undefined,
+)
+
+const toutesLesSousSectionsRevues = computed(() =>
+  definitionGabarit.value
+    ? definitionGabarit.value.sections.every((s) => sousSectionsRevues.value.has(s.section_key))
+    : true,
+)
+
+const nomFournisseurActuel = computed(
+  () => NOMS_FOURNISSEURS[configStore.config?.ai_provider ?? 'claude'] ?? 'Claude',
 )
 
 async function recharger(): Promise<void> {
@@ -52,6 +93,14 @@ async function recharger(): Promise<void> {
   )
   section.value = trouvee
   contenu.value = typeof trouvee?.values.contenu === 'string' ? trouvee.values.contenu : ''
+
+  if (trouvee?.generation_source.source_document_id) {
+    documentReferenceUtilise.value = await sectionsStore.obtenirDocumentReference(
+      trouvee.generation_source.source_document_id,
+    )
+  } else {
+    documentReferenceUtilise.value = undefined
+  }
 }
 
 onMounted(async () => {
@@ -59,6 +108,8 @@ onMounted(async () => {
   projet.value = await projetsStore.obtenirProjet(props.projectId)
   if (projet.value?.client_id) {
     await gabaritExportStore.charger(projet.value.client_id)
+    await configStore.charger(projet.value.client_id)
+    await relaisStore.charger()
   }
 })
 
@@ -283,7 +334,74 @@ async function rejeter(): Promise<void> {
 
 async function validerSectionIA(): Promise<void> {
   dernierResultat.value = await sectionsStore.validerSectionIA(props.sectionId)
+  sousSectionsRevues.value = new Set()
   await recharger()
+}
+
+/** Extraction du texte d'un fichier de référence (.docx/.pdf) — même patron que RevueStructureProcedure.vue (Phase 25). */
+async function importerFichierReference(evenement: Event): Promise<void> {
+  erreurExtractionReference.value = null
+  const fichier = (evenement.target as HTMLInputElement).files?.[0]
+  if (!fichier) return
+
+  enExtractionReference.value = true
+  try {
+    const tampon = await fichier.arrayBuffer()
+    texteDocumentReference.value = fichier.name.toLowerCase().endsWith('.pdf')
+      ? (await extraireTextePdf(tampon)).texte
+      : (await extraireTexteDocx(tampon)).texte
+    nomDocumentReference.value = fichier.name
+  } catch (e) {
+    erreurExtractionReference.value =
+      e instanceof Error ? e.message : "Erreur inconnue lors de l'extraction du fichier."
+  } finally {
+    enExtractionReference.value = false
+    ;(evenement.target as HTMLInputElement).value = ''
+  }
+}
+
+async function genererBrouillon(): Promise<void> {
+  if (texteDocumentReference.value.trim().length === 0 || !confirmationDroitUsage.value) return
+  erreurGeneration.value = null
+  enGeneration.value = true
+  try {
+    const estFournisseurCloud = (configStore.config?.ai_provider ?? 'claude') !== 'local'
+    const { principal, local } = construireAdaptateursIA({
+      estFournisseurCloud,
+      nomFournisseurActuel: nomFournisseurActuel.value,
+      relayUrl: relaisStore.connexion?.relayUrl,
+      jetonRelais: relaisStore.connexion?.jeton,
+    })
+    const resultat = await sectionsStore.genererBrouillonIA(
+      props.sectionId,
+      {
+        texteDocumentReference: texteDocumentReference.value,
+        nomDocumentReference:
+          nomDocumentReference.value.trim() || `Texte collé — ${new Date().toLocaleString()}`,
+        contexteNouveauCas: contexteNouveauCas.value,
+        confirmationDroitUsage: confirmationDroitUsage.value,
+        actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+      },
+      adaptateurAvecBascule(principal, local),
+    )
+    if (!resultat.ok) {
+      erreurGeneration.value =
+        resultat.motif === 'gabarit_introuvable'
+          ? 'Aucun gabarit défini pour ce type de section — génération impossible.'
+          : "Confirmation du droit d'usage requise avant de générer."
+      return
+    }
+    texteDocumentReference.value = ''
+    nomDocumentReference.value = ''
+    contexteNouveauCas.value = ''
+    confirmationDroitUsage.value = false
+    await recharger()
+  } catch (e) {
+    erreurGeneration.value =
+      e instanceof Error ? e.message : 'Erreur inconnue lors de la génération du brouillon.'
+  } finally {
+    enGeneration.value = false
+  }
 }
 
 async function assignerApprobateur(): Promise<void> {
@@ -333,6 +451,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
       :tables="section.tables"
       :langue="section.language"
       :verrouille="section.status === 'valide_en_interne'"
+      :champs-signales="section.generation_source.generated_fields"
       @maj-valeurs="majValeursGabarit"
       @maj-table="majTableGabarit"
     />
@@ -340,6 +459,105 @@ async function ajouterAvisRelecteur(): Promise<void> {
       Contenu
       <textarea v-model="contenu" :disabled="section.status === 'valide_en_interne'" rows="10" />
     </label>
+
+    <section
+      v-if="section.status === 'brouillon_aide' && definitionGabarit && projet?.client_id"
+      class="generation-brouillon no-print"
+    >
+      <h2>Génération de brouillon par adaptation (§4.1bis)</h2>
+      <p class="rappel">
+        Adapte un document de référence (structure, langage, raisonnement) au contexte du nouveau
+        cas — le résultat reste au statut « proposé par IA — non validé » tant que chaque section du
+        gabarit n'a pas été relue explicitement (URS-F-061).
+      </p>
+
+      <fieldset class="choix-reference">
+        <label>
+          <input v-model="modeReference" type="radio" value="coller" />
+          Coller le texte
+        </label>
+        <label>
+          <input v-model="modeReference" type="radio" value="uploader" />
+          Uploader un fichier (.docx, .pdf)
+        </label>
+      </fieldset>
+
+      <label v-if="modeReference === 'coller'">
+        Texte du document de référence
+        <textarea v-model="texteDocumentReference" rows="6" />
+      </label>
+      <template v-else>
+        <label class="bouton-fichier">
+          Choisir un fichier (.docx, .pdf)
+          <input type="file" accept=".docx,.pdf" @change="importerFichierReference" />
+        </label>
+        <p v-if="enExtractionReference">Extraction du texte en cours…</p>
+        <p v-if="erreurExtractionReference" class="bandeau-erreur" role="alert">
+          {{ erreurExtractionReference }}
+        </p>
+        <p v-if="nomDocumentReference && !enExtractionReference">
+          Fichier chargé : « {{ nomDocumentReference }} » ({{ texteDocumentReference.length }}
+          caractères extraits)
+        </p>
+      </template>
+
+      <label v-if="modeReference === 'coller'">
+        Nom du document de référence
+        <input v-model="nomDocumentReference" type="text" placeholder="ex. IQ ligne A11 (2024)" />
+      </label>
+
+      <label>
+        Contexte du nouveau cas
+        <textarea v-model="contexteNouveauCas" rows="3" />
+      </label>
+
+      <label class="confirmation-droit-usage">
+        <input v-model="confirmationDroitUsage" type="checkbox" />
+        {{
+          messageSysteme('U-07', section.language, {
+            titre: nomDocumentReference || 'ce document',
+          })
+        }}
+      </label>
+
+      <p v-if="erreurGeneration" class="bandeau-erreur" role="alert">{{ erreurGeneration }}</p>
+
+      <button
+        type="button"
+        :disabled="
+          enGeneration || texteDocumentReference.trim().length === 0 || !confirmationDroitUsage
+        "
+        @click="genererBrouillon"
+      >
+        {{ enGeneration ? 'Génération en cours…' : 'Générer le brouillon' }}
+      </button>
+    </section>
+
+    <section v-if="section.status === 'propose_par_ia_non_valide'" class="revue-ia no-print">
+      <h2>Revue du brouillon proposé par IA (URS-F-061)</h2>
+      <p v-if="documentReferenceUtilise">
+        Document de référence : « {{ documentReferenceUtilise.filename }} » (URS-F-064)
+      </p>
+      <p class="rappel">
+        Relisez explicitement chaque section ci-dessus avant de pouvoir valider — aucune validation
+        globale en un clic n'est possible.
+      </p>
+      <fieldset v-if="definitionGabarit" class="checklist-revue">
+        <label v-for="s in definitionGabarit.sections" :key="s.section_key">
+          <input
+            type="checkbox"
+            :checked="sousSectionsRevues.has(s.section_key)"
+            @change="
+              (e: Event) =>
+                (e.target as HTMLInputElement).checked
+                  ? sousSectionsRevues.add(s.section_key)
+                  : sousSectionsRevues.delete(s.section_key)
+            "
+          />
+          J'ai relu et validé « {{ s.labels[section.language] ?? s.labels.fr }} »
+        </label>
+      </fieldset>
+    </section>
 
     <section v-if="section.status !== 'valide_en_interne'" class="workflow no-print">
       <h2>Workflow (URS-F-011, URS-F-014ter/quater)</h2>
@@ -404,9 +622,12 @@ async function ajouterAvisRelecteur(): Promise<void> {
       </template>
 
       <template v-else-if="section.status === 'propose_par_ia_non_valide'">
-        <button type="button" @click="validerSectionIA">
+        <button type="button" :disabled="!toutesLesSousSectionsRevues" @click="validerSectionIA">
           Valider cette section (contenu proposé par IA)
         </button>
+        <p v-if="!toutesLesSousSectionsRevues" class="rappel">
+          Relisez chaque section ci-dessus avant de pouvoir valider.
+        </p>
       </template>
 
       <template v-else-if="section.status === 'en_verification'">
@@ -534,12 +755,37 @@ button {
   align-self: flex-start;
 }
 
-.workflow {
+.workflow,
+.generation-brouillon,
+.revue-ia {
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon);
   padding: 1rem;
   display: flex;
   flex-direction: column;
+  gap: 0.5rem;
+}
+
+.generation-brouillon h2,
+.revue-ia h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.choix-reference,
+.checklist-revue {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.75rem;
+}
+
+.confirmation-droit-usage {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   gap: 0.5rem;
 }
 

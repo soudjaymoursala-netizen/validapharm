@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test } from 'vitest'
+import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
 import { db } from '../../persistance/db'
 import { useProjectsStore } from './useProjectsStore'
 import { useSectionsStore } from './useSectionsStore'
@@ -9,7 +10,16 @@ beforeEach(async () => {
   setActivePinia(createPinia())
   await db.projects.clear()
   await db.sections.clear()
+  await db.projectDocuments.clear()
 })
+
+function providerRepondant(texte: string): ProviderAdapter {
+  return {
+    nomAffiche: 'Fournisseur test',
+    estCloud: true,
+    envoyerMessage: async () => ({ texte, version_moteur: null, citations: [] }),
+  }
+}
 
 async function creerProjetEtSection(templateType: 'oq' | 'iq' | 'contexte_procede' | 'dq' = 'oq') {
   const projets = useProjectsStore()
@@ -345,5 +355,165 @@ describe('useSectionsStore — importerSection (FS §4.3, URS-F-021)', () => {
 
     const projetEnBase = await db.projects.get(projet.id)
     expect(projetEnBase?.sections).toContain(importee.id)
+  })
+})
+
+describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33, URS-F-060 à 064)', () => {
+  test('refuse sans confirmation explicite du droit d’usage (URS-F-062)', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    const resultat = await sections.genererBrouillonIA(
+      section.id,
+      {
+        texteDocumentReference: 'Texte source',
+        nomDocumentReference: 'ref.docx',
+        contexteNouveauCas: 'Nouveau cas',
+        confirmationDroitUsage: false,
+        actor: 'user-1',
+      },
+      providerRepondant('CHAMP|description.description_procede|Procédé adapté.'),
+    )
+    expect(resultat).toEqual({ ok: false, motif: 'confirmation_droit_usage_requise' })
+
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.status).toBe('brouillon_aide')
+  })
+
+  test('refuse sur une section qui n’est plus brouillon_aide', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await db.sections.put({ ...section, status: 'valide_en_interne' })
+    const resultat = await sections.genererBrouillonIA(
+      section.id,
+      {
+        texteDocumentReference: 'Texte source',
+        nomDocumentReference: 'ref.docx',
+        contexteNouveauCas: 'Nouveau cas',
+        confirmationDroitUsage: true,
+        actor: 'user-1',
+      },
+      providerRepondant('CHAMP|description.description_procede|Procédé adapté.'),
+    )
+    expect(resultat).toEqual({ ok: false, motif: 'statut_incompatible' })
+  })
+
+  test('cas nominal : crée le document de référence, remplit les champs, statut propose_par_ia_non_valide, filiation et journal complets', async () => {
+    const { sections, projet, section } = await creerProjetEtSection('contexte_procede')
+    const resultat = await sections.genererBrouillonIA(
+      section.id,
+      {
+        texteDocumentReference: 'Le procédé source décrit un remplissage aseptique.',
+        nomDocumentReference: 'procede-reference.docx',
+        contexteNouveauCas: 'Nouvelle ligne, même principe de remplissage.',
+        confirmationDroitUsage: true,
+        actor: 'user-1',
+      },
+      providerRepondant(
+        [
+          'CHAMP|description.description_procede|Remplissage aseptique adapté à la nouvelle ligne.',
+          'CHAMP|description.conditions_operatoires|Température ambiante contrôlée.',
+        ].join('\n'),
+      ),
+    )
+    expect(resultat).toEqual({ ok: true, champsGeneres: 2 })
+
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.status).toBe('propose_par_ia_non_valide')
+    expect(sectionEnBase?.values.description_procede).toBe(
+      'Remplissage aseptique adapté à la nouvelle ligne.',
+    )
+    expect(sectionEnBase?.values.conditions_operatoires).toBe('Température ambiante contrôlée.')
+    // Gabarit "contexte_procede" n'a aucun champ scalaire `nombre' — aucun
+    // champ n'est donc d'origine technique/numérique dans ce cas (URS-F-063).
+    expect(sectionEnBase?.generation_source.generated_fields).toEqual([])
+    const sourceDocumentId = sectionEnBase?.generation_source.source_document_id
+    expect(sourceDocumentId).toBeTruthy()
+    if (!sourceDocumentId) throw new Error('source_document_id manquant')
+
+    const documentReference = await sections.obtenirDocumentReference(sourceDocumentId)
+    expect(documentReference).toMatchObject({
+      filename: 'procede-reference.docx',
+      project_id: projet.id,
+      extracted_text: 'Le procédé source décrit un remplissage aseptique.',
+    })
+
+    const actions = sectionEnBase?.audit_log.map((e) => e.action) ?? []
+    expect(actions).toContain('confirmation_droit_usage_document_reference')
+    expect(actions.some((a) => a.startsWith('generation_brouillon_ia'))).toBe(true)
+
+    // ALCOA+ (FS §3, v04) : entrée "génération assistée" distincte, jamais
+    // fusionnée avec une future validation utilisateur.
+    expect(sectionEnBase?.revisions.at(-1)).toMatchObject({
+      motif: 'génération assistée',
+      auteur: 'système (Fournisseur test)',
+    })
+
+    const projetEnBase = await db.projects.get(projet.id)
+    expect(projetEnBase?.documents).toContain(sectionEnBase?.generation_source.source_document_id)
+  })
+
+  test('ne recouvre jamais une valeur déjà saisie par l’utilisateur', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await sections.mettreAJourValeurs(section.id, {
+      description_procede: "Déjà rédigé par l'utilisateur.",
+    })
+
+    await sections.genererBrouillonIA(
+      section.id,
+      {
+        texteDocumentReference: 'Texte source',
+        nomDocumentReference: 'ref.docx',
+        contexteNouveauCas: 'Nouveau cas',
+        confirmationDroitUsage: true,
+        actor: 'user-1',
+      },
+      providerRepondant('CHAMP|description.description_procede|Valeur proposée par IA.'),
+    )
+
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.values.description_procede).toBe("Déjà rédigé par l'utilisateur.")
+  })
+
+  test('refuse quand aucun gabarit n’est défini pour le template_type', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await db.sections.put({ ...section, template_type: 'inconnu_hors_catalogue' as never })
+    const resultat = await sections.genererBrouillonIA(
+      section.id,
+      {
+        texteDocumentReference: 'Texte source',
+        nomDocumentReference: 'ref.docx',
+        contexteNouveauCas: 'Nouveau cas',
+        confirmationDroitUsage: true,
+        actor: 'user-1',
+      },
+      providerRepondant('CHAMP|description.description_procede|x'),
+    )
+    expect(resultat).toEqual({ ok: false, motif: 'gabarit_introuvable' })
+  })
+})
+
+describe('useSectionsStore — validerSectionIA (URS-F-061, clarification ALCOA+ FS §3 v04)', () => {
+  test('transition propose_par_ia_non_valide -> brouillon_aide avec une entrée revisions distincte motif "validation utilisateur"', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await db.sections.put({
+      ...section,
+      status: 'propose_par_ia_non_valide',
+      revisions: [
+        {
+          version: '0.1',
+          date: '2026-01-01T00:00:00.000Z',
+          auteur: 'système (Claude)',
+          motif: 'génération assistée',
+        },
+      ],
+    })
+
+    const resultat = await sections.validerSectionIA(section.id)
+    expect(resultat).toEqual({ ok: true })
+
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.status).toBe('brouillon_aide')
+    expect(sectionEnBase?.revisions).toHaveLength(2)
+    expect(sectionEnBase?.revisions.at(-1)).toMatchObject({ motif: 'validation utilisateur' })
+    // L'entrée "génération assistée" reste intacte, jamais fusionnée.
+    expect(sectionEnBase?.revisions[0]?.motif).toBe('génération assistée')
   })
 })

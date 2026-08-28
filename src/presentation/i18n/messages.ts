@@ -8,8 +8,8 @@ import type { Langue } from '../../logique-metier/domaine/types'
  * @requirement FDS §7, URS-NF-040/040bis
  *
  * Seuls les codes déjà mobilisés par un écran construit à ce stade sont
- * transcrits (U-01/U-02/U-03/U-05/U-06/U-12) — les autres (U-04, U-07 à
- * U-11, Structure Système/QMS) seront ajoutés avec chaque module
+ * transcrits (U-01/U-02/U-03/U-05/U-06/U-07/U-08/U-12) — les autres (U-04,
+ * U-09 à U-11, Structure Système/QMS) seront ajoutés avec chaque module
  * correspondant plutôt que traduits par avance sans écran pour les
  * vérifier à l'usage.
  *
@@ -44,6 +44,16 @@ export const messagesSysteme = {
     fr: 'Le contenu de « {titre} » sera transmis à {fournisseur}. Continuer ?',
     en: 'The content of "{titre}" will be sent to {fournisseur}. Continue?',
     de: 'Der Inhalt von „{titre}“ wird an {fournisseur} übermittelt. Fortfahren?',
+  },
+  'U-07': {
+    fr: "Confirmez-vous disposer du droit d'utiliser « {titre} » comme base pour cette génération (propriété intellectuelle / confidentialité, notamment vis-à-vis d'un autre client) ?",
+    en: 'Do you confirm you have the right to use "{titre}" as a basis for this generation (intellectual property / confidentiality, particularly regarding another client)?',
+    de: 'Bestätigen Sie, dass Sie berechtigt sind, „{titre}“ als Grundlage für diese Generierung zu verwenden (geistiges Eigentum / Vertraulichkeit, insbesondere gegenüber einem anderen Kunden)?',
+  },
+  'U-08': {
+    fr: 'Donnée technique/numérique reprise ou adaptée depuis le document de référence — à vérifier avant validation.',
+    en: 'Technical/numeric data taken or adapted from the reference document — to be checked before validation.',
+    de: 'Technischer/numerischer Wert, der aus dem Referenzdokument übernommen oder angepasst wurde — vor der Validierung zu prüfen.',
   },
   'U-12': {
     fr: "Cette version de ValidaPharm ne peut pas ouvrir ces données — elles ont été créées ou migrées avec une version plus récente. Mettez à jour l'application avant de continuer, ou revenez à la version {x} pour les rouvrir.",

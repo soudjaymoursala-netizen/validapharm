@@ -49,6 +49,73 @@ function monter() {
   })
 }
 
+const definitionAvecChampScalaire: DefinitionGabarit = {
+  template_id: 'dq',
+  template_version: '1.0.0',
+  family: 'B',
+  normes_associees: [],
+  sections: [
+    {
+      section_key: 'generalites',
+      labels: { fr: 'Généralités', en: 'General', de: 'Allgemein' },
+      required_link_type: null,
+      fields: [
+        {
+          field_key: 'tolerance',
+          labels: { fr: 'Tolérance', en: 'Tolerance', de: 'Toleranz' },
+          type: 'nombre',
+          required: false,
+          min: 0,
+          max: 100,
+        },
+        {
+          field_key: 'objectif',
+          labels: { fr: 'Objectif', en: 'Objective', de: 'Ziel' },
+          type: 'texte_long',
+          required: false,
+        },
+      ],
+    },
+  ],
+}
+
+describe('RenduGabarit — champsSignales (§4.1bis, Phase 33, URS-F-063)', () => {
+  function monterAvecSignalement(champsSignales: string[]) {
+    return mount(RenduGabarit, {
+      props: {
+        definition: definitionAvecChampScalaire,
+        values: {},
+        tables: {},
+        langue: 'fr',
+        verrouille: false,
+        champsSignales,
+      },
+    })
+  }
+
+  test('affiche le badge de signalement uniquement sur les champs listés', () => {
+    const wrapper = monterAvecSignalement(['tolerance'])
+    const labels = wrapper.findAll('label')
+    const labelTolerance = labels.find((l) => l.text().includes('Tolérance'))
+    const labelObjectif = labels.find((l) => l.text().includes('Objectif'))
+    expect(labelTolerance?.find('.badge-signale').exists()).toBe(true)
+    expect(labelObjectif?.find('.badge-signale').exists()).toBe(false)
+  })
+
+  test('aucun badge quand champsSignales est vide (par défaut)', () => {
+    const wrapper = mount(RenduGabarit, {
+      props: {
+        definition: definitionAvecChampScalaire,
+        values: {},
+        tables: {},
+        langue: 'fr',
+        verrouille: false,
+      },
+    })
+    expect(wrapper.find('.badge-signale').exists()).toBe(false)
+  })
+})
+
 describe('RenduGabarit — colonne de type liste dans un tableau dynamique', () => {
   test('rend un <select> avec les options du gabarit, jamais un champ texte libre', () => {
     const wrapper = monter()

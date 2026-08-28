@@ -1,8 +1,16 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
 import { aLienVersTypeSection } from '../../logique-metier/detection-liens/aLienVersTypeSection'
-import type { Langue, Section, TemplateType } from '../../logique-metier/domaine/types'
+import type {
+  Langue,
+  ProjectDocument,
+  Section,
+  TemplateType,
+} from '../../logique-metier/domaine/types'
 import type { DonneesImportSection } from '../../logique-metier/export/analyserImportJSON'
+import { obtenirDefinitionGabarit } from '../../logique-metier/gabarits/catalogue'
+import { genererBrouillonSection } from '../../logique-metier/generation-brouillon/genererBrouillonSection'
 import {
   evaluerGardesFinalisation,
   motifDeForcageValide,
@@ -26,6 +34,27 @@ export type ResultatActionSection =
   | { ok: true }
   | { ok: false; blocagesFinalisation: MessageBlocageFinalisation[] }
   | { ok: false; raisonTransition: RaisonBlocageTransition }
+
+/**
+ * Entrées de la génération de brouillon par adaptation (§4.1bis, Phase 33,
+ * TD-031) — `nomDocumentReference` sert uniquement de nom affiché
+ * (URS-F-064), jamais de contenu ; le texte réellement transmis à l'IA est
+ * `texteDocumentReference` (collé directement ou déjà extrait d'un fichier
+ * .docx/.pdf côté écran, URS-F-060).
+ */
+export interface EntreesGenerationBrouillonIA {
+  texteDocumentReference: string
+  nomDocumentReference: string
+  contexteNouveauCas: string
+  confirmationDroitUsage: boolean
+  actor: string
+}
+
+export type ResultatGenerationBrouillonIA =
+  | { ok: true; champsGeneres: number }
+  | { ok: false; motif: 'confirmation_droit_usage_requise' }
+  | { ok: false; motif: 'gabarit_introuvable' }
+  | { ok: false; motif: 'statut_incompatible' }
 
 const VERSION_MOTEUR_GABARITS = '0.1.0'
 
@@ -86,6 +115,143 @@ export const useSectionsStore = defineStore('sections', () => {
 
     await chargerSectionsDuProjet(input.project_id)
     return section
+  }
+
+  /**
+   * Génération de brouillon par adaptation d'un document de référence
+   * (§4.1bis, Phase 33, TD-031 — URS-F-060 à 064).
+   *
+   * Garde-fous non négociables, dans l'ordre :
+   * - URS-F-062 : refuse tant que `confirmationDroitUsage` n'est pas
+   *   `true` — cette confirmation n'est PAS une preuve juridique de droit
+   *   d'usage (elle reste de la responsabilité de l'utilisateur), mais une
+   *   action tracée dans `section.audit_log`, jamais silencieuse.
+   * - Uniquement applicable à une section `brouillon_aide` avec un gabarit
+   *   réellement défini (le repli générique "champ contenu libre" n'a pas
+   *   de champs adressables — génération sans objet).
+   * - Le document de référence est persisté comme `ProjectDocument` réel
+   *   (URS-F-000quater, jusqu'ici jamais consommé) pour que
+   *   `generation_source.source_document_id` (URS-F-064) référence un
+   *   objet réel plutôt qu'un simple label perdu.
+   * - Une valeur déjà saisie par l'utilisateur n'est jamais écrasée par une
+   *   proposition IA — seuls les champs encore vides sont renseignés.
+   * - `generation_source.generated_fields` liste uniquement les champs
+   *   d'origine technique/numérique (URS-F-063) — c'est ce que l'écran
+   *   utilise pour le surlignage distinct exigé, pas la liste de tous les
+   *   champs proposés.
+   */
+  async function genererBrouillonIA(
+    sectionId: string,
+    entrees: EntreesGenerationBrouillonIA,
+    provider: ProviderAdapter,
+  ): Promise<ResultatGenerationBrouillonIA> {
+    if (!entrees.confirmationDroitUsage) {
+      return { ok: false, motif: 'confirmation_droit_usage_requise' }
+    }
+
+    const section = await chargerSection(sectionId)
+    if (section.status !== 'brouillon_aide') {
+      return { ok: false, motif: 'statut_incompatible' }
+    }
+
+    const gabarit = obtenirDefinitionGabarit(section.template_type)
+    if (!gabarit) {
+      return { ok: false, motif: 'gabarit_introuvable' }
+    }
+
+    const maintenant = new Date().toISOString()
+    const documentReference: ProjectDocument = {
+      id: crypto.randomUUID(),
+      project_id: section.project_id,
+      filename: entrees.nomDocumentReference,
+      status: 'reference_de_travail_non_maitre',
+      uploaded_at: maintenant,
+      uploaded_by: entrees.actor,
+      extracted_text: entrees.texteDocumentReference,
+    }
+    await db.projectDocuments.put(documentReference)
+
+    const projet = await db.projects.get(section.project_id)
+    if (projet) {
+      await db.projects.put({
+        ...projet,
+        documents: [...projet.documents, documentReference.id],
+        updated_at: maintenant,
+        audit_log: [
+          ...projet.audit_log,
+          { timestamp: maintenant, actor: entrees.actor, action: 'ajout_document' },
+        ],
+      })
+    }
+
+    const proposition = await genererBrouillonSection(
+      {
+        gabarit,
+        texteDocumentReference: entrees.texteDocumentReference,
+        contexteNouveauCas: entrees.contexteNouveauCas,
+        langue: section.language,
+      },
+      provider,
+    )
+
+    const valeursExistantes = section.values
+    const nouvellesValeurs = { ...valeursExistantes }
+    for (const champ of proposition.champs) {
+      const cleValeur = champ.field_key
+      const dejaSaisi =
+        valeursExistantes[cleValeur] !== undefined &&
+        valeursExistantes[cleValeur] !== null &&
+        valeursExistantes[cleValeur] !== ''
+      if (!dejaSaisi) {
+        nouvellesValeurs[cleValeur] = champ.valeur
+      }
+    }
+    const champsGeneresTechniques = proposition.champs
+      .filter((c) => c.origineTechnique && nouvellesValeurs[c.field_key] === c.valeur)
+      .map((c) => c.field_key)
+
+    const apresConfirmation = new Date().toISOString()
+    const sectionMiseAJour: Section = {
+      ...section,
+      values: nouvellesValeurs,
+      status: 'propose_par_ia_non_valide',
+      generation_source: {
+        source_document_id: documentReference.id,
+        generated_fields: champsGeneresTechniques,
+      },
+      updated_at: apresConfirmation,
+      audit_log: [
+        ...section.audit_log,
+        {
+          timestamp: maintenant,
+          actor: entrees.actor,
+          action: 'confirmation_droit_usage_document_reference',
+        },
+        {
+          timestamp: apresConfirmation,
+          actor: entrees.actor,
+          action: `generation_brouillon_ia (${proposition.champs.length} champ(s) proposé(s), fournisseur ${provider.nomAffiche})`,
+        },
+      ],
+      revisions: [
+        ...section.revisions,
+        {
+          version: section.meta.version,
+          date: apresConfirmation,
+          auteur: `système (${provider.nomAffiche})`,
+          motif: 'génération assistée',
+        },
+      ],
+    }
+    await db.sections.put(sectionMiseAJour)
+    await chargerSectionsDuProjet(section.project_id)
+
+    return { ok: true, champsGeneres: proposition.champs.length }
+  }
+
+  /** Filiation URS-F-064 : nom du document de référence utilisé pour une génération de brouillon donnée. */
+  async function obtenirDocumentReference(id: string): Promise<ProjectDocument | undefined> {
+    return db.projectDocuments.get(id)
   }
 
   /**
@@ -282,13 +448,30 @@ export const useSectionsStore = defineStore('sections', () => {
     return finaliserTransition(section, resultat, `rejet : ${motif}`, motif)
   }
 
+  /**
+   * URS-F-061/§4.1bis, clarification ALCOA+ (FS §3, v04) : le passage de
+   * `propose_par_ia_non_valide` à `brouillon_aide` DOIT laisser une entrée
+   * `revisions` distincte motif "validation utilisateur" — jamais fusionnée
+   * avec l'entrée "génération assistée" déjà posée par
+   * `genererBrouillonIA`, pour respecter le principe "Contemporaneous".
+   * Documenté depuis la conception initiale mais jamais réellement posé
+   * jusqu'ici (aucune fonction ne produisait encore ce statut) — corrigé
+   * en même temps que la génération elle-même (Phase 33, TD-031).
+   */
   async function validerSectionIA(sectionId: string): Promise<ResultatActionSection> {
-    return appliquerTransitionSimple(sectionId, 'valider_section_ia')
+    const section = await chargerSection(sectionId)
+    const resultat = appliquerTransition(contexteTransitionDepuis(section), 'valider_section_ia')
+    return finaliserTransition(
+      section,
+      resultat,
+      'changement_statut: valider_section_ia',
+      'validation utilisateur',
+    )
   }
 
   async function appliquerTransitionSimple(
     sectionId: string,
-    action: 'transmettre_approbation' | 'valider_section_ia',
+    action: 'transmettre_approbation',
   ): Promise<ResultatActionSection> {
     const section = await chargerSection(sectionId)
     const resultat = appliquerTransition(contexteTransitionDepuis(section), action)
@@ -406,6 +589,8 @@ export const useSectionsStore = defineStore('sections', () => {
     sectionsParProjet,
     chargerSectionsDuProjet,
     creerSection,
+    genererBrouillonIA,
+    obtenirDocumentReference,
     importerSection,
     journaliserExport,
     mettreAJourValeurs,

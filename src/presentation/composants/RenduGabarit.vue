@@ -17,13 +17,23 @@ import type { Langue } from '../../logique-metier/domaine/types'
 type ValeurCellule = string | number | null
 type Ligne = Record<string, ValeurCellule>
 
-const props = defineProps<{
-  definition: DefinitionGabarit
-  values: Record<string, ValeurCellule>
-  tables: Record<string, Ligne[]>
-  langue: Langue
-  verrouille: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    definition: DefinitionGabarit
+    values: Record<string, ValeurCellule>
+    tables: Record<string, Ligne[]>
+    langue: Langue
+    verrouille: boolean
+    /**
+     * Champs (`field_key`) à signaler visuellement comme donnée
+     * technique/numérique reprise ou adaptée depuis un document de
+     * référence (§4.1bis, Phase 33, URS-F-063) — surlignage distinct,
+     * jamais fusionné avec l'affichage normal d'un champ.
+     */
+    champsSignales?: readonly string[]
+  }>(),
+  { champsSignales: () => [] },
+)
 
 const emit = defineEmits<{
   'maj-valeurs': [valeurs: Record<string, ValeurCellule>]
@@ -59,6 +69,10 @@ const tablesLocales = reactive<Record<string, Ligne[]>>(
 
 function libelle(labels: Record<Langue, string>): string {
   return labels[props.langue] ?? labels.fr
+}
+
+function estSignale(cleChamp: string): boolean {
+  return props.champsSignales.includes(cleChamp)
 }
 
 function valeurChamp(cleChamp: string): ValeurCellule {
@@ -249,8 +263,11 @@ function valeurCalculee(
         </template>
 
         <template v-else>
-          <label>
+          <label :class="{ 'champ-signale': estSignale(champ.field_key) }">
             {{ libelle(champ.labels) }}<span v-if="champ.required" aria-hidden="true"> *</span>
+            <span v-if="estSignale(champ.field_key)" class="badge-signale" role="note">
+              ⚠ donnée reprise du document de référence
+            </span>
             <textarea
               v-if="champ.type === 'texte_long'"
               :value="valeurChamp(champ.field_key) ?? ''"
@@ -352,6 +369,19 @@ button {
   color: var(--vp-statut-requalification-en-retard);
   margin: 0.25rem 0 0;
   font-size: 0.9em;
+}
+
+.champ-signale textarea,
+.champ-signale input,
+.champ-signale select {
+  border-color: var(--vp-statut-requalification-en-retard);
+  background-color: var(--vp-marque-fond-leger);
+}
+
+.badge-signale {
+  color: var(--vp-statut-requalification-en-retard);
+  font-size: 0.85em;
+  font-weight: 600;
 }
 
 /* Export PDF (FS §4.3 : "sans coupure de tableau en milieu de ligne") —

@@ -113,6 +113,15 @@ export interface ProjectDocument {
   status: 'reference_de_travail_non_maitre'
   uploaded_at: string
   uploaded_by: string
+  /**
+   * Texte extrait (docx/pdf natif) ou collé directement par l'utilisateur —
+   * ajouté Phase 33 (TD-031), pour servir de document de référence à la
+   * génération de brouillon par adaptation (§4.1bis, URS-F-060). Limite
+   * assumée : ce champ ne couvre que l'usage de §4.1bis, pas encore un
+   * écran générique de bibliothèque de documents (URS-F-000quater),
+   * toujours non construit au-delà de ce type.
+   */
+  extracted_text: string
 }
 
 /**
