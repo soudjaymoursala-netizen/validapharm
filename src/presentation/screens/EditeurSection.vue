@@ -47,6 +47,7 @@ const motifForcage = ref('')
 const nouvelApprobateur = ref('')
 const nouvelAvisRelecteurId = ref('')
 const nouvelAvisRelecteurTexte = ref('')
+const sectionCibleLienId = ref('')
 const dernierResultat = ref<ResultatActionSection | undefined>(undefined)
 let minuteurSauvegarde: ReturnType<typeof setTimeout> | undefined
 
@@ -101,6 +102,52 @@ async function recharger(): Promise<void> {
   } else {
     documentReferenceUtilise.value = undefined
   }
+}
+
+/**
+ * Autres sections du projet, hors la section courante — c'est le vivier
+ * dans lequel piocher une cible de lien (FDS §3.3/§3.6).
+ */
+const autresSectionsDuProjet = computed(() =>
+  (sectionsStore.sectionsParProjet[props.projectId] ?? []).filter((s) => s.id !== props.sectionId),
+)
+
+/**
+ * Sections déjà liées à la section courante (`project.links[]`, non
+ * dirigé — l'un ou l'autre sens compte) — pour affichage et retrait.
+ */
+const sectionsLiees = computed(() => {
+  if (!projet.value) return []
+  const idsLies = new Set(
+    projet.value.links
+      .filter((l) => l.from_section_id === props.sectionId || l.to_section_id === props.sectionId)
+      .map((l) => (l.from_section_id === props.sectionId ? l.to_section_id : l.from_section_id)),
+  )
+  return autresSectionsDuProjet.value.filter((s) => idsLies.has(s.id))
+})
+
+const sectionsLiablesRestantes = computed(() => {
+  const idsDejaLies = new Set(sectionsLiees.value.map((s) => s.id))
+  return autresSectionsDuProjet.value.filter((s) => !idsDejaLies.has(s.id))
+})
+
+/**
+ * Crée un lien entre la section courante et la section choisie
+ * (`sectionCibleLienId`) — seule voie légitime de satisfaire les
+ * garde-fous de finalisation U-01/U-02/U-03 sans passer par « Forcer »
+ * (trouvé manquant en simulant un vrai parcours de qualification de bout
+ * en bout : aucune interface ne permettait de créer ce lien).
+ */
+async function lierSectionSelectionnee(): Promise<void> {
+  if (!sectionCibleLienId.value) return
+  await projetsStore.ajouterLien(props.projectId, props.sectionId, sectionCibleLienId.value)
+  projet.value = await projetsStore.obtenirProjet(props.projectId)
+  sectionCibleLienId.value = ''
+}
+
+async function delierSection(autreSectionId: string): Promise<void> {
+  await projetsStore.retirerLien(props.projectId, props.sectionId, autreSectionId)
+  projet.value = await projetsStore.obtenirProjet(props.projectId)
 }
 
 onMounted(async () => {
@@ -557,6 +604,42 @@ async function ajouterAvisRelecteur(): Promise<void> {
           J'ai relu et validé « {{ s.labels[section.language] ?? s.labels.fr }} »
         </label>
       </fieldset>
+    </section>
+
+    <section class="liens-sections no-print">
+      <h2>Liens vers d'autres sections (FDS §3.3/§3.6)</h2>
+      <p class="rappel">
+        Un lien vers la section requise (ex. Contexte procédé pour l'OQ/PQ, Plan de métrologie pour
+        l'IQ) est la façon normale de satisfaire un garde-fou de finalisation — « Forcer » reste
+        réservé aux exceptions justifiées.
+      </p>
+      <ul v-if="sectionsLiees.length > 0" class="liste-liens">
+        <li v-for="s in sectionsLiees" :key="s.id">
+          {{ s.meta.titre }} ({{ s.template_type }})
+          <button
+            v-if="section.status !== 'valide_en_interne'"
+            type="button"
+            @click="delierSection(s.id)"
+          >
+            Délier
+          </button>
+        </li>
+      </ul>
+      <p v-else>Aucun lien pour l'instant.</p>
+      <div v-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+        <label>
+          Lier à
+          <select v-model="sectionCibleLienId" :disabled="sectionsLiablesRestantes.length === 0">
+            <option value="">— choisir une section —</option>
+            <option v-for="s in sectionsLiablesRestantes" :key="s.id" :value="s.id">
+              {{ s.meta.titre }} ({{ s.template_type }})
+            </option>
+          </select>
+        </label>
+        <button type="button" :disabled="!sectionCibleLienId" @click="lierSectionSelectionnee">
+          Lier
+        </button>
+      </div>
     </section>
 
     <section v-if="section.status !== 'valide_en_interne'" class="workflow no-print">

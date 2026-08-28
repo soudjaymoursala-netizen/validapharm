@@ -61,6 +61,56 @@ describe('useProjectsStore', () => {
     await autreVue.chargerProjets()
     expect(autreVue.projects.map((p) => p.id)).toContain(projet.id)
   })
+
+  test('ajouterLien crée un lien non dirigé, retirerLien le retire — idempotents', async () => {
+    const { projets, sections, projet, section: oq } = await creerProjetEtSection('oq')
+    const contexte = await sections.creerSection({
+      project_id: projet.id,
+      template_type: 'contexte_procede',
+      language: 'fr',
+      titre: 'Contexte procédé',
+      owner_id: 'user-1',
+    })
+
+    await projets.ajouterLien(projet.id, oq.id, contexte.id)
+    const projetApresAjout = await db.projects.get(projet.id)
+    expect(projetApresAjout?.links).toHaveLength(1)
+    expect(projetApresAjout?.links[0]).toMatchObject({
+      from_section_id: oq.id,
+      to_section_id: contexte.id,
+    })
+
+    // Idempotent : rejouer dans l'autre sens ne duplique pas le lien.
+    await projets.ajouterLien(projet.id, contexte.id, oq.id)
+    const projetApresDoublon = await db.projects.get(projet.id)
+    expect(projetApresDoublon?.links).toHaveLength(1)
+
+    await projets.retirerLien(projet.id, oq.id, contexte.id)
+    const projetApresRetrait = await db.projects.get(projet.id)
+    expect(projetApresRetrait?.links).toHaveLength(0)
+  })
+
+  test('ajouterLien lève réellement le blocage U-01 (bout en bout, sans passer par "Forcer")', async () => {
+    const { projets, sections, projet, section: oq } = await creerProjetEtSection('oq')
+    const contexte = await sections.creerSection({
+      project_id: projet.id,
+      template_type: 'contexte_procede',
+      language: 'fr',
+      titre: 'Contexte procédé',
+      owner_id: 'user-1',
+    })
+    await db.sections.put({
+      ...oq,
+      workflow: { authors: ['user-1'], reviewers: [], approver_final: 'user-2' },
+    })
+
+    const bloque = await sections.engagerVerification(oq.id)
+    expect(bloque).toEqual({ ok: false, blocagesFinalisation: ['U-01'] })
+
+    await projets.ajouterLien(projet.id, oq.id, contexte.id)
+    const autorise = await sections.engagerVerification(oq.id)
+    expect(autorise).toEqual({ ok: true })
+  })
 })
 
 describe('useSectionsStore — création', () => {
