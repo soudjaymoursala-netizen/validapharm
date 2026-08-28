@@ -113,4 +113,77 @@ describe('genererExportWord', () => {
     expect(html).not.toContain('<script>alert(1)</script>')
     expect(html).toContain('&lt;script&gt;')
   })
+
+  test("colonne calculée (IPR) : recalculée pour l'export, jamais une cellule vide malgré une valeur brute non persistée", () => {
+    const definitionAvecTableauIPR: DefinitionGabarit = {
+      template_id: 'dq',
+      template_version: '1.0.0',
+      family: 'B',
+      normes_associees: [],
+      sections: [
+        {
+          section_key: 'risques',
+          labels: { fr: 'Risques', en: 'Risks', de: 'Risiken' },
+          required_link_type: null,
+          fields: [
+            {
+              field_key: 'risques',
+              labels: {
+                fr: 'Risques identifiés',
+                en: 'Identified risks',
+                de: 'Identifizierte Risiken',
+              },
+              type: 'tableau_dynamique',
+              required: false,
+              colonnes: [
+                {
+                  field_key: 'severite',
+                  labels: { fr: 'Sévérité', en: 'Severity', de: 'Schweregrad' },
+                  type: 'nombre',
+                  required: true,
+                  min: 1,
+                  max: 5,
+                },
+                {
+                  field_key: 'occurrence',
+                  labels: { fr: 'Occurrence', en: 'Occurrence', de: 'Auftreten' },
+                  type: 'nombre',
+                  required: true,
+                  min: 1,
+                  max: 5,
+                },
+                {
+                  field_key: 'detectabilite',
+                  labels: { fr: 'Détectabilité', en: 'Detectability', de: 'Entdeckbarkeit' },
+                  type: 'nombre',
+                  required: true,
+                  min: 1,
+                  max: 5,
+                },
+                {
+                  field_key: 'ipr',
+                  labels: { fr: 'IPR', en: 'RPN', de: 'RPZ' },
+                  type: 'nombre',
+                  required: false,
+                  min: 1,
+                  max: 125,
+                  formule: { cle: 'ipr', entrees: ['severite', 'occurrence', 'detectabilite'] },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+    const html = genererExportWord(
+      sectionBase({
+        tables: {
+          risques: [{ severite: 5, occurrence: 2, detectabilite: 3, ipr: null }],
+        },
+      }),
+      definitionAvecTableauIPR,
+      'fr',
+    )
+    expect(html).toContain('<td>30</td>')
+  })
 })

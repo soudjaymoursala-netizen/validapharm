@@ -1,5 +1,6 @@
 import type { Langue, Section } from '../domaine/types'
 import type { DefinitionGabarit } from '../gabarits/definitionGabarit'
+import { evaluerColonneCalculee } from '../gabarits/evaluerColonneCalculee'
 import { libelleStatut } from '../i18n/libellesStatut'
 
 /**
@@ -93,7 +94,21 @@ function construireSections(
           libelle,
           entetes: champ.colonnes.map((c) => c.labels[langue] ?? c.labels.fr).join(' | '),
           lignes: lignes.map((ligne) =>
-            champ.colonnes.map((c) => String(ligne[c.field_key] ?? '')).join(' | '),
+            champ.colonnes
+              .map((c) => {
+                // Colonne calculée (ex. IPR, FDS §5) : jamais persistée
+                // (`ligne[c.field_key]` vaut toujours `null`) — recalculée
+                // ici comme le fait `RenduGabarit.vue` à l'écran, sinon le
+                // livrable exporté affiche une cellule vide là où l'écran
+                // montre une valeur (bug réel trouvé en testant un export
+                // Word réel : colonne IPR vide dans le document produit).
+                const valeur =
+                  c.type === 'nombre' && c.formule !== undefined
+                    ? evaluerColonneCalculee(c, champ.colonnes, ligne)
+                    : ligne[c.field_key]
+                return String(valeur ?? '')
+              })
+              .join(' | '),
           ),
         })
         continue

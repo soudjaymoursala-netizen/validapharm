@@ -1,5 +1,6 @@
 import type { ColonneTableau } from '../gabarits/definitionGabarit'
 import type { Langue } from '../domaine/types'
+import { evaluerColonneCalculee } from '../gabarits/evaluerColonneCalculee'
 
 /**
  * Export CSV d'un tableau dynamique (FS §4.3, URS-F-022 : "export CSV/XLSX
@@ -27,7 +28,16 @@ export function genererExportCSV(
     echapperCellule(colonne.labels[langue] ?? colonne.labels.fr),
   )
   const rangees = lignes.map((ligne) =>
-    colonnes.map((colonne) => echapperCellule(String(ligne[colonne.field_key] ?? ''))),
+    colonnes.map((colonne) => {
+      // Colonne calculée (ex. IPR, FDS §5) : jamais persistée, recalculée
+      // ici comme à l'écran (`RenduGabarit.vue`) — sinon le CSV exporté
+      // contient une cellule vide là où l'écran montre une valeur.
+      const valeur =
+        colonne.type === 'nombre' && colonne.formule !== undefined
+          ? evaluerColonneCalculee(colonne, colonnes, ligne)
+          : ligne[colonne.field_key]
+      return echapperCellule(String(valeur ?? ''))
+    }),
   )
   return [entetes, ...rangees].map((rangee) => rangee.join(',')).join('\r\n')
 }
