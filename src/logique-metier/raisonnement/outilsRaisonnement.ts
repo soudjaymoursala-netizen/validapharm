@@ -1,10 +1,12 @@
 import { chaineTechniqueDepuis } from '../architecture-technique/chaineTechnique'
+import { relationsConnaissanceDepuis } from '../graphe/relationsConnaissance'
 import type {
   AssetNode,
   Couverture,
   Evidence,
   Execution,
   KnowledgeItem,
+  KnowledgeRelation,
   Procedure,
   ProcedureStep,
   RelationTechnique,
@@ -27,6 +29,10 @@ import type { DefinitionOutilRaisonnement } from './protocoleRaisonnement'
  *
  * `procedures`/`procedureSteps` (Phase 20, TD-016) : outillent la
  * lecture d'une procédure structurée par un humain (cerveau procédural).
+ *
+ * `knowledgeRelations` (Phase 31, TD-029) : second consommateur réel du
+ * parcours générique `parcourirGraphe` (Knowledge Graph), aux côtés de
+ * `relationsTechniques`.
  */
 export interface DonneesOutilsRaisonnement {
   requirements: readonly Requirement[]
@@ -39,6 +45,7 @@ export interface DonneesOutilsRaisonnement {
   relationsTechniques: readonly RelationTechnique[]
   procedures: readonly Procedure[]
   procedureSteps: readonly ProcedureStep[]
+  knowledgeRelations: readonly KnowledgeRelation[]
 }
 
 export const CATALOGUE_OUTILS_RAISONNEMENT: readonly DefinitionOutilRaisonnement[] = [
@@ -69,6 +76,11 @@ export const CATALOGUE_OUTILS_RAISONNEMENT: readonly DefinitionOutilRaisonnement
     nom: 'lister_etapes_procedure',
     description:
       "Liste les étapes de la version la plus récente d'une procédure (SOP/WI), dans l'ordre. Paramètre : reference.",
+  },
+  {
+    nom: 'tracer_relations_connaissance',
+    description:
+      'Trace la chaîne de relations sortantes entre KnowledgeItem depuis un fait donné (ex. un fait qui en précise ou en complète un autre). Paramètre : knowledge_item_id.',
   },
 ]
 
@@ -132,6 +144,17 @@ export function listerEtapesProcedure(
     .sort((a, b) => a.ordre - b.ordre)
 }
 
+export function tracerRelationsConnaissance(
+  knowledgeItemId: string,
+  donnees: DonneesOutilsRaisonnement,
+): Array<{ item: KnowledgeItem; typeRelation: string }> {
+  return relationsConnaissanceDepuis(
+    knowledgeItemId,
+    donnees.knowledgeRelations,
+    donnees.knowledgeItems,
+  ).map((etape) => ({ item: etape.item, typeRelation: etape.relation.type }))
+}
+
 export interface ResultatExecutionOutil {
   /** Résumé textuel lisible par le modèle (transmis dans le transcript). */
   resultat: string
@@ -190,6 +213,18 @@ export function executerOutil(
         resultats.map((e) => ({
           id: e.id,
           libelle: `${e.ordre}. ${e.description}${e.obligatoire ? '' : ' (optionnelle)'}`,
+        })),
+      )
+    }
+    case 'tracer_relations_connaissance': {
+      const knowledgeItemId = appel.parametres.knowledge_item_id
+      if (!knowledgeItemId)
+        return { resultat: 'Paramètre knowledge_item_id manquant.', idsObtenus: [] }
+      const resultats = tracerRelationsConnaissance(knowledgeItemId, donnees)
+      return formaterResultat(
+        resultats.map((r) => ({
+          id: r.item.id,
+          libelle: `${r.item.libelle} (${r.typeRelation})`,
         })),
       )
     }

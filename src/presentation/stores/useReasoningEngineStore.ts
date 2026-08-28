@@ -110,6 +110,7 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       procedureSteps,
       manufacturingContexts,
       qualityEvents,
+      knowledgeRelations,
       contextSnapshotItems,
     ] = await Promise.all([
       db.requirements.where('client_id').equals(clientId).toArray(),
@@ -124,6 +125,7 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       db.procedureSteps.where('client_id').equals(clientId).toArray(),
       db.manufacturingContexts.where('client_id').equals(clientId).toArray(),
       db.qualityEvents.where('client_id').equals(clientId).toArray(),
+      db.knowledgeRelations.where('client_id').equals(clientId).toArray(),
       entrees.contextSnapshotId
         ? db.contextSnapshotItems
             .where('context_snapshot_id')
@@ -161,6 +163,7 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
         relationsTechniques,
         procedures,
         procedureSteps,
+        knowledgeRelations,
       },
     })
 

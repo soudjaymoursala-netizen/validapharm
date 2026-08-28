@@ -5,6 +5,7 @@ import type {
   Evidence,
   Execution,
   KnowledgeItem,
+  KnowledgeRelation,
   Procedure,
   ProcedureStep,
   RelationTechnique,
@@ -21,6 +22,7 @@ import {
   listerRequirementsPourActif,
   listerTestsPourRequirement,
   tracerChaineTechnique,
+  tracerRelationsConnaissance,
 } from './outilsRaisonnement'
 
 function requirement(id: string, assetNodeId: string | null): Requirement {
@@ -144,6 +146,17 @@ function relationTechnique(
   }
 }
 
+function knowledgeRelation(sourceId: string, cibleId: string, type: string): KnowledgeRelation {
+  return {
+    id: `${sourceId}-${type}-${cibleId}`,
+    client_id: 'client-1',
+    knowledge_item_source_id: sourceId,
+    knowledge_item_cible_id: cibleId,
+    type,
+    created_at: '2026-01-01T00:00:00.000Z',
+  }
+}
+
 function procedure(id: string, reference: string, numeroVersion: number): Procedure {
   return {
     id,
@@ -191,6 +204,7 @@ const donnees: DonneesOutilsRaisonnement = {
     procedureStep('step-v2-1', 'proc-v2', 1, 'Vérifier le contexte'),
     procedureStep('step-v2-2', 'proc-v2', 2, 'Identifier les impacts'),
   ],
+  knowledgeRelations: [knowledgeRelation('ki-1', 'ki-2', 'precise')],
 }
 
 describe('listerRequirementsPourActif', () => {
@@ -230,6 +244,17 @@ describe('tracerChaineTechnique (Phase 18, TD-013)', () => {
 
   test('un nœud sans relation sortante retourne une chaîne vide', () => {
     expect(tracerChaineTechnique('plc-01', donnees)).toEqual([])
+  })
+})
+
+describe('tracerRelationsConnaissance (Phase 31, TD-029)', () => {
+  test('trace la relation sortante et son type', () => {
+    const chaine = tracerRelationsConnaissance('ki-1', donnees)
+    expect(chaine).toEqual([{ item: knowledgeItem('ki-2', 'a_valider'), typeRelation: 'precise' }])
+  })
+
+  test('un KnowledgeItem sans relation sortante retourne une chaîne vide', () => {
+    expect(tracerRelationsConnaissance('ki-2', donnees)).toEqual([])
   })
 })
 
@@ -296,5 +321,14 @@ describe('executerOutil', () => {
     )
     expect(resultat.idsObtenus).toEqual(['step-v2-1', 'step-v2-2'])
     expect(resultat.resultat).toContain('Vérifier le contexte')
+  })
+
+  test('tracer_relations_connaissance retourne le KnowledgeItem cible et son type de relation', () => {
+    const resultat = executerOutil(
+      { nom: 'tracer_relations_connaissance', parametres: { knowledge_item_id: 'ki-1' } },
+      donnees,
+    )
+    expect(resultat.idsObtenus).toEqual(['ki-2'])
+    expect(resultat.resultat).toContain('precise')
   })
 })
