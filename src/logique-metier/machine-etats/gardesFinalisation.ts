@@ -1,4 +1,8 @@
 import type { TemplateType } from '../domaine/types'
+import {
+  evaluerReglesConformite,
+  type RegleConformite,
+} from '../conformite/evaluerReglesConformite'
 
 export type MessageBlocageFinalisation = 'U-01' | 'U-02' | 'U-03'
 
@@ -17,6 +21,35 @@ const TEMPLATES_EXIGEANT_CONTEXTE_PROCEDE: readonly TemplateType[] = [
   'validation_procede',
 ]
 
+interface RegleGardeFinalisation extends RegleConformite<
+  ContexteGardeFinalisation,
+  MessageBlocageFinalisation
+> {
+  pointDeControle: PointDeControle
+}
+
+const REGLES_GARDES_FINALISATION: readonly RegleGardeFinalisation[] = [
+  {
+    code: 'U-01',
+    pointDeControle: 'entree_en_verification',
+    bloque: (c) =>
+      TEMPLATES_EXIGEANT_CONTEXTE_PROCEDE.includes(c.templateType) && !c.aLienVersContextProcede,
+    message: 'Lien vers le Contexte procédé manquant.',
+  },
+  {
+    code: 'U-02',
+    pointDeControle: 'entree_en_verification',
+    bloque: (c) => c.templateType === 'iq' && !c.aLienVersPlanMetrologie,
+    message: 'Lien vers le Plan de métrologie manquant.',
+  },
+  {
+    code: 'U-03',
+    pointDeControle: 'cloture_valide_en_interne',
+    bloque: (c) => c.templateType === 'oq' && !c.aLienVersPlanMaintenance,
+    message: 'Lien vers le Plan de maintenance manquant.',
+  },
+]
+
 /**
  * Détermine les blocages de finalisation applicables (FDS §3.3), pour un
  * point de contrôle donné du cycle de vie d'une section.
@@ -31,32 +64,19 @@ const TEMPLATES_EXIGEANT_CONTEXTE_PROCEDE: readonly TemplateType[] = [
  * appel ne doit évaluer que le point de contrôle correspondant à la
  * transition en cours ; ne pas appeler ce module pour une transition qui
  * n'est ni l'une ni l'autre (ex. rejet, approbation intermédiaire).
+ *
+ * Implémenté depuis la Phase 30 (TD-028) via le Compliance Engine
+ * généralisé (`evaluerReglesConformite`) — comportement strictement
+ * identique à avant ce refactor.
  */
 export function evaluerGardesFinalisation(
   contexte: ContexteGardeFinalisation,
   pointDeControle: PointDeControle,
 ): MessageBlocageFinalisation[] {
-  const blocages: MessageBlocageFinalisation[] = []
-
-  if (pointDeControle === 'entree_en_verification') {
-    if (
-      TEMPLATES_EXIGEANT_CONTEXTE_PROCEDE.includes(contexte.templateType) &&
-      !contexte.aLienVersContextProcede
-    ) {
-      blocages.push('U-01')
-    }
-    if (contexte.templateType === 'iq' && !contexte.aLienVersPlanMetrologie) {
-      blocages.push('U-02')
-    }
-  }
-
-  if (pointDeControle === 'cloture_valide_en_interne') {
-    if (contexte.templateType === 'oq' && !contexte.aLienVersPlanMaintenance) {
-      blocages.push('U-03')
-    }
-  }
-
-  return blocages
+  const reglesApplicables = REGLES_GARDES_FINALISATION.filter(
+    (regle) => regle.pointDeControle === pointDeControle,
+  )
+  return evaluerReglesConformite(contexte, reglesApplicables).map((regle) => regle.code)
 }
 
 /**

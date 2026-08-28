@@ -8,6 +8,10 @@ import type {
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 import { construireReadinessContentPlan } from '../../logique-metier/deliverable/readinessContentPlan'
+import {
+  evaluerReglesConformite,
+  type RegleConformite,
+} from '../../logique-metier/conformite/evaluerReglesConformite'
 
 export interface NouveauContentPlanInput {
   templateId: TemplateType
@@ -21,6 +25,21 @@ export interface NouveauContentPlanInput {
 export type ErreurEcritureContentPlan = {
   erreur: 'introuvable' | 'non_valide' | 'deja_gele' | 'donnees_non_pretes'
 }
+
+/**
+ * Garde-fou non négociable (URS-F-160septies) — un `ContentPlan` dont
+ * `readiness` n'est pas `pret` ne peut jamais être gelé. Implémenté depuis
+ * la Phase 30 (TD-028) via le Compliance Engine généralisé
+ * (`evaluerReglesConformite`) — comportement strictement identique à avant
+ * ce refactor.
+ */
+const REGLES_GEL_CONTENT_PLAN: readonly RegleConformite<Pick<ContentPlan, 'readiness'>>[] = [
+  {
+    code: 'readiness_non_prete',
+    bloque: (plan) => plan.readiness !== 'pret',
+    message: 'Les données ne sont pas encore prêtes (readiness ≠ pret).',
+  },
+]
 
 /**
  * Store du `ContentPlan` (Phase 9 de convergence architecturale — spec
@@ -166,7 +185,8 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     if (!existant || existant.client_id !== clientId) return { erreur: 'introuvable' }
     if (existant.statut === 'gele') return { erreur: 'deja_gele' }
     if (existant.statut !== 'valide') return { erreur: 'non_valide' }
-    if (existant.readiness !== 'pret') return { erreur: 'donnees_non_pretes' }
+    const [regleBloquante] = evaluerReglesConformite(existant, REGLES_GEL_CONTENT_PLAN)
+    if (regleBloquante) return { erreur: 'donnees_non_pretes' }
 
     return changerStatut(existant, 'gele')
   }

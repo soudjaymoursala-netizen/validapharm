@@ -282,6 +282,14 @@ L'utilisateur a transmis un troisième document de vision ("VALIDAPHARM MASTER P
 - **Vérification navigateur** : impossible — aucun écran construit dans ce lot (domaine + persistance + store seulement, même discipline que les Phases 5/8a/9/13/28) ; couverte uniquement par tests (5 tests du module pur + 9 tests du store).
 - Vérifié : suite complète verte (645 tests, 91 fichiers), typecheck et lint propres.
 
+## Phase 30 — Compliance Engine généralisé : factorisation du patron règle→blocage — **Terminée (28/08/2026)**
+- **Dependencies** : Phase 1 (`verifierBlocageExport.ts`), garde-fous de finalisation U-01/U-02/U-03 (existants), Phase 28 (`gelerContentPlan`).
+- **Contexte** : deuxième des 3 chantiers P1 restants. Aucun document source ne précise l'ensemble des règles cibles d'un "Compliance Engine" au-delà d'un seul exemple (`VISION_NORTH_STAR_CONVERGENCE.md` §3, couche 14). Plutôt que d'inventer de nouvelles règles métier sans grounding réel, l'utilisateur a été sollicité (`AskUserQuestion`) sur 3 options concrètes.
+- **Décision de portée soumise à l'utilisateur** : factoriser le patron commun déjà répété 3 fois indépendamment (règle de trois) / passer au chantier 3 / fournir une règle concrète — l'utilisateur choisit "Factoriser le patron commun".
+- **Portée réellement construite** (spec `docs/convergence/PHASE_30_COMPLIANCE_ENGINE_SPEC.md`, TD-028) : `evaluerReglesConformite` (`logique-metier/conformite/`), fonction pure générique évaluant un ensemble de `RegleConformite` contre un contexte, retournant les règles bloquantes sans court-circuit. `verifierBlocageExport.ts`, `gardesFinalisation.ts` et `useContentPlanStore.gelerContentPlan` réécrits pour le consommer en interne — **refactor comportement-identique** : API publique et tests existants des 3 consommateurs strictement inchangés.
+- **Vérification** : les suites de tests déjà validées de `verifierBlocageExport`/`gardesFinalisation`/`useContentPlanStore` n'ont subi aucune modification et restent toutes vertes — preuve directe de non-régression. URS/FS non modifiées (aucune ne référence l'implémentation interne).
+- Vérifié : suite complète verte (649 tests, 92 fichiers), typecheck et lint propres.
+
 ---
 
 ## Ce qui reste volontairement "OPEN" (non planifié ici)
@@ -333,7 +341,8 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèl
 | 27 (Context Engine enrichi — narratif OÙ/QUOI/COMMENT/POURQUOI-IMPACT + grounding réel du Reasoning Engine) | **Terminée (27/08/2026)** | voir historique git de la branche | `01-URS-outil.md` v56 (§4.20bis/URS-F-201 à quater), `03-specifications-fonctionnelles.md` v46 (§4.20bis), `docs/convergence/PHASE_27_CONTEXT_ENGINE_ENRICHI_SPEC.md`, `TECHNICAL_DECISIONS.md` (TD-025) |
 | 28 (Deliverable Intelligence — calcul de readiness `ContentPlan`) | **Terminée (28/08/2026)** | voir historique git de la branche | `01-URS-outil.md` v57 (§4.16/URS-F-160octies-nonies), `03-specifications-fonctionnelles.md` v47 (§4.16), `docs/convergence/PHASE_28_DELIVERABLE_READINESS_SPEC.md`, `TECHNICAL_DECISIONS.md` (TD-026) |
 | 29 (Risk Assessment — AMDEC autonome, méthodologie client généralisée) | **Terminée (28/08/2026)** | voir historique git de la branche | `01-URS-outil.md` v58 (§4.6quinquies/URS-F-059 à sexies), `03-specifications-fonctionnelles.md` v48 (§4.6quinquies), `docs/convergence/PHASE_29_RISK_ASSESSMENT_AMDEC_SPEC.md`, `TECHNICAL_DECISIONS.md` (TD-027) |
-| 30 (Template Intelligence — ingestion Excel, génération assistée par IA) | Non engagée — chantier P0 restant du plan Vision North Star (ingestion Excel bloquée faute de librairie saine, TD-014, réévaluable sur nouvelle preuve), voir `VISION_NORTH_STAR_CONVERGENCE.md` §4 | — | — |
+| 30 (Compliance Engine généralisé — factorisation règle→blocage) | **Terminée (28/08/2026)** | voir historique git de la branche | Refactor comportement-identique, URS/FS non modifiées (aucune référence à l'implémentation interne) — `docs/convergence/PHASE_30_COMPLIANCE_ENGINE_SPEC.md`, `TECHNICAL_DECISIONS.md` (TD-028) |
+| 31 (Template Intelligence — ingestion Excel, génération assistée par IA) | Non engagée — chantier P0 restant du plan Vision North Star (ingestion Excel bloquée faute de librairie saine, TD-014, réévaluable sur nouvelle preuve), voir `VISION_NORTH_STAR_CONVERGENCE.md` §4 | — | — |
 | Écran de création pour `ManufacturingContext`/`QualityEvent` | **Non engagé** — gap préexistant découvert en préparant la vérification navigateur de la Phase 27 : ces deux entités (Phase 4/Phase 5) n'ont jamais eu d'écran de création, malgré leur usage réel dans le Context Engine (Phase 14/27) | — | — |
 | Écran `ContentPlan` | **Non engagé** — limite documentée depuis Phase 9, jamais close depuis (aucun consommateur réel construit) ; empêche toute vérification navigateur de `readiness` (Phase 28) | — | — |
 
