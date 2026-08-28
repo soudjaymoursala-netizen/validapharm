@@ -3,6 +3,12 @@ import type {
   ModeUsageIA,
   ProviderAdapter,
 } from '../../connecteurs/ia/ProviderAdapter'
+import {
+  estNarratifVide,
+  idsNarratifContexte,
+  serialiserNarratifContexte,
+  type NarratifContexteSnapshot,
+} from '../contexte/narratifContexteSnapshot'
 import type { EtatConfianceIA, TraceAppelOutil } from '../domaine/types'
 import { construirePrompt, parserSortieModele } from './protocoleRaisonnement'
 import {
@@ -22,6 +28,8 @@ export interface EntreesBoucleRaisonnement {
   donnees: DonneesOutilsRaisonnement
   /** Plafond d'itérations — voir spec §3 (jamais une boucle sans limite, budget cap explicite). */
   maxIterations?: number
+  /** Narratif du `ContextSnapshot` en vigueur (Phase 27, TD-025) — omis si aucun snapshot n'a été assemblé pour ce raisonnement. */
+  narratifContexte?: NarratifContexteSnapshot
 }
 
 export interface ReponseRaisonnement {
@@ -50,7 +58,11 @@ export interface ResultatBoucleRaisonnement {
  * correspond à aucun id réellement obtenu par un appel d'outil pendant
  * cette session, est automatiquement rétrogradée à `a_verifier` — jamais
  * l'IA seule ne décide qu'elle "sait" (principe fondateur n°1, invariant
- * #8 de `03_DOMAIN_DATA_MODEL.md`).
+ * #8 de `03_DOMAIN_DATA_MODEL.md`). Depuis la Phase 27 (TD-025), les ids
+ * du narratif de contexte assemblé sont considérés obtenus dès le premier
+ * tour, avec la même garantie qu'un appel d'outil (données déterministes
+ * déjà résolues au moment de l'assemblage du `ContextSnapshot`) — jamais
+ * une confiance accrue sur la seule affirmation du modèle.
  */
 export async function executerBoucleRaisonnement(
   entrees: EntreesBoucleRaisonnement,
@@ -62,8 +74,16 @@ export async function executerBoucleRaisonnement(
   const idsConnus = new Set<string>()
   let versionMoteur: string | null = null
 
+  const narratifTexte =
+    entrees.narratifContexte && !estNarratifVide(entrees.narratifContexte)
+      ? serialiserNarratifContexte(entrees.narratifContexte)
+      : undefined
+  if (entrees.narratifContexte) {
+    idsNarratifContexte(entrees.narratifContexte).forEach((id) => idsConnus.add(id))
+  }
+
   for (let iteration = 1; iteration <= maxIterations; iteration++) {
-    const prompt = construirePrompt(entrees.objectif, outils, transcript)
+    const prompt = construirePrompt(entrees.objectif, outils, transcript, narratifTexte)
     const reponseIA = await entrees.fournisseur.envoyerMessage(
       entrees.mode,
       CONTEXTE_SANS_DOCUMENT,

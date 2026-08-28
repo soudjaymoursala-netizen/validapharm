@@ -39,22 +39,28 @@ const ETATS_CONFIANCE_VALIDES: readonly EtatConfianceIA[] = [
 
 /**
  * Construit le texte de question envoyé au fournisseur IA — objectif,
- * catalogue d'outils disponibles, transcript des tours précédents, et
- * instructions strictes de format. Le transcript est reconstruit à chaque
- * appel (le relais reste sans état, TD-007) plutôt que porté par une
- * session côté serveur.
+ * narratif de contexte assemblé (Phase 27, TD-025 — optionnel, omis si
+ * aucun `ContextSnapshot` n'est en vigueur), catalogue d'outils
+ * disponibles, transcript des tours précédents, et instructions strictes
+ * de format. Le transcript est reconstruit à chaque appel (le relais reste
+ * sans état, TD-007) plutôt que porté par une session côté serveur.
  */
 export function construirePrompt(
   objectif: string,
   outils: readonly DefinitionOutilRaisonnement[],
   transcript: readonly string[],
+  narratifContexte?: string,
 ): string {
   const catalogue = outils.map((o) => `- ${o.nom} : ${o.description}`).join('\n')
   const historique =
     transcript.length > 0 ? `\n\nHistorique de ce raisonnement :\n${transcript.join('\n')}` : ''
+  const contexte =
+    narratifContexte && narratifContexte.length > 0
+      ? `Contexte assemblé pour ce raisonnement :\n${narratifContexte}\n\n`
+      : ''
 
   return [
-    `Objectif : ${objectif}`,
+    `${contexte}Objectif : ${objectif}`,
     '',
     `Outils disponibles :\n${catalogue}`,
     historique,

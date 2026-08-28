@@ -8,6 +8,7 @@
 // jamais les jetons `--vp-statut-*` de `qualification_status` (TD-010 :
 // ne jamais confondre les deux concepts, y compris visuellement).
 import { computed, onMounted, reactive, ref } from 'vue'
+import { construireNarratifContexte } from '../../logique-metier/contexte/narratifContexteSnapshot'
 import type { EtatConfianceIA, Mission } from '../../logique-metier/domaine/types'
 import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
 import { useClientConfigStore } from '../stores/useClientConfigStore'
@@ -16,6 +17,7 @@ import { useContextEngineStore } from '../stores/useContextEngineStore'
 import { useMissionStore } from '../stores/useMissionStore'
 import { NOMS_FOURNISSEURS } from '../stores/usePanneauChatStore'
 import { useOrganizationStore } from '../stores/useOrganizationStore'
+import { useProcessContextStore } from '../stores/useProcessContextStore'
 import { useQualityEventStore } from '../stores/useQualityEventStore'
 import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
@@ -27,6 +29,7 @@ const contextStore = useContextEngineStore()
 const reasoningStore = useReasoningEngineStore()
 const qualityEventStore = useQualityEventStore()
 const structureStore = useStructureSystemeStore()
+const processContextStore = useProcessContextStore()
 const organizationStore = useOrganizationStore()
 const configStore = useClientConfigStore()
 const relaisStore = useConnexionRelaisIAStore()
@@ -57,6 +60,15 @@ const dernierSnapshot = computed(() => {
 const elementsSnapshot = computed(() =>
   dernierSnapshot.value ? contextStore.elementsDuSnapshot(dernierSnapshot.value.id) : [],
 )
+/** Narratif OÙ/QUOI/COMMENT/POURQUOI-IMPACT (Phase 27, TD-025) — même fonction que celle consommée par le Reasoning Engine, jamais une seconde lecture divergente des mêmes éléments. */
+const narratifContexte = computed(() =>
+  construireNarratifContexte({
+    items: elementsSnapshot.value,
+    assetNodes: structureStore.noeuds,
+    manufacturingContexts: processContextStore.manufacturingContexts,
+    qualityEvents: qualityEventStore.evenements,
+  }),
+)
 const invocationsMission = computed(() =>
   reasoningStore.requests
     .filter((r) => r.mission_id === props.missionId)
@@ -78,6 +90,7 @@ onMounted(async () => {
     reasoningStore.charger(props.clientId),
     qualityEventStore.charger(props.clientId),
     structureStore.charger(props.clientId),
+    processContextStore.charger(props.clientId),
     organizationStore.charger(),
     configStore.charger(props.clientId),
     relaisStore.charger(),
@@ -141,7 +154,7 @@ async function assemblerContexte(): Promise<void> {
     assetNodeId: mission.value.asset_node_id,
     arbreWorkspace,
     assetNodes: structureStore.noeuds,
-    manufacturingContexts: [],
+    manufacturingContexts: processContextStore.manufacturingContexts,
     qualityEvents: qualityEventStore.evenements,
   })
 }
@@ -272,11 +285,33 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
     <section class="contexte">
       <h2>Contexte</h2>
       <button type="button" @click="assemblerContexte">Assembler le contexte</button>
-      <ul v-if="elementsSnapshot.length > 0">
-        <li v-for="element in elementsSnapshot" :key="element.id">
-          {{ element.type_objet }} : {{ element.objet_id }}
-        </li>
-      </ul>
+
+      <template v-if="elementsSnapshot.length > 0">
+        <div v-if="narratifContexte.ou.length > 0" class="facette-narratif">
+          <h3>Où</h3>
+          <ul>
+            <li v-for="fait in narratifContexte.ou" :key="fait.id">{{ fait.texte }}</li>
+          </ul>
+        </div>
+        <div v-if="narratifContexte.quoi.length > 0" class="facette-narratif">
+          <h3>Quoi</h3>
+          <ul>
+            <li v-for="fait in narratifContexte.quoi" :key="fait.id">{{ fait.texte }}</li>
+          </ul>
+        </div>
+        <div v-if="narratifContexte.comment.length > 0" class="facette-narratif">
+          <h3>Comment</h3>
+          <ul>
+            <li v-for="fait in narratifContexte.comment" :key="fait.id">{{ fait.texte }}</li>
+          </ul>
+        </div>
+        <div v-if="narratifContexte.pourquoiImpact.length > 0" class="facette-narratif">
+          <h3>Pourquoi / Impact</h3>
+          <ul>
+            <li v-for="fait in narratifContexte.pourquoiImpact" :key="fait.id">{{ fait.texte }}</li>
+          </ul>
+        </div>
+      </template>
       <p v-else-if="dernierSnapshot">Aucun élément de contexte résolu.</p>
     </section>
 
@@ -337,6 +372,18 @@ header {
   gap: 0.5rem;
   align-items: center;
   margin-bottom: 0.75rem;
+}
+
+.facette-narratif {
+  margin-top: 0.75rem;
+}
+
+.facette-narratif h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vp-texte-secondaire);
 }
 
 section ul {

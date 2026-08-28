@@ -5,6 +5,7 @@ import type {
   ProviderAdapter,
   Reponse,
 } from '../../connecteurs/ia/ProviderAdapter'
+import type { NarratifContexteSnapshot } from '../contexte/narratifContexteSnapshot'
 import type { Couverture, Requirement, Test as TestEntity } from '../domaine/types'
 import { executerBoucleRaisonnement } from './boucleRaisonnement'
 import type { DonneesOutilsRaisonnement } from './outilsRaisonnement'
@@ -256,5 +257,71 @@ describe("executerBoucleRaisonnement — plafond d'itérations (jamais une boucl
     expect(resultat.iterationsUtilisees).toBe(3)
     expect(resultat.trace).toHaveLength(3)
     expect(fournisseur.envoyerMessage).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('executerBoucleRaisonnement — narratif de contexte assemblé (Phase 27, TD-025)', () => {
+  const narratif: NarratifContexteSnapshot = {
+    ou: [{ id: 'n1', texte: 'Ligne A12 (SYS-A12) — statut de qualification : qualifie' }],
+    quoi: [],
+    comment: [],
+    pourquoiImpact: [{ id: 'q1', texte: 'deviation "Écart" — statut ouvert : détail' }],
+  }
+
+  test('le narratif sérialisé est injecté dans le prompt envoyé au fournisseur', async () => {
+    const fournisseur = fournisseurMock()
+    fournisseur.envoyerMessage.mockResolvedValueOnce(
+      reponse('REPONSE_FINALE: {"texte": "ok", "etat_confiance": "inconnu", "citations": []}'),
+    )
+
+    await executerBoucleRaisonnement({
+      objectif: 'Évaluer un impact',
+      fournisseur,
+      mode: 'chat_normatif',
+      donnees: donneesVides,
+      narratifContexte: narratif,
+    })
+
+    const promptEnvoye = fournisseur.envoyerMessage.mock.calls[0]?.[2]
+    expect(promptEnvoye).toContain('Contexte assemblé pour ce raisonnement')
+    expect(promptEnvoye).toContain('Ligne A12')
+    expect(promptEnvoye).toContain('POURQUOI / IMPACT')
+  })
+
+  test('une citation vers un id du narratif (jamais obtenu par appel d’outil) reste "connu"', async () => {
+    const fournisseur = fournisseurMock()
+    fournisseur.envoyerMessage.mockResolvedValueOnce(
+      reponse(
+        'REPONSE_FINALE: {"texte": "Le site est qualifié", "etat_confiance": "connu", "citations": ["n1"]}',
+      ),
+    )
+
+    const resultat = await executerBoucleRaisonnement({
+      objectif: 'Évaluer un impact',
+      fournisseur,
+      mode: 'chat_normatif',
+      donnees: donneesVides,
+      narratifContexte: narratif,
+    })
+
+    expect(resultat.reponse.etatConfiance).toBe('connu')
+  })
+
+  test('un narratif entièrement vide n’ajoute aucune section de contexte au prompt', async () => {
+    const fournisseur = fournisseurMock()
+    fournisseur.envoyerMessage.mockResolvedValueOnce(
+      reponse('REPONSE_FINALE: {"texte": "ok", "etat_confiance": "inconnu", "citations": []}'),
+    )
+
+    await executerBoucleRaisonnement({
+      objectif: 'Évaluer un impact',
+      fournisseur,
+      mode: 'chat_normatif',
+      donnees: donneesVides,
+      narratifContexte: { ou: [], quoi: [], comment: [], pourquoiImpact: [] },
+    })
+
+    const promptEnvoye = fournisseur.envoyerMessage.mock.calls[0]?.[2]
+    expect(promptEnvoye).not.toContain('Contexte assemblé')
   })
 })

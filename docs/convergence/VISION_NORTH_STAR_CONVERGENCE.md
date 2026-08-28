@@ -40,7 +40,7 @@ Catégories de la checklist déjà vérifiées sur le code réel (types, moteurs
 | 1-2 Data sources / Ingestion | OCR image (Azure AI Vision, Phase 6) — manque parsing Office natif |
 | 3-4 Document Intelligence / Knowledge extraction | `Source→SourceVersion→Extraction→ExtractionItem→KnowledgeItem` (Phase 8a) — faits plats, pas de structuration règle/condition |
 | 5 Knowledge Graph | Jointures typées ad hoc (`Couverture`, `ProvenanceLink`…) — pas de graphe générique interrogeable |
-| 6 Context Engine | `ContextSnapshot` (Phase 14) — liste d'objets résolus, pas un narratif WHY/WHAT/WHERE/HOW/IMPACT |
+| 6 Context Engine | `ContextSnapshot` (Phase 14) enrichi d'un narratif OÙ/QUOI/COMMENT/POURQUOI-IMPACT (Phase 27) réellement injecté dans le prompt du Reasoning Engine — facette COMMENT toujours vide (`Procedure` sans rattachement `AssetNode`) |
 | 7 Process Engine | `Process`/`Parameter`/`CPP`/`CQA` (Phase 2/4) — solide |
 | 8 Technical Architecture Engine | `AssetNode` + (à ajouter) relations typées — Phase 18 |
 | 9 Procedural Knowledge Engine | `Procedure`/`ProcedureStep` (Phase 20, saisie humaine) + `detecterSections`/`proposerStructureProcedure` (Phase 21, détection déterministe, proposition soumise à confirmation) |
@@ -60,7 +60,7 @@ Catégories de la checklist déjà vérifiées sur le code réel (types, moteurs
 4. **Phase 21 — Parseur déterministe de structure procédurale** — **Terminée**, voir `PHASE_21_PARSEUR_STRUCTURE_PROCEDURE_SPEC.md`/TD-017. En réponse directe à la demande utilisateur de trancher le point ouvert de la Phase 20 en commençant par le chemin sans IA : deux SOP réelles de clients différents (Sanofi, Ferring), lues intégralement dans Google Drive, confirment un même enchaînement sémantique (objectif/périmètre/responsabilités/procédure/références) sous un vocabulaire différent — détection 100% déterministe, aucun appel IA. Reste une proposition, jamais écrite sans confirmation humaine. Un repli IA-assisté pour les documents hors couverture reste un **point ouvert explicite**, à engager seulement si un cas réel le réclame.
 5. **Template Intelligence généralisée + génération au format client réel — Terminée pour le volet `.docx` (Phase 26, TD-024, 27/08/2026)**, voir `PHASE_26_GABARITS_EXPORT_CLIENT_SPEC.md`. `docxtemplater`+`pizzip` (pré-choisis TD-014) réellement installés et testés. Restant non engagé (Phase 27) : ingestion Excel (bloquée faute de librairie saine, TD-014), génération PDF/Excel personnalisée.
 
-**P1 — critique** : Context Engine enrichi (narratif WHY/WHAT/WHERE/HOW/IMPACT), Deliverable Intelligence, Compliance Engine généralisé, Risk/Impact Assessment à méthodologie client généralisée, Knowledge Graph générique.
+**P1 — critique** : **Context Engine enrichi — Terminée (Phase 27, 27/08/2026, TD-025)**, voir `PHASE_27_CONTEXT_ENGINE_ENRICHI_SPEC.md`. Restant : Deliverable Intelligence, Compliance Engine généralisé, Risk/Impact Assessment à méthodologie client généralisée, Knowledge Graph générique.
 
 **P2 — important** : extension des outils du Reasoning Engine (Process/Architecture/Procédure/Template comme outils appelables), proactivité, génération de tests contextualisée.
 

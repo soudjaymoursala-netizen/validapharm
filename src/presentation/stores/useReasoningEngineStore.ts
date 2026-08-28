@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
 import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
+import { construireNarratifContexte } from '../../logique-metier/contexte/narratifContexteSnapshot'
 import type {
   AIConfiguration,
   AIRequest,
@@ -107,6 +108,9 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       relationsTechniques,
       procedures,
       procedureSteps,
+      manufacturingContexts,
+      qualityEvents,
+      contextSnapshotItems,
     ] = await Promise.all([
       db.requirements.where('client_id').equals(clientId).toArray(),
       db.couvertures.where('client_id').equals(clientId).toArray(),
@@ -118,13 +122,34 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       db.relationsTechniques.where('client_id').equals(clientId).toArray(),
       db.procedures.where('client_id').equals(clientId).toArray(),
       db.procedureSteps.where('client_id').equals(clientId).toArray(),
+      db.manufacturingContexts.where('client_id').equals(clientId).toArray(),
+      db.qualityEvents.where('client_id').equals(clientId).toArray(),
+      entrees.contextSnapshotId
+        ? db.contextSnapshotItems
+            .where('context_snapshot_id')
+            .equals(entrees.contextSnapshotId)
+            .toArray()
+        : Promise.resolve([]),
     ])
+
+    // Narratif du ContextSnapshot en vigueur (Phase 27, TD-025) — réutilise
+    // les mêmes objets déjà chargés pour les outils, jamais une seconde
+    // résolution divergente.
+    const narratifContexte = entrees.contextSnapshotId
+      ? construireNarratifContexte({
+          items: contextSnapshotItems,
+          assetNodes,
+          manufacturingContexts,
+          qualityEvents,
+        })
+      : undefined
 
     const resultat = await executerBoucleRaisonnement({
       objectif: entrees.objectif,
       fournisseur: entrees.fournisseur,
       mode: entrees.mode,
       maxIterations: entrees.maxIterations,
+      narratifContexte,
       donnees: {
         requirements,
         couvertures,

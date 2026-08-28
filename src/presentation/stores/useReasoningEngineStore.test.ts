@@ -38,6 +38,9 @@ beforeEach(async () => {
   await db.relationsTechniques.clear()
   await db.procedures.clear()
   await db.procedureSteps.clear()
+  await db.manufacturingContexts.clear()
+  await db.qualityEvents.clear()
+  await db.contextSnapshotItems.clear()
 })
 
 describe('useReasoningEngineStore — assurerConfiguration (versionnée, condition E4)', () => {
@@ -273,5 +276,78 @@ describe('useReasoningEngineStore — garde-fous non négociables', () => {
     await store.charger('client-B')
     expect(store.requests).toHaveLength(0)
     expect(store.responses).toHaveLength(0)
+  })
+})
+
+describe('useReasoningEngineStore — narratif de contexte assemblé (Phase 27, TD-025)', () => {
+  test('un contextSnapshotId résout le narratif et le rend citable comme "connu" sans appel d’outil', async () => {
+    const noeud: AssetNode = {
+      id: 'n1',
+      client_id: 'client-1',
+      workspace_id: null,
+      level_key: 'systeme',
+      name: 'Ligne A12',
+      code: 'SYS-A12',
+      parent_id: null,
+      associated_nodes: [],
+      source: 'manuel',
+      qms_connector_id: null,
+      periodic_qualification: { applicable: false, deadline: null },
+      qualification_status: 'qualifie',
+      audit_log: [],
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    }
+    await db.assetNodes.put(noeud)
+    await db.contextSnapshotItems.put({
+      id: 'item-1',
+      client_id: 'client-1',
+      context_snapshot_id: 'snap-1',
+      type_objet: 'asset_node',
+      objet_id: 'n1',
+    })
+
+    const store = useReasoningEngineStore()
+    await store.charger('client-1')
+
+    const fournisseur = fournisseurMock()
+    fournisseur.envoyerMessage.mockResolvedValueOnce(
+      reponse(
+        'REPONSE_FINALE: {"texte": "Le site est qualifié", "etat_confiance": "connu", "citations": ["n1"]}',
+      ),
+    )
+
+    const { response } = await store.executerRaisonnement('client-1', {
+      objectif: 'Le site est-il qualifié ?',
+      missionId: null,
+      contextSnapshotId: 'snap-1',
+      fournisseur,
+      mode: 'chat_normatif',
+    })
+
+    expect(response.etat_confiance).toBe('connu')
+    const promptEnvoye = fournisseur.envoyerMessage.mock.calls[0]?.[2]
+    expect(promptEnvoye).toContain('Ligne A12')
+  })
+
+  test('contextSnapshotId absent (null) : aucun narratif, comportement inchangé', async () => {
+    const store = useReasoningEngineStore()
+    await store.charger('client-1')
+
+    const fournisseur = fournisseurMock()
+    fournisseur.envoyerMessage.mockResolvedValueOnce(
+      reponse('REPONSE_FINALE: {"texte": "ok", "etat_confiance": "inconnu", "citations": []}'),
+    )
+
+    await store.executerRaisonnement('client-1', {
+      objectif: 'Objectif',
+      missionId: null,
+      contextSnapshotId: null,
+      fournisseur,
+      mode: 'chat_normatif',
+    })
+
+    const promptEnvoye = fournisseur.envoyerMessage.mock.calls[0]?.[2]
+    expect(promptEnvoye).not.toContain('Contexte assemblé')
   })
 })
