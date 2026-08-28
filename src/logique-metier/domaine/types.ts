@@ -486,6 +486,99 @@ export interface EvaluationCSVAssessment {
 }
 
 /**
+ * Risk Assessment (AMDEC — Analyse des Modes de Défaillance, de leurs
+ * Effets et de leur Criticité, ICH Q9) autonome (Phase 29 de convergence
+ * architecturale, TD-027) — corrige la dette technique documentée trois
+ * fois indépendamment (`CURRENT_ARCHITECTURE.md`/`LEGACY_MAPPING.md`,
+ * "AMDEC non autonome") : `calculerIPR` (Phase 1, S×O×D) n'existait
+ * jusqu'ici que comme colonne calculée imbriquée dans le gabarit DQ, jamais
+ * comme module de risque indépendant, alors que le calcul lui-même n'a pas
+ * changé (**KEEP**, réutilisé tel quel).
+ *
+ * Structure calée sur un modèle AMDEC réel (`Processus_AMDEC.xlsx`, Google
+ * Drive) : Étape du processus / Mode de défaillance / Effet / SEV / Cause /
+ * OCC / Contrôle actuel / DET / RPN (= IPR) / Recommandation / Responsable
+ * et date cible / Actions menées / SEV-OCC-DET-RPN **résiduels** — un cycle
+ * en deux temps (évaluation initiale → action → évaluation résiduelle)
+ * confirmé par ce document réel, absent de tout ce qui existait jusqu'ici
+ * dans le dépôt (le gabarit DQ ne capture qu'un score initial, jamais de
+ * suivi d'action ni de risque résiduel).
+ *
+ * Même patron de méthodologie versionnée par client que
+ * `MethodProfileACFC`/`MethodProfileImpactAssessment` (Phase 1/3) —
+ * `echelle`/`seuil_action` remplacent le questionnaire Oui/Non, mécanisme
+ * réellement différent (numérique plutôt que binaire), d'où un type
+ * volontairement distinct, jamais fusionné (même discipline que
+ * `EvaluationCSVAssessment` vis-à-vis du moteur Oui/Non générique).
+ *
+ * @requirement Target Architecture §10, `CURRENT_ARCHITECTURE.md` (dette
+ * technique n°2 "AMDEC non autonome"), `LEGACY_MAPPING.md` (calculerIPR.ts,
+ * EXTEND)
+ */
+export type OrigineMethodeRiskAssessment =
+  'procedure_client' | 'defini_utilisateur' | 'baseline_validapharm'
+
+export interface MethodProfileRiskAssessment {
+  id: string
+  client_id: string
+  version: string
+  effective_date: string
+  source: string
+  origin: OrigineMethodeRiskAssessment
+  echelle_min: number
+  echelle_max: number
+  seuil_action: number
+  created_at: string
+}
+
+export type VerdictRiskAssessment = 'acceptable' | 'action_requise'
+
+/**
+ * Une ligne AMDEC : l'exécution d'un `MethodProfileRiskAssessment` contre
+ * un mode de défaillance réel, optionnellement rattaché à un `AssetNode`
+ * (§4.10) et/ou à un `Parameter` déjà classifié (Phase 2 — "Target
+ * Equivalent" documenté dans `LEGACY_MAPPING.md` : "logique de scoring d'un
+ * futur RiskAssessment/AMDEC, avec Parameter/CriticalParameter en amont").
+ * `method_profile_version` fige l'échelle/le seuil utilisés au moment de
+ * l'évaluation — même principe de reproductibilité historique que
+ * `EvaluationACFC`/`EvaluationImpactAssessment`.
+ *
+ * Les champs `*_residuel*` restent `null` tant qu'aucune action n'a été
+ * enregistrée (`enregistrerActionResiduelle`) — jamais une valeur devinée
+ * égale à l'initial.
+ */
+export interface RiskAssessment {
+  id: string
+  client_id: string
+  method_profile_id: string
+  method_profile_version: string
+  asset_node_id: string | null
+  parameter_id: string | null
+  etape_processus: string
+  mode_defaillance: string
+  effet_defaillance: string
+  cause_potentielle: string
+  controle_actuel: string
+  severite_initiale: number | null
+  occurrence_initiale: number | null
+  detectabilite_initiale: number | null
+  ipr_initial: number | null
+  verdict_initial: VerdictRiskAssessment | null
+  recommandation: string | null
+  responsable: string | null
+  date_cible: string | null
+  actions_menees: string | null
+  severite_residuelle: number | null
+  occurrence_residuelle: number | null
+  detectabilite_residuelle: number | null
+  ipr_residuel: number | null
+  verdict_residuel: VerdictRiskAssessment | null
+  audit_log: EntreeJournalAudit[]
+  created_at: string
+  updated_at: string
+}
+
+/**
  * Process (Phase 4 de convergence architecturale, `docs/convergence/
  * CONVERGENCE_PLAN.md`) — générique, pas limité à la production
  * (Target Architecture §4, `01_ARCHITECTURE_MASTER_FINAL.md`). EXTEND pur :

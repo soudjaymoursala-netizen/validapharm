@@ -56,6 +56,8 @@ import type {
   ReferenceQualityEvent,
   RelationTechnique,
   Requirement,
+  RiskAssessment,
+  MethodProfileRiskAssessment,
   Section,
   Source,
   SourceLocation,
@@ -223,6 +225,8 @@ export class ValidaPharmDatabase extends Dexie {
   procedures!: EntityTable<Procedure, 'id'>
   procedureSteps!: EntityTable<ProcedureStep, 'id'>
   gabaritsExportClient!: EntityTable<GabaritExportClient, 'id'>
+  methodProfilesRiskAssessment!: EntityTable<MethodProfileRiskAssessment, 'id'>
+  risksAssessment!: EntityTable<RiskAssessment, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -403,6 +407,16 @@ export class ValidaPharmDatabase extends Dexie {
      */
     this.version(26).stores({
       gabaritsExportClient: 'id, client_id, nom',
+    })
+    /**
+     * Phase 29 (`docs/convergence/PHASE_29_RISK_ASSESSMENT_AMDEC_SPEC.md`,
+     * TD-027) — Risk Assessment (AMDEC) autonome, méthodologie versionnée
+     * par client, corrigeant la dette "AMDEC non autonome" documentée
+     * depuis `CURRENT_ARCHITECTURE.md`/`LEGACY_MAPPING.md`.
+     */
+    this.version(27).stores({
+      methodProfilesRiskAssessment: 'id, client_id, created_at',
+      risksAssessment: 'id, client_id, method_profile_id, asset_node_id, parameter_id, created_at',
     })
   }
 }
