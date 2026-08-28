@@ -2,12 +2,12 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
   ContentPlan,
-  ReadinessContentPlan,
   TemplateType,
   TypeMethodProfileReference,
 } from '../../logique-metier/domaine/types'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
+import { construireReadinessContentPlan } from '../../logique-metier/deliverable/readinessContentPlan'
 
 export interface NouveauContentPlanInput {
   templateId: TemplateType
@@ -16,7 +16,6 @@ export interface NouveauContentPlanInput {
   methodProfileId: string | null
   methodProfileType: TypeMethodProfileReference | null
   contextSnapshot: unknown
-  readiness: ReadinessContentPlan
 }
 
 export type ErreurEcritureContentPlan = {
@@ -31,6 +30,11 @@ export type ErreurEcritureContentPlan = {
  * portés par le moteur de gabarits existant (`DefinitionGabarit`/
  * `RenduGabarit.vue`, KEEP) et le cycle de vie de `Section`, hors périmètre
  * ici. Aucune génération/validation/gel automatique par IA.
+ *
+ * **Étendu Phase 28** (TD-026) : `readiness` n'est plus fourni par
+ * l'appelant — calculé automatiquement à la création et recalculable à la
+ * demande via `construireReadinessContentPlan`
+ * (`logique-metier/deliverable/readinessContentPlan.ts`).
  *
  * @requirement Target Architecture, domaine "Deliverable Engine"
  */
@@ -47,12 +51,40 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     }
   }
 
+  /**
+   * Recharge la chaîne réelle `Requirement → Couverture → Test → Execution
+   * → Evidence` + `QualityEvent` pour ce client et calcule `readiness` via
+   * `construireReadinessContentPlan` (Phase 28, TD-026) — jamais une valeur
+   * fournie par l'appelant.
+   */
+  async function calculerReadiness(clientId: string, assetNodeId: string | null) {
+    const [requirements, couvertures, tests, executions, evidences, qualityEvents] =
+      await Promise.all([
+        db.requirements.where('client_id').equals(clientId).toArray(),
+        db.couvertures.where('client_id').equals(clientId).toArray(),
+        db.tests.where('client_id').equals(clientId).toArray(),
+        db.executions.where('client_id').equals(clientId).toArray(),
+        db.evidences.where('client_id').equals(clientId).toArray(),
+        db.qualityEvents.where('client_id').equals(clientId).toArray(),
+      ])
+    return construireReadinessContentPlan({
+      assetNodeId,
+      requirements,
+      couvertures,
+      tests,
+      executions,
+      evidences,
+      qualityEvents,
+    })
+  }
+
   /** `context_snapshot` est figé une seule fois ici et reste immutable ensuite. */
   async function creerContentPlan(
     clientId: string,
     input: NouveauContentPlanInput,
   ): Promise<ContentPlan> {
     const maintenant = new Date().toISOString()
+    const readiness = await calculerReadiness(clientId, input.assetNodeId)
     const plan: ContentPlan = {
       id: crypto.randomUUID(),
       client_id: clientId,
@@ -62,7 +94,7 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
       method_profile_id: input.methodProfileId,
       method_profile_type: input.methodProfileType,
       context_snapshot: JSON.stringify(input.contextSnapshot),
-      readiness: input.readiness,
+      readiness,
       statut: 'brouillon',
       audit_log: [
         { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
@@ -73,6 +105,39 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     await db.contentPlans.put(plan)
     contentPlans.value = [...contentPlans.value, plan]
     return plan
+  }
+
+  /**
+   * Recalcule `readiness` à la demande (nouvelles Executions/Evidence
+   * apparues après la création du plan) — jamais automatique en tâche de
+   * fond, toujours une action explicite tracée dans `audit_log`.
+   */
+  async function recalculerReadiness(
+    clientId: string,
+    contentPlanId: string,
+  ): Promise<ContentPlan | ErreurEcritureContentPlan> {
+    const existant = await db.contentPlans.get(contentPlanId)
+    if (!existant || existant.client_id !== clientId) return { erreur: 'introuvable' }
+    if (existant.statut === 'gele') return { erreur: 'deja_gele' }
+
+    const readiness = await calculerReadiness(clientId, existant.asset_node_id)
+    const maintenant = new Date().toISOString()
+    const miseAJour: ContentPlan = {
+      ...existant,
+      readiness,
+      updated_at: maintenant,
+      audit_log: [
+        ...existant.audit_log,
+        {
+          timestamp: maintenant,
+          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          action: `recalcul readiness : ${readiness}`,
+        },
+      ],
+    }
+    await db.contentPlans.put(miseAJour)
+    contentPlans.value = contentPlans.value.map((p) => (p.id === existant.id ? miseAJour : p))
+    return miseAJour
   }
 
   async function validerContentPlan(
@@ -136,5 +201,6 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     creerContentPlan,
     validerContentPlan,
     gelerContentPlan,
+    recalculerReadiness,
   }
 })
