@@ -184,6 +184,41 @@ describe('proposerStructureProcedure — étapes candidates (Phase 21, TD-017)',
     expect(proposition.etapesProposees).toHaveLength(2)
     expect(proposition.etapesProposees[0]?.contexteDetecte).toBeNull()
   })
+
+  it("ne confond pas une étape numérotée '1. texte' avec un nouvel en-tête de section quand elle réutilise la même convention que les en-têtes — bug réel trouvé en simulant une SOP réaliste (numérotation d'étape qui redémarre à 1 à l'intérieur de la section 4. PROCEDURE)", () => {
+    const texte = [
+      '1. OBJECTIF',
+      'Décrire le nettoyage.',
+      '2. CHAMP D APPLICATION',
+      "S'applique à la ligne STICK002.",
+      '3. RESPONSABILITES',
+      "L'opérateur est responsable.",
+      '4. PROCEDURE',
+      '1. Vérifier que la ligne est arrêtée.',
+      '2. Retirer les éléments de format.',
+      '3. Nettoyer les surfaces avec le détergent validé.',
+      '4. Rincer à l’eau purifiée.',
+      '5. REFERENCES',
+      'SOP-GEN-001',
+    ].join('\n')
+
+    const proposition = proposerStructureProcedure(texte)
+
+    expect(proposition.sections.map((s) => s.canon)).toEqual([
+      'objectif',
+      'perimetre',
+      'responsabilites',
+      'procedure',
+      'references',
+    ])
+    expect(proposition.etapesProposees).toHaveLength(4)
+    expect(proposition.etapesProposees.map((e) => e.description)).toEqual([
+      'Vérifier que la ligne est arrêtée.',
+      'Retirer les éléments de format.',
+      'Nettoyer les surfaces avec le détergent validé.',
+      'Rincer à l’eau purifiée.',
+    ])
+  })
 })
 
 describe('proposerEtapesDepuisTableaux (Phase 22, TD-019) — étapes sous tableau, calibré sur le manuel Markem-Imaje C350 réel', () => {

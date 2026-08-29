@@ -133,20 +133,37 @@ export function detecterSections(texte: string): SectionDetectee[] {
   const lignes = texte.split('\n')
   const frontieres: { index: number; canon: SectionCanoniqueProcedure; titreDetecte: string }[] = []
 
+  // Numéro du dernier en-tête de premier niveau accepté — un en-tête
+  // reconnu (dictionnaire/mot-clé) est toujours accepté quel que soit son
+  // numéro (l'OCR/la source peut avoir des trous), mais un candidat NON
+  // reconnu n'est accepté comme nouvel en-tête que si son numéro poursuit
+  // ou dépasse cette séquence. Sans ce garde-fou, une étape numérotée
+  // "1. Vérifier que la vanne est fermée." à l'intérieur d'une section
+  // "4. PROCEDURE" ré-ouvre une numérotation à 1 et est indiscernable
+  // syntaxiquement d'un nouvel en-tête — bug réel trouvé en simulant une
+  // SOP réaliste où les étapes de la section Procédure réutilisent la
+  // même convention "N. texte" que les en-têtes de section eux-mêmes
+  // (cas non couvert par les 3 corpus Sanofi/Ferring/IMA d'origine, qui
+  // n'avaient que des étapes à puce `- ` ou en prose libre).
+  let dernierNumero = 0
+
   lignes.forEach((ligneBrute, index) => {
     const ligne = ligneBrute.trim()
     const match = ligne.match(RE_TITRE_NUMEROTE)
     if (!match) return
+    const numero = Number(match[1])
     const titreCandidat = (match[2] ?? '').trim()
     if (titreCandidat.split(/\s+/).length > 8) return
 
     const canon = resoudreCanon(titreCandidat)
     if (canon) {
       frontieres.push({ index, canon, titreDetecte: titreCandidat })
+      dernierNumero = numero
       return
     }
-    if (!titreCandidat.endsWith(':') && titreCandidat.length <= 60) {
+    if (numero > dernierNumero && !titreCandidat.endsWith(':') && titreCandidat.length <= 60) {
       frontieres.push({ index, canon: 'autre', titreDetecte: titreCandidat })
+      dernierNumero = numero
     }
   })
 
