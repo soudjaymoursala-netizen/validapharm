@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | SDS-VALIDAPHARM-2026-001 |
-| **Version** | 14 (relais IA de production et plafond de dépense, test réseau vérifié — `REV-URS-VALIDAPHARM-2026-010`, 24/08/2026) |
+| **Version** | 16 (rattrapage documentaire Phases 12-34 de convergence architecturale — Reasoning Engine, Context Engine, Organization/Workspace, Knowledge Graph, ~70 nouvelles tables Dexie — audit croisé URS/FS/FDS/SDS, 28/08/2026, §12) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v25, `02-analyse-de-risque-outil.md` v27, `03-specifications-fonctionnelles.md` v11, `16-FDS-outil.md` v14, `08-conventions-codage.md` v02, `09-architecture-detaillee.md` v03, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v62, `02-analyse-de-risque-outil.md` v28, `03-specifications-fonctionnelles.md` v52, `16-FDS-outil.md` v16, `08-conventions-codage.md` v02, `09-architecture-detaillee.md` v03, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) — `docs/convergence/PHASE_13_*` à `PHASE_34_*` pour le détail exhaustif de chaque phase |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -77,6 +77,32 @@ La FDS (v04) décrit le comportement fonctionnel détaillé : écrans, flux, mac
 - Migration de schéma (URS-NF-046) : un script de migration versionné accompagne toute évolution de `schema_version`, exécuté à l'ouverture si `schema_version` du dépôt < version attendue par l'application, avant tout accès aux données.
 - **Atomicité de la migration (ajoutée v02 — revue SDS, E2, mitige AR-R-45, URS-NF-046quater)** : avant toute exécution, une sauvegarde intégrale de l'état courant (`/data`) est créée et vérifiée (checksum) ; si la migration échoue à n'importe quelle étape, un mécanisme de retour arrière restaure automatiquement cette sauvegarde, et l'application refuse de démarrer sur un état partiellement migré (message explicite, pas de démarrage silencieux sur données incohérentes). Le retour arrière lui-même est couvert par un test dédié (échec simulé en cours de migration). **(clarifié v11 — architecture web pure)** La "sauvegarde" est une référence Git créée via l'API (tag/branche pointant sur le SHA du commit précédant la migration) — un simple pointeur, aucune copie de fichiers nécessaire ; le retour arrière ré-écrit la branche principale sur ce SHA via l'API.
 - **Garde de compatibilité descendante (ajoutée v09 — résorption de dette, URS-NF-055bis, mitige AR-R-60)** : symétriquement, si `schema_version` du dépôt est **postérieur** à la version maximale que l'application sait lire (cas d'un rollback vers une version antérieure de l'application après une migration), l'application refuse explicitement de démarrer — écran dédié (FDS §7, message U-12), **avant tout accès en lecture ou écriture** à `/data`. Cette vérification est la première opération effectuée à l'ouverture, avant même la vérification `<` ci-dessus.
+
+### 3bis. Schéma de données — domaines ajoutés Phases 12 à 34 (ajouté v16)
+
+**(vérifié le 28/08/2026 par inspection directe du cache IndexedDB de l'application déployée, pas seulement par lecture du code)** Le schéma physique n'est plus limité aux domaines listés en §3 (v11, ~5 tables) : le cache local Dexie compte aujourd'hui 74 tables. Domaines ajoutés depuis, par phase (voir FS pour le détail fonctionnel de chacun, `docs/convergence/PHASE_*.md` pour le détail de conception) :
+
+| Domaine | Tables (noms Dexie réels) | Phase(s) |
+|---|---|---|
+| Assessment générique | `evaluationsACFC`, `evaluationsImpactAssessment`, `evaluationsCSVAssessment`, `methodProfilesACFC`, `methodProfilesImpactAssessment` | 1, 3 |
+| Paramètres | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | 2 |
+| Quality Events | `qualityEvents`, `referencesQualityEvent`, `associationsMissionQualityEvent` | 5 |
+| Structure Système — Architecture Technique | `relationsTechniques` | 18 |
+| Test/Execution/Evidence | `requirements`, `couvertures`, `tests`, `testObjectives`, `testCandidates`, `executions`, `executionSteps`, `executionEvents`, `measurements`, `evidences`, `evidenceLocations`, `provenanceLinks` | 7a/7b/7c |
+| Source/Document Intelligence | `sources`, `sourceVersions`, `sourceLocations`, `extractions`, `extractionItems`, `knowledgeItems`, `knowledgeRelations`, `confirmations`, `conflicts` | 8a, 31 |
+| Deliverable Engine | `contentPlans` | 9 |
+| Integration Gateway | `connectors`, `syncJobs`, `externalReferences` | 10 |
+| Organisation | `organizations`, `workspaces` | 11 |
+| Work | `missions`, `activities`, `dependencies` | 13 |
+| Context | `contextSnapshots`, `contextSnapshotItems` | 14 |
+| AI (Reasoning Engine) | `aiRequests`, `aiResponses`, `citationsAIResponse` | 15 |
+| Procédures | `procedures`, `procedureSteps` | 20 |
+| Risk Assessment | `methodProfilesRiskAssessment`, `risksAssessment` | 29 |
+| Gabarits d'export client | `gabaritsExportClient` | 26 |
+| Contexte procédé | `processes`, `fonctionsActif`, `associationsFonctionAssetNode`, `associationsFonctionProcess`, `manufacturingContexts` | 4 |
+| Documents projet | `projectDocuments` | (préexistant, enfin consommé Phase 33) |
+
+**Non couvert par cette liste** : les entités du domaine Manufacturing du package d'architecture cible (`Product`/`Material`/`Recipe`/`Format`/`Configuration`/`Batch`) n'ont aucune table correspondante — absence non documentée comme différée dans l'URS/FS, contrairement au reste des écarts de ce projet (à signaler explicitement plutôt qu'à faire apparaître comme couvert par accident de similarité de nom).
 
 ## 4. Moteur de calcul et logique métier (module isolé)
 
@@ -198,6 +224,36 @@ Complète le routeur IA (§6) et la sécurité technique (§7) : conception dét
 - **Plafond de dépense (répond à AR-R-65, complète le quota applicatif déjà spécifié §7)** : deux niveaux de garde-fou, pas un seul — (1) quota applicatif déjà décrit §7 (URS-NF-048, seuil configurable par `client_config`, blocage des nouveaux appels) ; (2) plafond de dépense configuré **côté tableau de bord du fournisseur IA lui-même** (ex. limite mensuelle + alerte de consommation), indépendant de l'application — un défaut de conception ou un contournement du garde-fou applicatif ne peut alors pas produire une facture illimitée. Le second niveau DOIT être configuré avant toute mise en production, pas seulement documenté.
 - **Test de joignabilité réseau (AR-R-64)** : porte exclusivement sur le domaine du relais (`*.workers.dev`), pas sur celui du fournisseur — **vérifié et clos le 24/08/2026** par l'utilisateur depuis son poste professionnel (Workers déjà actifs sur ce compte, chargement de leur URL confirmé réussi).
 
+## 6ter. Reasoning Engine — protocole d'appel d'outils et vérification de citation (ajouté v16 — Phases 13 à 17/27, `docs/convergence/PHASE_15_REASONING_ENGINE_SPEC.md`, `PHASE_27_CONTEXT_ENGINE_ENRICHI_SPEC.md`)
+
+**Découverte de conception structurante (Phase 15)** : le relais IA de production (§10quater) n'a pas de code serveur dans ce dépôt (seul `workers/ocr-relay/` y figure) — aucun function-calling natif fournisseur n'est donc possible. Le protocole d'appel d'outils est **entièrement textuel et orchestré côté navigateur** (TD-007), le relais restant un simple proxy sans état.
+
+- `executerBoucleRaisonnement()` (`src/logique-metier/raisonnement/boucleRaisonnement.ts`) : boucle plafonnée (`maxIterations`, défaut 6 — jamais une boucle sans limite, arrêt explicite avec `arretPourLimite: true` si le plafond est atteint sans réponse finale). À chaque tour : `construirePrompt()` reconstruit l'intégralité du contexte (catalogue d'outils + transcript + narratif de `ContextSnapshot` s'il existe, Phase 27) — la conversation n'est jamais portée par une session côté serveur, cohérent avec le relais sans état.
+- Catalogue d'outils (`CATALOGUE_OUTILS_RAISONNEMENT`) : 7 outils de lecture seule à ce jour (`lister_requirements_pour_actif`, `lister_tests_pour_requirement`, `lister_evidence_pour_test`, `lister_knowledge_items_valides`, `tracer_chaine_technique` — Phase 18, `lister_etapes_procedure` — Phase 20, `tracer_relations_connaissance` — Phase 31), tous des fonctions pures opérant sur des données déjà chargées par l'appelant (`useReasoningEngineStore`), jamais un accès direct à la base. Un nom d'outil inconnu ou des paramètres manquants ne lèvent jamais d'exception — résultat explicite que le modèle peut lire et corriger au tour suivant (dégradation gracieuse).
+- **Vérification de citation déterministe, non négociable (répond au principe fondateur n°1)** : `verifierConfiance()` — une réponse taguée `connu` sans citation, ou dont une citation ne correspond à aucun id réellement obtenu par un appel d'outil (ou par le narratif de contexte, Phase 27) pendant cette session de raisonnement, est automatiquement rétrogradée à `a_verifier`. L'IA seule ne décide jamais qu'elle "sait".
+- `EtatConfianceIA` : `connu | inféré | inconnu | conflit | a_verifier` — jamais un score numérique de confiance (TD-008), cohérent avec l'interdiction déjà actée de promotion automatique `Parameter`→`CPP` par score (§8bis FDS/analogie).
+- **Architecture volontairement plate, pas multi-agents** : un seul type d'orchestration existe à ce jour — une boucle unique appelant des outils de lecture. Il n'existe ni agents spécialisés par domaine (Context/Quality/Risk/Test...), ni composant Reviewer/Critic distinct de la vérification de citation ci-dessus, ni mécanisme de résolution de divergence entre plusieurs points de vue — à documenter explicitement comme un écart vis-à-vis de toute future spécification d'architecture agentique multi-agents, pas à présumer couvert par ce composant.
+- Narratif de `ContextSnapshot` (Phase 27, `construirePrompt` étendu) : sérialisé et injecté dans le prompt, ses identifiants ajoutés à `idsConnus` dès le premier tour avec la même garantie qu'un appel d'outil (données déjà résolues à l'assemblage du snapshot) — jamais une confiance accrue sur la seule affirmation du modèle.
+- Persistance : `AIRequest`/`AIResponse` (+ `CitationAIResponse`) écrits pour chaque invocation du Reasoning Engine (traçabilité input/output complète) — **différent du chat expert standard** (§6, §10quater), qui ne journalise que les métadonnées de session (`AiChatSessionLog`, horodatage/fournisseur/moteur, jamais le contenu) par choix de conception vie privée (URS-F-037). Cette asymétrie est volontaire, pas un oubli : le Reasoning Engine appelle des outils sur des données du client, le chat expert échange du texte libre.
+
+## 6quater. Context Engine — `ContextSnapshot` généralisé (ajouté v16 — Phase 14/27, `docs/convergence/PHASE_14_CONTEXT_ENGINE_SPEC.md`)
+
+- Généralise `resoudreRegleEffective`/`ancetresWorkspace`/`noeudsVisiblesDepuisWorkspace` (§6quinquies ci-après), jusqu'ici câblés sur le seul store Structure Système, en un assemblage de `ContextSnapshot`/`ContextSnapshotItem` réutilisable par tout consommateur (Mission workspace, Reasoning Engine).
+- `assemblerElementsContextSnapshot()` résout les éléments pertinents pour une Mission donnée (AssetNode/ManufacturingContext/Procedure/QualityEvent) — jamais un chargement intégral de la base client (répond au principe "ne pas simplement charger toute la base", cohérent avec §8ter perf).
+- `construireNarratifContexte()` (Phase 27) réorganise ces éléments déjà résolus en 4 facettes narratives OÙ/QUOI/COMMENT/POURQUOI-IMPACT (`AssetNode`/`ManufacturingContext`/`Procedure`/`QualityEvent`) — aucune nouvelle résolution, une réorganisation pure. Fondé sur le modèle Context=FACTS/Method=HOW/Rules-Risk-Requirements-History=WHY du package d'architecture cible (§1 §5.23 de `CONTEXTE-REPRISE-SESSION.md`).
+- **Limite assumée** : résolution de "méthode applicable"/"documents pertinents" pour un `ContextSnapshot` non construite ; la facette COMMENT reste vide en pratique tant qu'aucune `Procedure` n'est rattachée à un `AssetNode` (aucun rattachement construit à ce jour).
+
+## 6quinquies. Organisation multi-tenant — `Organization`/`Workspace` (ajouté v16 — Phase 11, `docs/convergence/PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`, TD-006)
+
+- **Décision structurante** : `Organization.id` reprend exactement l'`id` du `Client` migré — aucune des ~25 tables indexées par `client_id` n'a été réécrite ou renommée ; `client_id` continue de référencer la même valeur, désormais celle d'une `Organization`. `Client` devient un cas particulier d'`Organization` à un seul `Workspace`. Migration explicite (`migrerClient`/`migrerTousLesClients`), jamais automatique.
+- `Workspace` : arbre auto-référencé (`parent_workspace_id`), un seul discriminant `type: 'global' | 'site'` — pas de types rigides Global/Site/Facility/Area, cohérent avec `AssetHierarchySchema` (profondeur de hiérarchie jamais figée d'avance).
+- `resoudreRegleEffective()` (`src/logique-metier/organisation/resolutionEffective.ts`) implémente "Scope + Applicability + Effectivity + Inheritance/Override" : remonte l'arbre `Workspace` depuis un point donné, retourne la première règle trouvée avec son `workspaceIdOrigine` (traçabilité de provenance systématique) ou `null` — garde anti-cycle incluse.
+- **Câblage effectif, état réel (Phase "câblage étape 1", 26/08/2026)** : sur les ~42 stores métier indexés par `client_id`, **un seul** (`AssetNode`/Structure Système) consomme réellement `workspace_id` à ce jour — additif et rétrocompatible (`workspace_id: string | null`, `null` = nœud legacy visible partout). Les ~41 autres stores continuent de filtrer uniquement par `client_id` brut. Ce chantier reste explicitement en pause depuis le 26/08/2026 (priorité donnée à la clarification de vision Mission/Context/Reasoning Engine), pas terminé.
+
+## 6sexies. Knowledge Graph générique (ajouté v16 — Phase 31, `docs/convergence/PHASE_31_KNOWLEDGE_GRAPH_SPEC.md`)
+
+`parcourirGraphe()` — parcours en largeur générique paramétré par accesseurs `idSource`/`idCible`, jamais figé sur un nom de champ littéral. Deux consommateurs réels démontrés avant généralisation (règle de trois) : `chaineTechniqueDepuis` (`RelationTechnique`, Phase 18, refactor comportement-identique) et `relationsConnaissanceDepuis` (`KnowledgeRelation`, Phase 8a/31, second cas réel). Consommé uniquement par le Reasoning Engine (outils `tracer_chaine_technique`/`tracer_relations_connaissance`) — aucun écran de visualisation de graphe.
+
 ## 11. Matrice de traçabilité FDS → SDS
 
 | Section FDS | Section SDS |
@@ -218,6 +274,24 @@ Complète le routeur IA (§6) et la sécurité technique (§7) : conception dét
 | FS §5.1/§5.2/§5.5 (perf/rollback/lecteur d'écran) | §8ter, §3, §9 |
 | FS §2/§9/§10 (architecture web pure, API GitHub) | §2, §5, §5bis, §7, §10 |
 | `09-architecture-detaillee.md` (bibliothèques, quota API, hébergement, relais IA) | §5, §10, §10bis, §10quater |
+| FDS §3.10 (Mission workspace) | §6ter, §6quater |
+| FDS §3.11 (repli structuration procédurale) | §6ter (protocole/vérification d'ancrage réutilise le même patron) |
+| FDS §3.12 (correctif tableau_dynamique) | §3bis (persistance), §4 (portail de qualité — test de régression ajouté) |
+| URS-F-190 à 230 (Work/Context/AI/Coquille UX/Mission workspace) | §3bis, §6ter, §6quater |
+| URS-F-180 (Organization/Workspace) | §3bis, §6quinquies |
+| URS-F-150undecies (Knowledge Graph) | §3bis, §6sexies |
+| URS-F-240 (Architecture Technique) | §3bis (table `relationsTechniques`), §6sexies — **aucun écran, gap ouvert (voir FDS §2/§12)** |
+
+## 12. Écarts documentaires connus (ajouté v16 — audit du 28/08/2026)
+
+Cette SDS (comme la FDS) a été rattrapée le 28/08/2026 après un écart de traçabilité constaté : les Phases 12 à 34 de convergence architecturale (Mission/Activity, Context Engine, Reasoning Engine, Organization/Workspace, Architecture Technique, cerveau procédural, Risk Assessment autonome, Knowledge Graph, gabarits d'export client...) avaient été committées, testées et intégrées à l'URS/FS sans jamais être redescendues dans ce document ni dans la FDS — un écart de traçabilité GAMP5 non déclaré d'environ 20 phases, trouvé par audit croisé des 4 documents entre eux (aucun des deux ne se déclarait explicitement "en retard"). Le présent rattrapage (§3bis, §6ter à §6sexies) comble le contenu technique manquant mais **ne reproduit pas le niveau de détail complet de chaque spec de phase individuelle** (`docs/convergence/PHASE_13_*` à `PHASE_31_*`) — celles-ci restent la référence pour le détail exhaustif de chaque mécanisme, cohérent avec la façon dont l'URS/FS les citent déjà.
+
+**Écarts qui restent ouverts après ce rattrapage** (à ne pas confondre avec "couverts") :
+- URS-F-240 (relations techniques `AssetNode`) : exigence Must sans aucun écran, non refermé depuis la Phase 18 (27/08/2026).
+- Le relais IA de production (chat expert, Reasoning Engine) n'a pas son code dans ce dépôt — seul `workers/ocr-relay/` y figure (§10quater ne décrit que le relais IA générique, pas cette absence de code source versionné).
+- Le câblage `Workspace` (§6quinquies) reste à un seul store sur ~42, en pause.
+- Les entités `Product`/`Material`/`Recipe`/`Configuration`/`Batch` du domaine Manufacturing de l'architecture cible n'ont aucune contrepartie construite (§3bis).
+- Aucune architecture multi-agents (Agent Central + agents spécialisés + Reviewer/Critic actif) n'existe — le Reasoning Engine (§6ter) est une boucle unique d'appel d'outils en lecture seule.
 
 ---
-*Document vivant, version 15 — historique v02-v10 : voir corps du document. v11 (23/08/2026) : architecture web pure sans installation. v12 (23-24/08/2026) : architecture détaillée — stratégie Git Trees API pour éviter l'épuisement du quota GitHub (5000 req/h), trouvée en rédigeant `09-architecture-detaillee.md` avant tout code écrit (nouveau risque AR-R-63, mitigé dès la conception) ; hébergement GitHub Pages confirmé après vérification réseau réelle par l'utilisateur depuis son poste de travail (AR-R-62 clos) ; bibliothèques complémentaires actées (Pinia, Vue Router, Dexie.js, vite-plugin-pwa). v13 (24/08/2026, `REV-URS-VALIDAPHARM-2026-010`) : relais IA de production — conception du relais (Cloudflare Workers, sans état, §10quater), routage de modèle par mode d'usage (chat normatif/audit simulé, répond à URS-F-038bis), plafond de dépense à deux niveaux (applicatif + tableau de bord fournisseur, mitige AR-R-65). **v14 (24/08/2026) : test de joignabilité réseau du domaine du relais vérifié et clos** (AR-R-64) — Workers Cloudflare déjà actifs sur le poste professionnel de l'utilisateur, `*.workers.dev` confirmé accessible. Cascade de conception URS→FS→FDS→SDS complète, architecture entièrement vérifiée (réseau GitHub et relais IA) et détaillée (bibliothèques, quotas, hébergement, relais IA) — prête pour l'écriture du code, plus aucun point réseau bloquant. **v15 (26/08/2026) : déploiement GitHub Pages effectivement construit** (`.github/workflows/deploy-pages.yml`, `base` conditionnel, redirection SPA `public/404.html`) — §10bis passe de décision documentée à mécanisme réel.*
+*Document vivant, version 16 (28/08/2026) : rattrapage documentaire Phases 12-34 de convergence architecturale — §3bis (schéma de données), §6ter (Reasoning Engine), §6quater (Context Engine), §6quinquies (Organization/Workspace), §6sexies (Knowledge Graph), §12 (écarts connus, dont ceux qui restent ouverts). Trouvé et comblé suite à un audit croisé URS/FS/FDS/SDS du 28/08/2026 ayant constaté que ce document était figé vers la Phase 11-12 malgré une URS/FS à jour jusqu'à la Phase 34. Historique v02-v10 : voir corps du document. v11 (23/08/2026) : architecture web pure sans installation. v12 (23-24/08/2026) : architecture détaillée — stratégie Git Trees API pour éviter l'épuisement du quota GitHub (5000 req/h) ; hébergement GitHub Pages confirmé après vérification réseau réelle (AR-R-62 clos) ; bibliothèques complémentaires actées (Pinia, Vue Router, Dexie.js, vite-plugin-pwa). v13 (24/08/2026) : relais IA de production — conception du relais (Cloudflare Workers, sans état, §10quater), routage de modèle par mode d'usage, plafond de dépense à deux niveaux. v14 (24/08/2026) : test de joignabilité réseau du relais vérifié et clos (AR-R-64). v15 (26/08/2026) : déploiement GitHub Pages effectivement construit (§10bis passe de décision documentée à mécanisme réel).*

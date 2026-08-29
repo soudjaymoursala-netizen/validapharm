@@ -91,6 +91,18 @@ export const router = createRouter({
       props: true,
     },
     {
+      path: '/clients/:clientId/impact-assessment',
+      name: 'impact-assessment',
+      component: () => import('../screens/ImpactAssessment.vue'),
+      props: true,
+    },
+    {
+      path: '/clients/:clientId/csv-assessment',
+      name: 'csv-assessment',
+      component: () => import('../screens/ComputerSystemAssessment.vue'),
+      props: true,
+    },
+    {
       path: '/clients/:clientId/missions',
       name: 'liste-missions',
       component: () => import('../screens/ListeMissions.vue'),

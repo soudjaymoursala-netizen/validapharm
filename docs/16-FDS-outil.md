@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Référence** | FDS-VALIDAPHARM-2026-001 |
-| **Version** | 15 (§4.6/URS-F-050 corrigé : la stratégie de qualification repose sur la méthode ACFC configurable par client réellement implémentée en Phase 1 de convergence architecturale, 25/08/2026, jamais une grille de critères pondérés fixe ; ajout Impact Assessment (URS-F-056) et Computer System Assessment (URS-F-057), Phase 3, 25/08/2026 — cohérent avec URS v28, FS v18) |
+| **Version** | 17 (Impact Assessment et Computer System Assessment réellement construits — 2 des 5 écarts d'inventaire d'écrans trouvés par simulation d'usage réelle du 29/08/2026, §12 ; v16 : rattrapage documentaire Phases 12-34, 28/08/2026) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
-| **Documents de référence** | `01-URS-outil.md` v23, `02-analyse-de-risque-outil.md` v23, `03-specifications-fonctionnelles.md` v11, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) |
+| **Documents de référence** | `01-URS-outil.md` v62, `02-analyse-de-risque-outil.md` v28, `03-specifications-fonctionnelles.md` v52, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) — `docs/convergence/PHASE_13_*` à `PHASE_34_*` pour le détail exhaustif de chaque phase |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -30,16 +30,27 @@ Toute règle déjà énoncée en FS n'est pas reformulée ici sauf si elle néce
 | Panneau Chat expert | Conversation, sélection fournisseur, bandeau d'avertissement | URS-F-030 à 037 |
 | Bibliothèque de normes | Consultation/association de normes | URS-F-040/041 |
 | Assistant de stratégie de qualification | Méthode ACFC configurable par client, conclusion | URS-F-050 à 055 |
-| Impact Assessment / System Classification | Méthode configurable par client, verdict Direct/Not Direct Impact | URS-F-056 (nouveau v15) |
-| Computer System Assessment | Catégorie GAMP5 (fixe) + pertinence GxP/ERES | URS-F-057 (nouveau v15) |
-| Analyse de documents / Challenge de dossier | Chargement de document, constats affichés | URS-F-080 à 083 |
+| Impact Assessment / System Classification *(écran réellement construit v17, 29/08/2026 — le store existait depuis la Phase 3/v15 mais aucun composant ne l'exposait jusqu'ici, trouvé lors d'une simulation d'usage réelle)* | Méthode configurable par client, verdict Direct/Not Direct Impact | URS-F-056 (nouveau v15) |
+| Computer System Assessment *(écran réellement construit v17, 29/08/2026 — même écart trouvé et comblé)* | Catégorie GAMP5 (fixe) + pertinence GxP/ERES | URS-F-057 (nouveau v15) |
+| Analyse de documents / Challenge de dossier | Chargement de document, constats affichés — **seule la moitié §4.8/URS-F-082/083 (analyse structurelle, Phase 34) existe réellement, intégrée à Fiche Projet (voir ligne dédiée plus bas), pas comme écran séparé** ; URS-F-080/081 (PID/certificat) non implémentés | URS-F-080 à 083 |
 | Configuration client | Fournisseur IA, gabarit d'export, consentement télémétrie, qualification de fiabilité | `client_config` |
 | Export | Choix de format, avertissements de blocage | URS-F-020 à 028ter |
-| Journal d'anomalies *(ajouté v04 — audit QA spécialisés)* | Liste des anomalies constatées dans l'outil (hors moteur de calcul), statut de suivi | URS-NF-053 |
-| Configuration des connecteurs QMS *(ajouté v05)* | Liste des connecteurs par client (Veeva/SAP/TrackWise), activation, tenant | URS-F-090 à 090ter |
+| Journal d'anomalies *(ajouté v04 — audit QA spécialisés)* | **Écart trouvé v17 (29/08/2026) et non encore comblé** : aucune trace nulle part dans `src/presentation/` (ni écran, ni store), et même le type de domaine `Anomaly` est absent du modèle de données — documenté comme écran existant depuis la toute première version de ce paragraphe (v04) sans jamais avoir été construit. Voir §12. | URS-NF-053 |
+| Configuration des connecteurs QMS *(ajouté v05)* | **Écart trouvé v17 et non encore comblé** : `Connector`/`SyncJob`/`ExternalReference` existent au niveau domaine/persistance (Phase 10, Integration Gateway) mais aucun store ni écran ne les consomme. Voir §12. | URS-F-090 à 090ter |
 | Structure Système *(ajouté v05)* | Arbre + graphe des `asset_node` d'un client, création/édition de nœud, vue graphique | URS-F-100 à 100quater |
-| Dossier vivant d'un actif *(ajouté v05)* | Liste des livrables liés à un nœud, filtrable, export PDF | URS-F-101 à 101septies |
+| Dossier vivant d'un actif *(ajouté v05)* | **Écart trouvé v17 et non encore comblé** : le code lui-même le documente en commentaire (`useStructureSystemeStore.ts`) comme "hors périmètre" — la FDS l'a pourtant toujours présenté comme un écran livré. Voir §12. | URS-F-101 à 101septies |
 | Blocage d'incompatibilité de données *(ajouté v12)* | Écran plein affiché avant tout chargement si `schema_version` des données est postérieur à la version de l'application (message U-12) | URS-NF-055bis |
+| Coquille applicative — sidebar/Accueil *(ajouté v16 — Phase 16 de convergence architecturale, `docs/convergence/PHASE_16_COQUILLE_UX_SPEC.md`)* | `BarreLaterale`/`CoquilleApplication`/`AccueilQueVoulezVousFaire` : bascule Mode Expert/Mode Assistant (affichage seul, aucune différenciation comportementale à ce jour — URS-F-220quinquies), mémorisation du client actif côté navigateur, entrée "Accueil" (Que voulez-vous faire ?) | URS-F-220 à quinquies |
+| Missions *(ajouté v16 — Phase 17, `docs/convergence/PHASE_17_MISSION_WORKSPACE_SPEC.md`)* | `ListeMissions.vue` (liste + création de `Mission` par client) et `MissionWorkspace.vue` (Activités avec dépendances, association `QualityEvent`, assemblage/affichage d'un `ContextSnapshot`, invocation du Reasoning Engine scopée à la Mission, badge de confiance, historique des invocations) | URS-F-190 à quinquies, URS-F-200 à quater, URS-F-210 à sexies, URS-F-230 à quinquies |
+| Structure Système — extension Architecture Technique *(ajouté v16 — Phase 18)* | **Aucun écran** : `RelationTechnique` (`controle_par`/`connecte_a`/`heberge_sur` entre `AssetNode`) n'est exposée que par un outil de lecture du Reasoning Engine (`tracer_chaine_technique`) — un utilisateur ne peut ni créer ni consulter directement ces relations. **Gap Must sans écran, non refermé** (voir §12) | URS-F-240 à quater |
+| Procédures *(ajouté v16 — Phases 20/21/22/23/24/25)* | `RevueStructureProcedure.vue` (route `/clients/:clientId/procedures`) : import `.docx`/`.pdf` ou collage de texte, génération d'une proposition de structure (parseur déterministe en premier, repli IA uniquement si celui-ci ne retourne strictement rien), revue éditable des sections/étapes proposées (case "Retenir" par étape, badge de confiance IA), formulaire de métadonnées, confirmation — seule la confirmation écrit réellement `Procedure`/`ProcedureStep` | URS-F-250 à quater, URS-F-260 à septies, URS-F-270 à quater, URS-F-280 à quater, URS-F-290 à quater, URS-F-300 à quater |
+| Éditeur de section — génération de brouillon par adaptation *(ajouté v16 — Phase 33, panneau intégré à l'Éditeur de section, pas un écran séparé)* | Coller un texte ou uploader un fichier de référence (`.docx`/`.pdf`), confirmation de droit d'usage obligatoire, génération limitée aux champs scalaires du gabarit, checklist de relecture par `DefinitionSection` gate le bouton de validation, badge sur les champs générés | URS-F-060 à 064bis |
+| Éditeur de section — gabarit d'export personnalisé *(ajouté v16 — Phase 26, panneau intégré à l'Éditeur de section)* | Import d'un gabarit `.docx` client, refus explicite à l'import si les balises obligatoires (`redacteurs`/`approbateur_final`/`historique_revisions`) ne sont pas mappées, sélection du gabarit actif pour l'export | URS-F-023 à 026 |
+| Éditeur de section — liens vers d'autres sections *(ajouté v16 — correctif du 28/08/2026, non versionné en phase de convergence numérotée)* | Panneau permettant de choisir une autre section du même projet et de la lier/délier (lien non dirigé, idempotent, journalisé) — seule interface permettant de satisfaire légitimement les garde-fous U-01/U-02/U-03 (§3.3), auparavant contournables uniquement via "Forcer" | URS-F-000ter |
+| Panneau Chat expert — mode audit simulé *(ajouté v16 — Phase 32, sous-mode du panneau Chat expert existant, pas un écran séparé)* | Bascule explicite `chat_normatif`/`audit_simule`, sélection de persona(s) d'auditeur simulé (Swissmedic/FDA/cabinet de conseil GxP/QA spécialisée), bandeau de rappel à chaque activation (URS-F-039bis), qualification de fiabilité indexée par mode | URS-F-038 à 039ter |
+| Bibliothèque de normes — analyse structurelle *(ajouté v16 — Phase 34, extension de l'écran Fiche Projet existant, pas un écran séparé)* | Détection déterministe et affichage d'une section "exigence URS" sans aucun lien vers une autre section du projet — jamais un verdict de conformité | URS-F-082 (partiel), URS-F-083, URS-F-041bis/083bis |
+
+**Note méthodologique (ajoutée v16)** : contrairement aux écrans ci-dessus, les capacités suivantes — construites Phases 5/8a/9/13(domaine)/28/29/31 — **n'ont aucun écran**, par choix documenté à chaque phase (aucun consommateur UI réel identifié au moment de leur construction) : `QualityEvent`, `Source`/`Extraction`/`KnowledgeItem`, `ContentPlan`, `RiskAssessment` (AMDEC autonome), Knowledge Graph (`KnowledgeRelation`). Ne pas les chercher dans l'inventaire ci-dessus — elles sont consommées uniquement par le Reasoning Engine ou par test unitaire. Voir §12 pour la liste consolidée des écarts documentaires ainsi comblés et de ceux qui restent ouverts.
 
 ## 2bis. Charte graphique et identité visuelle *(ajouté v11 — répond à URS-NF-054 à 054quinquies, REV-URS-VALIDAPHARM-2026-010)*
 
@@ -310,6 +321,62 @@ Dossier vivant (depuis la fiche d'un nœud)
      de responsabilité si applicable)
 ```
 
+### 3.10 Mission workspace — assemblage de contexte et raisonnement (ajouté v16 — Phases 13/14/15/17, `docs/convergence/PHASE_13_MISSION_ACTIVITY_SPEC.md` à `PHASE_17_MISSION_WORKSPACE_SPEC.md`)
+
+```
+Missions (par client)
+   → [Nouvelle mission] → nom, description → Mission créée
+   → Ouvrir la Mission → MissionWorkspace
+        → [Ajouter une activité] → Activity (avec dépendances vers d'autres Activity de la même Mission)
+        → [Associer un QualityEvent] → lien Mission↔QualityEvent
+        → [Assembler le contexte] → ContextSnapshot construit :
+             résout resoudreRegleEffective/ancetresWorkspace/noeudsVisiblesDepuisWorkspace
+             (généralisés Phase 14, jusqu'ici câblés sur le seul store Structure Système)
+             → narratif OÙ (AssetNode)/QUOI (ManufacturingContext)/COMMENT (Procedure)/
+               POURQUOI-IMPACT (QualityEvent) — Phase 27, injecté dans le prompt du
+               Reasoning Engine, pas seulement une trace d'audit
+        → [Lancer le raisonnement] → protocole textuel d'appel d'outils (§Reasoning Engine,
+          SDS §6ter) → réponse avec état de confiance (connu/inféré/inconnu/conflit/
+          a_verifier) affiché en badge visuellement distinct de qualification_status,
+          citations vérifiées déterministiquement contre les ids réellement obtenus
+        → Échec réseau/fournisseur indisponible → bandeau d'erreur dédié, jamais un
+          rejet de promesse silencieux (bug trouvé et corrigé en vérification navigateur,
+          Phase 17)
+        → Historique des invocations consultable (AIRequest/AIResponse persistés)
+```
+
+**Garde-fou non négociable** : aucune section Assessment/Requirement/Test/Evidence n'est rattachée à la Mission dans cet incrément (appartiendrait à `Strategy`, non construite) ; aucun indicateur de "Validation State" n'est calculé ou affiché sur la Mission (TD-010 — vue calculée diagnostique différée, jamais un remplacement automatique d'un statut saisi manuellement).
+
+### 3.11 Repli IA-assisté de structuration procédurale (ajouté v16 — Phases 20 à 25, `docs/convergence/PHASE_20_PROCEDURAL_KNOWLEDGE_SPEC.md` à `PHASE_25_ECRAN_REVUE_STRUCTURE_PROCEDURE_SPEC.md`)
+
+```
+Procédures (par client)
+   → [Importer une SOP] → coller le texte, ou uploader (.docx → extraireTexteDocx +
+     extraireTableauxDocx ; .pdf → extraireTextePdf, texte plat uniquement, aucune
+     structure de tableau extraite d'un PDF à ce jour)
+   → [Générer une proposition] → proposerStructureProcedureAvecRepli() :
+        1. Parseur déterministe d'abord (détection de sections canoniques par dictionnaire
+           de libellés + repli mot-clé + repli ligne-par-ligne si aucune puce/numéro,
+           Phases 21/21-extension/22) — zéro appel réseau
+        2. Repli IA-assisté (Phase 24) uniquement si le parseur déterministe ne retourne
+           STRICTEMENT rien (0 section ET 0 étape) — jamais un mélange de provenance
+           dans un même résultat (PropositionAvecSource, discriminant source:
+           'deterministe' | 'ia')
+        3. Repli IA : vérification déterministe d'ancrage — chaque section/étape
+           proposée est comparée (texte normalisé) au document source ; ancrée →
+           EtatConfianceIA 'infere', absente (hallucination/reformulation) → 'a_verifier'
+   → Revue éditable : case "Retenir" par section/étape, badge de confiance IA si
+     source = 'ia', formulaire de métadonnées (référence, titre)
+   → [Confirmer et créer la procédure] → seule action qui écrit réellement
+     (Procedure/ProcedureStep) — [Annuler] ne laisse aucune trace
+```
+
+**Limite de fond assumée (TD-017/TD-018/TD-021)** : la couverture déterministe de "tous les types" de SOP est structurellement hors de portée d'un système de règles — confirmée sur 4 genres réels indépendants du corpus de l'utilisateur (Sanofi/Ferring à plan numéroté classique, IMA à mots-clés sans plan qualité, Nordson à en-têtes en gras non numérotés). Le repli IA existe précisément pour fermer cet écart au cas par cas, jamais pour prétendre à une couverture déterministe universelle.
+
+### 3.12 Résolution de conflit sur un champ `tableau_dynamique` — correctif de fiabilité (ajouté v16, correctif du 28/08/2026)
+
+**Défaut corrigé, sans changement de la conception SDS §5/FDS §3.6 déjà décrite** : `lignesTable()` (`RenduGabarit.vue`) renvoyait les lignes non modifiées d'un `tableau_dynamique` comme des Proxy Vue réactifs plutôt que des objets plats — IndexedDB (Dexie) ne pouvant cloner un Proxy, l'écriture aboutissait silencieusement à des valeurs vides pour tout le tableau (pas seulement les lignes ajoutées), sans qu'aucune erreur ne remonte à l'écran. Trouvé en simulant un vrai parcours de qualification de bout en bout (saisie multi-lignes, rechargement forçant une relecture IndexedDB) — pas par la suite de tests existante, qui ne couvrait pas ce cas. Corrigé par une conversion explicite en objet plat avant toute écriture ; test de régression ajouté. Les colonnes calculées (ex. IPR) d'un export Word/CSV, qui ne sont jamais persistées par conception (dérivées), étaient affectées symétriquement — corrigées dans le même lot en recalculant systématiquement via `evaluerColonneCalculee` côté export, comme `RenduGabarit.vue` le fait déjà à l'écran.
+
 ## 4. Détail du moteur de gabarits (déclaratif)
 
 Un gabarit est défini par une structure JSON déclarative, versionnée indépendamment du moteur (URS-REG-003) :
@@ -351,6 +418,11 @@ Un gabarit est défini par une structure JSON déclarative, versionnée indépen
 | Computer System Assessment (URS-F-057) | Pas de calcul déterministe : sélection directe d'une catégorie GAMP5 (1 à 5, fixe) + 2 booléens (pertinence GxP, pertinence ERES/Part 11), chacun justifié en texte libre | Aucun — pas de règle de décision, une saisie humaine directe |
 | Détection de dérive de version fournisseur (URS-F-032quinquies) | `session.engine_version ≠ qualification.version` → alerte | Absence de qualification préalable → activation bloquée en amont (pas un cas de "dérive", couvert par F-032quater) |
 | Détection de liens manquants (§4.8 FS, F-082) | Parcours du graphe `project.links[]` ; pour chaque exigence-cible attendue par le gabarit (`required_link_type`), vérifie l'existence d'au moins un lien entrant du type requis | Lien existant mais vers une section non pertinente (erreur humaine) → non détectable algorithmiquement, reste sous constat IA non déterministe (F-082) |
+| Risk Assessment / AMDEC autonome (ajouté v16 — Phase 29, URS-F-059 à sexies) | `evaluerVerdictRiskAssessment()` compare l'IPR (réutilise `calculerIPR` tel quel, aucune seconde implémentation) au seuil d'action du `MethodProfileRiskAssessment` actif du client (échelle S/O/D et seuil configurables, même patron que l'ACFC) → acceptable / action requise | S/O/D incomplets → verdict `null`, jamais une valeur par défaut optimiste ; cycle en deux temps (évaluation initiale → action → évaluation résiduelle), chaque évaluation figée référence sa `method_profile_version` |
+| Readiness d'un `ContentPlan` (ajouté v16 — Phase 28, URS-F-160octies-nonies) | `construireReadinessContentPlan()` résout la chaîne `Requirement → Couverture → Test → Execution → Evidence` ancrée sur `asset_node_id`, plus tout `QualityEvent` non clôturé sur ce nœud → `pret` / `besoin_information` / `besoin_revue` / `bloque` (pire-cas parmi les signaux) | `asset_node_id` absent ou aucun `Requirement` rattaché → toujours `besoin_information`, jamais un `pret` deviné |
+| Compliance Engine généralisé (ajouté v16 — Phase 30, refactor pur, aucune URS/FS nouvelle) | `evaluerReglesConformite()` — patron générique factorisé à partir de 3 mécanismes de blocage jusqu'ici indépendants (`verifierBlocageExport`, gardes de finalisation U-01/U-02/U-03, `gelerContentPlan`) : évalue un tableau de `RegleConformite {code, bloque, message}` contre un contexte, retourne toutes les règles bloquantes dans l'ordre de déclaration | Jamais de court-circuit — plusieurs règles indépendantes peuvent s'appliquer simultanément (ex. U-01+U-02) ; comportement des 3 consommateurs strictement inchangé (refactor, non une nouvelle règle) |
+| Parcours de graphe générique (ajouté v16 — Phase 18/31, URS-F-240/URS-F-150undecies) | `parcourirGraphe()` — parcours en largeur générique paramétré par des accesseurs `idSource`/`idCible`, tolère les cycles ; deux consommateurs réels : `chaineTechniqueDepuis` (`RelationTechnique` entre `AssetNode`) et `relationsConnaissanceDepuis` (`KnowledgeRelation` entre `KnowledgeItem`) | Aucun écran ne consomme le premier cas (§2, gap ouvert) ; le second n'est consommé que par le Reasoning Engine |
+| Vérification d'ancrage d'une proposition IA (ajouté v16 — Phase 24, §3.11) | Comparaison texte normalisé entre chaque section/étape proposée par le repli IA et le document source — présence intégrale mot pour mot requise | Ancrée → `EtatConfianceIA` 'infere' ; absente (reformulation/hallucination) → 'a_verifier', jamais une confiance déduite de la seule affirmation du modèle |
 
 ## 6. Détail des règles de validation par type de champ
 
@@ -416,6 +488,25 @@ Cette FDS sert d'entrée à la **SDS** (architecture technique : choix de framew
 | URS-F-100 à 102quinquies (Structure Système) | §2, §3.9, §7 (U-09/U-10) |
 | URS-NF-054 à 054quinquies (charte graphique) | §2bis |
 | URS-NF-052bis, 050bis, 055bis (perf/lecteur d'écran/rollback) | §8, §7 (U-12) |
+| §3.10 Mission workspace | URS-F-190 à 230 |
+| §3.11 Repli structuration procédurale | URS-F-250 à 300 |
+| §3.12 Correctif tableau_dynamique | (correctif, aucune exigence nouvelle) |
+| §5 AMDEC autonome/readiness/Compliance Engine/Knowledge Graph | URS-F-059 à sexies, URS-F-160octies-nonies, URS-F-150undecies |
+
+## 12. Écarts documentaires connus (ajouté v16 — audit du 28/08/2026, mis à jour v17 — simulation d'usage du 29/08/2026)
+
+Cette FDS a été rattrapée le 28/08/2026 après un écart de traçabilité constaté : les Phases 12 à 34 de convergence architecturale avaient été committées, testées et intégrées à l'URS/FS sans jamais être redescendues dans ce document ni dans la SDS — un écart de traçabilité GAMP5 non déclaré d'environ 20 phases, trouvé par audit croisé des 4 documents entre eux. Le présent rattrapage (§2, §3.10 à §3.12, §5) comble le contenu fonctionnel manquant mais **ne reproduit pas le niveau de détail complet de chaque spec de phase individuelle** (`docs/convergence/PHASE_13_*` à `PHASE_34_*`) — celles-ci restent la référence pour le détail exhaustif de chaque mécanisme.
+
+**v17 (29/08/2026)** : une simulation d'usage réelle de bout en bout (création client/projet/sections, tous les gabarits, Structure Système, Missions/Reasoning Engine, Chat expert, Procédures) a trouvé que **5 lignes du tableau §2 étaient fausses depuis leur toute première version** (v04/v05/v15) — l'écran promis n'existait tout simplement pas, jamais détecté faute d'avoir comparé l'inventaire déclaré à `src/presentation/screens/` réel. **Impact Assessment et Computer System Assessment sont désormais réellement construits** (`ImpactAssessment.vue`/`ComputerSystemAssessment.vue`, testés, portail de qualité vert). **Journal d'anomalies, Configuration des connecteurs QMS et Dossier vivant d'un actif restent des écarts ouverts, corrigés dans ce tableau plutôt que silencieusement laissés faux.**
+
+**Écarts qui restent ouverts après ce rattrapage** (à ne pas confondre avec "couverts") :
+- URS-F-240 (relations techniques `AssetNode`, §2) : exigence Must sans aucun écran, non refermé depuis la Phase 18 (27/08/2026).
+- **Journal d'anomalies (URS-NF-053)** : aucun écran, aucun store, et le type de domaine `Anomaly` lui-même n'existe pas — le plus gros des 3 écarts restants (rien à réutiliser, contrairement aux deux autres).
+- **Configuration des connecteurs QMS (URS-F-090 à 090ter)** : `Connector` existe en domaine/persistance (Phase 10) mais sans store ni écran de configuration.
+- **Dossier vivant d'un actif (URS-F-101 à 101septies)** : aucun écran ; le code documente lui-même cette absence en commentaire.
+- Aucune section Assessment/Requirement/Test/Evidence rattachée à la Mission (§3.10) ; aucun indicateur de "Validation State".
+- Aucune architecture multi-agents (Agent Central + agents spécialisés + Reviewer/Critic actif) — le Reasoning Engine (SDS §6ter) est une boucle unique d'appel d'outils en lecture seule.
+- La couverture déterministe de "tous les types" de SOP (§3.11) est une limite de fond assumée, pas un chantier reporté.
 
 ---
-*Document vivant, version 14 — historique v02-v12 : voir corps du document. v13 : choix de framework résolu (TypeScript + Vue 3). **v14 (23/08/2026, décision explicite de l'utilisateur) : architecture web pure sans installation** — contrainte réelle du poste de travail professionnel. §3.6 réécrit : résolution de conflit par détection SHA côté API GitHub, plus un mécanisme de fusion Git local (obsolète — supposait un accès Git natif incompatible avec cette architecture). FDS complète, prête pour la mise à jour de la SDS.*
+*Document vivant, version 17 (29/08/2026) : Impact Assessment et Computer System Assessment réellement construits (§2) suite à une simulation d'usage de bout en bout ayant trouvé 5 lignes de l'inventaire d'écrans fausses depuis leur version d'origine — 2 comblées, 3 restent ouvertes et explicitement corrigées dans le tableau plutôt que laissées à l'état de faux positif (§12). v16 (28/08/2026) : rattrapage documentaire Phases 12-34 de convergence architecturale — §2 (11 nouvelles lignes d'écrans/panneaux), §3.10 à §3.12 (nouveaux flux), §5 (4 nouveaux algorithmes), §12 (écarts connus). Historique v02-v12 : voir corps du document. v13 : choix de framework résolu (TypeScript + Vue 3). v14 (23/08/2026) : architecture web pure sans installation — §3.6 réécrit (résolution de conflit par détection SHA côté API GitHub).*

@@ -47,6 +47,9 @@ async function creerClient(): Promise<void> {
     <ul v-else class="liste-clients">
       <li v-for="client in store.clients" :key="client.id">
         {{ client.name }}
+        <RouterLink :to="{ name: 'liste-missions', params: { clientId: client.id } }">
+          Missions
+        </RouterLink>
         <RouterLink :to="{ name: 'configuration-drive', params: { clientId: client.id } }">
           Drive
         </RouterLink>
@@ -63,6 +66,15 @@ async function creerClient(): Promise<void> {
           :to="{ name: 'assistant-strategie-qualification', params: { clientId: client.id } }"
         >
           Stratégie de qualification
+        </RouterLink>
+        <RouterLink :to="{ name: 'impact-assessment', params: { clientId: client.id } }">
+          Impact Assessment
+        </RouterLink>
+        <RouterLink :to="{ name: 'csv-assessment', params: { clientId: client.id } }">
+          Computer System Assessment
+        </RouterLink>
+        <RouterLink :to="{ name: 'revue-structure-procedure', params: { clientId: client.id } }">
+          Procédures
         </RouterLink>
       </li>
     </ul>

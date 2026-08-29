@@ -20,6 +20,14 @@ const outilsClientActif = computed(() => {
       nom: 'Stratégie de qualification',
       route: { name: 'assistant-strategie-qualification', params: { clientId } },
     },
+    {
+      nom: 'Impact Assessment',
+      route: { name: 'impact-assessment', params: { clientId } },
+    },
+    {
+      nom: 'Computer System Assessment',
+      route: { name: 'csv-assessment', params: { clientId } },
+    },
     { nom: 'Assistant IA', route: { name: 'panneau-chat', params: { clientId } } },
     { nom: 'Procédures', route: { name: 'revue-structure-procedure', params: { clientId } } },
     { nom: 'Miroir Drive', route: { name: 'configuration-drive', params: { clientId } } },
