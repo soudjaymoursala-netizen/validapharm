@@ -30,6 +30,16 @@ function routeurDeTest(): Router {
         component: { template: '<div />' },
       },
       {
+        path: '/clients/:clientId/impact-assessment',
+        name: 'impact-assessment',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/clients/:clientId/csv-assessment',
+        name: 'csv-assessment',
+        component: { template: '<div />' },
+      },
+      {
         path: '/clients/:clientId/chat',
         name: 'panneau-chat',
         component: { template: '<div />' },
