@@ -60,6 +60,37 @@ export const messagesSysteme = {
     en: 'This version of ValidaPharm cannot open this data — it was created or migrated with a newer version. Update the application before continuing, or revert to version {x} to reopen it.',
     de: 'Diese Version von ValidaPharm kann diese Daten nicht öffnen — sie wurden mit einer neueren Version erstellt oder migriert. Aktualisieren Sie die Anwendung, oder kehren Sie zu Version {x} zurück, um sie erneut zu öffnen.',
   },
+  // U-13 à U-17 (ajoutés v18 — simulation d'usage réelle du 30/08/2026) :
+  // `RaisonBlocageTransition` (logique-metier/machine-etats/transitionSection.ts)
+  // était affichée telle quelle à l'écran (ex. littéralement "roles_manquants")
+  // depuis la conception du workflow — jamais remarqué faute de test manuel du
+  // chemin de blocage lui-même, trouvé en simulant un vrai parcours de
+  // qualification de bout en bout (projet "achat d'équipement").
+  'U-13': {
+    fr: "Le rédacteur et l'approbateur final doivent être renseignés avant de poursuivre (URS-F-011).",
+    en: 'The author and the final approver must be assigned before continuing (URS-F-011).',
+    de: 'Der Verfasser und der endgültige Genehmiger müssen vor dem Fortfahren angegeben werden (URS-F-011).',
+  },
+  'U-14': {
+    fr: "Au moins un avis de relecteur est requis avant de transmettre cette section à l'approbation (URS-F-014ter).",
+    en: 'At least one reviewer opinion is required before submitting this section for approval (URS-F-014ter).',
+    de: 'Vor der Weiterleitung dieses Abschnitts zur Genehmigung ist mindestens eine Gutachterstellungnahme erforderlich (URS-F-014ter).',
+  },
+  'U-15': {
+    fr: 'Un motif est obligatoire pour rejeter cette section.',
+    en: 'A reason is required to reject this section.',
+    de: 'Für die Ablehnung dieses Abschnitts ist eine Begründung erforderlich.',
+  },
+  'U-16': {
+    fr: 'Cette section est verrouillée (validée en interne) — son corps ne peut plus être modifié directement ; créez une nouvelle révision pour la faire évoluer (URS-F-012).',
+    en: 'This section is locked (internally validated) — its body can no longer be modified directly; create a new revision to change it (URS-F-012).',
+    de: 'Dieser Abschnitt ist gesperrt (intern validiert) — sein Inhalt kann nicht mehr direkt geändert werden; erstellen Sie eine neue Revision, um ihn zu ändern (URS-F-012).',
+  },
+  'U-17': {
+    fr: "Cette action n'est pas autorisée dans l'état actuel de cette section.",
+    en: 'This action is not allowed in the current state of this section.',
+    de: 'Diese Aktion ist im aktuellen Status dieses Abschnitts nicht zulässig.',
+  },
 } as const
 
 export type CodeMessageSysteme = keyof typeof messagesSysteme
