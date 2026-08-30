@@ -10,12 +10,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useCSVAssessmentStore } from '../stores/useCSVAssessmentStore'
+import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import type { CategorieGAMP5 } from '../../logique-metier/domaine/types'
 
 const props = defineProps<{ clientId: string }>()
 
 const clientsStore = useClientsStore()
 const csvStore = useCSVAssessmentStore()
+const structureStore = useStructureSystemeStore()
 
 const nomClient = ref<string | null>(null)
 
@@ -23,6 +25,7 @@ onMounted(async () => {
   const client = await clientsStore.obtenirClient(props.clientId)
   nomClient.value = client?.name ?? null
   await csvStore.charger(props.clientId)
+  await structureStore.charger(props.clientId)
 })
 
 const LIBELLES_CATEGORIE: Record<CategorieGAMP5, string> = {
@@ -34,6 +37,10 @@ const LIBELLES_CATEGORIE: Record<CategorieGAMP5, string> = {
 }
 
 const nomSysteme = ref('')
+// Nœud Structure Système évalué (optionnel) — même correctif que
+// ImpactAssessment.vue : `assetNodeId` existait dans le store sans jamais
+// être exposé à l'écran, trouvé en simulant un vrai parcours de qualification.
+const assetNodeIdSelectionne = ref('')
 const categorieGamp5 = ref<CategorieGAMP5 | null>(null)
 const justificationCategorie = ref('')
 const pertinenceGxp = ref<boolean | null>(null)
@@ -56,7 +63,7 @@ async function enregistrerEvaluation(): Promise<void> {
   if (pertinenceGxp.value === null || pertinenceEresPart11.value === null) return
   await csvStore.creerEvaluation(props.clientId, {
     nomSysteme: nomSysteme.value.trim(),
-    assetNodeId: null,
+    assetNodeId: assetNodeIdSelectionne.value || null,
     categorieGamp5: categorieGamp5.value,
     justificationCategorie: justificationCategorie.value.trim(),
     pertinenceGxp: pertinenceGxp.value,
@@ -68,6 +75,7 @@ async function enregistrerEvaluation(): Promise<void> {
 
 function nouvelleEvaluation(): void {
   nomSysteme.value = ''
+  assetNodeIdSelectionne.value = ''
   categorieGamp5.value = null
   justificationCategorie.value = ''
   pertinenceGxp.value = null
@@ -90,6 +98,15 @@ function nouvelleEvaluation(): void {
         <label>
           Système évalué
           <input v-model="nomSysteme" type="text" required placeholder="ex. SCADA ligne STICK002" />
+        </label>
+        <label>
+          Nœud Structure Système (optionnel)
+          <select v-model="assetNodeIdSelectionne">
+            <option value="">— aucun —</option>
+            <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
+              {{ noeud.name }} ({{ noeud.code }})
+            </option>
+          </select>
         </label>
 
         <fieldset class="categorie">

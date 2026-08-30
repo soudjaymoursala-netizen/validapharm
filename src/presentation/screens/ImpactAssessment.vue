@@ -13,6 +13,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useImpactAssessmentStore } from '../stores/useImpactAssessmentStore'
+import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import type { OrigineMethodeImpactAssessment } from '../../logique-metier/domaine/types'
 import type { ReponseQuestionOuiNon } from '../../logique-metier/assessment/moteurQuestionsOuiNon'
 import { methodeCompletementRepondue } from '../../logique-metier/assessment/evaluerVerdictImpactAssessment'
@@ -21,6 +22,7 @@ const props = defineProps<{ clientId: string }>()
 
 const clientsStore = useClientsStore()
 const methodeStore = useImpactAssessmentStore()
+const structureStore = useStructureSystemeStore()
 
 const nomClient = ref<string | null>(null)
 const formulaireConfigOuvert = ref(false)
@@ -29,6 +31,7 @@ onMounted(async () => {
   const client = await clientsStore.obtenirClient(props.clientId)
   nomClient.value = client?.name ?? null
   await methodeStore.charger(props.clientId)
+  await structureStore.charger(props.clientId)
   if (!methodeStore.profilActif) formulaireConfigOuvert.value = true
 })
 
@@ -63,6 +66,11 @@ async function enregistrerNouvelleVersion(): Promise<void> {
 
 // --- Évaluation contre la méthode active ---
 const nomElement = ref('')
+// Nœud Structure Système évalué (optionnel) — trouvé manquant en simulant un
+// vrai parcours de qualification : `assetNodeId` existe dans le store depuis
+// l'origine mais aucun écran ne le proposait, réduisant chaque évaluation à
+// un nom libre sans rattachement traçable au référentiel d'actifs.
+const assetNodeIdSelectionne = ref('')
 const reponses = reactive<Record<string, ReponseQuestionOuiNon>>({})
 const evaluationEnregistree = ref(false)
 
@@ -84,7 +92,7 @@ async function enregistrerEvaluation(): Promise<void> {
   if (!verdict.value || nomElement.value.trim().length === 0) return
   const resultat = await methodeStore.creerEvaluation(props.clientId, {
     nomElement: nomElement.value.trim(),
-    assetNodeId: null,
+    assetNodeId: assetNodeIdSelectionne.value || null,
     reponses: { ...reponses },
   })
   if ('erreur' in resultat) return
@@ -169,6 +177,15 @@ async function enregistrerEvaluation(): Promise<void> {
             required
             placeholder="ex. Isolateur de remplissage STICK002"
           />
+        </label>
+        <label class="nom-element">
+          Nœud Structure Système (optionnel)
+          <select v-model="assetNodeIdSelectionne">
+            <option value="">— aucun —</option>
+            <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
+              {{ noeud.name }} ({{ noeud.code }})
+            </option>
+          </select>
         </label>
         <ul class="liste-questions">
           <li v-for="question in methodeStore.profilActif.questions" :key="question.id">
