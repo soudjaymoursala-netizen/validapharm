@@ -16,6 +16,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useMethodProfileACFCStore } from '../stores/useMethodProfileACFCStore'
+import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import type { OrigineMethodeACFC, ReponseQuestionACFC } from '../../logique-metier/domaine/types'
 import {
   evaluerVerdictACFC,
@@ -32,6 +33,7 @@ const props = defineProps<{ clientId: string }>()
 
 const clientsStore = useClientsStore()
 const methodeStore = useMethodProfileACFCStore()
+const structureStore = useStructureSystemeStore()
 
 const nomClient = ref<string | null>(null)
 const formulaireConfigOuvert = ref(false)
@@ -40,6 +42,7 @@ onMounted(async () => {
   const client = await clientsStore.obtenirClient(props.clientId)
   nomClient.value = client?.name ?? null
   await methodeStore.charger(props.clientId)
+  await structureStore.charger(props.clientId)
   if (!methodeStore.profilActif) formulaireConfigOuvert.value = true
 })
 
@@ -74,6 +77,10 @@ async function enregistrerNouvelleVersion(): Promise<void> {
 
 // --- Évaluation ACFC contre la méthode active ---
 const nomElement = ref('')
+// Nœud Structure Système évalué (optionnel) — trouvé manquant en simulant un
+// vrai parcours de qualification (`assetNodeId` existait dans le store
+// depuis l'origine de l'écran, Phase 1, sans jamais être exposé).
+const assetNodeIdSelectionne = ref('')
 const reponses = reactive<Record<string, ReponseQuestionACFC>>({})
 const evaluationEnregistree = ref(false)
 
@@ -96,7 +103,7 @@ async function enregistrerEvaluation(): Promise<void> {
   if (!verdict.value || nomElement.value.trim().length === 0) return
   await methodeStore.creerEvaluation(props.clientId, {
     nomElement: nomElement.value.trim(),
-    assetNodeId: null,
+    assetNodeId: assetNodeIdSelectionne.value || null,
     reponses: { ...reponses },
   })
   evaluationEnregistree.value = true
@@ -184,6 +191,15 @@ const conclusion = computed(() =>
             required
             placeholder="ex. Vanne de régulation V-101"
           />
+        </label>
+        <label class="nom-element">
+          Nœud Structure Système (optionnel)
+          <select v-model="assetNodeIdSelectionne">
+            <option value="">— aucun —</option>
+            <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
+              {{ noeud.name }} ({{ noeud.code }})
+            </option>
+          </select>
         </label>
         <ul class="liste-questions">
           <li v-for="question in methodeStore.profilActif.questions" :key="question.id">

@@ -337,11 +337,31 @@ const messagesBlocage = computed<string[]>(() => {
   return []
 })
 
-const raisonTransitionBloquee = computed(() =>
-  dernierResultat.value?.ok === false && 'raisonTransition' in dernierResultat.value
+// `RaisonBlocageTransition` (logique-metier/machine-etats/transitionSection.ts)
+// → code de message système (i18n/messages.ts) — jamais affichée telle
+// quelle (bug réel trouvé le 30/08/2026 : le code brut, ex. "roles_manquants",
+// s'affichait directement à l'écran depuis la conception du workflow).
+const CODES_RAISON_BLOCAGE: Record<
+  NonNullable<ReturnType<typeof raisonTransitionBrute>>,
+  CodeMessageSysteme
+> = {
+  roles_manquants: 'U-13',
+  avis_manquant: 'U-14',
+  motif_requis: 'U-15',
+  section_verrouillee: 'U-16',
+  transition_invalide: 'U-17',
+}
+
+function raisonTransitionBrute() {
+  return dernierResultat.value?.ok === false && 'raisonTransition' in dernierResultat.value
     ? dernierResultat.value.raisonTransition
-    : undefined,
-)
+    : undefined
+}
+
+const raisonTransitionBloquee = computed(() => {
+  const brute = raisonTransitionBrute()
+  return brute ? messageSysteme(CODES_RAISON_BLOCAGE[brute], 'fr') : undefined
+})
 
 async function engagerVerification(): Promise<void> {
   dernierResultat.value = await sectionsStore.engagerVerification(props.sectionId)
@@ -694,7 +714,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
     </div>
 
     <p v-if="raisonTransitionBloquee" class="blocage no-print" role="alert">
-      Transition refusée : {{ raisonTransitionBloquee }}
+      {{ raisonTransitionBloquee }}
     </p>
 
     <div class="actions-cycle no-print">
