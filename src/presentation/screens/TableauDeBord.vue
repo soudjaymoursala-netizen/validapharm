@@ -12,6 +12,7 @@ import {
   type ResultatRecuperation,
   type ResultatSynchronisation,
 } from '../stores/useSynchronisationStore'
+import IconeSvg from '../composants/IconeSvg.vue'
 
 const projetsStore = useProjectsStore()
 const clientsStore = useClientsStore()
@@ -78,29 +79,54 @@ async function recupererDepuisGitHub(): Promise<void> {
   dernierResultatSync.value = await syncStore.recupererDepuisGitHub()
   await projetsStore.chargerProjets()
 }
+
+function nomClient(clientId: string | null): string | null {
+  if (!clientId) return null
+  return clientsStore.clients.find((c) => c.id === clientId)?.name ?? null
+}
 </script>
 
 <template>
   <main class="tableau-de-bord">
     <header>
-      <h1>Tableau de bord</h1>
+      <div>
+        <h1>Tableau de bord</h1>
+        <p class="sous-titre">{{ projetsStore.projetsActifs.length }} projet(s) actif(s)</p>
+      </div>
       <div class="actions-entete">
-        <RouterLink :to="{ name: 'gestion-clients' }">Clients</RouterLink>
-        <RouterLink :to="{ name: 'configuration-client' }">Configuration</RouterLink>
-        <button type="button" @click="formulaireOuvert = true">Nouveau projet</button>
+        <RouterLink class="bouton-secondaire" :to="{ name: 'gestion-clients' }">
+          <IconeSvg nom="utilisateur" :taille="15" />
+          Clients
+        </RouterLink>
+        <RouterLink class="bouton-secondaire" :to="{ name: 'configuration-client' }">
+          <IconeSvg nom="engrenage" :taille="15" />
+          Configuration
+        </RouterLink>
+        <button type="button" class="bouton-principal" @click="formulaireOuvert = true">
+          <IconeSvg nom="plus" :taille="15" />
+          Nouveau projet
+        </button>
       </div>
     </header>
 
-    <section class="synchronisation">
+    <section class="carte synchronisation">
       <div class="actions-sync">
-        <button type="button" :disabled="syncStore.synchronisationEnCours" @click="synchroniser">
+        <button
+          type="button"
+          class="bouton-secondaire"
+          :disabled="syncStore.synchronisationEnCours"
+          @click="synchroniser"
+        >
+          <IconeSvg nom="nuage" :taille="15" />
           {{ syncStore.synchronisationEnCours ? 'Synchronisation…' : 'Synchroniser vers GitHub' }}
         </button>
         <button
           type="button"
+          class="bouton-secondaire"
           :disabled="syncStore.synchronisationEnCours"
           @click="recupererDepuisGitHub"
         >
+          <IconeSvg nom="nuage" :taille="15" />
           Récupérer depuis GitHub
         </button>
       </div>
@@ -116,7 +142,7 @@ async function recupererDepuisGitHub(): Promise<void> {
       </RouterLink>
     </section>
 
-    <form v-if="formulaireOuvert" class="formulaire-projet" @submit.prevent="creerProjet">
+    <form v-if="formulaireOuvert" class="carte formulaire-projet" @submit.prevent="creerProjet">
       <label>
         Nom du projet
         <input v-model="brouillon.name" type="text" required autofocus />
@@ -143,24 +169,39 @@ async function recupererDepuisGitHub(): Promise<void> {
         <textarea v-model="brouillon.scope_out" />
       </label>
       <div class="actions">
-        <button type="button" @click="formulaireOuvert = false">Annuler</button>
-        <button type="submit">Créer le projet</button>
+        <button type="button" class="bouton-secondaire" @click="formulaireOuvert = false">
+          Annuler
+        </button>
+        <button type="submit" class="bouton-principal">Créer le projet</button>
       </div>
     </form>
 
-    <p
+    <div
       v-if="!projetsStore.enChargement && projetsStore.projetsActifs.length === 0"
-      class="etat-vide"
+      class="carte etat-vide"
     >
-      Aucun projet actif pour l'instant — créez le premier avec le bouton ci-dessus.
-    </p>
+      <IconeSvg nom="dossier" :taille="28" />
+      <p>Aucun projet actif pour l'instant — créez le premier avec le bouton ci-dessus.</p>
+    </div>
 
     <ul v-else class="liste-projets">
       <li v-for="projet in projetsStore.projetsActifs" :key="projet.id">
-        <RouterLink :to="{ name: 'fiche-projet', params: { projectId: projet.id } }">
-          {{ projet.name }}
+        <RouterLink
+          class="liste-projets__lien"
+          :to="{ name: 'fiche-projet', params: { projectId: projet.id } }"
+        >
+          <span class="liste-projets__icone" aria-hidden="true">
+            <IconeSvg nom="dossier" :taille="18" />
+          </span>
+          <span class="liste-projets__texte">
+            <span class="liste-projets__nom">{{ projet.name }}</span>
+            <span v-if="nomClient(projet.client_id)" class="liste-projets__client">{{
+              nomClient(projet.client_id)
+            }}</span>
+          </span>
+          <span class="meta">{{ projet.sections.length }} section(s)</span>
+          <IconeSvg nom="chevron-droit" :taille="16" class="liste-projets__fleche" />
         </RouterLink>
-        <span class="meta">{{ projet.sections.length }} section(s)</span>
       </li>
     </ul>
 
@@ -182,42 +223,98 @@ async function recupererDepuisGitHub(): Promise<void> {
 
 <style scoped>
 .tableau-de-bord {
-  padding: 2rem;
+  padding: 2.5rem;
+  max-width: 60rem;
+  margin: 0 auto;
   font-family: var(--vp-police);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: var(--vp-poids-bold);
+}
+
+.sous-titre {
+  margin: 0.3rem 0 0;
+  color: var(--vp-texte-secondaire);
+  font-size: 0.88rem;
 }
 
 .actions-entete {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.6rem;
+  flex-shrink: 0;
 }
 
 button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.bouton-principal,
+.bouton-secondaire {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: var(--vp-rayon-sm);
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: var(--vp-poids-medium);
+  text-decoration: none;
+  transition: var(--vp-transition);
+  white-space: nowrap;
+}
+
+.bouton-principal {
   background-color: var(--vp-marque);
   color: white;
   border: none;
-  border-radius: var(--vp-rayon);
-  padding: 0.5rem 1rem;
-  cursor: pointer;
-  transition: background-color var(--vp-transition);
 }
 
-button:hover {
+.bouton-principal:hover {
   background-color: var(--vp-marque-survol);
+}
+
+.bouton-secondaire {
+  background-color: var(--vp-fond-page);
+  color: var(--vp-texte-principal);
+  border: 1px solid var(--vp-bordure);
+}
+
+.bouton-secondaire:hover {
+  border-color: var(--vp-marque);
+  color: var(--vp-marque);
+}
+
+.bouton-secondaire:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.carte {
+  background-color: var(--vp-fond-page);
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon-lg);
+  box-shadow: var(--vp-ombre-sm);
+  padding: 1.25rem 1.5rem;
 }
 
 .synchronisation {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: 0.6rem;
 }
 
 .actions-sync {
@@ -230,32 +327,37 @@ button:hover {
 }
 
 .message-sync--succes {
-  color: var(--vp-statut-qualifie);
+  color: var(--vp-succes);
 }
 
-.message-sync--conflit {
-  color: var(--vp-statut-requalification-en-retard);
-}
-
+.message-sync--conflit,
 .message-sync--erreur {
-  color: var(--vp-statut-requalification-en-retard);
+  color: var(--vp-danger);
 }
 
 .formulaire-projet {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  border: 1px solid var(--vp-bordure);
-  border-radius: var(--vp-rayon);
-  padding: 1rem;
-  margin-bottom: 1.5rem;
   max-width: 32rem;
 }
 
 .formulaire-projet label {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--vp-texte-secondaire);
+}
+
+.formulaire-projet input,
+.formulaire-projet select,
+.formulaire-projet textarea {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon-sm);
+  padding: 0.5rem;
+  font-family: inherit;
+  color: var(--vp-texte-principal);
 }
 
 .actions {
@@ -269,27 +371,80 @@ button:hover {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
-.liste-projets li {
+.liste-projets__lien {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 0.85rem;
+  background-color: var(--vp-fond-page);
   border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon-lg);
+  box-shadow: var(--vp-ombre-sm);
+  padding: 0.9rem 1.2rem;
+  text-decoration: none;
+  color: inherit;
+  transition: var(--vp-transition);
+}
+
+.liste-projets__lien:hover {
+  border-color: var(--vp-marque);
+  box-shadow: var(--vp-ombre-md);
+}
+
+.liste-projets__icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex-shrink: 0;
   border-radius: var(--vp-rayon);
-  padding: 0.75rem 1rem;
+  background-color: var(--vp-marque-fond-leger);
+  color: var(--vp-marque);
+}
+
+.liste-projets__texte {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.liste-projets__nom {
+  font-weight: var(--vp-poids-semibold);
+  color: var(--vp-texte-principal);
+}
+
+.liste-projets__client {
+  font-size: 0.78rem;
+  color: var(--vp-texte-secondaire);
+}
+
+.liste-projets__fleche {
+  flex-shrink: 0;
+  color: var(--vp-texte-secondaire);
 }
 
 .meta {
+  flex-shrink: 0;
   color: var(--vp-texte-secondaire);
+  font-size: 0.82rem;
 }
 
 .etat-vide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
   color: var(--vp-texte-secondaire);
+  padding: 3rem 1.5rem;
+  text-align: center;
 }
 
 .bloc-archives {
-  margin-top: 1.5rem;
+  margin-top: 0.5rem;
 }
 
 .lien-archives {
@@ -298,6 +453,7 @@ button:hover {
   border: none;
   padding: 0;
   text-decoration: underline;
+  font-size: 0.85rem;
 }
 
 .liste-projets--archives {
@@ -305,6 +461,11 @@ button:hover {
 }
 
 .liste-projets--archives li {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.6rem 0.9rem;
+  display: flex;
+  justify-content: space-between;
   opacity: 0.75;
 }
 </style>

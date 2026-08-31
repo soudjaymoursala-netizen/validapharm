@@ -29,12 +29,39 @@
 
   /* Structure */
   --vp-bordure: #e4e4ee;
-  --vp-rayon: 8px;
+  --vp-bordure-forte: #d1d1e0;
+  --vp-rayon-sm: 6px;
+  --vp-rayon: 10px;
+  --vp-rayon-lg: 16px;
   --vp-transition: 175ms ease;
+
+  /* Élévation (ajouté v20, refonte UX guidée — répond à URS-NF-054/054bis
+     sans jamais toucher au registre visuel des exports, cf. règle
+     d'import ci-dessus). Utilisée pour distinguer une carte cliquable
+     d'un simple bloc de contenu, jamais pour porter seule une
+     information d'état (toujours doublée d'icône+couleur+texte). */
+  --vp-ombre-sm: 0 1px 2px rgba(15, 18, 34, 0.06);
+  --vp-ombre-md: 0 4px 12px rgba(15, 18, 34, 0.08);
+  --vp-ombre-lg: 0 12px 32px rgba(15, 18, 34, 0.12);
 
   /* Typographie */
   --vp-police: 'Inter', system-ui, sans-serif;
   --vp-taille-texte-min: 14px;
+  --vp-poids-medium: 500;
+  --vp-poids-semibold: 600;
+  --vp-poids-bold: 700;
+
+  /* État sémantique générique (ajouté v20) — succès/attention/danger/info
+     hors du domaine qualification_status ci-dessous, ex. bandeaux
+     d'erreur, garde-fous, confirmations. */
+  --vp-succes: #15803d;
+  --vp-succes-fond-leger: #ecfdf3;
+  --vp-attention: #b45309;
+  --vp-attention-fond-leger: #fffbeb;
+  --vp-danger: #dc2626;
+  --vp-danger-fond-leger: #fef2f2;
+  --vp-info: #2563eb;
+  --vp-info-fond-leger: #eff6ff;
 
   /* Palette sémantique qualification_status (FDS §2bis) — couleur ET icône
      ET libellé systématiques, jamais la couleur seule (URS-NF-054ter). */
@@ -46,6 +73,21 @@
   --vp-statut-requalification-en-retard: #dc2626;
   --vp-statut-suspendu: #7c3aed;
   --vp-statut-declasse: #374151;
+
+  /* Palette sémantique StatutSection (ajouté v20) — même discipline
+     couleur+icône+texte, jamais la couleur seule. Distincte de la
+     palette qualification_status ci-dessus (deux domaines différents :
+     cycle de vie d'un livrable vs état d'un actif). */
+  --vp-section-brouillon: #6b7280;
+  --vp-section-brouillon-fond: #f4f4f6;
+  --vp-section-propose-ia: #7c3aed;
+  --vp-section-propose-ia-fond: #f5f3ff;
+  --vp-section-verification: #2563eb;
+  --vp-section-verification-fond: #eff6ff;
+  --vp-section-approbation: #b45309;
+  --vp-section-approbation-fond: #fffbeb;
+  --vp-section-valide: #15803d;
+  --vp-section-valide-fond: #ecfdf3;
 }
 
 body {

@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test } from 'vitest'
