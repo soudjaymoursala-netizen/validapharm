@@ -5,11 +5,17 @@
 // listait lui-même cette absence. **Périmètre de ce premier incrément** :
 // agrège les données déjà rattachées à un `AssetNode` par un
 // `assetNodeId`/`asset_node_id` explicite (ACFC, Impact Assessment, CSV
-// Assessment, Risk Assessment/AMDEC, Missions ancrées, relations
-// techniques) — jamais de section de gabarit liée directement à un nœud
-// (aucun champ ne porte ce lien dans le modèle actuel, contrairement à ce
-// que décrivait la FS §3.9 d'origine ; corrigé honnêtement ici plutôt que
-// simulé).
+// Assessment, Risk Assessment/AMDEC, Missions ancrées, Journal
+// d'anomalies, relations techniques) — jamais de section de gabarit liée
+// directement à un nœud (aucun champ ne porte ce lien dans le modèle
+// actuel, contrairement à ce que décrivait la FS §3.9 d'origine ; corrigé
+// honnêtement ici plutôt que simulé).
+//
+// Journal d'anomalies ajouté le 31/08/2026 (scénario 3, inspection
+// simulée) : un constat d'audit lié à cet actif n'apparaissait nulle part
+// dans son dossier vivant alors que `QualityEvent.asset_node_id` existe
+// au même titre que les autres évaluations agrégées ci-dessus — trouvé
+// en consultant réellement l'écran après avoir consigné un constat.
 import { computed, onMounted, ref } from 'vue'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
@@ -18,6 +24,7 @@ import { useImpactAssessmentStore } from '../stores/useImpactAssessmentStore'
 import { useCSVAssessmentStore } from '../stores/useCSVAssessmentStore'
 import { useRiskAssessmentStore } from '../stores/useRiskAssessmentStore'
 import { useMissionStore } from '../stores/useMissionStore'
+import { useQualityEventStore } from '../stores/useQualityEventStore'
 
 const props = defineProps<{ clientId: string; noeudId: string }>()
 
@@ -28,6 +35,7 @@ const impactStore = useImpactAssessmentStore()
 const csvStore = useCSVAssessmentStore()
 const riskStore = useRiskAssessmentStore()
 const missionStore = useMissionStore()
+const qualityEventStore = useQualityEventStore()
 
 const nomClient = ref<string | null>(null)
 
@@ -41,6 +49,7 @@ onMounted(async () => {
     csvStore.charger(props.clientId),
     riskStore.charger(props.clientId),
     missionStore.charger(props.clientId),
+    qualityEventStore.charger(props.clientId),
   ])
 })
 
@@ -72,12 +81,30 @@ const evaluationsRisque = computed(() =>
 const missionsAncrees = computed(() =>
   missionStore.missions.filter((m) => m.asset_node_id === props.noeudId),
 )
+const evenementsQualite = computed(() =>
+  qualityEventStore.evenements
+    .filter((e) => e.asset_node_id === props.noeudId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+)
 const chaineTechnique = computed(() => structureStore.chaineTechniqueDepuisNoeud(props.noeudId))
 
 const LIBELLES_TYPE_RELATION: Record<string, string> = {
   controle_par: 'est contrôlé par',
   connecte_a: 'est connecté à',
   heberge_sur: 'est hébergé sur',
+}
+const LIBELLES_TYPE_QUALITY_EVENT: Record<string, string> = {
+  change_control: 'Change Control',
+  deviation: 'Déviation / anomalie',
+  capa: 'CAPA',
+  investigation: 'Investigation',
+  audit_finding: "Constat d'audit",
+  periodic_review: 'Revue périodique',
+}
+const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
+  ouvert: 'Ouvert',
+  en_cours: 'En cours',
+  cloture: 'Clôturé',
 }
 </script>
 
@@ -168,6 +195,20 @@ const LIBELLES_TYPE_RELATION: Record<string, string> = {
         <p v-else class="etat-vide">Aucune mission ancrée sur cet actif pour l'instant.</p>
       </section>
 
+      <section class="bloc-anomalies">
+        <h2>Journal d'anomalies rattachées</h2>
+        <ul v-if="evenementsQualite.length > 0" class="liste-anomalies">
+          <li v-for="e in evenementsQualite" :key="e.id">
+            <strong>{{ e.titre }}</strong>
+            <span class="meta">
+              ({{ LIBELLES_TYPE_QUALITY_EVENT[e.type] }} —
+              {{ LIBELLES_STATUT_QUALITY_EVENT[e.statut] }}, {{ e.created_at.slice(0, 10) }})
+            </span>
+          </li>
+        </ul>
+        <p v-else class="etat-vide">Aucun événement qualité rattaché à cet actif pour l'instant.</p>
+      </section>
+
       <section class="bloc-perimetre">
         <h2>Périmètre non couvert par cet écran</h2>
         <p class="rappel">
@@ -223,10 +264,24 @@ const LIBELLES_TYPE_RELATION: Record<string, string> = {
 }
 
 .liste-evaluations li,
-.liste-missions li {
+.liste-missions li,
+.liste-anomalies li {
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon);
   padding: 0.5rem 0.75rem;
+}
+
+.liste-anomalies {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.meta {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.85em;
 }
 
 .etat-vide {

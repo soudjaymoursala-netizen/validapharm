@@ -47,6 +47,7 @@ beforeEach(async () => {
   await db.relationsTechniques.clear()
   await db.evaluationsCSVAssessment.clear()
   await db.missions.clear()
+  await db.qualityEvents.clear()
 })
 
 describe('DossierVivantActif (URS-F-101 à 101septies)', () => {
@@ -84,6 +85,23 @@ describe('DossierVivantActif (URS-F-101 à 101septies)', () => {
       updated_at: maintenant,
     })
 
+    await db.qualityEvents.put({
+      id: 'event-1',
+      client_id: 'client-1',
+      type: 'audit_finding',
+      titre: 'Traçabilité incomplète de la requalification',
+      description: 'x',
+      origine: 'interne',
+      reference_externe: null,
+      asset_node_id: 'noeud-1',
+      process_id: null,
+      manufacturing_context_id: null,
+      statut: 'ouvert',
+      audit_log: [],
+      created_at: maintenant,
+      updated_at: maintenant,
+    })
+
     const wrapper = mount(DossierVivantActif, {
       props: { clientId: 'client-1', noeudId: 'noeud-1' },
       global: { plugins: [routeurDeTest()] },
@@ -93,6 +111,8 @@ describe('DossierVivantActif (URS-F-101 à 101septies)', () => {
     expect(wrapper.text()).toContain('Qualifié')
     expect(wrapper.text()).toContain('2027-01-01')
     expect(wrapper.text()).toContain('PLC autoclave')
+    expect(wrapper.text()).toContain('Traçabilité incomplète de la requalification')
+    expect(wrapper.text()).toContain("Constat d'audit")
   })
 
   test('nœud introuvable -> message explicite, jamais un écran vide silencieux', async () => {
