@@ -144,6 +144,12 @@ export const router = createRouter({
       component: () => import('../screens/SourceIntelligence.vue'),
       props: true,
     },
+    {
+      path: '/clients/:clientId/plans-livrable',
+      name: 'content-plan',
+      component: () => import('../screens/ContentPlan.vue'),
+      props: true,
+    },
   ],
 })
 

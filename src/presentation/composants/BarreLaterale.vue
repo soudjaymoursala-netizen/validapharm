@@ -27,6 +27,10 @@ const outilsClientActif = computed(() => {
       route: { name: 'source-intelligence', params: { clientId } },
     },
     {
+      nom: 'Plans de livrable',
+      route: { name: 'content-plan', params: { clientId } },
+    },
+    {
       nom: 'Stratégie de qualification',
       route: { name: 'assistant-strategie-qualification', params: { clientId } },
     },

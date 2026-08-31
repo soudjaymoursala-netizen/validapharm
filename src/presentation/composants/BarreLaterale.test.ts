@@ -74,6 +74,11 @@ function routeurDeTest(): Router {
         name: 'source-intelligence',
         component: { template: '<div />' },
       },
+      {
+        path: '/clients/:clientId/plans-livrable',
+        name: 'content-plan',
+        component: { template: '<div />' },
+      },
     ],
   })
 }
