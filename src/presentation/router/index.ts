@@ -138,6 +138,12 @@ export const router = createRouter({
       component: () => import('../screens/ParametresCritiques.vue'),
       props: true,
     },
+    {
+      path: '/clients/:clientId/ingestion-documentaire',
+      name: 'source-intelligence',
+      component: () => import('../screens/SourceIntelligence.vue'),
+      props: true,
+    },
   ],
 })
 

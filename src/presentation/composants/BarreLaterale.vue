@@ -23,6 +23,10 @@ const outilsClientActif = computed(() => {
       route: { name: 'parametres-critiques', params: { clientId } },
     },
     {
+      nom: 'Ingestion documentaire',
+      route: { name: 'source-intelligence', params: { clientId } },
+    },
+    {
       nom: 'Stratégie de qualification',
       route: { name: 'assistant-strategie-qualification', params: { clientId } },
     },

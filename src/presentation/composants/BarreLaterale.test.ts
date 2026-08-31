@@ -69,6 +69,11 @@ function routeurDeTest(): Router {
         name: 'parametres-critiques',
         component: { template: '<div />' },
       },
+      {
+        path: '/clients/:clientId/ingestion-documentaire',
+        name: 'source-intelligence',
+        component: { template: '<div />' },
+      },
     ],
   })
 }
