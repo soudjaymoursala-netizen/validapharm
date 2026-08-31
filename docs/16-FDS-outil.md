@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FDS-VALIDAPHARM-2026-001 |
-| **Version** | 19 (Journal d'anomalies ajouté à l'agrégation du Dossier vivant, suite à trois scénarios supplémentaires — audit/transfert de site/changement mineur — du 31/08/2026, §12 ; v18 : URS-F-240/Journal d'anomalies/Configuration des connecteurs QMS/statut de qualification d'un actif comblés, 31/08/2026 ; v17 : Impact Assessment et Computer System Assessment réellement construits, 29/08/2026 ; v16 : rattrapage documentaire Phases 12-34, 28/08/2026) |
+| **Version** | 20 (refonte visuelle UX guidée — pipeline de qualification, sidebar/accueil/tableau de bord modernisés — puis section "Documents" générique (URS-F-000quater, tout format) et choix guidés "vierge vs à partir d'un document"/"manuel vs import de fichier" pour la création de section et la configuration ACFC, 31/08/2026, demandes explicites de l'utilisateur, §2 ; v19 : Journal d'anomalies ajouté à l'agrégation du Dossier vivant, suite à trois scénarios supplémentaires — audit/transfert de site/changement mineur — du 31/08/2026, §12 ; v18 : URS-F-240/Journal d'anomalies/Configuration des connecteurs QMS/statut de qualification d'un actif comblés, 31/08/2026 ; v17 : Impact Assessment et Computer System Assessment réellement construits, 29/08/2026 ; v16 : rattrapage documentaire Phases 12-34, 28/08/2026) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
 | **Documents de référence** | `01-URS-outil.md` v62, `02-analyse-de-risque-outil.md` v28, `03-specifications-fonctionnelles.md` v52, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) — `docs/convergence/PHASE_13_*` à `PHASE_34_*` pour le détail exhaustif de chaque phase |
@@ -24,7 +24,7 @@ Toute règle déjà énoncée en FS n'est pas reformulée ici sauf si elle néce
 | Écran | Rôle | Répond à |
 |---|---|---|
 | Tableau de bord / Vue portefeuille | Liste des projets, statuts agrégés, alertes | URS-F-070 à 073 |
-| Fiche Projet | Contexte, portée, sections liées, vue de traçabilité, section Documents | URS-F-000 à 000nonies |
+| Fiche Projet | Contexte, portée, sections liées ; vue de traçabilité toujours backlog (tâche #12) ; section Documents *(réellement construite v20, 31/08/2026 — jusqu'ici cette ligne décrivait la cible sans écran réel, corrigé honnêtement plutôt que laissé comme faux positif)* : chargement de fichiers sous n'importe quel format, toujours étiquetés référence de travail (non maître), horodatés (URS-F-000quater) | URS-F-000 à 000nonies |
 | Éditeur de section | Rédaction guidée d'un livrable (gabarit) | URS-F-001 à 009, 4.1bis |
 | Panneau de suggestions | Idées de tests, sections manquantes — séparé du corps | URS-F-006/007 |
 | Panneau Chat expert | Conversation, sélection fournisseur, bandeau d'avertissement | URS-F-030 à 037 |
