@@ -427,7 +427,7 @@ Dette technique documentée trois fois indépendamment (`CURRENT_ARCHITECTURE.md
 
 `MethodProfileRiskAssessment` (échelle S/O/D + seuil d'action configurables par client, versionné, immuable — même patron que `MethodProfileACFC`/`MethodProfileImpactAssessment`) + `RiskAssessment` (ligne AMDEC, rattachable `AssetNode`/`Parameter`, Phase 2). `evaluerVerdictRiskAssessment` (`logique-metier/risque/`), fonction pure, compare l'IPR (calculé par `calculerIPR`, réutilisé tel quel, aucune seconde implémentation) au seuil — `null` explicite si non calculable, jamais un verdict deviné. `useRiskAssessmentStore` : `creerNouvelleVersion`/`creerEvaluation` (même patron que `useImpactAssessmentStore`) + nouvelle fonction `enregistrerActionResiduelle` (recalcule S/O/D/IPR résiduels, refusée sur un `RiskAssessment` introuvable).
 
-**Vérification navigateur impossible** : aucun écran construit dans ce lot (domaine + persistance + store seulement, même discipline que les Phases 5/8a/9/13/28). Couvert uniquement par tests : 5 tests du module pur + 9 tests du store.
+**Vérification navigateur impossible** : aucun écran construit dans ce lot (domaine + persistance + store seulement, même discipline que les Phases 5/8a/9/13/28). Couvert uniquement par tests : 5 tests du module pur + 9 tests du store. **Écran construit le 31/08/2026, voir §5.36.**
 
 URS §4.6quinquies/URS-F-059 à sexies (v58), FS §4.6quinquies (v48), TD-027. Vérifié : suite complète verte (645 tests, 91 fichiers), typecheck et lint propres.
 
@@ -524,7 +524,7 @@ Après la Phase 34, l'utilisateur demande une vérification par l'usage plutôt 
 |---|---|---|
 | ~~`useTestDefinitionStore`, `useExecutionStore`, `useEvidenceStore`~~ | Phase 7 (Requirement→Test→Execution→Evidence) | **Comblé le 31/08/2026, voir §5.32** — écrans construits et vérifiés en navigateur réel |
 | ~~`useParameterStore`~~ | Phase 2 (Parameter/CPP/CQA) | **Comblé le 31/08/2026, voir §5.33** — écran construit et vérifié en navigateur réel |
-| `useRiskAssessmentStore` | Phase 29 (Risk Assessment AMDEC autonome) | Seul le petit tableau S×O×D intégré au gabarit DQ est utilisable, pas la vraie méthodologie AMDEC versionnée par client |
+| ~~`useRiskAssessmentStore`~~ | Phase 29 (Risk Assessment AMDEC autonome) | **Comblé le 31/08/2026, voir §5.36** — écran construit et vérifié en navigateur réel |
 | ~~`useContentPlanStore`~~ | Phase 28 (Deliverable Intelligence) | **Comblé le 31/08/2026, voir §5.35** — écran construit et vérifié en navigateur réel |
 | ~~`useSourceIntelligenceStore`~~ | Phase 8a (Source→Extraction→KnowledgeItem) | **Comblé le 31/08/2026, voir §5.34** — écran construit et vérifié en navigateur réel |
 | `useIntegrationStore` | Connecteurs QMS tiers | Backlog #32, déjà connu |
@@ -575,6 +575,18 @@ Suite logique de §5.34 dans l'ordre des phases. Un écran nouveau, route `/clie
 - Poussé sur `main` (fast-forward, aucune divergence au moment du push).
 
 Reste orphelin après cette fermeture : `useRiskAssessmentStore` (Phase 29) — seul domaine gap restant avant `useIntegrationStore` (backlog #32, connecteurs QMS tiers, déjà connu et hors périmètre de cette série de fermetures).
+
+### 5.36 Phase 29 — écran `RiskAssessmentAmdec` construit, dernier gap comblé (31/08/2026)
+
+Suite logique de §5.35 dans l'ordre des phases — **clôt la série de fermetures de gaps ouverte en §5.32**, ne laissant plus orphelin que `useIntegrationStore` (backlog #32, connecteurs QMS tiers, hors périmètre car jamais listé comme un gap de la simulation de parcours réel mais comme un chantier de connecteur externe distinct). Un écran nouveau, route `/clients/:clientId/risk-assessment`, entrée sidebar « Risk Assessment (AMDEC) » :
+
+- **`RiskAssessmentAmdec.vue`** — même patron de profil versionné que l'ACFC (Phase 1) et l'Impact Assessment (Phase 3) : configuration d'un `MethodProfileRiskAssessment` (échelle S×O×D + seuil d'action réels du client, jamais une échelle par défaut fabriquée) puis création de lignes AMDEC contre le profil actif, avec cycle en deux temps évaluation initiale → action → évaluation résiduelle (structure du modèle réel `Processus_AMDEC.xlsx`, Google Drive, déjà actée en §5.25). Garde-fou respecté à l'écran : le formulaire de nouvelle ligne n'apparaît que si un profil est configuré ; l'IPR est affiché comme calculé mais jamais comme le verdict final — reformulation du principe déjà appliqué à `calculerIPR`/`evaluerVerdictRiskAssessment`.
+- Vérifié en navigateur réel (Playwright, profil persistant) sur le scénario PharmaTech Solutions / autoclave AC-104 : profil configuré (échelle 1-10, seuil 100), ligne AMDEC réelle sur la montée en température du cycle (S=8×O=3×D=4=IPR 96, verdict Acceptable), action résiduelle enregistrée (S=8×O=1×D=2=IPR 16, verdict résiduel Acceptable), aucune erreur console, persistance confirmée après reload à l'identique.
+- Tests unitaires (`RiskAssessmentAmdec.test.ts`) : chemin heureux complet (profil → ligne → IPR calculé → action résiduelle → IPR résiduel recalculé) + garde-fou qu'aucune ligne ne peut être créée sans profil configuré (le formulaire n'est même pas rendu). Aucun faux-négatif cette fois — les leçons de §5.32/§5.33/§5.34/§5.35 (attente explicite des options en cascade, scoping précis des sélecteurs multiples par formulaire) appliquées dès la première écriture.
+- 718 tests verts (106 fichiers), typecheck et lint propres. Aucun changement de schéma Dexie (tables déjà existantes depuis la Phase 29 d'origine).
+- Poussé sur `main` (fast-forward, aucune divergence au moment du push).
+
+**Bilan de la série §5.32 à §5.36** : 5 écrans construits en une session (`DefinitionTests`, `ExecutionTests`, `ParametresCritiques`, `SourceIntelligence`, `ContentPlan`, `RiskAssessmentAmdec` — 6 en comptant les deux sous-écrans de la Phase 7), chacun vérifié en navigateur réel sur le même scénario PharmaTech Solutions accumulé au fil des écrans, chacun avec sa propre suite de tests. Plus aucun domaine métier construit sans écran, hors `useIntegrationStore` (connecteurs QMS tiers, backlog #32, jamais engagé faute de compte QMS réel à connecter).
 
 ---
 

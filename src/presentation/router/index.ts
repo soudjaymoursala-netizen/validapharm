@@ -150,6 +150,12 @@ export const router = createRouter({
       component: () => import('../screens/ContentPlan.vue'),
       props: true,
     },
+    {
+      path: '/clients/:clientId/risk-assessment',
+      name: 'risk-assessment-amdec',
+      component: () => import('../screens/RiskAssessmentAmdec.vue'),
+      props: true,
+    },
   ],
 })
 

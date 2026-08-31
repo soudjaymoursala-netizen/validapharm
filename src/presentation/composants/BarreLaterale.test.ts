@@ -79,6 +79,11 @@ function routeurDeTest(): Router {
         name: 'content-plan',
         component: { template: '<div />' },
       },
+      {
+        path: '/clients/:clientId/risk-assessment',
+        name: 'risk-assessment-amdec',
+        component: { template: '<div />' },
+      },
     ],
   })
 }

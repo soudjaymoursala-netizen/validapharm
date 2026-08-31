@@ -31,6 +31,10 @@ const outilsClientActif = computed(() => {
       route: { name: 'content-plan', params: { clientId } },
     },
     {
+      nom: 'Risk Assessment (AMDEC)',
+      route: { name: 'risk-assessment-amdec', params: { clientId } },
+    },
+    {
       nom: 'Stratégie de qualification',
       route: { name: 'assistant-strategie-qualification', params: { clientId } },
     },
