@@ -58,6 +58,28 @@ function retirerLigneQuestion(index: number): void {
   if (brouillonQuestions.length > 1) brouillonQuestions.splice(index, 1)
 }
 
+/**
+ * Import d'une liste de questions depuis un fichier texte (une question
+ * par ligne) — remplace le remplissage manuel ligne par ligne, jamais un
+ * envoi direct : le résultat reste dans les mêmes champs éditables,
+ * relu et corrigible avant "Enregistrer cette version" (même discipline
+ * que le reste de l'écran : aucune question n'est jamais fabriquée,
+ * seulement reprise mot pour mot de ce que l'utilisateur a fourni).
+ */
+async function importerQuestionsTexte(evenement: Event): Promise<void> {
+  const fichier = (evenement.target as HTMLInputElement).files?.[0]
+  if (!fichier) return
+  ;(evenement.target as HTMLInputElement).value = ''
+
+  const texte = await fichier.text()
+  const lignes = texte
+    .split(/\r?\n/)
+    .map((ligne) => ligne.trim())
+    .filter((ligne) => ligne.length > 0)
+  if (lignes.length === 0) return
+  brouillonQuestions.splice(0, brouillonQuestions.length, ...lignes)
+}
+
 async function enregistrerNouvelleVersion(): Promise<void> {
   const questions = brouillonQuestions
     .map((texte) => texte.trim())
@@ -144,6 +166,13 @@ const conclusion = computed(() =>
         </label>
         <fieldset class="questions-config">
           <legend>Questions (une par ligne, mot pour mot)</legend>
+          <div class="choix-demarrage">
+            <label class="bouton-fichier">
+              Importer un fichier texte (une question par ligne)
+              <input type="file" accept="text/plain,.txt" @change="importerQuestionsTexte" />
+            </label>
+            <span class="choix-demarrage__ou">ou saisissez-les manuellement ci-dessous</span>
+          </div>
           <div v-for="(_, index) in brouillonQuestions" :key="index" class="ligne-question-config">
             <input
               v-model="brouillonQuestions[index]"
@@ -308,6 +337,44 @@ select {
 
 .ligne-question-config input {
   flex: 1;
+}
+
+.choix-demarrage {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+
+.choix-demarrage__ou {
+  font-size: 0.82rem;
+  color: var(--vp-texte-secondaire);
+  font-style: italic;
+}
+
+.bouton-fichier {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--vp-fond-carte, transparent);
+  color: var(--vp-texte-principal);
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.bouton-fichier:hover {
+  border-color: var(--vp-marque);
+  color: var(--vp-marque);
+}
+
+.bouton-fichier input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 button {

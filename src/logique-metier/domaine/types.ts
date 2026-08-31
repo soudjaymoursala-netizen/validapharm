@@ -133,12 +133,26 @@ export interface ProjectDocument {
   /**
    * Texte extrait (docx/pdf natif) ou collé directement par l'utilisateur —
    * ajouté Phase 33 (TD-031), pour servir de document de référence à la
-   * génération de brouillon par adaptation (§4.1bis, URS-F-060). Limite
-   * assumée : ce champ ne couvre que l'usage de §4.1bis, pas encore un
-   * écran générique de bibliothèque de documents (URS-F-000quater),
-   * toujours non construit au-delà de ce type.
+   * génération de brouillon par adaptation (§4.1bis, URS-F-060). Chaîne
+   * vide pour un document chargé depuis la section "Documents" générique
+   * (§4.9, URS-F-000quater) — l'extraction de texte n'est pas requise
+   * par cette exigence, seulement le chargement/l'horodatage/l'étiquetage.
    */
   extracted_text: string
+  /**
+   * Contenu binaire réel du fichier — absent (`null`) pour un document créé
+   * par le seul besoin ponctuel de §4.1bis avant l'ajout de la section
+   * "Documents" générique (ajouté v20, URS-F-000quater — le champ
+   * `extracted_text` seul ne permettait ni de retélécharger ni de
+   * prévisualiser le fichier d'origine, contrairement à ce que l'exigence
+   * "section Documents pour charger des fichiers de référence" impose).
+   * Jamais synchronisé vers GitHub (portée de `useSynchronisationStore`
+   * limitée aux projets/sections, SDS §5) — IndexedDB local uniquement,
+   * même régime que `GabaritExportClient.fichier`.
+   */
+  content: Blob | null
+  /** Type MIME déclaré par le navigateur au moment du chargement — chaîne vide si absent du document (même limite que `content`). */
+  mime_type: string
 }
 
 /**

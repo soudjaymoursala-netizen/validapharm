@@ -5,7 +5,8 @@
 // sinon (gabarits pas encore définis dans le catalogue — voir
 // logique-metier/gabarits/catalogue/index.ts). Transitions de statut avec
 // garde-fous fidèles (FDS §3.2/§3.3), sauvegarde automatique (URS-F-009).
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
 import { GabaritDocxInvalideError } from '../../connecteurs/office/erreurs'
 import { genererDocxPersonnalise } from '../../connecteurs/office/GenerationDocxAdapter'
@@ -31,6 +32,7 @@ import { useSectionsStore, type ResultatActionSection } from '../stores/useSecti
 
 const props = defineProps<{ projectId: string; sectionId: string }>()
 
+const route = useRoute()
 const sectionsStore = useSectionsStore()
 const projetsStore = useProjectsStore()
 const gabaritExportStore = useGabaritExportStore()
@@ -157,6 +159,16 @@ onMounted(async () => {
     await gabaritExportStore.charger(projet.value.client_id)
     await configStore.charger(projet.value.client_id)
     await relaisStore.charger()
+  }
+  // Arrivée depuis "À partir d'un document" (Fiche Projet) — porte
+  // directement l'attention sur le panneau §4.1bis déjà construit,
+  // jamais un nouveau mécanisme : simple confort de découverte.
+  if (route.query.demarrage === 'adaptation') {
+    modeReference.value = 'uploader'
+    await nextTick()
+    document
+      .querySelector('.generation-brouillon')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 })
 
