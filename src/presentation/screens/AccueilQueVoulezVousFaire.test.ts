@@ -1,7 +1,13 @@
+import 'fake-indexeddb/auto'
 import { mount } from '@vue/test-utils'
-import { describe, expect, test } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import AccueilQueVoulezVousFaire from './AccueilQueVoulezVousFaire.vue'
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
 
 function routeurDeTest() {
   return createRouter({
