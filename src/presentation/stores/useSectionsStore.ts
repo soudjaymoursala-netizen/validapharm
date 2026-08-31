@@ -168,6 +168,8 @@ export const useSectionsStore = defineStore('sections', () => {
       uploaded_at: maintenant,
       uploaded_by: entrees.actor,
       extracted_text: entrees.texteDocumentReference,
+      content: null,
+      mime_type: '',
     }
     await db.projectDocuments.put(documentReference)
 
