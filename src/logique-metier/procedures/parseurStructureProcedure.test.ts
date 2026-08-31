@@ -219,6 +219,32 @@ describe('proposerStructureProcedure — étapes candidates (Phase 21, TD-017)',
       'Rincer à l’eau purifiée.',
     ])
   })
+
+  it("ne perd pas une étape courte numérotée 'N.N texte.' en la confondant avec un sous-titre — bug réel trouvé en simulant une SOP d'exploitation d'étiqueteuse : une étape de ≤78 caractères se terminant par un point matchait RE_SOUS_TITRE et disparaissait en silence de la liste des étapes", () => {
+    const texte = [
+      '1. OBJET',
+      "Décrire l'exploitation de l'étiqueteuse.",
+      '2. DOMAINE D APPLICATION',
+      'Ligne L3.',
+      '3. RESPONSABILITES',
+      "L'opérateur est responsable.",
+      '4. PROCEDURE',
+      '4.1 Vérifier que le PLC de l’étiqueteuse est sous tension et que l’IHM affiche l’écran d’accueil.',
+      '4.2 Charger le rouleau d’étiquettes conforme au lot de fabrication en cours.',
+      '4.3 Lancer le programme de calibration automatique depuis l’IHM (menu Calibration > Démarrer).',
+      '5. REFERENCES',
+      'SOP-GEN-001',
+    ].join('\n')
+
+    const proposition = proposerStructureProcedure(texte)
+
+    expect(proposition.etapesProposees).toHaveLength(3)
+    expect(proposition.etapesProposees.map((e) => e.description)).toEqual([
+      '4.1 Vérifier que le PLC de l’étiqueteuse est sous tension et que l’IHM affiche l’écran d’accueil.',
+      '4.2 Charger le rouleau d’étiquettes conforme au lot de fabrication en cours.',
+      '4.3 Lancer le programme de calibration automatique depuis l’IHM (menu Calibration > Démarrer).',
+    ])
+  })
 })
 
 describe('proposerEtapesDepuisTableaux (Phase 22, TD-019) — étapes sous tableau, calibré sur le manuel Markem-Imaje C350 réel', () => {

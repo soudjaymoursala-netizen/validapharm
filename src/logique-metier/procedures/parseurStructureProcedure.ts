@@ -223,7 +223,15 @@ function collecterLignesSection(texteSection: string): {
     const sousTitre = ligne.match(RE_SOUS_TITRE)
     if (sousTitre) {
       const titre = (sousTitre[1] ?? '').trim()
-      if (titre.split(/\s+/).length <= 14) {
+      // Un sous-titre réel est une locution nominale courte ("Pre-requisites",
+      // "Back-Up - Uploading..."), jamais une phrase terminée par un point —
+      // exclusion ajoutée après un bug réel trouvé en simulant une SOP dont les
+      // étapes utilisent la même convention "N.N " que les sous-titres ("4.2
+      // Charger le rouleau d'étiquettes...") : sans ce garde-fou, une étape
+      // courte (≤78 caractères, phrase complète) était absorbée en silence
+      // comme contexte et disparaissait purement et simplement de la liste des
+      // étapes proposées — perte de donnée invisible, sans aucune erreur.
+      if (titre.split(/\s+/).length <= 14 && !titre.endsWith('.')) {
         contexteCourant = titre
         continue
       }
