@@ -120,6 +120,18 @@ export const router = createRouter({
       component: () => import('../screens/RevueStructureProcedure.vue'),
       props: true,
     },
+    {
+      path: '/clients/:clientId/tests',
+      name: 'definition-tests',
+      component: () => import('../screens/DefinitionTests.vue'),
+      props: true,
+    },
+    {
+      path: '/clients/:clientId/executions',
+      name: 'execution-tests',
+      component: () => import('../screens/ExecutionTests.vue'),
+      props: true,
+    },
   ],
 })
 

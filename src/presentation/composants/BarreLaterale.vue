@@ -16,6 +16,8 @@ const outilsClientActif = computed(() => {
   return [
     { nom: 'Missions', route: { name: 'liste-missions', params: { clientId } } },
     { nom: 'Structure Système', route: { name: 'structure-systeme', params: { clientId } } },
+    { nom: 'Exigences et tests', route: { name: 'definition-tests', params: { clientId } } },
+    { nom: 'Exécution de tests', route: { name: 'execution-tests', params: { clientId } } },
     {
       nom: 'Stratégie de qualification',
       route: { name: 'assistant-strategie-qualification', params: { clientId } },

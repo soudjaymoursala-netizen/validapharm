@@ -54,6 +54,16 @@ function routeurDeTest(): Router {
         name: 'revue-structure-procedure',
         component: { template: '<div />' },
       },
+      {
+        path: '/clients/:clientId/tests',
+        name: 'definition-tests',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/clients/:clientId/executions',
+        name: 'execution-tests',
+        component: { template: '<div />' },
+      },
     ],
   })
 }
