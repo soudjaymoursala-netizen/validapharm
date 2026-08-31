@@ -1,8 +1,11 @@
 <script setup lang="ts">
 // Fiche Projet (FDS §2) — contexte/portée, sections liées, ajout de
 // section depuis le catalogue (URS-F-000 à 000nonies). Version minimale
-// de cet incrément : la vue de traçabilité (graphe des liens) et le
-// chargement de documents restent backlog (tâche #12).
+// de cet incrément : la vue de traçabilité (graphe des liens) reste
+// backlog (tâche #12). Section "Documents" (URS-F-000quater, §4.9)
+// ajoutée v20 — comblait un écart Must documenté (le seul chargement de
+// fichier existant était le besoin ponctuel §4.1bis de génération de
+// brouillon, pas un écran générique de bibliothèque de documents).
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { detecterEcartsStructurels } from '../../logique-metier/analyse-projet/detecterEcartsStructurels'
@@ -15,18 +18,21 @@ import PipelineQualification from '../composants/PipelineQualification.vue'
 import IconeSvg from '../composants/IconeSvg.vue'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useSectionsStore } from '../stores/useSectionsStore'
+import { useProjectDocumentsStore } from '../stores/useProjectDocumentsStore'
 
 const props = defineProps<{ projectId: string }>()
 
 const router = useRouter()
 const projetsStore = useProjectsStore()
 const sectionsStore = useSectionsStore()
+const documentsStore = useProjectDocumentsStore()
 const projet = ref<Project | undefined>(undefined)
 const formulaireOuvert = ref(false)
 const nouveauTitre = ref('')
 const nouveauTemplateType = ref<TemplateType>('contexte_procede')
 const erreurImport = ref<string | null>(null)
 const modaleArchivageOuverte = ref(false)
+const erreurImportDocument = ref<string | null>(null)
 
 async function confirmerArchivage(identiteDeclaree: string): Promise<void> {
   await projetsStore.archiverProjet(props.projectId, identiteDeclaree)
@@ -70,7 +76,42 @@ function titreSection(sectionId: string): string {
 onMounted(async () => {
   projet.value = await projetsStore.obtenirProjet(props.projectId)
   await sectionsStore.chargerSectionsDuProjet(props.projectId)
+  await documentsStore.charger(props.projectId)
 })
+
+/**
+ * Import d'un document de référence sous n'importe quel format (URS-F-000quater,
+ * §4.9) — aucune restriction de type ni de taille fabriquée ici : le seul
+ * garde-fou exigé est l'étiquetage automatique "référence de travail, non
+ * maître" (porté par le store, jamais contournable depuis cet écran).
+ */
+async function importerDocument(evenement: Event): Promise<void> {
+  erreurImportDocument.value = null
+  const fichier = (evenement.target as HTMLInputElement).files?.[0]
+  if (!fichier) return
+  ;(evenement.target as HTMLInputElement).value = ''
+
+  try {
+    await documentsStore.importerDocument(
+      props.projectId,
+      fichier,
+      IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+    )
+  } catch {
+    erreurImportDocument.value = 'Échec du chargement du document — réessayez.'
+  }
+}
+
+/** Retélécharge le fichier tel que chargé — jamais une reconstruction à partir du texte extrait. */
+function telechargerDocument(document: { filename: string; content: Blob | null }): void {
+  if (!document.content) return
+  const url = URL.createObjectURL(document.content)
+  const lien = window.document.createElement('a')
+  lien.href = url
+  lien.download = document.filename
+  lien.click()
+  URL.revokeObjectURL(url)
+}
 
 /** Pré-remplit et ouvre le formulaire depuis un clic sur une étape non démarrée du pipeline. */
 function demarrerEtape(templateType: TemplateType): void {
@@ -78,9 +119,15 @@ function demarrerEtape(templateType: TemplateType): void {
   formulaireOuvert.value = true
 }
 
-async function ajouterSection(): Promise<void> {
+/**
+ * `depuisDocument` : après création, navigue directement vers l'éditeur
+ * en pointant sur le panneau "Génération de brouillon par adaptation"
+ * (§4.1bis) déjà construit — jamais un nouveau moteur de génération,
+ * seulement un raccourci de découverte vers une capacité existante.
+ */
+async function ajouterSection(depuisDocument = false): Promise<void> {
   if (nouveauTitre.value.trim().length === 0) return
-  await sectionsStore.creerSection({
+  const section = await sectionsStore.creerSection({
     project_id: props.projectId,
     template_type: nouveauTemplateType.value,
     language: projet.value?.language_default ?? 'fr',
@@ -89,6 +136,13 @@ async function ajouterSection(): Promise<void> {
   })
   formulaireOuvert.value = false
   nouveauTitre.value = ''
+  if (depuisDocument) {
+    await router.push({
+      name: 'editeur-section',
+      params: { projectId: props.projectId, sectionId: section.id },
+      query: { demarrage: 'adaptation' },
+    })
+  }
 }
 
 /**
@@ -177,7 +231,11 @@ async function importerFichier(evenement: Event): Promise<void> {
       </header>
       <p v-if="erreurImport" class="erreur-import" role="alert">{{ erreurImport }}</p>
 
-      <form v-if="formulaireOuvert" class="formulaire-section" @submit.prevent="ajouterSection">
+      <form
+        v-if="formulaireOuvert"
+        class="formulaire-section"
+        @submit.prevent="ajouterSection(false)"
+      >
         <label>
           Titre
           <input v-model="nouveauTitre" type="text" required autofocus />
@@ -190,15 +248,41 @@ async function importerFichier(evenement: Event): Promise<void> {
             </option>
           </select>
         </label>
+        <p class="rappel-choix">
+          « Vierge » démarre d'un modèle vide. « À partir d'un document » vous amène directement au
+          panneau qui adapte un protocole/exemple existant au contexte de ce projet (§4.1bis).
+        </p>
         <div class="actions">
           <button type="button" class="bouton-secondaire" @click="formulaireOuvert = false">
             Annuler
           </button>
-          <button type="submit" class="bouton-principal">Créer la section</button>
+          <button type="button" class="bouton-secondaire" @click="ajouterSection(true)">
+            À partir d'un document
+          </button>
+          <button type="submit" class="bouton-principal">Créer la section vierge</button>
         </div>
       </form>
 
-      <p v-if="sections.length === 0" class="etat-vide">Aucune section pour l'instant.</p>
+      <div v-if="sections.length === 0" class="guide-demarrage">
+        <p class="guide-demarrage__titre">Comment voulez-vous démarrer ce dossier ?</p>
+        <div class="guide-demarrage__options">
+          <button type="button" class="guide-demarrage__option" @click="formulaireOuvert = true">
+            <IconeSvg nom="plus" :taille="18" />
+            <span>
+              <strong>Construire manuellement</strong>
+              <small>Choisir un gabarit et rédiger la section depuis un modèle vierge.</small>
+            </span>
+          </button>
+          <label class="guide-demarrage__option">
+            <IconeSvg nom="dossier" :taille="18" />
+            <span>
+              <strong>Importer une section (JSON)</strong>
+              <small>Reprendre un export existant — répétez l'opération pour chaque section.</small>
+            </span>
+            <input type="file" accept="application/json" @change="importerFichier" />
+          </label>
+        </div>
+      </div>
       <ul v-else class="liste-sections">
         <li v-for="section in sections" :key="section.id">
           <RouterLink
@@ -212,6 +296,61 @@ async function importerFichier(evenement: Event): Promise<void> {
             <span class="liste-sections__gabarit">{{ section.template_type }}</span>
           </RouterLink>
           <PastilleStatutSection :statut="section.status" :langue="section.language" />
+        </li>
+      </ul>
+    </section>
+
+    <section class="carte documents">
+      <header>
+        <div>
+          <h2>Documents</h2>
+          <p class="rappel">
+            Fichiers de référence (documentation fournisseur, manuels, SOP…) sous n'importe quel
+            format — toujours des références de travail, jamais des documents maîtres du QMS
+            (URS-F-000quater).
+          </p>
+        </div>
+        <label class="bouton-fichier">
+          <IconeSvg nom="dossier" :taille="15" />
+          Importer un document
+          <input type="file" @change="importerDocument" />
+        </label>
+      </header>
+      <p v-if="erreurImportDocument" class="erreur-import" role="alert">
+        {{ erreurImportDocument }}
+      </p>
+      <p v-if="documentsStore.documents.length === 0" class="etat-vide">
+        Aucun document chargé pour l'instant.
+      </p>
+      <ul v-else class="liste-documents">
+        <li v-for="document in documentsStore.documents" :key="document.id">
+          <span class="liste-documents__icone" aria-hidden="true">
+            <IconeSvg nom="dossier" :taille="16" />
+          </span>
+          <span class="liste-documents__texte">
+            <span class="liste-documents__nom">{{ document.filename }}</span>
+            <span class="liste-documents__meta">
+              Référence de travail — non maître · chargé le
+              {{ document.uploaded_at.slice(0, 10) }} par {{ document.uploaded_by }}
+            </span>
+          </span>
+          <div class="liste-documents__actions">
+            <button
+              type="button"
+              class="bouton-secondaire"
+              :disabled="!document.content"
+              @click="telechargerDocument(document)"
+            >
+              Télécharger
+            </button>
+            <button
+              type="button"
+              class="bouton-texte-danger"
+              @click="documentsStore.supprimerDocument(document.id)"
+            >
+              Supprimer
+            </button>
+          </div>
         </li>
       </ul>
     </section>
@@ -471,6 +610,12 @@ button {
   max-width: 24rem;
 }
 
+.rappel-choix {
+  margin: -0.25rem 0 0;
+  font-size: 0.78rem;
+  color: var(--vp-texte-secondaire);
+}
+
 .formulaire-section label {
   display: flex;
   flex-direction: column;
@@ -542,5 +687,144 @@ button {
 .etat-vide {
   color: var(--vp-texte-secondaire);
   font-size: 0.9rem;
+}
+
+.guide-demarrage__titre {
+  margin: 0 0 0.75rem;
+  font-weight: var(--vp-poids-medium);
+  color: var(--vp-texte-principal);
+}
+
+.guide-demarrage__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.guide-demarrage__option {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.9rem 1rem;
+  border: 1px dashed var(--vp-bordure-forte);
+  border-radius: var(--vp-rayon);
+  background-color: var(--vp-fond-carte);
+  color: var(--vp-texte-principal);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--vp-transition);
+}
+
+.guide-demarrage__option:hover {
+  border-color: var(--vp-marque);
+  border-style: solid;
+  background-color: var(--vp-marque-fond-leger);
+}
+
+.guide-demarrage__option strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.guide-demarrage__option small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--vp-texte-secondaire);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.guide-demarrage__option input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.documents header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.documents h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.documents .rappel {
+  margin: 0.35rem 0 0;
+  color: var(--vp-texte-secondaire);
+  font-size: 0.82rem;
+  max-width: 32rem;
+}
+
+.liste-documents {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.liste-documents li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.65rem 0.9rem;
+}
+
+.liste-documents__icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  flex-shrink: 0;
+  border-radius: var(--vp-rayon-sm);
+  background-color: var(--vp-marque-fond-leger);
+  color: var(--vp-marque);
+}
+
+.liste-documents__texte {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.liste-documents__nom {
+  font-weight: var(--vp-poids-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liste-documents__meta {
+  font-size: 0.76rem;
+  color: var(--vp-texte-secondaire);
+}
+
+.liste-documents__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.bouton-texte-danger {
+  background: none;
+  border: none;
+  color: var(--vp-danger);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.5rem 0.6rem;
+}
+
+.bouton-texte-danger:hover {
+  text-decoration: underline;
 }
 </style>
