@@ -234,6 +234,16 @@ export interface AssetHierarchySchema {
  * depuis tous ses ancêtres (`noeudsVisiblesDepuisWorkspace`), jamais
  * depuis un site "cousin".
  */
+export type QualificationStatus =
+  | 'non_qualifie'
+  | 'en_cours_qualification_initiale'
+  | 'qualifie'
+  | 'qualifie_ecart_ouvert'
+  | 'requalification_requise'
+  | 'requalification_en_retard'
+  | 'suspendu'
+  | 'declasse'
+
 export interface AssetNode {
   id: string
   client_id: string
@@ -246,15 +256,7 @@ export interface AssetNode {
   source: 'manuel' | 'qms_pull'
   qms_connector_id: string | null
   periodic_qualification: { applicable: boolean; deadline: string | null }
-  qualification_status:
-    | 'non_qualifie'
-    | 'en_cours_qualification_initiale'
-    | 'qualifie'
-    | 'qualifie_ecart_ouvert'
-    | 'requalification_requise'
-    | 'requalification_en_retard'
-    | 'suspendu'
-    | 'declasse'
+  qualification_status: QualificationStatus
   audit_log: EntreeJournalAudit[]
   created_at: string
   updated_at: string

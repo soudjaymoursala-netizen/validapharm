@@ -161,6 +161,24 @@ export const router = createRouter({
       component: () => import('../screens/RiskAssessmentAmdec.vue'),
       props: true,
     },
+    {
+      path: '/clients/:clientId/structure-systeme/:noeudId/dossier-vivant',
+      name: 'dossier-vivant-actif',
+      component: () => import('../screens/DossierVivantActif.vue'),
+      props: true,
+    },
+    {
+      path: '/clients/:clientId/connecteurs-qms',
+      name: 'configuration-connecteurs-qms',
+      component: () => import('../screens/ConfigurationConnecteursQMS.vue'),
+      props: true,
+    },
+    {
+      path: '/clients/:clientId/anomalies',
+      name: 'journal-anomalies',
+      component: () => import('../screens/JournalAnomalies.vue'),
+      props: true,
+    },
   ],
 })
 

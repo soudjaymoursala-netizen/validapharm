@@ -403,3 +403,58 @@ describe('useStructureSystemeStore — Architecture Technique (Phase 18, TD-013)
     expect(chaine.map((etape) => etape.noeud.code)).toEqual(['PLC-01', 'SCADA-01', 'SERVEUR-01'])
   })
 })
+
+describe('useStructureSystemeStore — modifierQualificationNoeud (URS-F-101, URS-F-101bis)', () => {
+  test('un nœud neuf est toujours créé "non_qualifie", jamais de périodicité applicable', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.creerNoeud('client-1', {
+      level_key: 'equipement',
+      name: 'Autoclave',
+      code: 'AUT-01',
+      parent_id: null,
+    })
+    const noeud = store.noeuds.find((n) => n.code === 'AUT-01')
+    expect(noeud?.qualification_status).toBe('non_qualifie')
+    expect(noeud?.periodic_qualification).toEqual({ applicable: false, deadline: null })
+  })
+
+  test('modifie manuellement le statut et active la périodicité avec une échéance', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.creerNoeud('client-1', {
+      level_key: 'equipement',
+      name: 'Autoclave',
+      code: 'AUT-01',
+      parent_id: null,
+    })
+    const noeudId = idDuNoeud(store.noeuds, 'AUT-01')
+
+    await store.modifierQualificationNoeud(noeudId, {
+      qualification_status: 'qualifie',
+      periodic_qualification: { applicable: true, deadline: '2027-03-01' },
+    })
+
+    const noeudMisAJour = store.noeuds.find((n) => n.id === noeudId)
+    expect(noeudMisAJour?.qualification_status).toBe('qualifie')
+    expect(noeudMisAJour?.periodic_qualification).toEqual({
+      applicable: true,
+      deadline: '2027-03-01',
+    })
+    expect(noeudMisAJour?.audit_log).toHaveLength(2)
+    expect(noeudMisAJour?.audit_log[1]?.action).toBe('modification')
+  })
+
+  test('ne fait rien pour un nœud introuvable — jamais une erreur silencieuse fabriquée', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+
+    await expect(
+      store.modifierQualificationNoeud('id-inconnu', {
+        qualification_status: 'qualifie',
+        periodic_qualification: { applicable: false, deadline: null },
+      }),
+    ).resolves.toBeUndefined()
+    expect(store.noeuds).toEqual([])
+  })
+})

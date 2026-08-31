@@ -8,6 +8,7 @@ import type {
   AssetHierarchySchema,
   AssetNode,
   Langue,
+  QualificationStatus,
   RelationTechnique,
   TypeRelationTechnique,
   Workspace,
@@ -46,13 +47,14 @@ export type ResultatCreationRelationTechnique =
 
 /**
  * Store de la Couche Présentation pour le référentiel d'actifs (FS §4.10,
- * URS-F-100 à 100decies) — premier incrément : hiérarchie configurable +
- * CRUD de nœuds avec les deux garde-fous non négociables (absence de
- * cycle, unicité du code par client). Le graphe `associated_nodes[]`, le
- * pull QMS, le dossier vivant et le suivi de périodicité restent hors
- * périmètre (backlog).
+ * URS-F-100 à 100decies) — hiérarchie configurable + CRUD de nœuds avec
+ * les deux garde-fous non négociables (absence de cycle, unicité du code
+ * par client), relations techniques (URS-F-240) et statut de
+ * qualification (URS-F-101/101bis, édition manuelle uniquement). Le
+ * graphe `associated_nodes[]` et le pull QMS restent hors périmètre
+ * (backlog).
  *
- * @requirement URS-F-100, URS-F-100bis, URS-F-100ter, URS-F-100nonies
+ * @requirement URS-F-100, URS-F-100bis, URS-F-100ter, URS-F-100nonies, URS-F-101, URS-F-101bis, URS-F-240
  */
 export const useStructureSystemeStore = defineStore('structureSysteme', () => {
   const schema = ref<AssetHierarchySchema | null>(null)
@@ -227,6 +229,44 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     return chaineTechniqueDepuis(noeudDepartId, relationsTechniques.value, noeuds.value)
   }
 
+  /**
+   * Modification manuelle du statut de qualification et de la
+   * périodicité (URS-F-101, URS-F-101bis) — jamais de transition
+   * automatique fabriquée par l'outil (même discipline que partout
+   * ailleurs : rien n'est déduit à la place de l'utilisateur sur une
+   * donnée à impact GMP). Trouvé figé à `non_qualifie` sans aucun moyen
+   * de le faire évoluer, en simulant une requalification périodique
+   * réelle (31/08/2026).
+   */
+  async function modifierQualificationNoeud(
+    noeudId: string,
+    changement: {
+      qualification_status: QualificationStatus
+      periodic_qualification: { applicable: boolean; deadline: string | null }
+    },
+  ): Promise<void> {
+    const noeud = await db.assetNodes.get(noeudId)
+    if (!noeud) return
+
+    const maintenant = new Date().toISOString()
+    const misAJour: AssetNode = {
+      ...noeud,
+      qualification_status: changement.qualification_status,
+      periodic_qualification: changement.periodic_qualification,
+      updated_at: maintenant,
+      audit_log: [
+        ...noeud.audit_log,
+        {
+          timestamp: maintenant,
+          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          action: 'modification',
+        },
+      ],
+    }
+    await db.assetNodes.put(misAJour)
+    noeuds.value = noeuds.value.map((n) => (n.id === noeudId ? misAJour : n))
+  }
+
   return {
     schema,
     noeuds,
@@ -239,5 +279,6 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     noeudsVisiblesDepuisWorkspace,
     creerRelationTechnique,
     chaineTechniqueDepuisNoeud,
+    modifierQualificationNoeud,
   }
 })
