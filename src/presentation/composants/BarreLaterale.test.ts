@@ -89,6 +89,16 @@ function routeurDeTest(): Router {
         name: 'profil-local',
         component: { template: '<div />' },
       },
+      {
+        path: '/clients/:clientId/anomalies',
+        name: 'journal-anomalies',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/clients/:clientId/connecteurs-qms',
+        name: 'configuration-connecteurs-qms',
+        component: { template: '<div />' },
+      },
     ],
   })
 }
