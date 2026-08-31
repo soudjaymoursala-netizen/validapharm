@@ -88,5 +88,16 @@ describe('ImpactAssessment', () => {
       .toArray()
     expect(evals[0]?.verdict).toBe('impact_direct')
     expect(evals[0]?.nom_element).toBe('Isolateur STICK002')
+
+    await flushPromises()
+    expect(wrapper.text()).toContain('Évaluations enregistrées')
+    expect(wrapper.text()).toContain('Isolateur STICK002')
+
+    const nouvelleBtn = wrapper.findAll('button').find((b) => b.text() === 'Nouvelle évaluation')
+    await nouvelleBtn?.trigger('click')
+    await flushPromises()
+    expect((wrapper.find('.nom-element input').element as HTMLInputElement).value).toBe('')
+    // L'historique reste visible après réinitialisation du formulaire.
+    expect(wrapper.text()).toContain('Isolateur STICK002')
   })
 })

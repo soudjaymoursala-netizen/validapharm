@@ -98,6 +98,13 @@ async function enregistrerEvaluation(): Promise<void> {
   if ('erreur' in resultat) return
   evaluationEnregistree.value = true
 }
+
+function nouvelleEvaluation(): void {
+  nomElement.value = ''
+  assetNodeIdSelectionne.value = ''
+  for (const cle of Object.keys(reponses)) Reflect.deleteProperty(reponses, cle)
+  evaluationEnregistree.value = false
+}
 </script>
 
 <template>
@@ -212,8 +219,21 @@ async function enregistrerEvaluation(): Promise<void> {
         <p v-if="evaluationEnregistree" class="confirmation" role="status">
           Évaluation enregistrée.
         </p>
+        <button v-if="evaluationEnregistree" type="button" @click="nouvelleEvaluation">
+          Nouvelle évaluation
+        </button>
       </section>
     </template>
+
+    <section v-if="methodeStore.evaluations.length > 0" class="bloc-historique">
+      <h2>Évaluations enregistrées</h2>
+      <ul>
+        <li v-for="e in methodeStore.evaluations" :key="e.id">
+          {{ e.nom_element }} —
+          {{ e.verdict === 'impact_direct' ? 'Direct Impact' : 'Not Direct Impact' }}
+        </li>
+      </ul>
+    </section>
   </main>
 </template>
 
