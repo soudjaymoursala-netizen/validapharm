@@ -588,6 +588,21 @@ Suite logique de §5.35 dans l'ordre des phases — **clôt la série de fermetu
 
 **Bilan de la série §5.32 à §5.36** : 5 écrans construits en une session (`DefinitionTests`, `ExecutionTests`, `ParametresCritiques`, `SourceIntelligence`, `ContentPlan`, `RiskAssessmentAmdec` — 6 en comptant les deux sous-écrans de la Phase 7), chacun vérifié en navigateur réel sur le même scénario PharmaTech Solutions accumulé au fil des écrans, chacun avec sa propre suite de tests. Plus aucun domaine métier construit sans écran, hors `useIntegrationStore` (connecteurs QMS tiers, backlog #32, jamais engagé faute de compte QMS réel à connecter).
 
+### 5.37 Archivage protégé de client/projet — verrou local par mot de passe (§4.31/URS-F-310, TD-033, 31/08/2026)
+
+L'utilisateur demande la possibilité de supprimer un client/projet, protégée par un mot de passe, nécessitant selon lui un « système d'identification avec mail/visa et un mot de passe ». **Avant toute implémentation**, investigation de l'existant révèle un conflit direct avec deux décisions de gouvernance déjà actées : le cadrage §5 (« L'accès au dépôt se fait via un jeton d'API GitHub... **jamais de mot de passe** ») et TD-011 (RBAC/signature électronique de façade **interdite** — « fabriquer un semblant... serait activement dangereux : cela fabriquerait une fausse preuve de conformité 21 CFR Part 11/Annexe 11, pire que son absence honnête »). Signalé explicitement à l'utilisateur avant de coder, avec options alternatives, plutôt que d'implémenter tel quel un système qui aurait recréé le piège que sa propre gouvernance a déjà identifié et écarté.
+
+**Deux questions posées via `AskUserQuestion`, tranchées par l'utilisateur** : (1) mécanisme de garde — choisit **« Les deux »** (confirmation par nom retapé ET mot de passe local, jamais une authentification) ; (2) suppression réelle ou archivage — choisit **archivage** (cohérent ALCOA+, jamais de perte de donnée).
+
+- `logique-metier/securite/verrouLocal.ts` : PBKDF2-SHA-256 (100 000 itérations, sel aléatoire, Web Crypto API) — jamais un hachage simple, jamais un mot de passe en clair. `useProfilLocalStore`/`ProfilLocal.vue` (route `/profil-local`) : profil unique par installation (email/visa/mot de passe), même patron que `useConnexionGitHubStore`.
+- `ModaleConfirmationArchivage.vue` : composant réutilisé par `GestionClients.vue` (client) et `FicheProjet.vue` (projet) — double garde (nom exact + mot de passe), invite claire à configurer le profil si absent plutôt qu'un blocage silencieux.
+- `Client`/`Project` gagnent `statut: 'actif' | 'archive'` + `archived_at`/`archived_by` (déclaratif, jamais vérifié cryptographiquement — même limite qu'`EntreeJournalAudit.actor`). `archiverClient`/`archiverProjet`/`desarchiverClient`/`desarchiverProjet` — **aucune fonction de suppression physique ajoutée**. `Client` gagne au passage un `audit_log` qu'il n'avait jamais eu.
+- Schéma Dexie v28 (nouvelle table `profilLocal`, champs additifs non indexés sur `clients`/`projects`).
+- Vérifié en navigateur réel (Playwright) : archivage sans profil → invite claire, aucune écriture ; profil configuré ; mauvais nom → refusé ; mauvais mot de passe → refusé ; les deux corrects → client archivé (disparaît de la liste active, persiste après reload, réapparaît dans « Afficher les clients archivés », désarchivage fonctionnel) ; même parcours vérifié côté projet (`FicheProjet.vue`, redirection vers le tableau de bord). **Bug réel trouvé et corrigé pendant cette vérification** : `ModaleConfirmationArchivage.vue` n'appelait jamais `profilLocalStore.charger()` — après un rechargement de page complet (état Pinia remis à zéro, contrairement à un simple changement de route), la modale affichait à tort "aucun profil configuré" même quand un profil existait réellement en base ; corrigé en chargeant explicitement dans le `onMounted` du composant lui-même plutôt que de compter sur l'écran appelant pour l'avoir déjà fait.
+- 743 tests verts (111 fichiers), typecheck et lint propres.
+- Doc : nouveau TD-033 (`docs/convergence/TECHNICAL_DECISIONS.md`), `00-cadrage-projet.md` §5 (dérogation étroite référencée), URS v63 (§4.31/URS-F-310 à quinquies), FS v53 (§4.31), SDS v17 (§3bis table des tables, §7 verrou local).
+- Poussé sur `main` (fast-forward, aucune divergence au moment du push).
+
 ---
 
 ## 6. Repères pratiques

@@ -76,6 +76,26 @@ export interface EnregistrementVersionSchema {
 }
 
 /**
+ * Profil utilisateur local (§4.31/URS-F-310bis, TD-033) — enregistrement
+ * unique, pas par client (un seul poste, un seul utilisateur local, même
+ * raisonnement que `EnregistrementConnexionGitHub`). Porte le verrou de
+ * confirmation (mot de passe haché, jamais en clair — voir
+ * `logique-metier/securite/verrouLocal.ts`) requis pour archiver un
+ * client/projet, et l'identité déclarative (email/visa) écrite dans
+ * `archived_by` — **pas** un compte, **pas** une authentification de
+ * session, **pas** une signature électronique (TD-011/TD-033).
+ */
+export interface EnregistrementProfilLocal {
+  id: 'unique'
+  email: string
+  visa: string
+  motDePasseHash: string
+  motDePasseSel: string
+  created_at: string
+  updated_at: string
+}
+
+/**
  * Configuration de connexion au dépôt GitHub dédié (URS-NF-044) —
  * enregistrement unique, pas par client : SDS §3 décrit un seul dépôt de
  * données pour l'ensemble de l'installation locale (`/data/projects/...`),
@@ -227,6 +247,7 @@ export class ValidaPharmDatabase extends Dexie {
   gabaritsExportClient!: EntityTable<GabaritExportClient, 'id'>
   methodProfilesRiskAssessment!: EntityTable<MethodProfileRiskAssessment, 'id'>
   risksAssessment!: EntityTable<RiskAssessment, 'id'>
+  profilLocal!: EntityTable<EnregistrementProfilLocal, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -417,6 +438,21 @@ export class ValidaPharmDatabase extends Dexie {
     this.version(27).stores({
       methodProfilesRiskAssessment: 'id, client_id, created_at',
       risksAssessment: 'id, client_id, method_profile_id, asset_node_id, parameter_id, created_at',
+    })
+    /**
+     * §4.31 (`URS-F-310`, TD-033) — profil utilisateur local (verrou de
+     * confirmation pour l'archivage de client/projet) + champs additifs
+     * `statut`/`archived_at`/`archived_by` sur `clients`/`projects` (non
+     * indexés : le volume par installation reste modeste, filtrage
+     * client-side comme le reste de l'application — cohérent avec
+     * `chargerClients`/`chargerProjets`, jamais de requête indexée sur ces
+     * tables). Les enregistrements `Client`/`Project` créés avant cette
+     * version n'ont pas ces champs : traités comme `statut: 'actif'` côté
+     * store (valeur absente ≠ `'archive'`), même garantie de non-régression
+     * que `workspace_id` (v20) ou `readiness` (v16→28).
+     */
+    this.version(28).stores({
+      profilLocal: 'id',
     })
   }
 }

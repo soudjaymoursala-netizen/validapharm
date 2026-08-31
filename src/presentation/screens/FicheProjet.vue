@@ -4,16 +4,19 @@
 // de cet incrément : la vue de traçabilité (graphe des liens) et le
 // chargement de documents restent backlog (tâche #12).
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { detecterEcartsStructurels } from '../../logique-metier/analyse-projet/detecterEcartsStructurels'
 import type { Project, TemplateType } from '../../logique-metier/domaine/types'
 import { analyserImportJSON } from '../../logique-metier/export/analyserImportJSON'
 import { libelleStatut } from '../i18n/messages'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import ModaleConfirmationArchivage from '../composants/ModaleConfirmationArchivage.vue'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useSectionsStore } from '../stores/useSectionsStore'
 
 const props = defineProps<{ projectId: string }>()
 
+const router = useRouter()
 const projetsStore = useProjectsStore()
 const sectionsStore = useSectionsStore()
 const projet = ref<Project | undefined>(undefined)
@@ -21,6 +24,13 @@ const formulaireOuvert = ref(false)
 const nouveauTitre = ref('')
 const nouveauTemplateType = ref<TemplateType>('contexte_procede')
 const erreurImport = ref<string | null>(null)
+const modaleArchivageOuverte = ref(false)
+
+async function confirmerArchivage(identiteDeclaree: string): Promise<void> {
+  await projetsStore.archiverProjet(props.projectId, identiteDeclaree)
+  modaleArchivageOuverte.value = false
+  await router.push({ name: 'tableau-de-bord' })
+}
 
 // Catalogue restreint à ce qui est réellement exploitable par la machine à
 // états et les garde-fous de cet incrément (URS §10, catalogue complet en
@@ -103,7 +113,12 @@ async function importerFichier(evenement: Event): Promise<void> {
 <template>
   <main v-if="projet" class="fiche-projet">
     <RouterLink :to="{ name: 'tableau-de-bord' }"> &larr; Tableau de bord </RouterLink>
-    <h1>{{ projet.name }}</h1>
+    <header class="entete-projet">
+      <h1>{{ projet.name }}</h1>
+      <button type="button" class="bouton-archiver" @click="modaleArchivageOuverte = true">
+        Archiver ce projet
+      </button>
+    </header>
     <section class="contexte">
       <p><strong>Contexte :</strong> {{ projet.context || '—' }}</p>
       <p><strong>Portée incluse :</strong> {{ projet.scope_in || '—' }}</p>
@@ -180,6 +195,13 @@ async function importerFichier(evenement: Event): Promise<void> {
         </li>
       </ul>
     </section>
+
+    <ModaleConfirmationArchivage
+      v-if="modaleArchivageOuverte"
+      :nom="projet.name"
+      @confirme="confirmerArchivage"
+      @annule="modaleArchivageOuverte = false"
+    />
   </main>
   <p v-else>Chargement…</p>
 </template>
@@ -191,6 +213,21 @@ async function importerFichier(evenement: Event): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.entete-projet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.entete-projet h1 {
+  margin: 0;
+}
+
+.bouton-archiver {
+  background-color: var(--vp-couleur-erreur, #b00020);
 }
 
 .contexte p {

@@ -60,6 +60,14 @@ export interface SignatureRole {
   date?: string
 }
 
+/**
+ * `actif`/`archive` — un projet archivé n'est jamais supprimé physiquement
+ * (ALCOA+, jamais de perte de donnée) : il disparaît de la liste
+ * principale mais reste intégralement lisible, restaurable et présent
+ * dans le dépôt GitHub. Voir §4.31/URS-F-310 (TD-033).
+ */
+export type StatutArchivage = 'actif' | 'archive'
+
 export interface Project {
   id: string
   name: string
@@ -72,6 +80,15 @@ export interface Project {
   sections: string[]
   documents: string[]
   links: LienProjet[]
+  statut: StatutArchivage
+  archived_at: string | null
+  /**
+   * Identité déclarée par l'utilisateur au moment de l'archivage (visa
+   * saisi dans le profil local, §4.31/URS-F-310bis) — jamais vérifiée
+   * cryptographiquement, jamais une signature électronique opposable
+   * (même limite qu'`EntreeJournalAudit.actor`, TD-011).
+   */
+  archived_by: string | null
   audit_log: EntreeJournalAudit[]
   created_at: string
   updated_at: string
@@ -134,6 +151,11 @@ export interface ProjectDocument {
 export interface Client {
   id: string
   name: string
+  statut: StatutArchivage
+  archived_at: string | null
+  /** Voir `Project.archived_by` — même limite (déclaratif, jamais une signature électronique). */
+  archived_by: string | null
+  audit_log: EntreeJournalAudit[]
   created_at: string
 }
 

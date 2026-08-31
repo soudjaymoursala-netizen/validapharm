@@ -2,12 +2,21 @@
 // Gestion des clients (FS §3 v12) — écran minimal : identité seule (nom).
 // Prérequis pour isoler par client_id la configuration du miroir Drive
 // (SDS §5bis/§7, tâche #25) et, plus tard, le fournisseur IA (tâche #14).
+//
+// Archivage (§4.31/URS-F-310, TD-033) : jamais une suppression physique
+// (ALCOA+) — voir `ModaleConfirmationArchivage.vue` pour la double garde
+// (nom retapé + mot de passe local, jamais une authentification).
 import { onMounted, ref } from 'vue'
+import ModaleConfirmationArchivage from '../composants/ModaleConfirmationArchivage.vue'
 import { useClientsStore } from '../stores/useClientsStore'
+import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import type { Client } from '../../logique-metier/domaine/types'
 
 const store = useClientsStore()
 const formulaireOuvert = ref(false)
 const nom = ref('')
+const afficherArchives = ref(false)
+const clientAArchiver = ref<Client | null>(null)
 
 onMounted(async () => {
   await store.chargerClients()
@@ -18,6 +27,16 @@ async function creerClient(): Promise<void> {
   await store.creerClient({ name: nom.value.trim() })
   formulaireOuvert.value = false
   nom.value = ''
+}
+
+async function confirmerArchivage(identiteDeclaree: string): Promise<void> {
+  if (!clientAArchiver.value) return
+  await store.archiverClient(clientAArchiver.value.id, identiteDeclaree)
+  clientAArchiver.value = null
+}
+
+async function desarchiver(client: Client): Promise<void> {
+  await store.desarchiverClient(client.id, IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1)
 }
 </script>
 
@@ -40,12 +59,12 @@ async function creerClient(): Promise<void> {
       </div>
     </form>
 
-    <p v-if="!store.enChargement && store.clients.length === 0" class="etat-vide">
-      Aucun client pour l'instant — créez le premier avec le bouton ci-dessus.
+    <p v-if="!store.enChargement && store.clientsActifs.length === 0" class="etat-vide">
+      Aucun client actif pour l'instant — créez le premier avec le bouton ci-dessus.
     </p>
 
     <ul v-else class="liste-clients">
-      <li v-for="client in store.clients" :key="client.id">
+      <li v-for="client in store.clientsActifs" :key="client.id">
         {{ client.name }}
         <RouterLink :to="{ name: 'liste-missions', params: { clientId: client.id } }">
           Missions
@@ -76,8 +95,33 @@ async function creerClient(): Promise<void> {
         <RouterLink :to="{ name: 'revue-structure-procedure', params: { clientId: client.id } }">
           Procédures
         </RouterLink>
+        <button type="button" class="bouton-archiver" @click="clientAArchiver = client">
+          Archiver
+        </button>
       </li>
     </ul>
+
+    <section class="bloc-archives">
+      <button type="button" class="lien-archives" @click="afficherArchives = !afficherArchives">
+        {{ afficherArchives ? 'Masquer' : 'Afficher' }} les clients archivés ({{
+          store.clientsArchives.length
+        }})
+      </button>
+      <ul v-if="afficherArchives" class="liste-clients liste-clients--archives">
+        <li v-for="client in store.clientsArchives" :key="client.id">
+          {{ client.name }}
+          <span class="meta">archivé le {{ client.archived_at }} par {{ client.archived_by }}</span>
+          <button type="button" @click="desarchiver(client)">Désarchiver</button>
+        </li>
+      </ul>
+    </section>
+
+    <ModaleConfirmationArchivage
+      v-if="clientAArchiver"
+      :nom="clientAArchiver.name"
+      @confirme="confirmerArchivage"
+      @annule="clientAArchiver = null"
+    />
   </main>
 </template>
 
@@ -145,6 +189,35 @@ button {
 
 .liste-clients li > :first-child {
   margin-right: auto;
+}
+
+.bouton-archiver {
+  background-color: var(--vp-couleur-erreur, #b00020);
+}
+
+.bloc-archives {
+  margin-top: 1.5rem;
+}
+
+.lien-archives {
+  background: none;
+  color: var(--vp-marque);
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.liste-clients--archives {
+  margin-top: 0.75rem;
+}
+
+.liste-clients--archives li {
+  opacity: 0.75;
+}
+
+.meta {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.85em;
 }
 
 .etat-vide {

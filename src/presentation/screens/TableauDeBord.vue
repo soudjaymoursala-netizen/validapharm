@@ -18,6 +18,7 @@ const clientsStore = useClientsStore()
 const syncStore = useSynchronisationStore()
 const router = useRouter()
 const formulaireOuvert = ref(false)
+const afficherArchives = ref(false)
 const dernierResultatSync = ref<ResultatSynchronisation | ResultatRecuperation | undefined>(
   undefined,
 )
@@ -147,18 +148,35 @@ async function recupererDepuisGitHub(): Promise<void> {
       </div>
     </form>
 
-    <p v-if="!projetsStore.enChargement && projetsStore.projects.length === 0" class="etat-vide">
-      Aucun projet pour l'instant — créez le premier avec le bouton ci-dessus.
+    <p
+      v-if="!projetsStore.enChargement && projetsStore.projetsActifs.length === 0"
+      class="etat-vide"
+    >
+      Aucun projet actif pour l'instant — créez le premier avec le bouton ci-dessus.
     </p>
 
     <ul v-else class="liste-projets">
-      <li v-for="projet in projetsStore.projects" :key="projet.id">
+      <li v-for="projet in projetsStore.projetsActifs" :key="projet.id">
         <RouterLink :to="{ name: 'fiche-projet', params: { projectId: projet.id } }">
           {{ projet.name }}
         </RouterLink>
         <span class="meta">{{ projet.sections.length }} section(s)</span>
       </li>
     </ul>
+
+    <section v-if="projetsStore.projetsArchives.length > 0" class="bloc-archives">
+      <button type="button" class="lien-archives" @click="afficherArchives = !afficherArchives">
+        {{ afficherArchives ? 'Masquer' : 'Afficher' }} les projets archivés ({{
+          projetsStore.projetsArchives.length
+        }})
+      </button>
+      <ul v-if="afficherArchives" class="liste-projets liste-projets--archives">
+        <li v-for="projet in projetsStore.projetsArchives" :key="projet.id">
+          {{ projet.name }}
+          <span class="meta">archivé le {{ projet.archived_at }} par {{ projet.archived_by }}</span>
+        </li>
+      </ul>
+    </section>
   </main>
 </template>
 
@@ -268,5 +286,25 @@ button:hover {
 
 .etat-vide {
   color: var(--vp-texte-secondaire);
+}
+
+.bloc-archives {
+  margin-top: 1.5rem;
+}
+
+.lien-archives {
+  background: none;
+  color: var(--vp-marque);
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.liste-projets--archives {
+  margin-top: 0.75rem;
+}
+
+.liste-projets--archives li {
+  opacity: 0.75;
 }
 </style>

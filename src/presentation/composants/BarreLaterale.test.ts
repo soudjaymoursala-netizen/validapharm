@@ -84,6 +84,11 @@ function routeurDeTest(): Router {
         name: 'risk-assessment-amdec',
         component: { template: '<div />' },
       },
+      {
+        path: '/profil-local',
+        name: 'profil-local',
+        component: { template: '<div />' },
+      },
     ],
   })
 }

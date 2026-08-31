@@ -3,7 +3,8 @@
 | | |
 |---|---|
 | **Référence** | SDS-VALIDAPHARM-2026-001 |
-| **Version** | 16 (rattrapage documentaire Phases 12-34 de convergence architecturale — Reasoning Engine, Context Engine, Organization/Workspace, Knowledge Graph, ~70 nouvelles tables Dexie — audit croisé URS/FS/FDS/SDS, 28/08/2026, §12) |
+| **Version** | 17 (§4.31/URS-F-310 — archivage protégé de client/projet, verrou local par mot de passe PBKDF2-SHA-256, nouvelle table `profilLocal`, 31/08/2026, TD-033 — §3bis/§7 mis à jour) |
+| **Version précédente** | 16 (rattrapage documentaire Phases 12-34 de convergence architecturale — Reasoning Engine, Context Engine, Organization/Workspace, Knowledge Graph, ~70 nouvelles tables Dexie — audit croisé URS/FS/FDS/SDS, 28/08/2026, §12) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
 | **Documents de référence** | `01-URS-outil.md` v62, `02-analyse-de-risque-outil.md` v28, `03-specifications-fonctionnelles.md` v52, `16-FDS-outil.md` v16, `08-conventions-codage.md` v02, `09-architecture-detaillee.md` v03, `23-revue-multi-experts-SDS.md` v01, `24-audit-swissmedic-SDS.md` v01, `25-audit-fda-SDS.md` v01, `36-revue-multi-experts-SDS-v04.md` v01, `37-audit-swissmedic-SDS-v05.md` v01, `38-audit-fda-SDS-v05.md` v01 (closes) — `docs/convergence/PHASE_13_*` à `PHASE_34_*` pour le détail exhaustif de chaque phase |
@@ -101,6 +102,7 @@ La FDS (v04) décrit le comportement fonctionnel détaillé : écrans, flux, mac
 | Gabarits d'export client | `gabaritsExportClient` | 26 |
 | Contexte procédé | `processes`, `fonctionsActif`, `associationsFonctionAssetNode`, `associationsFonctionProcess`, `manufacturingContexts` | 4 |
 | Documents projet | `projectDocuments` | (préexistant, enfin consommé Phase 33) |
+| Profil local (verrou d'archivage) | `profilLocal` | §4.31, 31/08/2026, TD-033 |
 
 **Non couvert par cette liste** : les entités du domaine Manufacturing du package d'architecture cible (`Product`/`Material`/`Recipe`/`Format`/`Configuration`/`Batch`) n'ont aucune table correspondante — absence non documentée comme différée dans l'URS/FS, contrairement au reste des écarts de ce projet (à signaler explicitement plutôt qu'à faire apparaître comme couvert par accident de similarité de nom).
 
@@ -156,6 +158,7 @@ La FDS (v04) décrit le comportement fonctionnel détaillé : écrans, flux, mac
 - Scan de secrets automatique avant chaque commit sur le **dépôt de conception** (hook pre-commit, `scripts/hooks/pre-commit`), rejet du commit si un pattern de clé/jeton est détecté dans un fichier suivi — protège le code source, distinct des secrets d'exécution ci-dessus qui ne sont jamais commités nulle part.
 - Quota configurable par fournisseur (URS-NF-048) implémenté au niveau du routeur IA — compteur d'appels/coût estimé, seuil configurable par `client_config`, blocage des nouveaux appels au-delà du seuil avec message explicite.
 - **Fiabilité de l'horodatage — risque largement résolu par effet de bord (ajouté v03 — audit FDA simulé, MAJ-01 ; réévalué v11 — architecture web pure, AR-R-47)** : la remédiation "Phase 3, horodatage serveur" prévue à l'origine est en réalité disponible **dès la Phase 1** grâce au choix de l'API GitHub — un commit créé via l'API est horodaté par les serveurs GitHub, indépendamment de l'horloge du poste client, **à condition que le connecteur n'envoie jamais de date `author`/`committer` explicite dans la requête de création de commit** (l'API l'accepterait sinon, ce qui réintroduirait la faiblesse). Règle d'implémentation non négociable : `GitHubConnector.ecrire()` ne transmet jamais de champ de date — laisse systématiquement GitHub assigner l'horodatage serveur. Limite résiduelle assumée : ceci authentifie le moment de réception par GitHub, pas une preuve cryptographique au sens Part 11 complet (toujours hors périmètre Phase 1).
+- **Verrou local d'archivage — dérogation étroite et documentée (ajouté v17 — 31/08/2026, §4.31/URS-F-310, TD-033)** : `logique-metier/securite/verrouLocal.ts` implémente un mot de passe local (PBKDF2-SHA-256, 100 000 itérations, sel aléatoire par profil, Web Crypto API) requis pour archiver un `Client`/`Project`. **Ce n'est pas un mécanisme d'authentification** : il est vérifié uniquement côté client, aucun secret serveur n'intervient, et le hachage stocké dans `profilLocal` (IndexedDB) reste lisible par quiconque a déjà accès au navigateur via les DevTools — même modèle de risque que les jetons d'API déjà documentés ci-dessus, jamais présenté comme une protection supérieure. Explicitement hors du champ interdit par TD-011 (aucun rôle, aucune session, un seul enregistrement local par installation, jamais qualifié de signature électronique dans l'UI ou l'export).
 
 ## 8. Journal d'anomalies — implémentation
 

@@ -66,6 +66,7 @@ ValidaPharm est un outil d'aide à la rédaction de livrables qualité **CQV / C
 
 - Dépôt Git **privé** dédié, accès restreint.
 - **(ajouté v3, 23/08/2026)** L'accès au dépôt se fait via un jeton d'API GitHub (PAT à portée restreinte au dépôt dédié) — jamais de mot de passe. Le stockage de ce jeton **dans le navigateur** est un risque assumé et documenté (surface XSS), pas simplement ignoré — voir AR-R-61, mitigation en SDS §7.
+- **Dérogation étroite (ajoutée 31/08/2026, TD-033)** : un mot de passe local existe pour l'archivage de client/projet (§4.31/URS-F-310) — ce n'est **pas** une exception au principe ci-dessus pour l'accès au dépôt ou une authentification déguisée. C'est un **verrou de confirmation** local (haché PBKDF2-SHA-256, vérifié uniquement côté client, jamais un contrôle d'accès réel) explicitement écarté du champ d'application de TD-011 (aucun RBAC, aucune session, aucun rôle, un seul enregistrement local par installation) — voir TD-033 pour la justification complète et les limites assumées.
 - Aucune donnée métier (procédés, formules, résultats) envoyée à une API cloud sans action explicite et consciente de l'utilisateur ; le chat expert par défaut ne voit que la question posée, pas le document.
 - Sauvegarde Drive chiffrée par les mécanismes natifs du compte Google de l'utilisateur (pas de duplication vers un tiers additionnel).
 - Dès la Phase 3 : gestion des mots de passe avec hachage fort (bcrypt/argon2), sessions expirables, principe du moindre privilège par rôle.

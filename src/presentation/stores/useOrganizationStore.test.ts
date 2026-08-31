@@ -12,7 +12,15 @@ beforeEach(async () => {
 })
 
 async function creerClient(nom: string) {
-  const client = { id: crypto.randomUUID(), name: nom, created_at: new Date().toISOString() }
+  const client = {
+    id: crypto.randomUUID(),
+    name: nom,
+    statut: 'actif' as const,
+    archived_at: null,
+    archived_by: null,
+    audit_log: [],
+    created_at: new Date().toISOString(),
+  }
   await db.clients.put(client)
   return client
 }

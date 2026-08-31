@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { Langue, LienProjet, Project } from '../../logique-metier/domaine/types'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
@@ -14,6 +14,8 @@ export interface NouveauProjetInput {
   client_id: string | null
 }
 
+export type ErreurArchivageProjet = { erreur: 'introuvable' | 'deja_archive' | 'deja_actif' }
+
 /**
  * Store de la Couche Présentation (SDS §6) orchestrant la persistance
  * locale (`persistance/db.ts`) pour la gestion de projets (FS §4.0). Ne
@@ -25,6 +27,9 @@ export interface NouveauProjetInput {
 export const useProjectsStore = defineStore('projects', () => {
   const projects = ref<Project[]>([])
   const enChargement = ref(false)
+
+  const projetsActifs = computed(() => projects.value.filter((p) => p.statut !== 'archive'))
+  const projetsArchives = computed(() => projects.value.filter((p) => p.statut === 'archive'))
 
   async function chargerProjets(): Promise<void> {
     enChargement.value = true
@@ -50,6 +55,9 @@ export const useProjectsStore = defineStore('projects', () => {
       sections: [],
       documents: [],
       links: [],
+      statut: 'actif',
+      archived_at: null,
+      archived_by: null,
       audit_log: [
         { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
       ],
@@ -151,13 +159,76 @@ export const useProjectsStore = defineStore('projects', () => {
     if (index !== -1) projects.value[index] = projetMisAJour
   }
 
+  /**
+   * Archivage (§4.31/URS-F-310, TD-033) — jamais une suppression physique
+   * (ALCOA+) : `statut` bascule à `archive`, le projet reste lisible et
+   * restaurable. La garde de confirmation (nom retapé + mot de passe
+   * local) est vérifiée par l'appelant avant d'invoquer cette fonction,
+   * jamais ici (même séparation que `useClientsStore.archiverClient`).
+   */
+  async function archiverProjet(
+    projectId: string,
+    identiteDeclaree: string,
+  ): Promise<Project | ErreurArchivageProjet> {
+    const existant = await db.projects.get(projectId)
+    if (!existant) return { erreur: 'introuvable' }
+    if (existant.statut === 'archive') return { erreur: 'deja_archive' }
+
+    const maintenant = new Date().toISOString()
+    const projetMisAJour: Project = {
+      ...existant,
+      statut: 'archive',
+      archived_at: maintenant,
+      archived_by: identiteDeclaree,
+      updated_at: maintenant,
+      audit_log: [
+        ...existant.audit_log,
+        { timestamp: maintenant, actor: identiteDeclaree, action: 'archivage' },
+      ],
+    }
+    await db.projects.put(projetMisAJour)
+    const index = projects.value.findIndex((p) => p.id === projectId)
+    if (index !== -1) projects.value[index] = projetMisAJour
+    return projetMisAJour
+  }
+
+  async function desarchiverProjet(
+    projectId: string,
+    identiteDeclaree: string,
+  ): Promise<Project | ErreurArchivageProjet> {
+    const existant = await db.projects.get(projectId)
+    if (!existant) return { erreur: 'introuvable' }
+    if (existant.statut !== 'archive') return { erreur: 'deja_actif' }
+
+    const maintenant = new Date().toISOString()
+    const projetMisAJour: Project = {
+      ...existant,
+      statut: 'actif',
+      archived_at: null,
+      archived_by: null,
+      updated_at: maintenant,
+      audit_log: [
+        ...existant.audit_log,
+        { timestamp: maintenant, actor: identiteDeclaree, action: 'désarchivage' },
+      ],
+    }
+    await db.projects.put(projetMisAJour)
+    const index = projects.value.findIndex((p) => p.id === projectId)
+    if (index !== -1) projects.value[index] = projetMisAJour
+    return projetMisAJour
+  }
+
   return {
     projects,
+    projetsActifs,
+    projetsArchives,
     enChargement,
     chargerProjets,
     creerProjet,
     obtenirProjet,
     ajouterLien,
     retirerLien,
+    archiverProjet,
+    desarchiverProjet,
   }
 })

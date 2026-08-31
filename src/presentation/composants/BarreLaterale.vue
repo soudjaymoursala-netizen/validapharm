@@ -103,6 +103,7 @@ function basculerMode(nouveauMode: ModeAffichage): void {
       <p class="sidebar__titre-groupe">Clients &amp; configuration</p>
       <RouterLink :to="{ name: 'gestion-clients' }">Clients</RouterLink>
       <RouterLink :to="{ name: 'configuration-client' }">Configuration GitHub</RouterLink>
+      <RouterLink :to="{ name: 'profil-local' }">Profil local</RouterLink>
     </div>
   </nav>
 </template>

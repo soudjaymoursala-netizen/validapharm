@@ -61,6 +61,11 @@ export const router = createRouter({
       component: () => import('../screens/GestionClients.vue'),
     },
     {
+      path: '/profil-local',
+      name: 'profil-local',
+      component: () => import('../screens/ProfilLocal.vue'),
+    },
+    {
       path: '/clients/:clientId/drive',
       name: 'configuration-drive',
       component: () => import('../screens/ConfigurationDrive.vue'),
