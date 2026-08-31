@@ -523,7 +523,7 @@ Après la Phase 34, l'utilisateur demande une vérification par l'usage plutôt 
 | Store orphelin | Domaine / Phase | Impact concret pour un vrai parcours |
 |---|---|---|
 | ~~`useTestDefinitionStore`, `useExecutionStore`, `useEvidenceStore`~~ | Phase 7 (Requirement→Test→Execution→Evidence) | **Comblé le 31/08/2026, voir §5.32** — écrans construits et vérifiés en navigateur réel |
-| `useParameterStore` | Phase 2 (Parameter/CPP/CQA) | Aucun écran pour classer un paramètre critique et le promouvoir CPP/CQA |
+| ~~`useParameterStore`~~ | Phase 2 (Parameter/CPP/CQA) | **Comblé le 31/08/2026, voir §5.33** — écran construit et vérifié en navigateur réel |
 | `useRiskAssessmentStore` | Phase 29 (Risk Assessment AMDEC autonome) | Seul le petit tableau S×O×D intégré au gabarit DQ est utilisable, pas la vraie méthodologie AMDEC versionnée par client |
 | `useContentPlanStore` | Phase 28 (Deliverable Intelligence) | Pas de calcul de complétude du dossier de livrables visible |
 | `useSourceIntelligenceStore` | Phase 8a (Source→Extraction→KnowledgeItem) | Pipeline d'ingestion documentaire sans point d'entrée UI |
@@ -541,6 +541,16 @@ Suite directe de la priorité identifiée en §5.31, sur autorisation explicite 
 - Tests unitaires (`DefinitionTests.test.ts`, `ExecutionTests.test.ts`) : chemin heureux complet + les deux garde-fous ci-dessus. Un test a d'abord échoué en environnement de test (jsdom) alors que le parcours identique fonctionnait sans erreur en navigateur réel — root cause diagnostiquée par élimination : (1) `onMounted` enchaîne 5 lectures IndexedDB séquentielles (structure/tests/exécutions/preuves), un seul `flushPromises()` après le montage ne suffit pas toujours à les vider avant qu'une option n'apparaisse dans un `<select>` — corrigé par une boucle d'attente explicite sur la présence de l'option ; (2) un deuxième bug était dans le test lui-même, pas dans l'écran : un index de sélecteur `.ligne-formulaire[2]` visait par erreur le bloc Clôture au lieu du bloc Preuves (ordre réel : Événement=0, Preuves=1, Clôture=2). Aucun bug applicatif trouvé sur ce chemin — la divergence était intégralement due à la robustesse temporelle du test, pas au comportement de l'écran.
 - 710 tests verts (102 fichiers), typecheck et lint propres. Aucun changement de schéma Dexie (tables déjà existantes depuis 7a/7b/7c).
 - Poussé sur `main` (fast-forward, aucune divergence avec la session Desktop locale au moment du push).
+
+### 5.33 Phase 2 — écran `ParametresCritiques` construit, gap comblé (31/08/2026)
+
+Suite logique de §5.32 dans l'ordre des phases (sur confirmation explicite de l'utilisateur de poursuivre « la suite logique tant que tous les gaps sont résolus »). Un écran nouveau, route `/clients/:clientId/parametres-critiques`, entrée sidebar « Paramètres critiques » :
+
+- **`ParametresCritiques.vue`** — `Parameter → ClassificationCriticiteParametre` (indicatif) + `CPP`/`CQA` (déclarations humaines explicites et **séparées**, jamais dérivées d'une classification — DEC-019 : *"Un CPP ne doit jamais être promu automatiquement à partir d'un simple score de criticité"*). Quatre formulaires distincts : création de `Parameter`, classification (niveau important/critique + justification, ne crée ni CPP ni CQA), déclaration de CPP (rattaché à un `Parameter`, contexte + justification requis), déclaration de CQA (indépendant, pas de `parameter_id`). Désactivation de CPP/CQA jamais une suppression — motif tracé dans `audit_log`, cohérent avec le principe déjà acté pour `ExecutionStep`/`Evidence` (Phase 7).
+- Vérifié en navigateur réel (Playwright, profil persistant) sur le scénario PharmaTech Solutions / autoclave AC-104 (paramètre F0, classifié critique, CPP et CQA déclarés séparément) : aucune erreur console, persistance confirmée après reload, désactivation du CPP confirmée (disparaît de la liste des CPP actifs sans supprimer l'enregistrement).
+- Tests unitaires (`ParametresCritiques.test.ts`) : chemin heureux complet (paramètre → classification → CPP → CQA → désactivation) + garde-fou explicite qu'une classification `important` ne crée jamais de CPP/CQA (DEC-019). Leçon de §5.32 appliquée dès l'écriture : boucle d'attente explicite sur la présence de l'option dans le `<select>` avant interaction — les deux tests sont passés du premier coup, aucun faux-négatif cette fois.
+- 712 tests verts (103 fichiers), typecheck et lint propres. Aucun changement de schéma Dexie (tables déjà existantes depuis la Phase 2 d'origine).
+- Poussé sur `main` (fast-forward, aucune divergence au moment du push).
 
 ---
 

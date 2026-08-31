@@ -64,6 +64,11 @@ function routeurDeTest(): Router {
         name: 'execution-tests',
         component: { template: '<div />' },
       },
+      {
+        path: '/clients/:clientId/parametres-critiques',
+        name: 'parametres-critiques',
+        component: { template: '<div />' },
+      },
     ],
   })
 }

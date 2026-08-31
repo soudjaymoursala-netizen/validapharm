@@ -19,6 +19,10 @@ const outilsClientActif = computed(() => {
     { nom: 'Exigences et tests', route: { name: 'definition-tests', params: { clientId } } },
     { nom: 'Exécution de tests', route: { name: 'execution-tests', params: { clientId } } },
     {
+      nom: 'Paramètres critiques',
+      route: { name: 'parametres-critiques', params: { clientId } },
+    },
+    {
       nom: 'Stratégie de qualification',
       route: { name: 'assistant-strategie-qualification', params: { clientId } },
     },

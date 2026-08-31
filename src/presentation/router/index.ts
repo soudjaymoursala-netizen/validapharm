@@ -132,6 +132,12 @@ export const router = createRouter({
       component: () => import('../screens/ExecutionTests.vue'),
       props: true,
     },
+    {
+      path: '/clients/:clientId/parametres-critiques',
+      name: 'parametres-critiques',
+      component: () => import('../screens/ParametresCritiques.vue'),
+      props: true,
+    },
   ],
 })
 
