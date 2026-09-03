@@ -11,10 +11,15 @@ const MODE_PAR_DEFAUT: ModeAffichage = 'expert'
  * PHASE_16_COQUILLE_UX_SPEC.md` §3) — préférence d'affichage côté
  * navigateur (`localStorage`), pas une donnée métier. "Coexistants sur le
  * même moteur" (vision produit) : aucun nouveau moteur n'est créé pour le
- * mode Assistant. **Limite assumée** : ce store ne fait, dans ce lot,
- * qu'exposer et persister la préférence — aucun écran existant n'en
- * modifie encore son comportement (différencier réellement les deux modes
- * suppose la Phase 17, Mission workspace, qui n'existe pas encore).
+ * mode Assistant, seulement une vue filtrée du même menu.
+ *
+ * Différenciation réelle ajoutée v21 (31/08/2026, URS-F-220quinquies
+ * comblé) — `BarreLaterale.vue` restreint la navigation "Mon site" au
+ * parcours guidé en Mode Assistant (Missions, Structure Système,
+ * Stratégie de qualification, évaluations, Procédures, Assistant IA) et
+ * masque les écrans de configuration avancée (Configuration GitHub,
+ * Profil local) — jamais un écran supprimé, seulement caché tant que le
+ * Mode Expert n'est pas réactivé.
  */
 export const useModeAffichageStore = defineStore('modeAffichage', () => {
   const mode = ref<ModeAffichage>(lireDepuisStockage())

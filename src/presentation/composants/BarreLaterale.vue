@@ -9,6 +9,17 @@
 // (nom réel, pas seulement son id technique), sidebar fixe pendant le
 // défilement du contenu — aucun changement de logique de navigation,
 // seulement de présentation.
+//
+// Différenciation réelle Mode Expert/Mode Assistant (v21, 31/08/2026) —
+// comble URS-F-220quinquies : jusqu'ici le bouton changeait seulement son
+// propre état visuel, "aucune différenciation comportementale" n'existant
+// nulle part ailleurs, bloquée sur l'absence de la Phase 17 (Mission
+// workspace) — désormais construite (§4.23). Mode Assistant restreint la
+// navigation aux outils du parcours guidé (Missions comme point d'entrée,
+// évaluations, procédures) ; Mode Expert garde l'accès complet, y compris
+// aux écrans de configuration avancée. Jamais un nouveau moteur ni un
+// écran retiré (URS-F-220quinquies) — seulement une vue filtrée du même
+// menu, réversible à tout instant.
 import { computed, ref, watch } from 'vue'
 import { useClientActifStore } from '../stores/useClientActifStore'
 import { useClientsStore } from '../stores/useClientsStore'
@@ -45,89 +56,114 @@ interface OutilClient {
   nom: string
   icone: NomIcone
   route: { name: string; params: Record<string, string> }
+  /** Visible en Mode Assistant — parcours guidé restreint (v21). */
+  guide: boolean
 }
+
+const TOUS_LES_OUTILS_CLIENT = (clientId: string): OutilClient[] => [
+  {
+    nom: 'Missions',
+    icone: 'reseau',
+    route: { name: 'liste-missions', params: { clientId } },
+    guide: true,
+  },
+  {
+    nom: 'Structure Système',
+    icone: 'batiment',
+    route: { name: 'structure-systeme', params: { clientId } },
+    guide: true,
+  },
+  {
+    nom: 'Exigences et tests',
+    icone: 'reglettes',
+    route: { name: 'definition-tests', params: { clientId } },
+    guide: false,
+  },
+  {
+    nom: 'Exécution de tests',
+    icone: 'graphique',
+    route: { name: 'execution-tests', params: { clientId } },
+    guide: false,
+  },
+  {
+    nom: 'Paramètres critiques',
+    icone: 'reglettes',
+    route: { name: 'parametres-critiques', params: { clientId } },
+    guide: false,
+  },
+  {
+    nom: 'Ingestion documentaire',
+    icone: 'nuage',
+    route: { name: 'source-intelligence', params: { clientId } },
+    guide: false,
+  },
+  {
+    nom: 'Plans de livrable',
+    icone: 'dossier',
+    route: { name: 'content-plan', params: { clientId } },
+    guide: false,
+  },
+  {
+    nom: 'Risk Assessment (AMDEC)',
+    icone: 'flacon',
+    route: { name: 'risk-assessment-amdec', params: { clientId } },
+    guide: false,
+  },
+  {
+    nom: 'Stratégie de qualification',
+    icone: 'bouclier',
+    route: { name: 'assistant-strategie-qualification', params: { clientId } },
+    guide: true,
+  },
+  {
+    nom: 'Impact Assessment',
+    icone: 'bouclier',
+    route: { name: 'impact-assessment', params: { clientId } },
+    guide: true,
+  },
+  {
+    nom: 'Computer System Assessment',
+    icone: 'bouclier',
+    route: { name: 'csv-assessment', params: { clientId } },
+    guide: true,
+  },
+  {
+    nom: 'Assistant IA',
+    icone: 'etincelles',
+    route: { name: 'panneau-chat', params: { clientId } },
+    guide: true,
+  },
+  {
+    nom: 'Procédures',
+    icone: 'flux',
+    route: { name: 'revue-structure-procedure', params: { clientId } },
+    guide: true,
+  },
+  {
+    nom: "Journal d'anomalies",
+    icone: 'alerte-triangle',
+    route: { name: 'journal-anomalies', params: { clientId } },
+    guide: false,
+  },
+  {
+    nom: 'Connecteurs QMS',
+    icone: 'lien',
+    route: { name: 'configuration-connecteurs-qms', params: { clientId } },
+    guide: false,
+  },
+  {
+    nom: 'Miroir Drive',
+    icone: 'nuage',
+    route: { name: 'configuration-drive', params: { clientId } },
+    guide: false,
+  },
+]
 
 const outilsClientActif = computed<OutilClient[] | null>(() => {
   const clientId = clientActifStore.clientActifId
   if (!clientId) return null
-  return [
-    { nom: 'Missions', icone: 'reseau', route: { name: 'liste-missions', params: { clientId } } },
-    {
-      nom: 'Structure Système',
-      icone: 'batiment',
-      route: { name: 'structure-systeme', params: { clientId } },
-    },
-    {
-      nom: 'Exigences et tests',
-      icone: 'reglettes',
-      route: { name: 'definition-tests', params: { clientId } },
-    },
-    {
-      nom: 'Exécution de tests',
-      icone: 'graphique',
-      route: { name: 'execution-tests', params: { clientId } },
-    },
-    {
-      nom: 'Paramètres critiques',
-      icone: 'reglettes',
-      route: { name: 'parametres-critiques', params: { clientId } },
-    },
-    {
-      nom: 'Ingestion documentaire',
-      icone: 'nuage',
-      route: { name: 'source-intelligence', params: { clientId } },
-    },
-    {
-      nom: 'Plans de livrable',
-      icone: 'dossier',
-      route: { name: 'content-plan', params: { clientId } },
-    },
-    {
-      nom: 'Risk Assessment (AMDEC)',
-      icone: 'flacon',
-      route: { name: 'risk-assessment-amdec', params: { clientId } },
-    },
-    {
-      nom: 'Stratégie de qualification',
-      icone: 'bouclier',
-      route: { name: 'assistant-strategie-qualification', params: { clientId } },
-    },
-    {
-      nom: 'Impact Assessment',
-      icone: 'bouclier',
-      route: { name: 'impact-assessment', params: { clientId } },
-    },
-    {
-      nom: 'Computer System Assessment',
-      icone: 'bouclier',
-      route: { name: 'csv-assessment', params: { clientId } },
-    },
-    {
-      nom: 'Assistant IA',
-      icone: 'etincelles',
-      route: { name: 'panneau-chat', params: { clientId } },
-    },
-    {
-      nom: 'Procédures',
-      icone: 'flux',
-      route: { name: 'revue-structure-procedure', params: { clientId } },
-    },
-    {
-      nom: "Journal d'anomalies",
-      icone: 'alerte-triangle',
-      route: { name: 'journal-anomalies', params: { clientId } },
-    },
-    {
-      nom: 'Connecteurs QMS',
-      icone: 'lien',
-      route: { name: 'configuration-connecteurs-qms', params: { clientId } },
-    },
-    {
-      nom: 'Miroir Drive',
-      icone: 'nuage',
-      route: { name: 'configuration-drive', params: { clientId } },
-    },
-  ]
+  const outils = TOUS_LES_OUTILS_CLIENT(clientId)
+  return modeStore.mode === 'assistant' ? outils.filter((o) => o.guide) : outils
 })
 
 function basculerMode(nouveauMode: ModeAffichage): void {
@@ -193,6 +229,9 @@ function basculerMode(nouveauMode: ModeAffichage): void {
           </div>
         </div>
         <p v-else class="sidebar__titre-groupe">Mon site</p>
+        <p v-if="modeStore.mode === 'assistant' && outilsClientActif" class="sidebar__note-mode">
+          Parcours guidé — le Mode Expert donne accès à tous les outils.
+        </p>
         <template v-if="outilsClientActif">
           <RouterLink v-for="outil in outilsClientActif" :key="outil.nom" :to="outil.route">
             <IconeSvg :nom="outil.icone" :taille="16" />
@@ -210,14 +249,16 @@ function basculerMode(nouveauMode: ModeAffichage): void {
           <IconeSvg nom="utilisateur" :taille="16" />
           Clients
         </RouterLink>
-        <RouterLink :to="{ name: 'configuration-client' }">
-          <IconeSvg nom="engrenage" :taille="16" />
-          Configuration GitHub
-        </RouterLink>
-        <RouterLink :to="{ name: 'profil-local' }">
-          <IconeSvg nom="cadenas" :taille="16" />
-          Profil local
-        </RouterLink>
+        <template v-if="modeStore.mode === 'expert'">
+          <RouterLink :to="{ name: 'configuration-client' }">
+            <IconeSvg nom="engrenage" :taille="16" />
+            Configuration GitHub
+          </RouterLink>
+          <RouterLink :to="{ name: 'profil-local' }">
+            <IconeSvg nom="cadenas" :taille="16" />
+            Profil local
+          </RouterLink>
+        </template>
       </div>
     </div>
   </nav>
@@ -395,6 +436,13 @@ function basculerMode(nouveauMode: ModeAffichage): void {
 .sidebar__groupe a:hover :deep(svg),
 .sidebar__groupe a.router-link-active :deep(svg) {
   color: var(--vp-marque);
+}
+
+.sidebar__note-mode {
+  margin: 0 0 0.4rem 0.5rem;
+  font-size: 0.72rem;
+  color: var(--vp-texte-secondaire);
+  font-style: italic;
 }
 
 .sidebar__invite {
