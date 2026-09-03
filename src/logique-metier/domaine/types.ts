@@ -267,7 +267,7 @@ export interface AssetNode {
   code: string
   parent_id: string | null
   associated_nodes: string[]
-  source: 'manuel' | 'qms_pull'
+  source: 'manuel' | 'qms_pull' | 'import_fichier'
   qms_connector_id: string | null
   periodic_qualification: { applicable: boolean; deadline: string | null }
   qualification_status: QualificationStatus
