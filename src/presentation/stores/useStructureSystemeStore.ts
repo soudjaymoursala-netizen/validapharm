@@ -15,7 +15,13 @@ import type {
 } from '../../logique-metier/domaine/types'
 import { noeudsVisiblesDepuisWorkspace as calculerNoeudsVisibles } from '../../logique-metier/organisation/noeudsVisiblesDepuisWorkspace'
 import { introduitUnCycle } from '../../logique-metier/structure-systeme/detectionCycle'
+import {
+  preparerImportHierarchie,
+  type ErreurLigneImportHierarchie,
+} from '../../logique-metier/structure-systeme/importerHierarchieXlsx'
 import { codeDejaUtilise } from '../../logique-metier/structure-systeme/validerCodeUnique'
+import { extraireGrilleXlsx } from '../../connecteurs/office/XlsxNatifAdapter'
+import { DocumentInvalideError } from '../../connecteurs/office/erreurs'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
@@ -39,6 +45,13 @@ export type ResultatActionNoeud =
   | { ok: false; raison: 'code_deja_utilise' }
   | { ok: false; raison: 'cycle_introduit' }
   | { ok: false; raison: 'workspace_introuvable' }
+
+export type ResultatImportHierarchie =
+  | { ok: true; noeudsCrees: number; erreurs: ErreurLigneImportHierarchie[] }
+  | { ok: false; raison: 'fichier_illisible' }
+  | { ok: false; raison: 'grille_vide' }
+  | { ok: false; raison: 'colonne_niveau_inconnue'; entete: string }
+  | { ok: false; raison: 'ordre_colonnes_incoherent'; entete: string }
 
 export type ResultatCreationRelationTechnique =
   | { ok: true; relation: RelationTechnique }
@@ -135,6 +148,74 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     await db.assetNodes.put(noeud)
     noeuds.value = [...noeuds.value, noeud]
     return { ok: true }
+  }
+
+  /**
+   * Import en lot d'une hiérarchie d'actifs depuis un classeur `.xlsx`
+   * (Phase 36, TD-042) — lecture native minimale
+   * (`XlsxNatifAdapter.extraireGrilleXlsx`) puis planification pure
+   * (`preparerImportHierarchie`), jamais d'écriture avant validation
+   * complète du plan. Écrit en un seul lot Dexie (`bulkPut`) plutôt
+   * qu'un `creerNoeud` par ligne, pour ne pas laisser une hiérarchie
+   * partiellement importée si une erreur survient en cours de route
+   * (la planification, elle, échoue ou réussit avant toute écriture).
+   */
+  async function importerHierarchieDepuisXlsx(
+    clientId: string,
+    fichier: ArrayBuffer,
+  ): Promise<ResultatImportHierarchie> {
+    let grille: string[][]
+    try {
+      grille = (await extraireGrilleXlsx(fichier)).lignes
+    } catch (erreur) {
+      if (erreur instanceof DocumentInvalideError) {
+        return { ok: false, raison: 'fichier_illisible' }
+      }
+      throw erreur
+    }
+
+    // Relus frais depuis Dexie (jamais depuis `schema.value`/`noeuds.value`,
+    // des refs réactifs Vue) — même piège que `ajouterNiveau`/`creerNoeud`.
+    const schemaActuel = (await db.assetHierarchySchemas.get(clientId)) ?? {
+      client_id: clientId,
+      levels: [],
+    }
+    const noeudsExistants = await db.assetNodes.where('client_id').equals(clientId).toArray()
+
+    const resultat = preparerImportHierarchie(grille, schemaActuel, noeudsExistants)
+    if (!resultat.ok) return resultat
+
+    const maintenant = new Date().toISOString()
+    const nouveauxNoeuds: AssetNode[] = resultat.plan.aCreer.map((n) => ({
+      id: n.id,
+      client_id: clientId,
+      workspace_id: null,
+      level_key: n.level_key,
+      name: n.name,
+      code: n.code,
+      parent_id: n.parent_id,
+      associated_nodes: [],
+      source: 'import_fichier',
+      qms_connector_id: null,
+      periodic_qualification: { applicable: false, deadline: null },
+      qualification_status: 'non_qualifie',
+      audit_log: [
+        {
+          timestamp: maintenant,
+          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          action: 'création (import XLSX)',
+        },
+      ],
+      created_at: maintenant,
+      updated_at: maintenant,
+    }))
+
+    if (nouveauxNoeuds.length > 0) {
+      await db.assetNodes.bulkPut(nouveauxNoeuds)
+      noeuds.value = [...noeuds.value, ...nouveauxNoeuds]
+    }
+
+    return { ok: true, noeudsCrees: nouveauxNoeuds.length, erreurs: resultat.plan.erreurs }
   }
 
   /**
@@ -275,6 +356,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     charger,
     ajouterNiveau,
     creerNoeud,
+    importerHierarchieDepuisXlsx,
     reparenterNoeud,
     noeudsVisiblesDepuisWorkspace,
     creerRelationTechnique,
