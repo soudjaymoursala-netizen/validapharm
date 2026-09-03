@@ -344,6 +344,26 @@ Confirmé (TD-034) comme une reformulation narrative de la Target Architecture v
 - **Ce qui reste à faire avant l'implémentation** : spec dédiée (`PHASE_35_TEST_DESIGN_ENGINE_SPEC.md`), suivant le patron déjà validé de `readinessContentPlan.ts`/`evaluerVerdictRiskAssessment.ts` (fonction pure, statuts `PROPOSED/NEEDS_INFORMATION/NEEDS_REVIEW/ACCEPTED/REJECTED` déjà présents sur `TestCandidate`), éventuellement précédée d'une revue panel si le domaine s'avère aussi structurant que Phase 5 (Quality Events) l'a été.
 - **Statut** : **non engagée** — identifiée comme priorité P0 du prochain cycle avec son grounding rassemblé, pour ne pas repartir de zéro à la prochaine session.
 
+## Phase 36 — Import d'architecture XLSX (résolution partielle TD-014)
+
+- **Dependencies** : Phase 4 (`AssetHierarchySchema`/`AssetNode`), `jszip` déjà présent (TD-014, lecture `.docx`).
+- **Contexte** : demande explicite de l'utilisateur en discutant l'écran Architecture de site (§5 de son parcours détaillé) — trouver une solution au blocage Excel plutôt qu'un contournement.
+- **Décision (TD-042)** : lecteur XLSX minimal et dédié (`jszip`+`DOMParser`, jamais de librairie Excel généraliste), scope étroit aux valeurs de cellules, convention colonne=niveau de hiérarchie.
+- **Statut** : **engagée le 03/09/2026** sur demande explicite de l'utilisateur ("tu feras ce chantier maintenant").
+
+## Phase 37 — Authentification multi-utilisateur (OAuth GitHub) + partage projet
+
+- **Dependencies** : Phase 11 (Organization/Workspace), `Section.owner_id`/`shared_with` (déjà modélisés depuis la Phase 0, jamais câblés).
+- **Contexte** : `CONFLICT-004` résolu (03/09/2026) — vrai modèle commercial multi-utilisateur, pas une aspiration vague.
+- **Décision (TD-043)** : OAuth GitHub comme identité (pas un système de mot de passe maison), partage appliqué en convention UX (pas une frontière de sécurité réelle), collaborateurs GitHub du dépôt d'organisation comme modèle RBAC réutilisé.
+- **Statut** : **engagée le 03/09/2026** sur demande explicite de l'utilisateur.
+
+## Phase 38 — Couche IA : les deux options d'interaction (assistant contextuel + génération assistée)
+
+- **Dependencies** : Phase 15 (Reasoning Engine), Phase 33 (génération de brouillon par adaptation, scope scalaire).
+- **Contexte** : l'utilisateur confirme vouloir les deux options du §50 du master prompt, pas un choix entre elles.
+- **Statut** : **engagée le 03/09/2026** — Option 1 (assistant contextuel par section, câblage du Reasoning Engine existant hors du seul panneau de chat) et Option 2 (génération assistée étendue au-delà des champs scalaires) à construire.
+
 ---
 
 ## Ce qui reste volontairement "OPEN" (non planifié ici)
