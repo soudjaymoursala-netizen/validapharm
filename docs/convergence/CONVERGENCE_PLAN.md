@@ -332,6 +332,20 @@ L'utilisateur a transmis un troisième document de vision ("VALIDAPHARM MASTER P
 
 ---
 
+## Nouveau document de vision + ré-audit (03/09/2026)
+
+Confirmé (TD-034) comme une reformulation narrative de la Target Architecture v5.0 déjà auditée le 25/08/2026, pas une nouvelle cible. Ré-audit du code réel par 3 agents indépendants (domaine/données, services/workflows, IA/document intelligence) — résultat consolidé dans `GAP.md` §4, `CURRENT_ARCHITECTURE.md` addendum, `LEGACY_MAPPING.md` (composants construits depuis le 25/08), `ARCHITECTURE_CONFLICTS.md` CONFLICT-004, `ARCHITECTURE_CHALLENGES.md` (confirmations), `TECHNICAL_DECISIONS.md` TD-034 à TD-041. Grounding complémentaire : `docs/couche-ia/METHODE_RAISONNEMENT_DISTILLATION.md` (Questionnaire Couche IA, distillé).
+
+## Phase 35 — Test Design Engine (recommandée, non engagée)
+
+- **Dependencies** : Phase 7a (Requirement/TestObjective/TestCandidate/Test déjà modélisés), Phase 4 (Function/Process), Phase 2 (Parameter/CriticalParameter), Phase 29 (Risk Assessment AMDEC).
+- **Contexte** : confirmé absent par l'audit services du 03/09/2026 — `useTestDefinitionStore.ts` est un CRUD manuel pur, aucune génération de candidat de test depuis Context+Risk+Requirement, aucune critique IA de couverture (TD-036). C'est le gap le plus significatif restant identifié par la mise à jour du GAP (`GAP.md` §4, conclusion).
+- **Grounding déjà rassemblé** : `docs/couche-ia/METHODE_RAISONNEMENT_DISTILLATION.md` §5 (méthode réelle de conception de tests par phase DQ/FAT/SAT/IQ/OQ/PQ, catégories systématiquement oubliées par un junior, critère de suffisance de couverture) et §4 (détection de gap/oubli). Ne pas construire sans relire cette section.
+- **Ce qui reste à faire avant l'implémentation** : spec dédiée (`PHASE_35_TEST_DESIGN_ENGINE_SPEC.md`), suivant le patron déjà validé de `readinessContentPlan.ts`/`evaluerVerdictRiskAssessment.ts` (fonction pure, statuts `PROPOSED/NEEDS_INFORMATION/NEEDS_REVIEW/ACCEPTED/REJECTED` déjà présents sur `TestCandidate`), éventuellement précédée d'une revue panel si le domaine s'avère aussi structurant que Phase 5 (Quality Events) l'a été.
+- **Statut** : **non engagée** — identifiée comme priorité P0 du prochain cycle avec son grounding rassemblé, pour ne pas repartir de zéro à la prochaine session.
+
+---
+
 ## Ce qui reste volontairement "OPEN" (non planifié ici)
 
 Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèle IA exact pour le multimodal, les tests de charge/pentest/sauvegarde-restauration ne sont **pas** tranchés dans ce plan (*mise à jour 25/08/2026 : le fournisseur OCR/parseur, lui, est désormais tranché — Azure AI Vision, décision explicite de l'utilisateur, TD-001*) — ils viennent après le GAP, comme le package le précise lui-même. *(Mise à jour 25/08/2026, clôture des points ouverts)* Le "schéma SQL physique si un backend est retenu" mentionné initialement ici est devenu **sans objet** : TD-001 (25/08/2026) a tranché qu'aucun backend relationnel n'est retenu (extension serverless à la place) — il n'y a donc pas de schéma SQL à concevoir tant que ce choix n'est pas révisé sur besoin réel démontré.
@@ -389,5 +403,7 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèl
 | 32 (Template Intelligence — ingestion Excel, génération assistée par IA) | Non engagée — chantier P0 restant du plan Vision North Star (ingestion Excel bloquée faute de librairie saine, TD-014, réévaluable sur nouvelle preuve), voir `VISION_NORTH_STAR_CONVERGENCE.md` §4 | — | — |
 | Écran de création pour `ManufacturingContext`/`QualityEvent` | **Non engagé** — gap préexistant découvert en préparant la vérification navigateur de la Phase 27 : ces deux entités (Phase 4/Phase 5) n'ont jamais eu d'écran de création, malgré leur usage réel dans le Context Engine (Phase 14/27) | — | — |
 | Écran `ContentPlan` | **Non engagé** — limite documentée depuis Phase 9, jamais close depuis (aucun consommateur réel construit) ; empêche toute vérification navigateur de `readiness` (Phase 28) | — | — |
+| **Nouveau document de vision + ré-audit** | **Terminée (03/09/2026)** | `aeed062` | `GAP.md` §4, `CURRENT_ARCHITECTURE.md` (addendum), `LEGACY_MAPPING.md` (composants construits depuis 25/08), `ARCHITECTURE_CONFLICTS.md` (CONFLICT-004), `ARCHITECTURE_CHALLENGES.md` (confirmations), `TECHNICAL_DECISIONS.md` (TD-034 à TD-041), `docs/couche-ia/METHODE_RAISONNEMENT_DISTILLATION.md` (nouveau) |
+| 35 (Test Design Engine) | **Recommandée, non engagée** — prochain chantier P0, grounding rassemblé (TD-036) | — | — |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.

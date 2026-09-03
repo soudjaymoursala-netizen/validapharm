@@ -49,4 +49,21 @@
 
 ---
 
+## CONFLICT-004 — Authentification multi-utilisateur (comptes/rôles/permissions) du prompt narratif du 03/09/2026 vs. mono-utilisateur PWA + jeton GitHub personnel
+
+- **Current Decision** : mono-utilisateur assumé depuis le cadrage (`00-cadrage-projet.md` §4/§5, "jamais un mot de passe"), confirmé par 3 sources indépendantes du 03/09/2026 : l'audit domaine ("Multi-user/auth/RBAC/permissions: **absent**, by explicit design"), l'audit IA ("no user authentication or RBAC anywhere... single personal GitHub token is the entire security/identity model"), et TD-011/TD-033 qui interdisent explicitement une façade RBAC/e-signature et documentent le verrou local comme n'étant *pas* un mécanisme d'authentification.
+- **Target Decision** : `PROMPT_MAITRE_FINAL_VALIDAPHARM_VISION_PARCOURS_ARCHITECTURE_CLAUDE.md` §7-9 (narratif reçu le 03/09/2026) décrit une page publique "Se connecter / Créer un compte", des comptes email/mot de passe, des rôles, permissions, statut de compte, audit des actions sensibles. Le package `10- Architecture détaillée` (source d'autorité supérieure par construction, §"règle de priorité" de `00_README_AND_GOVERNANCE.md`) est plus mesuré : §33 liste Identity/Authentication/Authorization/RBAC comme des capacités à *prévoir*, pas à construire immédiatement, et §31 confirme "Core ne dépend pas du cloud... aucun cloud obligatoire" — cohérent avec CONFLICT-001 déjà résolu (extension serverless légère, pas un backend applicatif complet).
+- **Evidence** : le narratif du 03/09 est une reformulation libre de la même vision (aucune nouvelle décision DEC-XXX qu'il contienne n'est absente du package structuré) — il n'a donc pas plus d'autorité que le package déjà audité, et le package structuré lui-même ne demande pas une authentification immédiate, seulement une architecture qui n'interdit pas d'y arriver un jour.
+- **Impact** : Élevé si mal interprété — construire un vrai système de comptes/mots de passe maintenant violerait directement TD-011 ("RBAC/signature électronique de façade interdite") et le cadrage §5, sans qu'aucun besoin réel ne l'ait déclenché (le projet reste, à ce jour, utilisé par un seul consultant sur son propre poste).
+- **Options** :
+  1. Construire l'authentification multi-utilisateur maintenant, en levant TD-011.
+  2. Ne rien construire — le mono-utilisateur reste la réalité d'usage actuelle, l'authentification reste dans la colonne "à prévoir" du package tant qu'un besoin réel (plusieurs consultants sur un même dossier client, ou un déploiement au-delà d'un seul utilisateur) n'apparaît pas.
+  3. Préparer le terrain sans construire : vérifier que le modèle de données (déjà fait — `owner_id`/`shared_with`/`workflow.reviewers` existent sur `Section` depuis la Phase 0, jamais câblés à une vérification réelle) ne bloquera pas une authentification future, sans construire la façade maintenant.
+- **Recommendation** : **Option 2/3 combinées** — même logique que CONFLICT-002/CONFLICT-003 (ne pas construire par anticipation sans besoin réel démontré), et cohérent avec TD-011 qui reste non rouverte. Le modèle de données a déjà les champs déclaratifs nécessaires (`Section.owner_id`/`shared_with`/`workflow.reviewers`, confirmé par l'audit domaine) — rien à ajouter tant qu'aucune vérification réelle ne doit s'y accrocher.
+- **Risk si ignoré** : construire une authentification de façade non vérifiée créerait exactement le risque que TD-011 a nommé dès le 27/08/2026 — une fausse preuve de conformité 21 CFR Part 11/Annexe 11, pire que son absence honnête.
+- **Decision Required** : **OUI, mais pas maintenant** — à soumettre explicitement à l'utilisateur seulement si/quand un besoin réel de multi-utilisateur apparaît (plusieurs consultants, déploiement client). Tant que ce n'est pas le cas, TD-011 reste la position par défaut de ce projet et ce conflit reste documenté-mais-non-résolu, pas silencieusement tranché.
+- **Statut (03/09/2026)** : **ouvert, non bloquant** — n'affecte aucun chantier en cours (Phase 35 recommandée ci-dessous ne dépend pas de l'authentification).
+
+---
+
 *Prochain livrable : `ARCHITECTURE_CHALLENGES.md` (challenge technique des décisions de la cible, au-delà des contradictions déjà identifiées ici).*
