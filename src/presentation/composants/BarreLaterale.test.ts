@@ -168,4 +168,36 @@ describe('BarreLaterale — bascule Mode Expert / Assistant', () => {
     expect(boutonAssistant?.classes()).toContain('actif')
     expect(localStorage.getItem('validapharm.mode_affichage')).toBe('assistant')
   })
+
+  test('Mode Assistant restreint réellement la navigation au parcours guidé (URS-F-220quinquies comblé)', async () => {
+    useClientActifStore().definirClientActif('client-1')
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(BarreLaterale, { global: { plugins: [router] } })
+
+    // Mode Expert (par défaut) : accès complet, y compris aux écrans de
+    // configuration avancée.
+    expect(wrapper.text()).toContain('Exigences et tests')
+    expect(wrapper.text()).toContain('Connecteurs QMS')
+    expect(wrapper.text()).toContain('Configuration GitHub')
+
+    const boutonAssistant = wrapper.findAll('button').find((b) => b.text() === 'Mode Assistant')
+    await boutonAssistant?.trigger('click')
+
+    // Mode Assistant : le parcours guidé reste visible…
+    expect(wrapper.text()).toContain('Missions')
+    expect(wrapper.text()).toContain('Structure Système')
+    expect(wrapper.text()).toContain('Stratégie de qualification')
+    // …mais les écrans de configuration avancée disparaissent — jamais
+    // supprimés du routeur, seulement masqués tant que le Mode Expert
+    // n'est pas réactivé (aucun changement de comportement caché).
+    expect(wrapper.text()).not.toContain('Exigences et tests')
+    expect(wrapper.text()).not.toContain('Connecteurs QMS')
+    expect(wrapper.text()).not.toContain('Configuration GitHub')
+
+    // Réversible : retour au Mode Expert restaure l'accès complet.
+    const boutonExpert = wrapper.findAll('button').find((b) => b.text() === 'Mode Expert')
+    await boutonExpert?.trigger('click')
+    expect(wrapper.text()).toContain('Connecteurs QMS')
+  })
 })
