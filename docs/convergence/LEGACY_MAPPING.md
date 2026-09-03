@@ -137,4 +137,59 @@ Statuts possibles : `KEEP` · `ADAPT` · `EXTEND` · `REFACTOR` · `MIGRATE` · 
 
 ---
 
+## Composants construits depuis le 25/08/2026 (Phases 1-34), classés le 03/09/2026
+
+Ces composants n'existaient pas lors du premier passage et sont classés ici pour la première fois, sur la base des 3 audits indépendants du 03/09/2026.
+
+### Reasoning Engine (`boucleRaisonnement.ts`, `useReasoningEngineStore.ts`, `outilsRaisonnement.ts`)
+- **Purpose** : boucle multi-tour à appel d'outils, grounded sur Requirements/Tests/Evidence/KnowledgeItems/AssetNodes/Procedures, avec vérification déterministe de citation (une affirmation `connu` sans citation résolue est rétrogradée `a_verifier`).
+- **Business Value** : élevée — c'est la brique la plus proche du "Reasoning Engine" cible (§11 du master prompt), et elle est déjà gouvernée (aucune écriture directe dans le domaine métier).
+- **Target Equivalent** : Reasoning Engine + une partie du Reviewer (§62 du master prompt).
+- **Migration Strategy** : **EXTEND** — outils supplémentaires (Process/Architecture/Procédure/Template comme outils appelables, déjà en P2 de `VISION_NORTH_STAR_CONVERGENCE.md`), pas de remplacement.
+- **Final Status** : **KEEP/EXTEND**.
+
+### Quality Events (`useQualityEventStore.ts`, `JournalAnomalies.vue`)
+- **Purpose** : Change Control/Deviation/CAPA/Investigation/Audit Finding/Periodic Review, cross-référencés, non-bloquants par design.
+- **Business Value** : élevée — seul point du repo qui alimente réellement une porte de blocage inter-module (readiness `ContentPlan`, voir ci-dessous).
+- **Target Equivalent** : `QualityEvent` (§16, §41 du master prompt) — correspondance quasi exacte.
+- **Migration Strategy** : **KEEP** — statut simple 3 valeurs (`ouvert/en_cours/cloture`), pas un state-machine complexe, conforme au principe "jamais un workflow figé à étapes obligatoires" du package.
+- **Final Status** : **KEEP**.
+
+### Readiness `ContentPlan` (`readinessContentPlan.ts`, Phase 28)
+- **Purpose** : calcule `READY/NEEDS_INFORMATION/NEEDS_REVIEW/BLOCKED` en parcourant la chaîne réelle Requirement→Couverture→Test→Execution→Evidence, et bloque sur tout `QualityEvent` ouvert sur le même `asset_node_id`.
+- **Business Value** : élevée — c'est une vraie porte de revue (§45/§62 du master prompt : "Le système ne doit pas produire silencieusement un document incomplet").
+- **Target Equivalent** : la partie "Readiness Check" du pipeline Deliverable Engine (§45 du master prompt).
+- **Migration Strategy** : **EXTEND** vers l'objet `DeliverableVersion` unifié (voir TD-035) plutôt que remplacer — le calcul lui-même est correct et testé.
+- **Final Status** : **KEEP/EXTEND**.
+
+### Risk Assessment AMDEC autonome (Phase 29, `useRiskAssessmentStore.ts`)
+- **Purpose** : méthodologie AMDEC (S×O×D→IPR, seuil configurable par client) autonome, calquée sur un modèle réel trouvé dans Drive.
+- **Business Value** : élevée — ferme un gap identifié depuis Phase 0 (`calculerIPR.ts` n'existait qu'attaché au gabarit DQ).
+- **Target Equivalent** : `RiskAssessment` (§14, §59 du master prompt).
+- **Migration Strategy** : **EXTEND** — la connexion Risk→Requirement/Test (confirmée absente par l'audit domaine §8 du 03/09) reste à construire ; c'est la limite actuelle la plus concrète de ce module.
+- **Final Status** : **KEEP/EXTEND**.
+
+### Knowledge Graph générique (`parcourirGraphe.ts`, Phase 31)
+- **Purpose** : parcours BFS générique de graphe à arêtes typées, factorisé après 2 cas réels indépendants (Architecture Technique, Knowledge).
+- **Business Value** : moyenne-élevée — infrastructure réutilisable, pas un cas d'usage isolé.
+- **Target Equivalent** : composant transverse au Context Engine/Knowledge Graph (§47, master prompt).
+- **Migration Strategy** : **KEEP** — règle de trois déjà respectée avant de généraliser, cohérent avec la discipline anti-sur-ingénierie du projet.
+- **Final Status** : **KEEP**.
+
+### Compliance Engine généralisé (`evaluerReglesConformite.ts`, Phase 30)
+- **Purpose** : factorisation pure du patron règle→blocage, déjà répété 3 fois indépendamment avant d'être généralisé.
+- **Business Value** : moyenne — réduction de duplication, comportement identique aux 3 call sites d'origine.
+- **Target Equivalent** : approche générique des `DecisionRule`/`ApplicabilityRules` (§07 du package).
+- **Migration Strategy** : **KEEP**.
+- **Final Status** : **KEEP**.
+
+### Source/Document Intelligence natif (DOCX/PDF/OCR, Phases 8a/19-25)
+- **Purpose** : parsing DOCX natif (texte/tableaux/images), PDF natif (`pdfjs-dist`), OCR Azure Vision réel (relais Cloudflare), chaîne Source→Extraction→KnowledgeItem→Confirmation gouvernée.
+- **Business Value** : élevée — pilier majeur de la cible (§08/§20), passé de "Total (gap)" à "largement construit" en 9 jours.
+- **Target Equivalent** : Document Intelligence pipeline (§08, §20 du master prompt) — texte/tableau seulement, pas diagramme (assumé, CHALLENGE-001).
+- **Migration Strategy** : **EXTEND** — Excel reste bloqué (aucune librairie saine, TD-014), diagram intelligence reste hors périmètre par choix assumé.
+- **Final Status** : **KEEP/EXTEND**.
+
+---
+
 *Aucun composant classé `UNKNOWN` dans cette passe — chaque élément du repository a une utilisation et une valeur métier clairement identifiables. Prochain livrable : `ARCHITECTURE_CONFLICTS.md`.*

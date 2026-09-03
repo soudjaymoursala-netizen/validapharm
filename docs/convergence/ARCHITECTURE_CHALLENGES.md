@@ -18,6 +18,7 @@
 - **Recommendation** : adopter l'alternative en 2 temps. Le seuil de confiance `NEEDS_REVIEW` déjà prévu par le package (§35, §21) doit être **strict par défaut** pour tout diagramme technique complexe, pas seulement "configuré".
 - **Risk si ignoré** : un `KnowledgeItem` erroné généré à partir d'un schéma mal compris peut se propager jusqu'à un livrable GxP sans qu'un humain l'ait vraiment vérifié — contradiction directe avec DEC-028 ("AI n'est pas source de vérité") si la revue devient une formalité.
 - **Decision Required** : NON immédiatement — c'est une recommandation de séquencement technique, applicable dès que le chantier Source Intelligence est engagé (pas avant, cf. `GAP.md` priorité "basse dans l'immédiat" sur ce point).
+- **Statut (03/09/2026)** : **toujours d'actualité, confirmé par un audit indépendant.** Le chantier Source Intelligence est maintenant largement construit (Phases 8a, 19-25 — parsing DOCX/PDF natif, OCR Azure réel) mais volontairement sans aucune capacité de diagram intelligence, exactement comme recommandé ici. Un audit du 03/09/2026 (sans connaissance préalable de ce challenge) confirme indépendamment "no image-classification, vision-LLM captioning, or shape/graph-recognition code found... zero diagram/logic-flow understanding". Le séquencement en 2 temps recommandé reste la bonne décision — le "temps 1" (OCR + structuration manuelle assistée) est fait ; le "temps 2" (P&ID/schémas électriques réels) reste à bon droit non engagé.
 
 ---
 

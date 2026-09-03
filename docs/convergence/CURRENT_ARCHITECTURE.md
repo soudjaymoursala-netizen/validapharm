@@ -112,4 +112,50 @@ Un seul héritage réel : le "moteur de templates v1" mentionné au cadrage comm
 
 ---
 
-*Prochain livrable : `LEGACY_MAPPING.md` (classification KEEP/ADAPT/EXTEND/REFACTOR/MIGRATE/REPLACE/DEPRECATE/UNKNOWN de chaque élément listé ci-dessus).*
+## Addendum — État réel au 03/09/2026 (9 jours, 34 phases plus tard)
+
+> Comme annoncé dans la note de suivi ci-dessus, ce document reste un instantané figé de Phase 0. Cet addendum ne le réécrit pas — il documente l'état réel vérifié le 03/09/2026 par 3 audits indépendants (domaine/données, services/workflows, IA/document intelligence), chacun ayant lu le code réel sans connaissance préalable de ce fichier, à la demande explicite de l'utilisateur ("j'ai l'impression que le mode assistant ne marche pas" a ouvert une session de fix, suivie d'un nouveau document de vision redemandant l'audit complet §1 du master package).
+
+### Domains (mise à jour)
+
+Le repository connaît maintenant **beaucoup plus que 3 domaines** : Governance/Scope (Organization/Workspace hiérarchique), Asset (System/Subsystem/Equipment/Component via `AssetNode` générique + relations typées), Process/Function/ManufacturingContext, Criticality/Assessment (4 moteurs : ACFC, Impact, CSV, Risk/AMDEC), Quality Events (6 sous-types), Test/Execution/Evidence (traçabilité complète testée), Source Intelligence (Source→Extraction→KnowledgeItem→Confirmation), Mission/Activity, Context/AI (Reasoning Engine à appel d'outils), Procedural Knowledge (structuration de SOP), Deliverable (Content Plan + readiness).
+
+### Entities (mise à jour)
+
+**89 interfaces** dans `domaine/types.ts` (contre 8 en Phase 0), avec **28 versions** de schéma Dexie incrémentales — détail complet dans l'audit domaine du 03/09/2026 (voir `GAP.md` §4). L'ancienne ligne "Aucune autre" de ce document est obsolète depuis longtemps.
+
+### Relationships (mise à jour)
+
+Confirmé génuinement relationnel/graphe, pas de simples clés étrangères 1:N : arbres à détection de cycle (`AssetNode.parent_id`, `Workspace.parent_workspace_id`), graphe libre tolérant les cycles par conception (`associated_nodes[]`), relations typées dirigées (`RelationTechnique`), jointures N:M explicites avec contexte (`Couverture`, `ProvenanceLink`, `AssociationFonctionAssetNode`), objets de jointure polymorphes (`ContextSnapshotItem`), et un moteur de parcours de graphe générique (`parcourirGraphe.ts`) réutilisé sur 2 domaines indépendants. L'intégrité référentielle reste conventionnelle (`string` id, pas de contrainte Dexie), pas garantie par le moteur de base.
+
+### AI (mise à jour)
+
+AI Gateway confirmé solide : `ProviderAdapter` (2 implémentations réelles), routage à bascule, traçabilité de version de modèle avec détection de dérive silencieuse (`QualificationFiabiliteIA`). Nouveau depuis Phase 0 : **Reasoning Engine** à appel d'outils (4+ outils : Requirements/Tests/Evidence/KnowledgeItems/AssetNodes/Procedures) avec vérification déterministe de citation (`verifierConfiance`) et **mode audit simulé** (débat contradictoire multi-angles + personas régulateurs). Chat expert (`PanneauChat.vue`) reste un chatbot générique + pièce jointe manuelle d'une section — le Reasoning Engine grounded existe mais n'y est pas câblé (2 features distinctes).
+
+### Document Processing (mise à jour)
+
+Radicalement différent de la Phase 0 ("inexistant en ingestion") : parsing DOCX natif réel (texte/tableaux/images), parsing PDF natif réel (`pdfjs-dist`), OCR Azure Vision réel via relais Cloudflare Worker dédié. Toujours absent : Excel (bloqué, aucune librairie saine — TD-014), et surtout **toute compréhension de diagramme/schéma/P&ID** (confirmé absent par l'audit du 03/09, choix assumé — CHALLENGE-001).
+
+### Deliverables (mise à jour)
+
+Le calcul de `readiness` existe maintenant réellement (`construireReadinessContentPlan`, Phase 28) et parcourt la vraie chaîne Requirement→Couverture→Test→Execution→Evidence, bloquant sur `QualityEvent` ouvert. Reste vrai : pas d'objet `DeliverableVersion` unifié référençant l'ensemble des versions utilisées (voir TD-035).
+
+### Test System (mise à jour)
+
+**762 tests** au 03/09/2026 (contre 282 en Phase 0), tous verts. Toujours aucun test de scénario de bout en bout au sens des 70 scénarios du package (`11_USE_CASES_70_SCENARIOS.md`).
+
+### Security (inchangé, confirmé délibéré)
+
+Toujours aucune authentification/RBAC — confirmé par les 3 audits du 03/09 comme un choix délibéré et documenté (TD-011), pas un oubli. Nouveau depuis Phase 0 : un verrou local par mot de passe (Phase 33, TD-033) protège l'archivage accidentel, explicitement documenté comme n'étant *pas* une authentification. Voir `ARCHITECTURE_CONFLICTS.md` CONFLICT-004 pour la tension (non résolue, non bloquante) avec le narratif du 03/09/2026 qui redemande des comptes/rôles.
+
+### Technical Debt (mise à jour)
+
+Les 2 premiers points de la liste Phase 0 sont clos (`ACFC codé en dur` → `MethodProfileACFC`, Phase 1 ; `AMDEC non autonome` → module autonome, Phase 29). Nouvelles dettes identifiées par les audits du 03/09 :
+5. **Test Design Engine inexistant** — `useTestDefinitionStore.ts` est un CRUD manuel pur ; aucune génération de candidat de test depuis Context+Risk+Requirement, aucune critique IA de couverture (pilier central de la cible, §28-30 du master prompt).
+6. **`DataFlow` non modélisé comme entité** — seule une relation typée (`RelationTechnique`) approxime les flux de données entre systèmes digitaux.
+7. **Deliverable Engine non unifié** — 3 mécanismes réels (readiness `ContentPlan`, machine à états `Section`, garde d'export) glués par convention plutôt qu'un objet `DeliverableVersion` unique.
+8. **Memory/Learning non gouverné au niveau règle** — le journal `Confirmation` gouverne chaque fait individuellement, rien ne généralise une confirmation répétée en règle client réutilisable versionnée.
+
+---
+
+*Prochain livrable : `LEGACY_MAPPING.md` (classification KEEP/ADAPT/EXTEND/REFACTOR/MIGRATE/REPLACE/DEPRECATE/UNKNOWN de chaque élément listé ci-dessus). Mis à jour le 03/09/2026 avec les composants construits depuis — voir sa propre section "Composants construits depuis le 25/08/2026".*
