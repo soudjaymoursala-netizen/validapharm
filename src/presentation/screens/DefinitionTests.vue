@@ -62,6 +62,14 @@ function libelleRequirement(requirementId: string): string {
   return r ? `${r.reference} — ${r.titre}` : requirementId
 }
 
+// --- Couverture des risques (Phase 35 — Test Design Engine, TD-036) ---
+// Rapport recalculé à l'affichage, jamais persisté (même discipline que
+// `testsCouvrantRequirement`) — un risque `action_requise` sans candidat
+// de test actif est signalé explicitement, jamais silencieux.
+function couvertureRisques(requirementId: string) {
+  return testStore.couvertureRisquesRequirement(requirementId)
+}
+
 // --- Objectifs de test ---
 const requirementSelectionne = ref('')
 const titreObjectif = ref('')
@@ -81,6 +89,21 @@ async function creerObjectif(): Promise<void> {
 function libelleObjectif(testObjectiveId: string): string {
   const o = testStore.testObjectives.find((o) => o.id === testObjectiveId)
   return o ? o.titre : testObjectiveId
+}
+
+// --- Génération de candidats depuis les risques (Phase 35, TD-036) ---
+const messageGenerationParObjectif = ref<Record<string, string>>({})
+
+async function genererDepuisRisques(testObjectiveId: string): Promise<void> {
+  const resultat = await testStore.genererCandidatsRisquesPourObjectif(
+    props.clientId,
+    testObjectiveId,
+  )
+  messageGenerationParObjectif.value[testObjectiveId] = resultat.ok
+    ? resultat.nombreCrees > 0
+      ? `${resultat.nombreCrees} candidat(s) proposé(s) depuis l'analyse de risque.`
+      : "Aucun nouveau risque à couvrir (déjà couverts, ou aucun risque 'action requise' sur le nœud de cette exigence)."
+    : 'Exigence introuvable pour cet objectif.'
 }
 
 // --- Candidats de test ---
@@ -223,6 +246,16 @@ async function declarerCouverture(): Promise<void> {
       <ul v-if="testStore.requirements.length > 0">
         <li v-for="r in testStore.requirements" :key="r.id">
           <strong>{{ r.reference }}</strong> — {{ r.titre }}
+          <ul v-if="couvertureRisques(r.id).length > 0" class="liste-couverture-risques">
+            <li
+              v-for="risque in couvertureRisques(r.id)"
+              :key="risque.risk_assessment_id"
+              :class="risque.statut === 'non_couvert' ? 'risque-non-couvert' : 'risque-couvert'"
+            >
+              {{ risque.statut === 'non_couvert' ? '⚠' : '✓' }} {{ risque.mode_defaillance }} —
+              {{ risque.statut === 'non_couvert' ? 'non couvert par un test' : 'couvert' }}
+            </li>
+          </ul>
         </li>
       </ul>
       <p v-else>Aucune exigence pour l'instant.</p>
@@ -253,6 +286,12 @@ async function declarerCouverture(): Promise<void> {
       <ul v-if="testStore.testObjectives.length > 0">
         <li v-for="o in testStore.testObjectives" :key="o.id">
           {{ o.titre }} <span class="meta">({{ libelleRequirement(o.requirement_id) }})</span>
+          <button type="button" class="bouton-secondaire" @click="genererDepuisRisques(o.id)">
+            Proposer des candidats depuis les risques
+          </button>
+          <p v-if="messageGenerationParObjectif[o.id]" class="message-generation">
+            {{ messageGenerationParObjectif[o.id] }}
+          </p>
         </li>
       </ul>
       <p v-else>Aucun objectif pour l'instant.</p>
@@ -285,6 +324,9 @@ async function declarerCouverture(): Promise<void> {
           <p>
             {{ c.titre }} <span class="meta">({{ libelleObjectif(c.test_objective_id) }})</span> —
             <strong>{{ LIBELLES_STATUT_CANDIDATE[c.statut] }}</strong>
+            <span v-if="c.risk_assessment_id" class="badge-origine-risque"
+              >proposé depuis l'analyse de risque</span
+            >
           </p>
           <template
             v-if="
@@ -452,5 +494,38 @@ textarea {
 
 button {
   cursor: pointer;
+}
+
+.liste-couverture-risques {
+  list-style: none;
+  padding-left: 1rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.85em;
+}
+
+.risque-non-couvert {
+  color: var(--vp-couleur-erreur, #b00020);
+}
+
+.risque-couvert {
+  color: var(--vp-texte-secondaire);
+}
+
+.bouton-secondaire {
+  margin-left: 0.5rem;
+  font-size: 0.85em;
+}
+
+.message-generation {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.85em;
+  margin: 0.25rem 0 0;
+}
+
+.badge-origine-risque {
+  color: var(--vp-marque, #5b3df5);
+  font-size: 0.8em;
+  font-style: italic;
+  margin-left: 0.4rem;
 }
 </style>
