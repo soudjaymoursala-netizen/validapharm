@@ -10,6 +10,7 @@ import { useClientsStore } from '../stores/useClientsStore'
 import {
   useStructureSystemeStore,
   type ResultatActionNoeud,
+  type ResultatImportHierarchie,
 } from '../stores/useStructureSystemeStore'
 import type {
   AssetNode,
@@ -149,6 +150,46 @@ async function ajouterNiveau(): Promise<void> {
   brouillonNiveau.numbering_pattern = ''
 }
 
+// --- Import XLSX de la hiérarchie (Phase 36, TD-042) — lecteur natif
+// minimal (`jszip`+`DOMParser`, jamais une librairie Excel généraliste),
+// convention colonne=niveau documentée à l'utilisateur avant l'import.
+const resultatImport = ref<ResultatImportHierarchie | undefined>(undefined)
+const importEnCours = ref(false)
+const champFichier = ref<HTMLInputElement | null>(null)
+
+const MESSAGES_ERREUR_IMPORT: Record<string, string> = {
+  fichier_illisible: "Le fichier fourni n'est pas un .xlsx valide ou n'a pas pu être lu.",
+  grille_vide: 'Le fichier ne contient aucune ligne.',
+}
+
+function messageErreurImport(resultat: Extract<ResultatImportHierarchie, { ok: false }>): string {
+  if (resultat.raison === 'colonne_niveau_inconnue') {
+    return `La colonne "${resultat.entete}" ne correspond à aucun niveau connu — créez ce niveau dans la hiérarchie configurable ci-dessus avant de réimporter.`
+  }
+  if (resultat.raison === 'ordre_colonnes_incoherent') {
+    return `La colonne "${resultat.entete}" est dans le mauvais ordre — les colonnes doivent suivre l'ordre des niveaux (du plus générique au plus spécifique).`
+  }
+  return MESSAGES_ERREUR_IMPORT[resultat.raison] ?? 'Import refusé.'
+}
+
+async function importerFichier(evenement: Event): Promise<void> {
+  const fichier = (evenement.target as HTMLInputElement).files?.[0]
+  if (!fichier) return
+
+  importEnCours.value = true
+  resultatImport.value = undefined
+  try {
+    const contenu = await fichier.arrayBuffer()
+    resultatImport.value = await structureStore.importerHierarchieDepuisXlsx(
+      props.clientId,
+      contenu,
+    )
+  } finally {
+    importEnCours.value = false
+    if (champFichier.value) champFichier.value.value = ''
+  }
+}
+
 async function creerNoeud(): Promise<void> {
   resultatCreation.value = await structureStore.creerNoeud(props.clientId, {
     level_key: brouillonNoeud.level_key,
@@ -225,6 +266,41 @@ const noeudsAffiches = computed(() =>
           <button type="submit">Ajouter le niveau</button>
         </div>
       </form>
+    </section>
+
+    <section class="bloc-import">
+      <h2>Importer depuis un fichier Excel</h2>
+      <p class="rappel">
+        Convention attendue : la première ligne du tableau contient les en-têtes de niveau (dans
+        l'ordre de la hiérarchie configurable ci-dessus, ex. « Bâtiment », « Ligne », « Équipement
+        »), avec une colonne « Code » optionnelle. Chaque ligne suivante décrit un chemin depuis la
+        racine — les valeurs répétées d'une ligne à l'autre (ex. le même bâtiment) ne créent le nœud
+        qu'une seule fois.
+      </p>
+      <input
+        ref="champFichier"
+        type="file"
+        accept=".xlsx"
+        :disabled="importEnCours"
+        @change="importerFichier"
+      />
+      <p v-if="importEnCours" class="etat-vide">Import en cours…</p>
+      <template v-else-if="resultatImport">
+        <p v-if="resultatImport.ok" class="confirmation">
+          {{ resultatImport.noeudsCrees }} nœud(s) créé(s).
+          <span v-if="resultatImport.erreurs.length > 0">
+            {{ resultatImport.erreurs.length }} ligne(s) ignorée(s) —
+            <template v-for="(erreur, i) in resultatImport.erreurs" :key="i">
+              ligne {{ erreur.ligne }} ({{
+                erreur.raison === 'case_vide_au_milieu'
+                  ? 'case vide au milieu de la ligne'
+                  : 'code déjà utilisé'
+              }}){{ i < resultatImport.erreurs.length - 1 ? ', ' : '' }}
+            </template>
+          </span>
+        </p>
+        <p v-else class="erreur" role="alert">{{ messageErreurImport(resultatImport) }}</p>
+      </template>
     </section>
 
     <section class="bloc-noeuds">
@@ -497,6 +573,17 @@ button {
 .erreur {
   color: var(--vp-statut-requalification-en-retard);
   margin: 0;
+}
+
+.confirmation {
+  color: var(--vp-marque);
+  margin: 0;
+}
+
+.bloc-import {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .etat-vide {
