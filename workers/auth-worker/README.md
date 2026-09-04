@@ -51,6 +51,7 @@ par l'utilisateur**, avec ou sans ce connecteur :
    base ci-dessus, vérifiées par une requête sur `sqlite_master`.
 
 3. **Configurer les secrets** (jamais commités) :
+
    ```
    wrangler secret put JWT_SECRET          # chaîne aléatoire longue, ex. openssl rand -base64 48
    wrangler secret put BOOTSTRAP_TOKEN     # jeton à usage unique pour créer le premier admin
@@ -58,12 +59,14 @@ par l'utilisateur**, avec ou sans ce connecteur :
    ```
 
 4. **Déployer** :
+
    ```
    wrangler deploy
    ```
 
 5. **Créer le premier compte admin** (une seule fois — l'endpoint refuse
    tout second appel une fois un compte existant) :
+
    ```
    curl -X POST https://<votre-worker>.workers.dev/auth/bootstrap-admin \
      -H "Content-Type: application/json" \
