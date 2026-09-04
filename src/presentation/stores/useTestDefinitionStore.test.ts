@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { db } from '../../persistance/db'
+import type { RiskAssessment } from '../../logique-metier/domaine/types'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
 
 beforeEach(async () => {
@@ -11,7 +12,42 @@ beforeEach(async () => {
   await db.testCandidates.clear()
   await db.tests.clear()
   await db.couvertures.clear()
+  await db.risksAssessment.clear()
 })
+
+function risqueTest(overrides: Partial<RiskAssessment> = {}): RiskAssessment {
+  return {
+    id: 'risque-1',
+    client_id: 'client-1',
+    method_profile_id: 'profil-1',
+    method_profile_version: '1',
+    asset_node_id: 'noeud-1',
+    parameter_id: null,
+    etape_processus: 'Compression',
+    mode_defaillance: 'Perte de pression',
+    effet_defaillance: 'Comprimé hors spécification',
+    cause_potentielle: 'Joint défectueux',
+    controle_actuel: 'Contrôle visuel hebdomadaire',
+    severite_initiale: 4,
+    occurrence_initiale: 3,
+    detectabilite_initiale: 2,
+    ipr_initial: 24,
+    verdict_initial: 'action_requise',
+    recommandation: 'Ajouter un capteur de pression continu',
+    responsable: null,
+    date_cible: null,
+    actions_menees: null,
+    severite_residuelle: null,
+    occurrence_residuelle: null,
+    detectabilite_residuelle: null,
+    ipr_residuel: null,
+    verdict_residuel: null,
+    audit_log: [],
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
 
 describe('useTestDefinitionStore — chaîne de définition de base', () => {
   test('Requirement -> TestObjective -> TestCandidate -> Test', async () => {
@@ -298,5 +334,98 @@ describe('useTestDefinitionStore — isolation stricte par client', () => {
     })
     await store.charger('client-B')
     expect(store.requirements).toHaveLength(0)
+  })
+})
+
+describe('useTestDefinitionStore — Test Design Engine (Phase 35, TD-036)', () => {
+  test('genererCandidatsRisquesPourObjectif crée des candidats proposés depuis les risques action_requise', async () => {
+    await db.risksAssessment.put(risqueTest())
+    const store = useTestDefinitionStore()
+    await store.charger('client-1')
+
+    const requirement = await store.creerRequirement('client-1', {
+      reference: 'URS-F-001',
+      titre: 'Exigence liée au nœud à risque',
+      description: '',
+      assetNodeId: 'noeud-1',
+      processId: null,
+    })
+    const objectif = await store.creerTestObjective('client-1', {
+      requirementId: requirement.id,
+      titre: 'Objectif',
+      description: '',
+    })
+
+    const resultat = await store.genererCandidatsRisquesPourObjectif('client-1', objectif.id)
+    expect(resultat).toEqual({ ok: true, nombreCrees: 1 })
+
+    const candidats = store.testCandidates.filter((c) => c.test_objective_id === objectif.id)
+    expect(candidats).toHaveLength(1)
+    expect(candidats[0]?.risk_assessment_id).toBe('risque-1')
+    expect(candidats[0]?.statut).toBe('propose')
+    expect(candidats[0]?.titre).toContain('Perte de pression')
+  })
+
+  test('genererCandidatsRisquesPourObjectif est idempotent — ne recrée pas un candidat déjà généré', async () => {
+    await db.risksAssessment.put(risqueTest())
+    const store = useTestDefinitionStore()
+    await store.charger('client-1')
+    const requirement = await store.creerRequirement('client-1', {
+      reference: 'URS-F-001',
+      titre: 'Exigence',
+      description: '',
+      assetNodeId: 'noeud-1',
+      processId: null,
+    })
+    const objectif = await store.creerTestObjective('client-1', {
+      requirementId: requirement.id,
+      titre: 'Objectif',
+      description: '',
+    })
+
+    await store.genererCandidatsRisquesPourObjectif('client-1', objectif.id)
+    const second = await store.genererCandidatsRisquesPourObjectif('client-1', objectif.id)
+
+    expect(second).toEqual({ ok: true, nombreCrees: 0 })
+    expect(store.testCandidates.filter((c) => c.test_objective_id === objectif.id)).toHaveLength(1)
+  })
+
+  test('genererCandidatsRisquesPourObjectif retourne une erreur si objectif introuvable', async () => {
+    const store = useTestDefinitionStore()
+    await store.charger('client-1')
+    const resultat = await store.genererCandidatsRisquesPourObjectif('client-1', 'inconnu')
+    expect(resultat).toEqual({ ok: false, raison: 'objectif_introuvable' })
+  })
+
+  test('couvertureRisquesRequirement reflète non_couvert puis couvert après génération', async () => {
+    await db.risksAssessment.put(risqueTest())
+    const store = useTestDefinitionStore()
+    await store.charger('client-1')
+    const requirement = await store.creerRequirement('client-1', {
+      reference: 'URS-F-001',
+      titre: 'Exigence',
+      description: '',
+      assetNodeId: 'noeud-1',
+      processId: null,
+    })
+    const objectif = await store.creerTestObjective('client-1', {
+      requirementId: requirement.id,
+      titre: 'Objectif',
+      description: '',
+    })
+
+    expect(store.couvertureRisquesRequirement(requirement.id)).toEqual([
+      {
+        risk_assessment_id: 'risque-1',
+        mode_defaillance: 'Perte de pression',
+        statut: 'non_couvert',
+      },
+    ])
+
+    await store.genererCandidatsRisquesPourObjectif('client-1', objectif.id)
+
+    expect(store.couvertureRisquesRequirement(requirement.id)).toEqual([
+      { risk_assessment_id: 'risque-1', mode_defaillance: 'Perte de pression', statut: 'couvert' },
+    ])
   })
 })

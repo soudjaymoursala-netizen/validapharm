@@ -899,11 +899,20 @@ export type StatutTestCandidate =
  * traçabilité déjà appliqué partout ailleurs dans ce projet).
  * `duplique_de_id`/`remplace_par_id` ne sont renseignés que pour les
  * statuts `doublon`/`remplace` respectivement.
+ *
+ * `risk_assessment_id` (Phase 35 — Test Design Engine, TD-036) : `null`
+ * pour un candidat saisi manuellement ; renseigné quand le candidat a été
+ * **proposé** par `genererCandidatsDepuisRisques` à partir d'un
+ * `RiskAssessment` dont le verdict est `action_requise` — comble le gap
+ * identifié en Phase 0 ("Risk isn't wired into Requirement/Test directly").
+ * Jamais déduit après coup : un candidat créé manuellement pour couvrir
+ * le même risque reste `null` sauf lien explicite de l'utilisateur.
  */
 export interface TestCandidate {
   id: string
   client_id: string
   test_objective_id: string
+  risk_assessment_id: string | null
   titre: string
   description: string
   statut: StatutTestCandidate

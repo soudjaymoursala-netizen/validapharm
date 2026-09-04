@@ -4,10 +4,16 @@ import type {
   Couverture,
   EtapeTest,
   Requirement,
+  RiskAssessment,
   Test,
   TestCandidate,
   TestObjective,
 } from '../../logique-metier/domaine/types'
+import {
+  evaluerCouvertureRisques,
+  type CouvertureRisque,
+} from '../../logique-metier/test-design/evaluerCouvertureRisques'
+import { genererCandidatsDepuisRisques } from '../../logique-metier/test-design/genererCandidatsDepuisRisques'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
@@ -56,6 +62,7 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
   const testCandidates = ref<TestCandidate[]>([])
   const tests = ref<Test[]>([])
   const couvertures = ref<Couverture[]>([])
+  const risquesAssessment = ref<RiskAssessment[]>([])
   const enChargement = ref(false)
 
   async function charger(clientId: string): Promise<void> {
@@ -66,6 +73,10 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       testCandidates.value = await db.testCandidates.where('client_id').equals(clientId).toArray()
       tests.value = await db.tests.where('client_id').equals(clientId).toArray()
       couvertures.value = await db.couvertures.where('client_id').equals(clientId).toArray()
+      risquesAssessment.value = await db.risksAssessment
+        .where('client_id')
+        .equals(clientId)
+        .toArray()
     } finally {
       enChargement.value = false
     }
@@ -123,6 +134,7 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       id: crypto.randomUUID(),
       client_id: clientId,
       test_objective_id: input.testObjectiveId,
+      risk_assessment_id: null,
       titre: input.titre,
       description: input.description,
       statut: 'propose',
@@ -138,6 +150,74 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     await db.testCandidates.put(candidat)
     testCandidates.value = [...testCandidates.value, candidat]
     return candidat
+  }
+
+  /**
+   * Propose des candidats de test depuis les risques réels du référentiel
+   * (Phase 35 — Test Design Engine, TD-036) — délègue entièrement à la
+   * fonction pure `genererCandidatsDepuisRisques` (aucune règle métier ici,
+   * même discipline que `creerNoeud`/`ajouterNiveau`). Les candidats sont
+   * créés au statut `propose`, comme n'importe quel candidat manuel —
+   * l'utilisateur les accepte/rejette exactement de la même façon, jamais
+   * une approbation automatique.
+   */
+  async function genererCandidatsRisquesPourObjectif(
+    clientId: string,
+    testObjectiveId: string,
+  ): Promise<{ ok: true; nombreCrees: number } | { ok: false; raison: 'objectif_introuvable' }> {
+    const objectif = testObjectives.value.find((o) => o.id === testObjectiveId)
+    if (!objectif) return { ok: false, raison: 'objectif_introuvable' }
+    const requirement = requirements.value.find((r) => r.id === objectif.requirement_id)
+    if (!requirement) return { ok: false, raison: 'objectif_introuvable' }
+
+    const candidatsExistants = testCandidates.value.filter(
+      (c) => c.test_objective_id === testObjectiveId,
+    )
+    const suggestions = genererCandidatsDepuisRisques(
+      requirement,
+      risquesAssessment.value,
+      candidatsExistants,
+    )
+
+    const maintenant = new Date().toISOString()
+    const nouveaux: TestCandidate[] = suggestions.map((s) => ({
+      id: crypto.randomUUID(),
+      client_id: clientId,
+      test_objective_id: testObjectiveId,
+      risk_assessment_id: s.risk_assessment_id,
+      titre: s.titre,
+      description: s.description,
+      statut: 'propose',
+      motif_rejet: null,
+      duplique_de_id: null,
+      remplace_par_id: null,
+      audit_log: [
+        {
+          timestamp: maintenant,
+          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          action: 'création (proposé depuis analyse de risque)',
+        },
+      ],
+      created_at: maintenant,
+      updated_at: maintenant,
+    }))
+
+    if (nouveaux.length > 0) {
+      await db.testCandidates.bulkPut(nouveaux)
+      testCandidates.value = [...testCandidates.value, ...nouveaux]
+    }
+    return { ok: true, nombreCrees: nouveaux.length }
+  }
+
+  /**
+   * Rapport de couverture des risques pour une exigence — délègue à la
+   * fonction pure `evaluerCouvertureRisques`. Recalculé à l'affichage,
+   * jamais persisté (comme `testsCouvrantRequirement`).
+   */
+  function couvertureRisquesRequirement(requirementId: string): CouvertureRisque[] {
+    const requirement = requirements.value.find((r) => r.id === requirementId)
+    if (!requirement) return []
+    return evaluerCouvertureRisques(requirement, risquesAssessment.value, testCandidates.value)
   }
 
   async function accepterTestCandidate(
@@ -319,11 +399,14 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     testCandidates,
     tests,
     couvertures,
+    risquesAssessment,
     enChargement,
     charger,
     creerRequirement,
     creerTestObjective,
     creerTestCandidate,
+    genererCandidatsRisquesPourObjectif,
+    couvertureRisquesRequirement,
     accepterTestCandidate,
     rejeterTestCandidate,
     marquerBesoinInformation,
