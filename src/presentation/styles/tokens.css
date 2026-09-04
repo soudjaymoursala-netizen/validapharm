@@ -1,13 +1,33 @@
 /**
- * Jetons de conception — écran de travail (FDS §2bis, "Indigo premium +
- * accents vifs"). Thème sombre ajouté en Phase 40 (§9 du prompt maître du
- * 03/09/2026, écran Paramètres — « thème clair/sombre ») : un bloc
- * `:root[data-theme='sombre']` redéfinit uniquement les jetons de
- * surface/texte/structure/ombre ci-dessous, jamais les couleurs
- * sémantiques de statut (qualification_status/StatutSection) qui doivent
- * rester reconnaissables à l'identique dans les deux thèmes. Activé/
- * désactivé par `usePreferencesAffichageStore` (attribut `data-theme` sur
- * `<html>`, persisté en `localStorage`, jamais une donnée métier).
+ * Jetons de conception — écran de travail (FDS §2bis, « Indigo premium +
+ * accents vifs »). Refonte visuelle Phase 41 (04/09/2026, demande
+ * explicite de l'utilisateur — carte blanche sur la forme/l'esthétique) :
+ * même direction déjà actée (indigo premium, coins modérés ≈8-10px,
+ * transitions courtes sans rebond, séparation écran/export, contraste
+ * WCAG AA vérifié — voir calculs ci-dessous) mais une exécution plus
+ * aboutie sur 3 points qui restaient en dette :
+ *   1. Police enfin vendorisée (`fonts.css`) — Inter en corps de texte
+ *      (conforme FDS §2bis, jusqu'ici en `system-ui` faute d'asset local),
+ *      + Fraunces en police d'affichage pour les titres majeurs (nouveau,
+ *      §"Typographie" ci-dessous) — jamais chargées depuis un CDN.
+ *   2. Teinte de marque remplacée : l'ancienne valeur (#4f46e5) était
+ *      exactement le indigo-600 par défaut d'un design system générique
+ *      (Tailwind) — remplacée par une teinte réglée à la main, plus
+ *      profonde, distincte de toute palette de composants standard.
+ *   3. Un second accent (« accents vifs », déjà nommé dans la direction
+ *      retenue mais jamais livré) — un rose/bordeaux profond, choisi à
+ *      distance de toutes les teintes sémantiques de statut ci-dessous
+ *      (jamais de collision avec ambre/orange/rouge/violet déjà utilisés
+ *      pour qualification_status) — utilisé avec parcimonie (badge client
+ *      actif, détails éditoriaux), jamais sur une action fonctionnelle.
+ *
+ * Thème sombre ajouté en Phase 40 : un bloc `:root[data-theme='sombre']`
+ * redéfinit uniquement les jetons de surface/texte/structure/ombre
+ * ci-dessous, jamais les couleurs sémantiques de statut
+ * (qualification_status/StatutSection) qui doivent rester reconnaissables
+ * à l'identique dans les deux thèmes. Activé/désactivé par
+ * `usePreferencesAffichageStore` (attribut `data-theme` sur `<html>`,
+ * persisté en `localStorage`, jamais une donnée métier).
  *
  * Séparation stricte écran/export (URS-NF-054bis, SDS §7bis) : ce fichier
  * n'est JAMAIS importé par le moteur de génération d'export (backlog) —
@@ -15,45 +35,70 @@
  * comme un document imprimé classique (fond blanc, texte noir), quel que
  * soit le thème d'affichage choisi par l'utilisateur.
  *
- * Police Inter documentée en FDS §2bis mais pas encore chargée en asset
- * local du bundle (aucun fichier de police fourni à ce stade) — utiliser
- * system-ui en attendant plutôt que de dépendre d'un CDN externe, interdit
- * par le principe local-first déjà acté. À compléter quand la police sera
- * effectivement acquise/vendorisée.
+ * Bouton plein (fond `--vp-marque` + libellé) : la teinte de marque en
+ * thème sombre est nécessairement plus claire que celle du thème clair
+ * (lisible comme texte/icône sur fond quasi noir), ce qui est
+ * mathématiquement incompatible avec un libellé blanc lisible dessus
+ * (contraste ≥4.5:1 impossible dans les deux sens à la fois — vérifié par
+ * calcul WCAG explicite pendant cette refonte, pas seulement à l'oeil).
+ * D'où `--vp-marque-bouton-texte` : blanc en thème clair, encre foncée en
+ * thème sombre (inversion classique du libellé sur bouton plein en dark
+ * mode) — jamais un simple `color: white` figé sur les boutons pleins.
  */
 :root {
-  /* Fond */
-  --vp-fond-page: #ffffff;
-  --vp-fond-carte: #f7f7fb;
+  /* Fond — page légèrement teintée, cartes en blanc pur : la carte "flotte"
+     au-dessus de la page sans dépendre uniquement de l'ombre portée pour
+     se distinguer (inversion du couple page/carte de la version précédente,
+     où la page était blanche et la carte légèrement teintée). */
+  --vp-fond-page: #f5f5fa;
+  --vp-fond-carte: #ffffff;
 
   /* Texte */
-  --vp-texte-principal: #0f1222;
-  --vp-texte-secondaire: #5b5f73;
+  --vp-texte-principal: #14152a;
+  --vp-texte-secondaire: #5c5f76;
 
-  /* Marque (indigo) */
-  --vp-marque: #4f46e5;
-  --vp-marque-survol: #4338ca;
-  --vp-marque-fond-leger: #eef2ff;
+  /* Marque (indigo réglé à la main — jamais une teinte de design system
+     générique, voir note ci-dessus). Contrastes vérifiés (WCAG) :
+     texte/lien #4638c2 sur blanc = 8.06:1 ; libellé blanc sur bouton
+     #4638c2 = 8.06:1. */
+  --vp-marque: #4638c2;
+  --vp-marque-survol: #38299c;
+  --vp-marque-fond-leger: #eeecfb;
+  --vp-marque-bouton-texte: #ffffff;
+
+  /* Accent secondaire (« accents vifs ») — rose/bordeaux profond, réservé
+     aux touches éditoriales (badge client actif, détails de marque),
+     jamais à une action fonctionnelle ni à un statut. Contraste vérifié :
+     #a8215f sur blanc = 6.89:1 ; blanc sur #a8215f = 6.89:1. */
+  --vp-accent: #a8215f;
+  --vp-accent-fond-leger: #fce9f1;
+  --vp-accent-bouton-texte: #ffffff;
 
   /* Structure */
-  --vp-bordure: #e4e4ee;
-  --vp-bordure-forte: #d1d1e0;
+  --vp-bordure: #e3e2f0;
+  --vp-bordure-forte: #cfcee3;
   --vp-rayon-sm: 6px;
   --vp-rayon: 10px;
   --vp-rayon-lg: 16px;
   --vp-transition: 175ms ease;
 
-  /* Élévation (ajouté v20, refonte UX guidée — répond à URS-NF-054/054bis
-     sans jamais toucher au registre visuel des exports, cf. règle
-     d'import ci-dessus). Utilisée pour distinguer une carte cliquable
-     d'un simple bloc de contenu, jamais pour porter seule une
-     information d'état (toujours doublée d'icône+couleur+texte). */
-  --vp-ombre-sm: 0 1px 2px rgba(15, 18, 34, 0.06);
-  --vp-ombre-md: 0 4px 12px rgba(15, 18, 34, 0.08);
-  --vp-ombre-lg: 0 12px 32px rgba(15, 18, 34, 0.12);
+  /* Élévation — ombres diffuses à faible opacité (plutôt qu'une ombre
+     dure et proche), pour un effet de profondeur discret, cohérent avec
+     "premium sobre" (FDS §2bis : jamais de rebond/overshoot, même
+     discipline appliquée ici à l'élévation). Utilisée pour distinguer une
+     carte cliquable d'un simple bloc de contenu, jamais pour porter seule
+     une information d'état (toujours doublée d'icône+couleur+texte). */
+  --vp-ombre-sm: 0 1px 2px rgba(20, 21, 42, 0.05), 0 1px 1px rgba(20, 21, 42, 0.03);
+  --vp-ombre-md: 0 8px 24px -4px rgba(20, 21, 42, 0.1), 0 2px 6px -2px rgba(20, 21, 42, 0.06);
+  --vp-ombre-lg: 0 24px 56px -12px rgba(20, 21, 42, 0.18), 0 8px 20px -6px rgba(20, 21, 42, 0.1);
 
-  /* Typographie */
-  --vp-police: 'Inter', system-ui, sans-serif;
+  /* Typographie — Inter (corps/interface) chargée localement (`fonts.css`,
+     Phase 41), Fraunces (affichage) ajoutée pour les titres majeurs
+     uniquement : nom du produit, titres d'écran, nom d'un client sur sa
+     fiche. Jamais sur le corps de texte, les boutons ou les formulaires —
+     la densité d'information visée par FDS §2bis reste portée par Inter. */
+  --vp-police: 'Inter', system-ui, -apple-system, sans-serif;
+  --vp-police-affichage: 'Fraunces', 'Iowan Old Style', Georgia, serif;
   --vp-taille-texte-min: 14px;
   --vp-poids-medium: 500;
   --vp-poids-semibold: 600;
@@ -72,7 +117,11 @@
   --vp-info-fond-leger: #eff6ff;
 
   /* Palette sémantique qualification_status (FDS §2bis) — couleur ET icône
-     ET libellé systématiques, jamais la couleur seule (URS-NF-054ter). */
+     ET libellé systématiques, jamais la couleur seule (URS-NF-054ter).
+     Valeurs inchangées par cette refonte : déjà auditées (contraste ≥4.5:1
+     recalculé et corrigé en v11, `docs/archive/revues-audits/
+     charte-graphique/40-audit-accessibilite-charte-graphique.md`) — les
+     rouvrir sans nouvel audit romprait cette garantie déjà établie. */
   --vp-statut-non-qualifie: #6b7280;
   --vp-statut-en-cours-qualification-initiale: #2563eb;
   --vp-statut-qualifie: #15803d;
@@ -85,7 +134,8 @@
   /* Palette sémantique StatutSection (ajouté v20) — même discipline
      couleur+icône+texte, jamais la couleur seule. Distincte de la
      palette qualification_status ci-dessus (deux domaines différents :
-     cycle de vie d'un livrable vs état d'un actif). */
+     cycle de vie d'un livrable vs état d'un actif). Inchangée pour la
+     même raison que ci-dessus. */
   --vp-section-brouillon: #6b7280;
   --vp-section-brouillon-fond: #f4f4f6;
   --vp-section-propose-ia: #7c3aed;
@@ -109,28 +159,36 @@
  */
 :root[data-theme='sombre'] {
   /* Fond */
-  --vp-fond-page: #12131c;
-  --vp-fond-carte: #1a1c29;
+  --vp-fond-page: #101019;
+  --vp-fond-carte: #191a27;
 
   /* Texte */
   --vp-texte-principal: #f1f2f8;
   --vp-texte-secondaire: #a3a6bd;
 
-  /* Marque (indigo, légèrement éclairci pour le contraste sur fond sombre) */
-  --vp-marque: #818cf8;
-  --vp-marque-survol: #a5b0fb;
+  /* Marque (indigo éclairci pour le contraste sur fond sombre — voir note
+     de tête sur `--vp-marque-bouton-texte`, contraste vérifié : #8b7fff
+     sur fond page sombre = 5.79:1 en tant que texte/icône). */
+  --vp-marque: #8b7fff;
+  --vp-marque-survol: #a79cff;
   --vp-marque-fond-leger: #262a44;
+  --vp-marque-bouton-texte: #14152a;
+
+  /* Accent secondaire — éclairci pour le même motif que la marque. */
+  --vp-accent: #e27fae;
+  --vp-accent-fond-leger: #34172a;
+  --vp-accent-bouton-texte: #14152a;
 
   /* Structure */
-  --vp-bordure: #2c2f42;
-  --vp-bordure-forte: #3d4159;
+  --vp-bordure: #2b2e42;
+  --vp-bordure-forte: #3c4059;
 
   /* Élévation — ombres plus marquées, nécessaires sur fond sombre pour
      rester perceptibles (une ombre calquée sur le thème clair y devient
      invisible). */
   --vp-ombre-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --vp-ombre-md: 0 4px 14px rgba(0, 0, 0, 0.45);
-  --vp-ombre-lg: 0 14px 36px rgba(0, 0, 0, 0.55);
+  --vp-ombre-md: 0 10px 28px -6px rgba(0, 0, 0, 0.5), 0 2px 8px -2px rgba(0, 0, 0, 0.35);
+  --vp-ombre-lg: 0 28px 64px -14px rgba(0, 0, 0, 0.6), 0 10px 24px -8px rgba(0, 0, 0, 0.4);
 
   /* État sémantique générique — fonds légers réajustés pour rester lisibles
      sur fond sombre ; les couleurs de premier plan (succès/attention/
@@ -146,18 +204,21 @@
      toujours sur la préférence système, cohérent avec `data-theme='sombre'`
      qui gagne toujours sur un OS resté en thème clair. */
   :root:not([data-theme='clair']) {
-    --vp-fond-page: #12131c;
-    --vp-fond-carte: #1a1c29;
+    --vp-fond-page: #101019;
+    --vp-fond-carte: #191a27;
     --vp-texte-principal: #f1f2f8;
     --vp-texte-secondaire: #a3a6bd;
-    --vp-marque: #818cf8;
-    --vp-marque-survol: #a5b0fb;
+    --vp-marque: #8b7fff;
+    --vp-marque-survol: #a79cff;
     --vp-marque-fond-leger: #262a44;
-    --vp-bordure: #2c2f42;
-    --vp-bordure-forte: #3d4159;
+    --vp-marque-bouton-texte: #14152a;
+    --vp-accent: #e27fae;
+    --vp-accent-fond-leger: #34172a;
+    --vp-bordure: #2b2e42;
+    --vp-bordure-forte: #3c4059;
     --vp-ombre-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-    --vp-ombre-md: 0 4px 14px rgba(0, 0, 0, 0.45);
-    --vp-ombre-lg: 0 14px 36px rgba(0, 0, 0, 0.55);
+    --vp-ombre-md: 0 10px 28px -6px rgba(0, 0, 0, 0.5), 0 2px 8px -2px rgba(0, 0, 0, 0.35);
+    --vp-ombre-lg: 0 28px 64px -14px rgba(0, 0, 0, 0.6), 0 10px 24px -8px rgba(0, 0, 0, 0.4);
     --vp-succes-fond-leger: #0f2b1c;
     --vp-attention-fond-leger: #2e2408;
     --vp-danger-fond-leger: #2e1414;
@@ -173,4 +234,107 @@ body {
   transition:
     background-color var(--vp-transition),
     color var(--vp-transition);
+}
+
+/* Titre de page (chaque écran porte exactement un `<h1>`, jamais un autre
+   niveau pour ce rôle — vérifié sur les 44 écrans) : bascule sur la police
+   d'affichage (voir note en tête de fichier), sans toucher à la taille ni
+   aux marges propres à chaque écran (non repris ici — un `<h1>` scoped
+   plus spécifique les redéfinit déjà là où c'est nécessaire, ex.
+   `Login.vue`/`Parametres.vue`). Volontairement limité au niveau h1 :
+   étendre la police d'affichage aux sous-titres aurait contredit la
+   densité d'information visée par FDS §2bis. */
+h1 {
+  font-family: var(--vp-police-affichage);
+  font-weight: var(--vp-poids-semibold);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* Listes non ordonnées (Phase 41) : partout dans l'application, un `<ul>`
+   sert à afficher des enregistrements (comptes, sources, paramètres,
+   étapes…), jamais une liste à puces éditoriale — vérifié sur les ~40
+   écrans, aucun `list-style: disc` explicite nulle part. Le reset global
+   évite la puce+retrait par défaut du navigateur que la majorité des
+   écrans oubliaient de retirer eux-mêmes. Un `<ol>` (étapes numérotées,
+   chaîne technique) n'est PAS concerné : ce sont les seules listes de
+   l'application où le numéro porte une vraie information d'ordre — jamais
+   réinitialisées ici. */
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Focus clavier (Phase 41) : la majorité des champs de saisie de
+   l'application (34 écrans sur ~40) n'avaient aucun style de focus propre
+   — repli sur l'anneau bleu par défaut du navigateur, hors de la charte.
+   Règle unique, cohérente sur les trois types de champ, jamais retirée
+   (`outline` réellement remplacé par une bordure+halo visibles, jamais
+   supprimé sans remplacement). */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--vp-marque);
+  box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
+}
+
+/* Base par défaut des champs et boutons (Phase 41) : plusieurs écrans plus
+   anciens (`SourceIntelligence.vue`, `ProfilLocal.vue`, `MissionWorkspace.vue`…)
+   n'habillent jamais leurs `<button>`/`<select>`/`<textarea>` — ils héritent
+   donc du rendu brut du système d'exploitation, en rupture avec le reste de
+   l'application déjà stylée. Cette base globale comble cet oubli sans jamais
+   entrer en conflit avec un style déjà écrit localement : une règle scoped
+   Vue (`button[data-v-xxx]`, `.bouton-principal`) a toujours une spécificité
+   supérieure à ces sélecteurs nus et continue donc de gagner partout où un
+   écran a déjà fait ce travail — cette base ne s'applique que là où rien
+   d'autre n'était défini. Jamais destinée à remplacer `.bouton-principal`/
+   `.bouton-secondaire`, seulement à éviter qu'un bouton oublié ressemble à
+   un widget non stylé. */
+button {
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: var(--vp-poids-medium);
+  color: var(--vp-texte-principal);
+  background-color: var(--vp-fond-carte);
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon-sm);
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  transition: var(--vp-transition);
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--vp-marque);
+  color: var(--vp-marque);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+button[type='submit'] {
+  background-color: var(--vp-marque);
+  border-color: var(--vp-marque);
+  color: var(--vp-marque-bouton-texte);
+}
+
+button[type='submit']:hover:not(:disabled) {
+  background-color: var(--vp-marque-survol);
+  border-color: var(--vp-marque-survol);
+  color: var(--vp-marque-bouton-texte);
+}
+
+select,
+textarea {
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--vp-texte-principal);
+  background-color: var(--vp-fond-carte);
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon-sm);
+  padding: 0.5rem 0.7rem;
+  transition: var(--vp-transition);
 }

@@ -227,7 +227,7 @@ function libelleCourtStatut(etape: EtapeCalculee): string {
   margin-left: auto;
   flex-shrink: 0;
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border: none;
   border-radius: var(--vp-rayon-sm);
   padding: 0.5rem 1rem;

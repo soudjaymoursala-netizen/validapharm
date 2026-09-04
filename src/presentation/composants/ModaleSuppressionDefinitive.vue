@@ -136,11 +136,11 @@ textarea {
 }
 
 .bandeau-erreur {
-  color: var(--vp-couleur-erreur, #b00020);
+  color: var(--vp-danger);
 }
 
 .bouton-danger {
-  background-color: var(--vp-couleur-erreur, #b00020);
+  background-color: var(--vp-danger);
   color: white;
   border: none;
   border-radius: 0.25rem;

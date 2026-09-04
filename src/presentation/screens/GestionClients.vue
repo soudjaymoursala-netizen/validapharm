@@ -71,7 +71,9 @@ async function confirmerSuppressionDefinitive(justification: string): Promise<vo
     <header>
       <RouterLink :to="{ name: 'accueil' }">&larr; Accueil</RouterLink>
       <h1>Mes clients</h1>
-      <button type="button" @click="formulaireOuvert = true">Nouveau client</button>
+      <button type="button" class="bouton-principal" @click="formulaireOuvert = true">
+        Nouveau client
+      </button>
     </header>
 
     <form v-if="formulaireOuvert" class="formulaire-client" @submit.prevent="creerClient">
@@ -98,7 +100,7 @@ async function confirmerSuppressionDefinitive(justification: string): Promise<vo
       </label>
       <div class="actions">
         <button type="button" @click="formulaireOuvert = false">Annuler</button>
-        <button type="submit">Créer le client</button>
+        <button type="submit" class="bouton-principal">Créer le client</button>
       </div>
     </form>
 
@@ -177,13 +179,24 @@ header {
   margin-bottom: 1.5rem;
 }
 
-button {
+/* `.bouton-principal` seulement (jamais un `button` nu) : un `button`
+   sans classe (Annuler, Désarchiver) doit rester une action neutre/
+   secondaire — la base globale de `tokens.css` s'en charge — et non
+   hériter par erreur de l'apparence d'une action primaire (Phase 41,
+   bug trouvé pendant la vérification navigateur : « Annuler » avait
+   exactement la même couleur que « Créer le client »). */
+.bouton-principal {
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border: none;
   border-radius: var(--vp-rayon);
   padding: 0.5rem 1rem;
   cursor: pointer;
+  transition: var(--vp-transition);
+}
+
+.bouton-principal:hover {
+  background-color: var(--vp-marque-survol);
 }
 
 .formulaire-client {
@@ -261,7 +274,7 @@ button {
 }
 
 .bouton-archiver {
-  background-color: var(--vp-couleur-erreur, #b00020);
+  background-color: var(--vp-danger);
   flex-shrink: 0;
 }
 
@@ -273,8 +286,8 @@ button {
 
 .bouton-danger {
   background-color: transparent;
-  color: var(--vp-couleur-erreur, #b00020);
-  border: 1px solid var(--vp-couleur-erreur, #b00020);
+  color: var(--vp-danger);
+  border: 1px solid var(--vp-danger);
 }
 
 .bloc-archives {

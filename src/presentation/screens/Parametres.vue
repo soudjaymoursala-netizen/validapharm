@@ -95,7 +95,7 @@ h1 {
 }
 
 .bloc {
-  background-color: var(--vp-fond-page);
+  background-color: var(--vp-fond-carte);
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon-lg);
   box-shadow: var(--vp-ombre-sm);

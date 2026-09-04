@@ -151,7 +151,7 @@ input[type='text'] {
 }
 
 .bandeau-erreur {
-  color: var(--vp-couleur-erreur, #b00020);
+  color: var(--vp-danger);
 }
 
 .liste-gabarits {
@@ -178,7 +178,7 @@ input[type='text'] {
 .bouton-danger {
   background: none;
   border: none;
-  color: var(--vp-couleur-erreur, #b00020);
+  color: var(--vp-danger);
   cursor: pointer;
 }
 

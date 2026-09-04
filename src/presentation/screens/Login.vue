@@ -93,6 +93,11 @@ async function seConnecter(): Promise<void> {
   justify-content: center;
   padding: 2rem;
   background-color: var(--vp-fond-page);
+  background-image: radial-gradient(
+    circle at 50% -10%,
+    var(--vp-marque-fond-leger),
+    transparent 60%
+  );
 }
 
 .carte {
@@ -101,11 +106,11 @@ async function seConnecter(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  padding: 2rem;
+  padding: 2.25rem;
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon-lg);
   background-color: var(--vp-fond-carte);
-  box-shadow: var(--vp-ombre-md);
+  box-shadow: var(--vp-ombre-lg);
 }
 
 .marque {
@@ -122,20 +127,24 @@ async function seConnecter(): Promise<void> {
   height: 2rem;
   border-radius: var(--vp-rayon-sm);
   background-color: var(--vp-marque);
-  color: white;
+  background-image: linear-gradient(160deg, var(--vp-marque), var(--vp-marque-survol));
+  box-shadow: var(--vp-ombre-sm);
+  color: var(--vp-marque-bouton-texte);
   font-size: 0.75rem;
   font-weight: var(--vp-poids-bold);
 }
 
 .nom-produit {
-  font-weight: var(--vp-poids-bold);
+  font-family: var(--vp-police-affichage);
+  font-weight: var(--vp-poids-semibold);
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
   color: var(--vp-texte-principal);
 }
 
 h1 {
   margin: 0;
-  font-size: 1.3rem;
-  font-weight: var(--vp-poids-bold);
+  font-size: 1.5rem;
 }
 
 .formulaire {
@@ -155,20 +164,33 @@ h1 {
 .formulaire input {
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon-sm);
-  padding: 0.55rem 0.7rem;
+  padding: 0.6rem 0.75rem;
   font-family: inherit;
   color: var(--vp-texte-principal);
+  background-color: var(--vp-fond-carte);
+  transition: var(--vp-transition);
+}
+
+.formulaire input:focus-visible {
+  outline: none;
+  border-color: var(--vp-marque);
+  box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
 }
 
 .formulaire button {
   margin-top: 0.4rem;
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border: none;
   border-radius: var(--vp-rayon-sm);
-  padding: 0.6rem;
+  padding: 0.65rem;
   font-weight: var(--vp-poids-medium);
   cursor: pointer;
+  transition: var(--vp-transition);
+}
+
+.formulaire button:hover:not(:disabled) {
+  background-color: var(--vp-marque-survol);
 }
 
 .formulaire button:disabled {
@@ -178,7 +200,7 @@ h1 {
 
 .bandeau-erreur {
   margin: 0;
-  color: var(--vp-couleur-erreur, #b00020);
+  color: var(--vp-danger);
   font-size: 0.85rem;
 }
 

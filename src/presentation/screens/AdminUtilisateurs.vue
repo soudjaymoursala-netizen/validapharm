@@ -95,7 +95,9 @@ async function basculerStatut(u: UtilisateurWire): Promise<void> {
     <RouterLink :to="{ name: 'accueil' }">&larr; Accueil</RouterLink>
     <header>
       <h1>Gestion des comptes</h1>
-      <button type="button" @click="formulaireOuvert = true">Nouveau compte</button>
+      <button type="button" class="bouton-principal" @click="formulaireOuvert = true">
+        Nouveau compte
+      </button>
     </header>
     <p class="rappel">
       Aucune inscription libre — seul un admin crée un compte. La désactivation empêche
@@ -129,7 +131,7 @@ async function basculerStatut(u: UtilisateurWire): Promise<void> {
       <p v-if="erreur" class="bandeau-erreur" role="alert">{{ erreur }}</p>
       <div class="actions">
         <button type="button" @click="formulaireOuvert = false">Annuler</button>
-        <button type="submit">Créer le compte</button>
+        <button type="submit" class="bouton-principal">Créer le compte</button>
       </div>
     </form>
 
@@ -171,13 +173,21 @@ header {
   justify-content: space-between;
 }
 
-button {
+/* `.bouton-principal` seulement (Phase 41, même bug que GestionClients.vue) :
+   un `button` nu (Annuler, Promouvoir/Rétrograder) doit rester une action
+   neutre — la base globale de `tokens.css` s'en charge. */
+.bouton-principal {
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border: none;
   border-radius: var(--vp-rayon-sm);
   padding: 0.5rem 1rem;
   cursor: pointer;
+  transition: var(--vp-transition);
+}
+
+.bouton-principal:hover {
+  background-color: var(--vp-marque-survol);
 }
 
 .rappel {
@@ -217,7 +227,7 @@ button {
 }
 
 .bandeau-erreur {
-  color: var(--vp-couleur-erreur, #b00020);
+  color: var(--vp-danger);
   margin: 0;
 }
 
@@ -262,8 +272,8 @@ button {
 }
 
 .badge--desactive {
-  background-color: color-mix(in srgb, var(--vp-couleur-erreur, #b00020) 15%, transparent);
-  color: var(--vp-couleur-erreur, #b00020);
+  background-color: color-mix(in srgb, var(--vp-danger) 15%, transparent);
+  color: var(--vp-danger);
 }
 
 .actions-compte {
@@ -280,7 +290,7 @@ button {
 }
 
 .bouton-danger {
-  color: var(--vp-couleur-erreur, #b00020) !important;
+  color: var(--vp-danger) !important;
 }
 
 .etat-vide {

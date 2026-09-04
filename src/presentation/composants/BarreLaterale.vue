@@ -374,15 +374,19 @@ function basculerMode(nouveauMode: ModeAffichage): void {
   height: 2rem;
   border-radius: var(--vp-rayon-sm);
   background-color: var(--vp-marque);
-  color: white;
+  background-image: linear-gradient(160deg, var(--vp-marque), var(--vp-marque-survol));
+  box-shadow: var(--vp-ombre-sm);
+  color: var(--vp-marque-bouton-texte);
   font-size: 0.75rem;
   font-weight: var(--vp-poids-bold);
   letter-spacing: 0.02em;
 }
 
 .sidebar__nom-produit {
-  font-weight: var(--vp-poids-bold);
-  font-size: 1.02rem;
+  font-family: var(--vp-police-affichage);
+  font-weight: var(--vp-poids-semibold);
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
   color: var(--vp-texte-principal);
 }
 
@@ -419,9 +423,15 @@ function basculerMode(nouveauMode: ModeAffichage): void {
   border: none;
   color: var(--vp-texte-secondaire);
   font-size: 0.72rem;
-  text-decoration: underline;
+  text-decoration: none;
   cursor: pointer;
   padding: 0;
+  transition: var(--vp-transition);
+}
+
+.sidebar__deconnexion:hover {
+  color: var(--vp-marque);
+  text-decoration: underline;
 }
 
 .sidebar__bascule-mode {
@@ -448,7 +458,7 @@ function basculerMode(nouveauMode: ModeAffichage): void {
 
 .sidebar__bascule-mode button.actif {
   background-color: var(--vp-marque);
-  color: #ffffff;
+  color: var(--vp-marque-bouton-texte);
 }
 
 .sidebar__groupe {
@@ -473,7 +483,7 @@ function basculerMode(nouveauMode: ModeAffichage): void {
   padding: 0.5rem;
   margin-bottom: 0.5rem;
   border-radius: var(--vp-rayon);
-  background-color: var(--vp-marque-fond-leger);
+  background-color: var(--vp-accent-fond-leger);
 }
 
 .sidebar__avatar-client {
@@ -484,8 +494,8 @@ function basculerMode(nouveauMode: ModeAffichage): void {
   width: 1.9rem;
   height: 1.9rem;
   border-radius: 999px;
-  background-color: var(--vp-marque);
-  color: white;
+  background-color: var(--vp-accent);
+  color: var(--vp-accent-bouton-texte);
   font-size: 0.7rem;
   font-weight: var(--vp-poids-semibold);
 }
@@ -500,8 +510,7 @@ function basculerMode(nouveauMode: ModeAffichage): void {
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--vp-marque-survol);
-  opacity: 0.85;
+  color: var(--vp-accent);
 }
 
 .sidebar__badge-client-nom {
@@ -540,6 +549,7 @@ function basculerMode(nouveauMode: ModeAffichage): void {
   background-color: var(--vp-marque-fond-leger);
   color: var(--vp-marque);
   font-weight: var(--vp-poids-medium);
+  box-shadow: inset 2.5px 0 0 var(--vp-marque);
 }
 
 .sidebar__groupe a:hover :deep(svg),

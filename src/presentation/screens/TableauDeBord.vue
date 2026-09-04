@@ -321,7 +321,7 @@ button {
 
 .bouton-principal {
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border: none;
 }
 
@@ -346,7 +346,7 @@ button {
 }
 
 .carte {
-  background-color: var(--vp-fond-page);
+  background-color: var(--vp-fond-carte);
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon-lg);
   box-shadow: var(--vp-ombre-sm);
@@ -440,7 +440,7 @@ button {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  background-color: var(--vp-fond-page);
+  background-color: var(--vp-fond-carte);
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon-lg);
   box-shadow: var(--vp-ombre-sm);

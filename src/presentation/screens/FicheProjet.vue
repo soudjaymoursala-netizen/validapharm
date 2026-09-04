@@ -510,7 +510,7 @@ async function importerFichier(evenement: Event): Promise<void> {
 }
 
 .carte {
-  background-color: var(--vp-fond-page);
+  background-color: var(--vp-fond-carte);
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon-lg);
   box-shadow: var(--vp-ombre-sm);
@@ -633,7 +633,7 @@ button {
   align-items: center;
   gap: 0.4rem;
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border-radius: var(--vp-rayon-sm);
   padding: 0.5rem 1rem;
   font-size: 0.88rem;

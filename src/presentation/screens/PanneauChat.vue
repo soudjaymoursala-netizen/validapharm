@@ -263,7 +263,9 @@ async function reouvrirSession(): Promise<void> {
           }}
         </p>
         <div class="actions">
-          <button type="button" @click="confirmationEnvoiOuverte = false">Annuler</button>
+          <button type="button" class="bouton-neutre" @click="confirmationEnvoiOuverte = false">
+            Annuler
+          </button>
           <button type="button" @click="envoyer">Continuer</button>
         </div>
       </div>
@@ -398,11 +400,25 @@ select {
 
 button {
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border: none;
   border-radius: var(--vp-rayon);
   padding: 0.5rem 1rem;
   cursor: pointer;
+}
+
+/* `.bouton-neutre` (Phase 41) : dans la modale de confirmation d'envoi,
+   « Annuler » avait le même poids visuel qu'« Continuer » (bouton nu
+   hérité de la règle `button` ci-dessus, jamais différencié). */
+.bouton-neutre {
+  background-color: var(--vp-fond-page);
+  color: var(--vp-texte-principal);
+  border: 1px solid var(--vp-bordure);
+}
+
+.bouton-neutre:hover {
+  border-color: var(--vp-marque);
+  color: var(--vp-marque);
 }
 
 button:disabled {

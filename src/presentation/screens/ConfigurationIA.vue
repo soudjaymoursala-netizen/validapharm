@@ -281,7 +281,7 @@ input[type='date'] {
 
 button {
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border: none;
   border-radius: var(--vp-rayon);
   padding: 0.5rem 1rem;

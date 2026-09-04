@@ -297,7 +297,7 @@ const projetsDuClient = computed(() =>
 
 .bouton-principal {
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border: none;
 }
 
@@ -320,7 +320,7 @@ const projetsDuClient = computed(() =>
   padding: 1.4rem 1.5rem;
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon-lg);
-  background-color: var(--vp-fond-page);
+  background-color: var(--vp-fond-carte);
   color: var(--vp-texte-principal);
   text-decoration: none;
   box-shadow: var(--vp-ombre-sm);
@@ -373,7 +373,7 @@ const projetsDuClient = computed(() =>
 }
 
 .carte {
-  background-color: var(--vp-fond-page);
+  background-color: var(--vp-fond-carte);
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon-lg);
   box-shadow: var(--vp-ombre-sm);

@@ -368,7 +368,7 @@ td {
 
 button {
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border: none;
   border-radius: var(--vp-rayon);
   padding: 0.4rem 0.8rem;

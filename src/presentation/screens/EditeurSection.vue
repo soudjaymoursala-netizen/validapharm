@@ -851,7 +851,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
           Motif de rejet
           <input v-model="motifRejet" type="text" />
         </label>
-        <button type="button" @click="rejeter">Rejeter</button>
+        <button type="button" class="bouton-danger" @click="rejeter">Rejeter</button>
       </template>
 
       <template v-else-if="section.status === 'en_approbation'">
@@ -860,7 +860,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
           Motif de rejet
           <input v-model="motifRejet" type="text" />
         </label>
-        <button type="button" @click="rejeter">Rejeter</button>
+        <button type="button" class="bouton-danger" @click="rejeter">Rejeter</button>
       </template>
 
       <p v-else-if="section.status === 'valide_en_interne'" class="verrouille">
@@ -960,9 +960,20 @@ input {
   font-family: inherit;
 }
 
+/* `.bouton-danger` (Phase 41) : « Rejeter » ne doit jamais avoir le même
+   poids visuel qu'« Approuver »/« Transmettre à l'approbation » — un
+   bouton plein indigo identique aux deux ne distinguait pas l'action
+   destructrice de l'action positive dans un flux d'approbation GxP.
+   Même recette que `GestionClients.vue`/`AdminUtilisateurs.vue`. */
+.bouton-danger {
+  background-color: transparent;
+  color: var(--vp-danger);
+  border: 1px solid var(--vp-danger);
+}
+
 button {
   background-color: var(--vp-marque);
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   border: none;
   border-radius: var(--vp-rayon);
   padding: 0.5rem 1rem;

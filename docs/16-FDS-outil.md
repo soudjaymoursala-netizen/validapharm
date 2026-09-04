@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | FDS-VALIDAPHARM-2026-001 |
-| **Version** | 21 (URS-F-220quinquies comblé — différenciation réelle Mode Expert/Mode Assistant, 31/08/2026, signalé par l'utilisateur, §2). Version 20 (refonte visuelle UX guidée — pipeline de qualification, sidebar/accueil/tableau de bord modernisés — puis section "Documents" générique (URS-F-000quater, tout format) et choix guidés "vierge vs à partir d'un document"/"manuel vs import de fichier" pour la création de section et la configuration ACFC, 31/08/2026, demandes explicites de l'utilisateur, §2 ; v19 : Journal d'anomalies ajouté à l'agrégation du Dossier vivant, suite à trois scénarios supplémentaires — audit/transfert de site/changement mineur — du 31/08/2026, §12 ; v18 : URS-F-240/Journal d'anomalies/Configuration des connecteurs QMS/statut de qualification d'un actif comblés, 31/08/2026 ; v17 : Impact Assessment et Computer System Assessment réellement construits, 29/08/2026 ; v16 : rattrapage documentaire Phases 12-34, 28/08/2026) |
+| **Version** | 22 (refonte visuelle premium §2bis — Phase 41, 04/09/2026, demande explicite de l'utilisateur (« carte blanche », « épuré, premium et agréable à utiliser et à voir ») ; polices Inter/Fraunces enfin vendorisées localement (point resté non résolu depuis v09/v13 malgré la décision de principe) ; teinte de marque remplacée (`#4F46E5`, indigo-600 générique d'un design system standard → `#4638C2` réglée à la main) ; second accent « vif » enfin livré (rose/bordeaux, badge site actif uniquement, aucune collision avec la palette sémantique de statut) ; fond de page/carte inversés pour une profondeur perceptible ; base globale non intrusive pour les boutons/listes/champs de saisie oubliés par plusieurs écrans plus anciens ; 3 bugs réels trouvés et corrigés en vérification navigateur (sidebar visible avant authentification, thème sombre non réappliqué après rechargement complet, boutons « Annuler »/« Rejeter » au même poids visuel qu'une action primaire) ; tous les contrastes recalculés explicitement (WCAG AA), 904 tests, typecheck/lint propres, vérifié en navigateur réel clair et sombre). Version 21 (URS-F-220quinquies comblé — différenciation réelle Mode Expert/Mode Assistant, 31/08/2026, signalé par l'utilisateur, §2). Version 20 (refonte visuelle UX guidée — pipeline de qualification, sidebar/accueil/tableau de bord modernisés — puis section "Documents" générique (URS-F-000quater, tout format) et choix guidés "vierge vs à partir d'un document"/"manuel vs import de fichier" pour la création de section et la configuration ACFC, 31/08/2026, demandes explicites de l'utilisateur, §2 ; v19 : Journal d'anomalies ajouté à l'agrégation du Dossier vivant, suite à trois scénarios supplémentaires — audit/transfert de site/changement mineur — du 31/08/2026, §12 ; v18 : URS-F-240/Journal d'anomalies/Configuration des connecteurs QMS/statut de qualification d'un actif comblés, 31/08/2026 ; v17 : Impact Assessment et Computer System Assessment réellement construits, 29/08/2026 ; v16 : rattrapage documentaire Phases 12-34, 28/08/2026) |
 | **Statut** | En rédaction |
 | **Catégorie GAMP 5** | Catégorie 5 (sur mesure) |
 | **Documents de référence** | `01-URS-outil.md` v62, `02-analyse-de-risque-outil.md` v28, `03-specifications-fonctionnelles.md` v52, `17-revue-multi-experts-FDS.md` v01, `18-audit-swissmedic-FDS.md` v01, `19-audit-fda-FDS.md` v01, `20-audit-cabinet-conseil-GxP-FDS.md` v01, `21-audit-QA-specialises-FDS.md` v01 (closes) — `docs/convergence/PHASE_13_*` à `PHASE_34_*` pour le détail exhaustif de chaque phase |
@@ -60,18 +60,23 @@ Toute règle déjà énoncée en FS n'est pas reformulée ici sauf si elle néce
 
 ### Direction retenue : « Indigo premium + accents vifs »
 
+**Refonte Phase 41 (04/09/2026, demande explicite de l'utilisateur — carte blanche sur la forme/l'esthétique, « je veux quelque chose d'épuré, premium et agréable à utiliser et à voir »)** : la direction « Indigo premium + accents vifs » posée en v09 restait partiellement non livrée — Inter documentée mais jamais vendorisée (voir note « Typographie » ci-dessous, inchangée depuis v09 jusqu'à ce lot), et aucun second accent « vif » distinct n'existait réellement malgré le nom de la direction. Ce lot livre les deux : polices vendorisées localement (aucun changement de principe, seulement l'exécution promise), et un second accent (rose/bordeaux profond, `#A8215F` clair / `#E27FAE` sombre) choisi à distance de toutes les teintes sémantiques de statut ci-dessous — utilisé avec parcimonie (badge « site actif » de la sidebar), jamais sur une action fonctionnelle. La teinte de marque elle-même est remplacée : l'ancienne valeur `#4F46E5` était exactement le indigo-600 par défaut d'un design system générique (Tailwind), remplacée par une teinte réglée à la main (`#4638C2`), plus profonde, jamais un décalque de composants standard. Contrastes WCAG recalculés explicitement pour chaque nouvelle valeur (jamais visés à l'oeil), voir le tableau ci-dessous.
+
 **Palette — écran de travail**
 
 | Rôle | Couleur | Usage |
 |---|---|---|
-| Fond principal (clair) | `#FFFFFF` / `#F7F7FB` | Fond de page, cartes |
-| Fond principal (sombre, Should — non prioritaire Phase 1) | `#0B0E14` / `#12141C` | Mode sombre si implémenté *(clarifié v11 — revue FDS-charte, E7 : classé Should explicitement, pas laissé "optionnel" non tranché)* |
-| Texte principal | `#0F1222` (clair) / `#EDEFF7` (sombre) | Corps de texte, titres — taille minimale équivalente 14px pour le corps *(ajouté v11 — revue FDS-charte, E4)* |
-| Texte secondaire | `#5B5F73` (clair) / `#9BA0B8` (sombre) | Libellés, méta-informations |
-| Marque (indigo) | `#4F46E5` | Actions primaires, liens, éléments actifs |
-| Marque — survol | `#4338CA` | États hover/pressed |
-| Marque — fond léger | `#EEF2FF` | Fonds de badges/sélections liés à la marque |
-| Bordures | `#E4E4EE` (clair) / `#262A3A` (sombre) | Séparateurs, cadres de champs |
+| Fond de page (clair) | `#F5F5FA` | Fond de page — légèrement teinté, la carte "flotte" au-dessus *(inversé v41 : avant, la page était blanche et la carte teintée — l'inverse donne une profondeur perceptible sans dépendre uniquement de l'ombre)* |
+| Fond de carte (clair) | `#FFFFFF` | Cartes, panneaux, champs de saisie |
+| Fond principal (sombre) | `#101019` / `#191A27` | Page / carte, même logique d'inversion qu'en clair |
+| Texte principal | `#14152A` (clair) / `#F1F2F8` (sombre) | Corps de texte, titres — taille minimale équivalente 14px pour le corps *(ajouté v11 — revue FDS-charte, E4)* |
+| Texte secondaire | `#5C5F76` (clair) / `#A3A6BD` (sombre) | Libellés, méta-informations |
+| Marque (indigo, réglée à la main — Phase 41) | `#4638C2` (clair) / `#8B7FFF` (sombre) | Actions primaires, liens, éléments actifs — contraste texte/lien sur fond carte clair : 8.06:1 |
+| Marque — survol | `#38299C` (clair) / `#A79CFF` (sombre) | États hover/pressed |
+| Marque — fond léger | `#EEECFB` (clair) / `#262A44` (sombre) | Fonds de badges/sélections liés à la marque |
+| Marque — texte de bouton plein *(nouveau v41)* | `#FFFFFF` (clair) / `#14152A` (sombre) | Libellé d'un bouton plein sur fond marque — inversion nécessaire en thème sombre : la marque y est éclaircie pour rester lisible comme texte (contraste ≥4.5:1 contre le fond quasi noir), ce qui rend un libellé blanc dessus mathématiquement illisible (white/#8B7FFF = 3.19:1, sous le seuil) ; un libellé sombre inversé donne 5.62:1 |
+| Accent secondaire (« accents vifs », nouveau v41) | `#A8215F` (clair) / `#E27FAE` (sombre) | Touches éditoriales uniquement (badge site actif) — jamais une action fonctionnelle, jamais un statut |
+| Bordures | `#E3E2F0` (clair) / `#2B2E42` (sombre) | Séparateurs, cadres de champs |
 
 **Palette sémantique — `qualification_status` (répond à URS-NF-054ter/quater, mitige R-59)**
 
@@ -92,10 +97,11 @@ Chaque statut porte **une couleur ET une icône ET un libellé texte** — jamai
 
 | Contexte | Police | Justification |
 |---|---|---|
-| Écran de travail | Inter (chargée localement, pas de dépendance CDN), fallback `system-ui` | Lisibilité écran, cohérente avec l'identité "premium/fluide" |
+| Écran de travail — corps/interface | Inter (chargée localement, pas de dépendance CDN), fallback `system-ui` | Lisibilité écran, cohérente avec l'identité "premium/fluide" |
+| Écran de travail — titres majeurs *(nouveau v41)* | Fraunces (chargée localement, axe optique automatique), fallback `Georgia, serif` | Police d'affichage réservée au `<h1>` de chaque écran (nom du produit, titre d'écran, nom d'un client sur sa fiche) — jamais le corps de texte, les boutons ou les formulaires, pour ne jamais nuire à la densité d'information visée plus bas ; donne à l'identité "premium" un point de vue distinctif plutôt qu'un empilement de composants génériques |
 | Documents exportés (Word/PDF) | Police classique à empattements (ex. Times New Roman / Georgia) | Cohérence avec l'usage réglementaire et l'attente visuelle d'un document officiel |
 
-*(v13 — framework résolu, `08-conventions-codage.md`)* Police confirmée ci-dessus, chargée en asset local du bundle Vue — jamais un appel réseau externe (cohérent avec le principe local-first, pas de dépendance à un CDN de polices).
+*(v13 — framework résolu, `08-conventions-codage.md`)* Police confirmée ci-dessus, chargée en asset local du bundle Vue — jamais un appel réseau externe (cohérent avec le principe local-first, pas de dépendance à un CDN de polices). **(v41, 04/09/2026)** Ce point restait non résolu en pratique malgré la décision de principe : le code utilisait encore `system-ui` faute de fichier de police réellement vendorisé. Résolu : Inter et Fraunces vendorisées en `.woff2` locaux (subsets `latin`/`latin-ext` seulement, suffisants pour le français — les autres subsets de Google Fonts, non utilisés par une application strictement francophone, ont été délibérément exclus du dépôt), servies depuis l'origine de l'application, jamais depuis `fonts.googleapis.com` au runtime.
 
 **Interactions (répond à URS-NF-054)**
 
@@ -114,6 +120,11 @@ Chaque statut porte **une couleur ET une icône ET un libellé texte** — jamai
 **Clarifications de revue (v11 — revue multi-experts charte graphique)** :
 - **E5** : la séparation écran/export (URS-NF-054bis) est garantie techniquement, pas seulement documentairement — aucun jeton de couleur/typographie de l'écran n'est importé par le moteur de génération d'export (détail SDS §7bis).
 - **E3** : cette séparation ne couvre pas un contenu explicitement choisi par l'utilisateur (ex. capture d'écran insérée manuellement dans un livrable) — seule la génération automatique d'export est concernée par le principe de sobriété stricte.
+
+**Bugs trouvés et corrigés pendant la vérification navigateur (v41, 04/09/2026)** — aucun n'était visible en lecture de code seule, les trois n'ont été découverts qu'en observant l'application réelle dans les deux thèmes :
+- La sidebar (barre latérale complète, avec tous les liens vers des routes protégées) s'affichait sur l'écran de connexion lui-même, avant toute authentification — chaque lien aurait immédiatement renvoyé vers `/connexion` (garde de routeur, TD-046), et la première impression du produit était brouillée par une navigation sans objet. Corrigé : `CoquilleApplication.vue` masque désormais la sidebar sur la route `connexion`.
+- Le thème sombre choisi en `localStorage` (`usePreferencesAffichageStore`) n'était réappliqué au DOM qu'après une visite de l'écran Paramètres dans la session en cours — un rechargement complet de page (F5, réouverture de la PWA) retombait silencieusement sur le thème clair par défaut malgré une préférence sombre enregistrée, car aucun composant toujours monté n'instanciait ce store. Corrigé : instancié une fois dans `App.vue` (racine).
+- Plusieurs écrans plus anciens (`SourceIntelligence.vue`, `ProfilLocal.vue`, `MissionWorkspace.vue`…) n'habillaient jamais leurs `<button>`/`<select>`/`<textarea>`, hérités bruts du système d'exploitation — en rupture complète avec le reste de l'application déjà stylée. Corrigé par une base globale non intrusive dans `tokens.css` (spécificité toujours inférieure à un style local déjà écrit, ne comble que l'absence). Distinct : sur `GestionClients.vue`/`AdminUtilisateurs.vue`, une règle `button {}` locale trop large forçait *toute* action (y compris « Annuler ») à porter l'apparence d'une action primaire — corrigé en la restreignant à `.bouton-principal` ; même défaut trouvé sur `EditeurSection.vue` où « Rejeter » portait la même couleur qu'« Approuver » dans un flux d'approbation GxP, corrigé par un style `.bouton-danger` dédié.
 
 ## 3. Flux de navigation principaux
 

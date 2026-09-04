@@ -258,7 +258,7 @@ textarea {
 }
 
 .bandeau-erreur {
-  color: var(--vp-couleur-erreur, #b00020);
+  color: var(--vp-danger);
 }
 
 button {

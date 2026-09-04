@@ -124,7 +124,7 @@ const cartes: CarteAction[] = [
   border-radius: var(--vp-rayon-lg);
   background-color: var(--vp-marque);
   background-image: linear-gradient(135deg, var(--vp-marque), var(--vp-marque-survol));
-  color: white;
+  color: var(--vp-marque-bouton-texte);
   text-decoration: none;
   box-shadow: var(--vp-ombre-md);
   transition: var(--vp-transition);
@@ -175,7 +175,7 @@ const cartes: CarteAction[] = [
   padding: 1.4rem 1.5rem;
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon-lg);
-  background-color: var(--vp-fond-page);
+  background-color: var(--vp-fond-carte);
   color: var(--vp-texte-principal);
   text-decoration: none;
   box-shadow: var(--vp-ombre-sm);
