@@ -352,12 +352,15 @@ Confirmé (TD-034) comme une reformulation narrative de la Target Architecture v
 - **Décision (TD-042)** : lecteur XLSX minimal et dédié (`jszip`+`DOMParser`, jamais de librairie Excel généraliste), scope étroit aux valeurs de cellules, convention colonne=niveau de hiérarchie.
 - **Statut** : **engagée le 03/09/2026** sur demande explicite de l'utilisateur ("tu feras ce chantier maintenant").
 
-## Phase 37 — Authentification multi-utilisateur (OAuth GitHub) + partage projet
+## Phase 37 — Authentification multi-utilisateur (profil local) + partage projet (implémentée le 03/09/2026)
 
-- **Dependencies** : Phase 11 (Organization/Workspace), `Section.owner_id`/`shared_with` (déjà modélisés depuis la Phase 0, jamais câblés).
+- **Dependencies** : Phase 11 (Organization/Workspace), `Section.owner_id`/`shared_with` (déjà modélisés depuis la Phase 0, jamais câblés), Phase "archivage" (TD-033, `ProfilLocal`/`useProfilLocalStore`).
 - **Contexte** : `CONFLICT-004` résolu (03/09/2026) — vrai modèle commercial multi-utilisateur, pas une aspiration vague.
-- **Décision (TD-043)** : OAuth GitHub comme identité (pas un système de mot de passe maison), partage appliqué en convention UX (pas une frontière de sécurité réelle), collaborateurs GitHub du dépôt d'organisation comme modèle RBAC réutilisé.
-- **Statut** : **engagée le 03/09/2026** sur demande explicite de l'utilisateur.
+- **Décision (TD-043, amendée TD-044)** : TD-043 retenait initialement OAuth GitHub comme identité. Avant implémentation, amendée sur objection explicite de l'utilisateur ("tout le monde n'a pas github") : l'identité multi-utilisateur retenue est le **profil local** déjà construit (TD-033, email), pas un compte GitHub individuel — le jeton GitHub reste un réglage par client/organisation, inchangé. Le partage reste appliqué en **convention UX** (pas une frontière de sécurité réelle), décision de fond de TD-043 inchangée.
+- **Implémentation** : `Project.owner_id`/`shared_with` (mêmes types que `Section.owner_id`/`shared_with`), `identifiantUtilisateurCourant()` (`identiteLocale.ts`), `peutModifierProjet` (fonction pure, `permissionsProjet.ts`), câblage `useProjectsStore.ts`/`FicheProjet.vue` (garde d'affichage sur archivage/ajout de section/import/partage — lecture toujours ouverte).
+- **Vérification** : tests unitaires (`permissionsProjet.test.ts`, `projets-archivage.test.ts`), 810 tests (suite complète), typecheck et lint propres. Vérifié en navigateur réel : projet créé par un profil, partagé en lecture à un second identifiant, profil local changé pour un troisième identifiant (ni propriétaire ni partagé en édition) → lecture intégrale toujours visible, tous les contrôles d'édition (archiver, ajouter/importer une section, importer un document, partager) masqués, message explicite "Lecture seule".
+- **Limite assumée** : câblage limité au niveau `Project` dans ce lot — `Section.owner_id`/`shared_with` (niveau section, déjà modélisé) reste backlog, à traiter si un second cas réel le justifie.
+- **Statut** : **implémentée**, sur demande explicite de l'utilisateur.
 
 ## Phase 38 — Couche IA : les deux options d'interaction (assistant contextuel + génération assistée)
 
@@ -427,5 +430,6 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèl
 | **Nouveau document de vision + ré-audit** | **Terminée (03/09/2026)** | `aeed062` | `GAP.md` §4, `CURRENT_ARCHITECTURE.md` (addendum), `LEGACY_MAPPING.md` (composants construits depuis 25/08), `ARCHITECTURE_CONFLICTS.md` (CONFLICT-004), `ARCHITECTURE_CHALLENGES.md` (confirmations), `TECHNICAL_DECISIONS.md` (TD-034 à TD-041), `docs/couche-ia/METHODE_RAISONNEMENT_DISTILLATION.md` (nouveau) |
 | 35 (Test Design Engine — proposition déterministe de candidats depuis l'AMDEC + détection de couverture) | **Terminée (03/09/2026)** | voir historique git de la branche | `01-URS-outil.md` v67 (§4.12/URS-F-120octies-nonies), `03-specifications-fonctionnelles.md` v55 (§4.12bis), `TECHNICAL_DECISIONS.md` (TD-036) |
 | 36 (Import d'architecture XLSX) | **Terminée (03/09/2026)** | PR #12 | `01-URS-outil.md` v66 (URS-F-100terdecies/quaterdecies), `03-specifications-fonctionnelles.md` v54 (§4.10), `TECHNICAL_DECISIONS.md` (TD-042) |
+| 37 (Authentification multi-utilisateur — profil local — + partage projet) | **Terminée (03/09/2026)** | voir historique git de la branche | `01-URS-outil.md` v68 (URS-F-000decies-undecies), `03-specifications-fonctionnelles.md` v56 (§4.0bis), `TECHNICAL_DECISIONS.md` (TD-043 amendée par TD-044), `ARCHITECTURE_CONFLICTS.md` (CONFLICT-004) |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.
