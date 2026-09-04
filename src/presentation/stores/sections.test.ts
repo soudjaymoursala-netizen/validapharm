@@ -463,7 +463,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33, URS-F-060
         ].join('\n'),
       ),
     )
-    expect(resultat).toEqual({ ok: true, champsGeneres: 2 })
+    expect(resultat).toEqual({ ok: true, champsGeneres: 2, lignesTableauxGenerees: 0 })
 
     const sectionEnBase = await db.sections.get(section.id)
     expect(sectionEnBase?.status).toBe('propose_par_ia_non_valide')
@@ -498,6 +498,54 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33, URS-F-060
 
     const projetEnBase = await db.projects.get(projet.id)
     expect(projetEnBase?.documents).toContain(sectionEnBase?.generation_source.source_document_id)
+  })
+
+  test('propose des lignes de tableau dynamique pour un tableau vide (Phase 38, Option 2, TD-045)', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    const resultat = await sections.genererBrouillonIA(
+      section.id,
+      {
+        texteDocumentReference: 'Le procédé source décrit un remplissage aseptique.',
+        nomDocumentReference: 'procede-reference.docx',
+        contexteNouveauCas: 'Nouvelle ligne, même principe de remplissage.',
+        confirmationDroitUsage: true,
+        actor: 'user-1',
+      },
+      providerRepondant(
+        [
+          'LIGNE_TABLEAU|parametres_critiques.cpp|parametre=Température;valeur_cible=121°C;tolerance=±1°C',
+          'LIGNE_TABLEAU|parametres_critiques.cpp|parametre=Pression;valeur_cible=2 bar;tolerance=±0.1 bar',
+        ].join('\n'),
+      ),
+    )
+    expect(resultat).toEqual({ ok: true, champsGeneres: 0, lignesTableauxGenerees: 2 })
+
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.tables.cpp).toEqual([
+      { parametre: 'Température', valeur_cible: '121°C', tolerance: '±1°C' },
+      { parametre: 'Pression', valeur_cible: '2 bar', tolerance: '±0.1 bar' },
+    ])
+  })
+
+  test('ne recouvre jamais un tableau déjà rempli (Phase 38, Option 2, TD-045)', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await sections.mettreAJourTable(section.id, 'cpp', [{ parametre: 'Déjà saisi' }])
+
+    const resultat = await sections.genererBrouillonIA(
+      section.id,
+      {
+        texteDocumentReference: 'Texte source',
+        nomDocumentReference: 'ref.docx',
+        contexteNouveauCas: 'Nouveau cas',
+        confirmationDroitUsage: true,
+        actor: 'user-1',
+      },
+      providerRepondant('LIGNE_TABLEAU|parametres_critiques.cpp|parametre=Nouvelle valeur'),
+    )
+    expect(resultat).toEqual({ ok: true, champsGeneres: 0, lignesTableauxGenerees: 0 })
+
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.tables.cpp).toEqual([{ parametre: 'Déjà saisi' }])
   })
 
   test('ne recouvre jamais une valeur déjà saisie par l’utilisateur', async () => {
