@@ -108,8 +108,8 @@ async function enregistrerQualification(): Promise<void> {
     <section class="bloc-fournisseur">
       <h2>Fournisseur</h2>
       <p class="rappel">
-        Le chat expert n'a jamais accès par défaut au contenu des livrables (URS-F-031) ; l'accès à
-        un document précis reste une action explicite lors de l'envoi d'une question.
+        Le chat expert n'a jamais accès par défaut au contenu des livrables ; l'accès à un document
+        précis reste une action explicite lors de l'envoi d'une question.
       </p>
 
       <form class="formulaire" @submit.prevent="changerFournisseur">
@@ -135,7 +135,7 @@ async function enregistrerQualification(): Promise<void> {
 
     <template v-if="estFournisseurCloud">
       <section class="bloc-conditions">
-        <h2>Conditions de traitement des données (URS-F-032ter)</h2>
+        <h2>Conditions de traitement des données</h2>
         <p class="rappel">
           Les conditions de rétention, d'entraînement sur les données et de localisation diffèrent
           selon le fournisseur — à vérifier vous-même avant d'acquitter.
