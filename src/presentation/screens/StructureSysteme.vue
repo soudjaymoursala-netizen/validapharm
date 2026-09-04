@@ -239,7 +239,7 @@ const noeudsAffiches = computed(() =>
 
 <template>
   <main class="structure-systeme">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Structure Système — {{ nomClient ?? props.clientId }}</h1>
 
     <section class="bloc-hierarchie">

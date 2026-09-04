@@ -148,7 +148,7 @@ async function reouvrirSession(): Promise<void> {
 
 <template>
   <main class="panneau-chat">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Chat expert — {{ nomClient ?? props.clientId }}</h1>
 
     <p class="bandeau-fournisseur">

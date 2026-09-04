@@ -159,8 +159,8 @@
  */
 :root[data-theme='sombre'] {
   /* Fond */
-  --vp-fond-page: #101019;
-  --vp-fond-carte: #191a27;
+  --vp-fond-page: #15161f;
+  --vp-fond-carte: #1c1d2a;
 
   /* Texte */
   --vp-texte-principal: #f1f2f8;
@@ -204,8 +204,8 @@
      toujours sur la préférence système, cohérent avec `data-theme='sombre'`
      qui gagne toujours sur un OS resté en thème clair. */
   :root:not([data-theme='clair']) {
-    --vp-fond-page: #101019;
-    --vp-fond-carte: #191a27;
+    --vp-fond-page: #15161f;
+    --vp-fond-carte: #1c1d2a;
     --vp-texte-principal: #f1f2f8;
     --vp-texte-secondaire: #a3a6bd;
     --vp-marque: #8b7fff;
@@ -347,4 +347,50 @@ textarea {
   border-radius: var(--vp-rayon-sm);
   padding: 0.5rem 0.7rem;
   transition: var(--vp-transition);
+}
+
+/* Lien de retour vers l'écran parent — répété en haut de presque tout écran
+   (`&larr; Clients`, `&larr; Tableau de bord`…). Auparavant un simple
+   `<RouterLink>` sans classe : rendu comme un lien texte brut et souligné,
+   visuellement à part du reste d'une interface autrement toute en cartes et
+   boutons. Pastille discrète avec la même grammaire visuelle que le reste
+   (rayon, ombre, couleurs de marque au survol) plutôt qu'un lien de
+   navigateur générique. */
+.lien-retour {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-start;
+  padding: 0.5rem 1rem 0.5rem 0.8rem;
+  border-radius: 999px;
+  background-color: var(--vp-fond-carte);
+  border: 1px solid var(--vp-bordure);
+  box-shadow: var(--vp-ombre-sm);
+  color: var(--vp-texte-secondaire);
+  font-size: 0.85rem;
+  font-weight: var(--vp-poids-medium);
+  text-decoration: none;
+  transition: var(--vp-transition);
+}
+
+.lien-retour::before {
+  content: '←';
+  font-size: 1em;
+  transition: transform var(--vp-transition);
+}
+
+.lien-retour:hover {
+  color: var(--vp-marque);
+  border-color: var(--vp-marque);
+  background-color: var(--vp-marque-fond-leger);
+}
+
+.lien-retour:hover::before {
+  transform: translateX(-3px);
+}
+
+.lien-retour:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
+  border-color: var(--vp-marque);
 }

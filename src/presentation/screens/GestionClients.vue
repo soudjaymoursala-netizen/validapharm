@@ -69,7 +69,7 @@ async function confirmerSuppressionDefinitive(justification: string): Promise<vo
 <template>
   <main class="gestion-clients">
     <header>
-      <RouterLink :to="{ name: 'accueil' }">&larr; Accueil</RouterLink>
+      <RouterLink :to="{ name: 'accueil' }" class="lien-retour">Accueil</RouterLink>
       <h1>Mes clients</h1>
       <button type="button" class="bouton-principal" @click="formulaireOuvert = true">
         Nouveau client

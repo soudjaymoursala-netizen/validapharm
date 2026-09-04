@@ -154,7 +154,7 @@ async function creerConnecteur(): Promise<void> {
 
 <template>
   <main class="connecteurs-qms">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Connecteurs QMS/documentaires — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">
       Configuration uniquement (URS-F-090). Les adaptateurs Veeva Vault, SharePoint, dossier réseau

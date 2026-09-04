@@ -141,7 +141,7 @@ const conclusion = computed(() =>
 
 <template>
   <main class="assistant-strategie">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Stratégie de qualification — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">Aide à la décision, non une décision de qualification.</p>
 

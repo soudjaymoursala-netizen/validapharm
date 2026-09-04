@@ -132,7 +132,7 @@ const evaluationsTriees = computed(() =>
 
 <template>
   <main class="risk-assessment">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Risk Assessment / AMDEC — {{ nomClient ?? props.clientId }}</h1>
     <p class="rappel">
       L'IPR est calculé mais jamais autoritatif à lui seul — le verdict reste une aide à la

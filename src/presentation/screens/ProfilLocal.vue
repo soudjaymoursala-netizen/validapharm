@@ -81,7 +81,7 @@ async function enregistrer(): Promise<void> {
 
 <template>
   <main class="profil-local">
-    <RouterLink :to="{ name: 'accueil' }">&larr; Accueil</RouterLink>
+    <RouterLink :to="{ name: 'accueil' }" class="lien-retour">Accueil</RouterLink>
     <h1>Profil</h1>
     <p class="rappel">
       Ce mot de passe est un <strong>verrou local de confirmation</strong> — requis pour archiver un

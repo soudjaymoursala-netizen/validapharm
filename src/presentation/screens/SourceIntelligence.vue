@@ -198,7 +198,7 @@ const LIBELLES_STATUT_KNOWLEDGE: Record<string, string> = {
 
 <template>
   <main class="source-intelligence">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Ingestion documentaire — {{ nomClient ?? props.clientId }}</h1>
     <p class="rappel">
       Un `KnowledgeItem` naît toujours `à valider` — jamais validé automatiquement. Aucun appel IA

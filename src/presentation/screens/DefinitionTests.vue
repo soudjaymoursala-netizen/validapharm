@@ -210,7 +210,7 @@ async function declarerCouverture(): Promise<void> {
 
 <template>
   <main class="definition-tests">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Exigences et tests — {{ nomClient ?? props.clientId }}</h1>
     <p class="rappel">
       Chaîne de définition Requirement → Objectif de test → Candidat → Test, avec couverture

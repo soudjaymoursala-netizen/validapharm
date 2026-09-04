@@ -181,7 +181,7 @@ async function cloturer(executionId: string): Promise<void> {
 
 <template>
   <main class="execution-tests">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Exécution de tests — {{ nomClient ?? props.clientId }}</h1>
     <p class="rappel">
       Le verdict n'est jamais déduit des résultats d'étape — toujours une décision explicite à la

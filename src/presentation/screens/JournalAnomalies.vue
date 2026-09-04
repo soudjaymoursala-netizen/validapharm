@@ -123,7 +123,7 @@ function titreEvenement(id: string): string {
 
 <template>
   <main class="journal-anomalies">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Journal d'anomalies — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">
       Change Control, Déviation, CAPA, Investigation, Constat d'audit, Revue périodique

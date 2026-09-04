@@ -57,8 +57,11 @@ async function importer(evenement: Event): Promise<void> {
 
 <template>
   <main class="templates-formulaires">
-    <RouterLink :to="{ name: 'fiche-client', params: { clientId: props.clientId } }">
-      &larr; {{ nomClient ?? props.clientId }}
+    <RouterLink
+      :to="{ name: 'fiche-client', params: { clientId: props.clientId } }"
+      class="lien-retour"
+    >
+      {{ nomClient ?? props.clientId }}
     </RouterLink>
     <h1>Templates &amp; Formulaires — {{ nomClient ?? props.clientId }}</h1>
     <p class="rappel">

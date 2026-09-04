@@ -124,7 +124,7 @@ const projetsDuClient = computed(() =>
 
 <template>
   <main class="fiche-client">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Mes clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Mes clients</RouterLink>
 
     <header class="entete-client">
       <h1>{{ clientCourant?.name ?? props.clientId }}</h1>

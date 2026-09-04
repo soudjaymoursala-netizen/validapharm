@@ -92,7 +92,7 @@ async function basculerStatut(u: UtilisateurWire): Promise<void> {
 
 <template>
   <main class="admin-utilisateurs">
-    <RouterLink :to="{ name: 'accueil' }">&larr; Accueil</RouterLink>
+    <RouterLink :to="{ name: 'accueil' }" class="lien-retour">Accueil</RouterLink>
     <header>
       <h1>Gestion des comptes</h1>
       <button type="button" class="bouton-principal" @click="formulaireOuvert = true">

@@ -146,7 +146,7 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
 
 <template>
   <main class="parametres-critiques">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Paramètres critiques — {{ nomClient ?? props.clientId }}</h1>
     <p class="rappel">
       Un CPP ou un CQA n'est jamais promu automatiquement à partir d'une classification de criticité

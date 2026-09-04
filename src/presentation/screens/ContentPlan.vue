@@ -114,7 +114,7 @@ const plansTries = computed(() =>
 
 <template>
   <main class="content-plan">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Plans de livrable — {{ nomClient ?? props.clientId }}</h1>
     <p class="rappel">
       `readiness` est recalculé à la demande, jamais en tâche de fond. Un plan ne peut être gelé que

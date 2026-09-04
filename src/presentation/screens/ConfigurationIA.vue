@@ -102,7 +102,7 @@ async function enregistrerQualification(): Promise<void> {
 
 <template>
   <main class="configuration-ia">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Configuration IA — {{ nomClient ?? props.clientId }}</h1>
 
     <section class="bloc-fournisseur">

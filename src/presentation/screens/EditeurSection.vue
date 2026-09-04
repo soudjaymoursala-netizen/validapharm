@@ -580,9 +580,9 @@ async function ajouterAvisRelecteur(): Promise<void> {
   <main v-if="section" class="editeur-section">
     <RouterLink
       :to="{ name: 'fiche-projet', params: { projectId: props.projectId } }"
-      class="no-print"
+      class="no-print lien-retour"
     >
-      &larr; Fiche projet
+      Fiche projet
     </RouterLink>
     <h1>{{ section.meta.titre }}</h1>
     <p class="meta">

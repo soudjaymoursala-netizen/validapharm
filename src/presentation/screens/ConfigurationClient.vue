@@ -4,7 +4,7 @@
 // l'installation (un seul dépôt/relais, pas un par client — contrairement
 // au fournisseur IA/qualification de fiabilité, qui sont par client et se
 // configurent sur l'écran Configuration IA d'un client, GestionClients.vue).
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, type Ref } from 'vue'
 import {
   useConnexionGitHubStore,
   type ResultatTestConnexion,
@@ -16,9 +16,11 @@ const store = useConnexionGitHubStore()
 const brouillon = reactive({ owner: '', repo: '', branche: 'main', jeton: '' })
 const resultatTest = ref<ResultatTestConnexion | undefined>(undefined)
 const testEnCours = ref(false)
+const vientDEnregistrer = ref(false)
 
 const relaisStore = useConnexionRelaisIAStore()
 const brouillonRelais = reactive({ relayUrl: '', jeton: '' })
+const vientDEnregistrerRelais = ref(false)
 
 // Worker d'authentification (TD-046) — volontairement séparé du relais IA
 // ci-dessous : sans jeton fixe (le jeton de session s'obtient dynamiquement
@@ -27,6 +29,16 @@ const brouillonRelais = reactive({ relayUrl: '', jeton: '' })
 // l'utilisateur doit pouvoir indiquer où se connecter avant de se connecter.
 const authentificationStore = useConnexionAuthentificationStore()
 const brouillonAuthentification = reactive({ relayUrl: '' })
+const vientDEnregistrerAuthentification = ref(false)
+
+const DUREE_AFFICHAGE_CONFIRMATION_MS = 3000
+
+function signalerEnregistrement(indicateur: Ref<boolean>): void {
+  indicateur.value = true
+  setTimeout(() => {
+    indicateur.value = false
+  }, DUREE_AFFICHAGE_CONFIRMATION_MS)
+}
 
 onMounted(async () => {
   await store.charger()
@@ -52,6 +64,7 @@ onMounted(async () => {
 async function enregistrer(): Promise<void> {
   await store.enregistrer({ ...brouillon })
   resultatTest.value = undefined
+  signalerEnregistrement(vientDEnregistrer)
 }
 
 async function effacer(): Promise<void> {
@@ -74,6 +87,7 @@ async function testerConnexion(): Promise<void> {
 
 async function enregistrerRelais(): Promise<void> {
   await relaisStore.enregistrer({ ...brouillonRelais })
+  signalerEnregistrement(vientDEnregistrerRelais)
 }
 
 async function effacerRelais(): Promise<void> {
@@ -84,12 +98,13 @@ async function effacerRelais(): Promise<void> {
 
 async function enregistrerAuthentification(): Promise<void> {
   await authentificationStore.enregistrer({ ...brouillonAuthentification })
+  signalerEnregistrement(vientDEnregistrerAuthentification)
 }
 </script>
 
 <template>
   <main class="configuration-client">
-    <RouterLink :to="{ name: 'tableau-de-bord' }">&larr; Tableau de bord</RouterLink>
+    <RouterLink :to="{ name: 'tableau-de-bord' }" class="lien-retour">Tableau de bord</RouterLink>
     <h1>Configuration client</h1>
 
     <section class="bloc-github">
@@ -120,6 +135,9 @@ async function enregistrerAuthentification(): Promise<void> {
           <button type="button" @click="effacer">Effacer</button>
           <button type="submit">Enregistrer</button>
         </div>
+        <p v-if="vientDEnregistrer" class="confirmation-enregistrement" role="status">
+          ✓ Enregistré.
+        </p>
       </form>
 
       <div class="test-connexion">
@@ -162,6 +180,9 @@ async function enregistrerAuthentification(): Promise<void> {
           <button type="button" @click="effacerRelais">Effacer</button>
           <button type="submit">Enregistrer</button>
         </div>
+        <p v-if="vientDEnregistrerRelais" class="confirmation-enregistrement" role="status">
+          ✓ Enregistré.
+        </p>
       </form>
     </section>
 
@@ -186,6 +207,13 @@ async function enregistrerAuthentification(): Promise<void> {
         <div class="actions">
           <button type="submit">Enregistrer</button>
         </div>
+        <p
+          v-if="vientDEnregistrerAuthentification"
+          class="confirmation-enregistrement"
+          role="status"
+        >
+          ✓ Enregistré.
+        </p>
       </form>
     </section>
   </main>
@@ -258,5 +286,11 @@ button:disabled {
 
 .test-echec {
   color: var(--vp-statut-requalification-en-retard);
+}
+
+.confirmation-enregistrement {
+  color: var(--vp-statut-qualifie);
+  font-weight: var(--vp-poids-medium);
+  align-self: flex-start;
 }
 </style>

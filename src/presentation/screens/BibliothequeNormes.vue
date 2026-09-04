@@ -14,7 +14,7 @@ const resultats = computed(() => rechercherNormes(motCle.value))
 
 <template>
   <main class="bibliotheque-normes">
-    <RouterLink :to="{ name: 'tableau-de-bord' }">&larr; Tableau de bord</RouterLink>
+    <RouterLink :to="{ name: 'tableau-de-bord' }" class="lien-retour">Tableau de bord</RouterLink>
     <h1>Bibliothèque de normes</h1>
     <p class="rappel">
       Normes et référentiels cités par les gabarits du catalogue (FDS §4) — recherche par mot-clé.

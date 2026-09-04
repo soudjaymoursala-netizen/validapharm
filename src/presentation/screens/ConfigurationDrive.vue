@@ -76,7 +76,7 @@ async function sauvegarderMaintenant(): Promise<void> {
 
 <template>
   <main class="configuration-drive">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Miroir Drive — {{ nomClient ?? props.clientId }}</h1>
 
     <section class="bloc-drive">

@@ -110,8 +110,10 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
 
 <template>
   <main class="dossier-vivant">
-    <RouterLink :to="{ name: 'structure-systeme', params: { clientId: props.clientId } }"
-      >&larr; Structure Système</RouterLink
+    <RouterLink
+      :to="{ name: 'structure-systeme', params: { clientId: props.clientId } }"
+      class="lien-retour"
+      >Structure Système</RouterLink
     >
     <template v-if="noeud">
       <h1>Dossier vivant — {{ noeud.name }}</h1>

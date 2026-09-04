@@ -87,7 +87,7 @@ function nouvelleEvaluation(): void {
 
 <template>
   <main class="csv-assessment">
-    <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
+    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Computer System Assessment — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">
       Aide à la décision, non une décision de classification (URS-F-057).
