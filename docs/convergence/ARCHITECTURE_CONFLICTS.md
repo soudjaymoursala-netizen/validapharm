@@ -24,7 +24,7 @@
 
 ## CONFLICT-002 — Fusion ACFC/Computer System Assessment et modèle d'impact à 3 niveaux (URS v25) vs types d'Assessment distincts (Target)
 
-- **Current Decision** : `01-URS-outil.md` lignes 399-412 — ACFC et Computer System Assessment sont dits "fusionnés en un seul mini-outil", et le modèle d'impact est décrit comme "direct/indirect/aucun" (3 niveaux).
+- **Current Decision** : la spécification des exigences alors en vigueur (URS v25) disait ACFC et Computer System Assessment "fusionnés en un seul mini-outil", et décrivait le modèle d'impact comme "direct/indirect/aucun" (3 niveaux).
 - **Target Decision** : `CriticalityAssessment`, `ImpactAssessment`, `CSVAssessment`, `GxPAssessment` sont des **types distincts** partageant seulement un moteur d'assessment configurable commun (`01_ARCHITECTURE_MASTER_FINAL.md` §13). Rien dans le package Target n'évoque un modèle d'impact à 3 niveaux — l'esprit général de "types distincts, jamais fusionnés silencieusement" contredit directement la fusion actée dans l'URS.
 - **Evidence** : déjà documenté dans `GAP.md` ligne "Assessment générique" ; confirmé indépendamment par la lecture normative de la veille (Ferring FSMP Project Master Plan : System Impact Assessment → Computerized System Assessment → Risk Analysis sont trois étapes séquentielles distinctes, jamais fusionnées) et par l'ISPE Baseline Guide (System Classification binaire Direct/Not-Direct, "Indirect Impact" explicitement retiré de la pratique de référence).
 - **Impact** : Moyen-élevé — si le futur module d'assessment est construit sur la base de l'URS actuelle (fusionnée, 3 niveaux), il faudra le refaire une deuxième fois pour se conformer à la fois à la cible et aux normes réelles déjà étudiées.
@@ -39,7 +39,7 @@
 
 ## CONFLICT-003 — L'URS référence un "gabarit CSV" qui n'existe pas dans le catalogue implémenté
 
-- **Current Decision (documentaire)** : `01-URS-outil.md` ligne 412 dit que le Computer System Assessment "pré-remplit la section Généralités du gabarit CSV".
+- **Current Decision (documentaire)** : la spécification des exigences alors en vigueur disait que le Computer System Assessment "pré-remplit la section Généralités du gabarit CSV".
 - **Current Decision (code)** : `TemplateType` (`domaine/types.ts`) ne contient aucune entrée `csv` — seuls 11 gabarits existent, aucun n'est un dossier CSV complet.
 - **Evidence** : confirmé en lisant directement `src/logique-metier/gabarits/catalogue/index.ts` et `domaine/types.ts` (déjà relevé dans le tableau de modules produit le 25/08 avant la lecture du package Target).
 - **Impact** : Faible à court terme (rien ne dépend encore de ce gabarit), mais c'est un exemple concret du risque que la Target Architecture identifie explicitement : un document de conception peut affirmer une capacité qui n'a jamais été construite. Cette contradiction n'est pas entre Current et Target — elle est **interne à l'existant documentaire lui-même**, ce qui est un signal qu'il faut vérifier systématiquement chaque référence de l'URS contre le code avant de bâtir dessus (c'est précisément la méthode que ce livrable applique).

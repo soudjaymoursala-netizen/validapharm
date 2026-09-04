@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Référence** | ARCH-EXPL-VALIDAPHARM-2026-001 |
-| **Version** | 03 (relais IA de production, test réseau vérifié — `REV-URS-VALIDAPHARM-2026-010`, 24/08/2026) |
+| **Version** | 03 (relais IA de production, test réseau vérifié, 24/08/2026) |
 | **Statut** | En vigueur |
 | **Public visé** | Toute personne du projet **sans compétence logicielle** — pour comprendre où vivent les données, comment l'outil fonctionne, et où se situent les points de vigilance, sans avoir besoin de lire le code ou les documents techniques |
 | **Documents de référence** | `09-architecture-detaillee.md` v03 (version technique, pour les développeurs), `22-SDS-outil.md` v14, `02-analyse-de-risque-outil.md` v27 |
@@ -124,11 +124,11 @@ Ce bloc est **en cours de conception**, pas encore construit — décrit ici pou
 | Coût de l'IA qui dérive avec l'usage | §5 | Plafond de dépense à deux niveaux (applicatif + tableau de bord fournisseur) à configurer avant mise en production (AR-R-65) |
 | Relais journalisant par erreur le contenu des échanges | §5 | Relais conçu sans état, à vérifier en configuration avant mise en production (AR-R-67) |
 | Faux sentiment de protection du code par la seule organisation en modules | §6 | Communication explicite de la limite technique ; protection réelle recommandée par voie contractuelle (AR-R-66) |
-| Simulation d'audit prise pour un vrai audit réglementaire | §5 | Rappel explicite affiché à chaque activation du mode audit simulé (URS-F-039bis) |
+| Simulation d'audit prise pour un vrai audit réglementaire | §5 | Rappel explicite affiché à chaque activation du mode audit simulé |
 
 ## 9. Ce qui reste ouvert (à trancher avant de coder les blocs concernés)
 
 - **Plus aucun point bloquant** : le fournisseur, l'hébergement du relais, le plafond de dépense et la joignabilité réseau (§5) sont désormais tous conçus et vérifiés. Reste à les configurer concrètement au moment d'écrire ce bloc de code (pas une décision en attente).
 
 ---
-*Document vivant, version 03 (24/08/2026) — créé le 24/08/2026 en réponse à la demande explicite de l'utilisateur d'une explication d'architecture complète, commentée et accessible à un non-informaticien. v02 (24/08/2026, `REV-URS-VALIDAPHARM-2026-010`) : conception du relais IA actée (§5, §8). **v03 (24/08/2026)** : test réseau du relais vérifié et clos. Ne remplace pas `09-architecture-detaillee.md` (référence technique) : les deux doivent rester cohérents, toute divergence future doit être répercutée dans les deux documents.*
+*Document vivant, version 03 (24/08/2026) — créé le 24/08/2026 en réponse à la demande explicite de l'utilisateur d'une explication d'architecture complète, commentée et accessible à un non-informaticien. v02 (24/08/2026) : conception du relais IA actée (§5, §8). **v03 (24/08/2026)** : test réseau du relais vérifié et clos. Ne remplace pas `09-architecture-detaillee.md` (référence technique) : les deux doivent rester cohérents, toute divergence future doit être répercutée dans les deux documents.*

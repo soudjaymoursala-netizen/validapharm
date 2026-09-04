@@ -76,7 +76,7 @@ Résolution du même patron déjà éprouvé par l'outil `lister_requirements_po
 - `NouveauContentPlanInput.readiness` **retiré** — plus jamais fourni par l'appelant.
 - `creerContentPlan` calcule `readiness` automatiquement via une nouvelle fonction interne `calculerReadiness(clientId, assetNodeId)`, qui recharge `requirements`/`couvertures`/`tests`/`executions`/`evidences`/`qualityEvents` pour le client et appelle `construireReadinessContentPlan`.
 - Nouvelle fonction exportée `recalculerReadiness(clientId, contentPlanId)` : recharge la même donnée, recalcule, persiste et journalise (`audit_log`, action `recalcul readiness : <valeur>`). Refusée sur un plan `gele` (`erreur: 'deja_gele'`) ou introuvable (`erreur: 'introuvable'`) — même discipline de garde-fou que `gelerContentPlan`/`validerContentPlan`.
-- Le garde-fou existant (`gelerContentPlan` exige `readiness === 'pret'`, URS-F-160septies) reste inchangé — désormais appuyé sur une valeur réellement calculée plutôt que déclarée par l'appelant.
+- Le garde-fou existant (`gelerContentPlan` exige `readiness === 'pret'`) reste inchangé — désormais appuyé sur une valeur réellement calculée plutôt que déclarée par l'appelant.
 
 **Changement d'API interne assumé** : `NouveauContentPlanInput.readiness` retiré est cassant, mais une recherche exhaustive dans le code (`grep -rn "creerContentPlan\|NouveauContentPlanInput\|readiness:"`) confirme qu'aucun autre appelant n'existe en dehors du store lui-même et de ses tests — aucun écran ne consomme `useContentPlanStore` (limite déjà documentée en Phase 9, toujours vraie).
 
@@ -100,7 +100,6 @@ Suite complète, typecheck, lint : tous verts (voir commit).
 
 ## 7. Documentation alignée
 
-- `01-URS-outil.md` v57 — §4.16/URS-F-160octies-nonies.
 - `03-specifications-fonctionnelles.md` v47 — §4.16.
 - `docs/convergence/TECHNICAL_DECISIONS.md` — TD-026.
 - `docs/convergence/CONVERGENCE_PLAN.md` — Phase 28 terminée, Phase 28 (Template Intelligence) renumérotée Phase 29, nouvel item ouvert "Écran `ContentPlan`".

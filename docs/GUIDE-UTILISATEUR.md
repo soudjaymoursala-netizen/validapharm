@@ -1,7 +1,7 @@
 # Guide utilisateur ValidaPharm — référence complète
 
 > Document de référence pratique, distinct des documents réglementaires numérotés
-> (`00-cadrage-projet.md`, `01-URS-outil.md`, etc.) : il explique **comment utiliser
+> (`00-cadrage-projet.md`, `03-specifications-fonctionnelles.md`, etc.) : il explique **comment utiliser
 > l'outil**, écran par écran, champ par champ, sans reformuler les exigences. En cas
 > de divergence entre ce guide et le comportement réel de l'application, le code
 > source fait foi — ce document doit être mis à jour en conséquence.

@@ -76,7 +76,6 @@ Suite complète (645 tests, 91 fichiers), typecheck et lint : tous verts.
 
 ## 7. Documentation alignée
 
-- `01-URS-outil.md` v58 — §4.6quinquies/URS-F-059 à sexies.
 - `03-specifications-fonctionnelles.md` v48 — §4.6quinquies.
 - `docs/convergence/TECHNICAL_DECISIONS.md` — TD-027.
 - `docs/convergence/CONVERGENCE_PLAN.md` — Phase 29 terminée, Phase 29 (Template Intelligence) renumérotée Phase 30.
