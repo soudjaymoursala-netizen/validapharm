@@ -51,7 +51,7 @@ export interface EntreesGenerationBrouillonIA {
 }
 
 export type ResultatGenerationBrouillonIA =
-  | { ok: true; champsGeneres: number }
+  | { ok: true; champsGeneres: number; lignesTableauxGenerees: number }
   | { ok: false; motif: 'confirmation_droit_usage_requise' }
   | { ok: false; motif: 'gabarit_introuvable' }
   | { ok: false; motif: 'statut_incompatible' }
@@ -192,6 +192,7 @@ export const useSectionsStore = defineStore('sections', () => {
         texteDocumentReference: entrees.texteDocumentReference,
         contexteNouveauCas: entrees.contexteNouveauCas,
         langue: section.language,
+        tablesExistantes: section.tables,
       },
       provider,
     )
@@ -212,10 +213,23 @@ export const useSectionsStore = defineStore('sections', () => {
       .filter((c) => c.origineTechnique && nouvellesValeurs[c.field_key] === c.valeur)
       .map((c) => c.field_key)
 
+    // Lignes de tableau dynamique (Phase 38, TD-045) — re-vérifiées vides
+    // ici sur le même `section` chargé en tête de fonction (jamais un
+    // écrasement), même discipline que `nouvellesValeurs` ci-dessus.
+    const nouvellesTables = { ...section.tables }
+    let nombreLignesTableauxGenerees = 0
+    for (const proposition_ of proposition.lignesTableaux) {
+      const dejaRempli = (section.tables[proposition_.field_key]?.length ?? 0) > 0
+      if (dejaRempli || proposition_.lignes.length === 0) continue
+      nouvellesTables[proposition_.field_key] = proposition_.lignes
+      nombreLignesTableauxGenerees += proposition_.lignes.length
+    }
+
     const apresConfirmation = new Date().toISOString()
     const sectionMiseAJour: Section = {
       ...section,
       values: nouvellesValeurs,
+      tables: nouvellesTables,
       status: 'propose_par_ia_non_valide',
       generation_source: {
         source_document_id: documentReference.id,
@@ -232,7 +246,7 @@ export const useSectionsStore = defineStore('sections', () => {
         {
           timestamp: apresConfirmation,
           actor: entrees.actor,
-          action: `generation_brouillon_ia (${proposition.champs.length} champ(s) proposé(s), fournisseur ${provider.nomAffiche})`,
+          action: `generation_brouillon_ia (${proposition.champs.length} champ(s), ${nombreLignesTableauxGenerees} ligne(s) de tableau proposé(s), fournisseur ${provider.nomAffiche})`,
         },
       ],
       revisions: [
@@ -248,7 +262,11 @@ export const useSectionsStore = defineStore('sections', () => {
     await db.sections.put(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
 
-    return { ok: true, champsGeneres: proposition.champs.length }
+    return {
+      ok: true,
+      champsGeneres: proposition.champs.length,
+      lignesTableauxGenerees: nombreLignesTableauxGenerees,
+    }
   }
 
   /** Filiation URS-F-064 : nom du document de référence utilisé pour une génération de brouillon donnée. */
