@@ -16,7 +16,7 @@
 
 0. [Comprendre l'outil avant de commencer](#0-comprendre-loutil-avant-de-commencer)
 1. [Premier lancement : connexion au dépôt GitHub et au relais IA](#1-premier-lancement--connexion-au-dépôt-github-et-au-relais-ia)
-2. [Le profil local (verrou de confirmation)](#2-le-profil-local-verrou-de-confirmation)
+2. [Authentification et profil local](#2-authentification-et-profil-local)
 3. [Gérer les clients](#3-gérer-les-clients)
 4. [Tableau de bord et projets](#4-tableau-de-bord-et-projets)
 5. [Fiche projet](#5-fiche-projet)
@@ -49,13 +49,16 @@
 
 ## 0. Comprendre l'outil avant de commencer
 
-**ValidaPharm est une PWA (Progressive Web App) sans serveur central et sans compte
-utilisateur au sens classique.** Il n'y a ni identifiant/mot de passe de connexion,
-ni notion de session authentifiée. Trois idées à comprendre avant de commencer :
+**ValidaPharm est une PWA (Progressive Web App) sans serveur central pour les
+données métier, mais avec une authentification réelle multi-utilisateur**
+(Worker Cloudflare dédié + base D1) : toute l'application — à l'exception de
+l'écran de connexion lui-même et de « Configuration client » — exige désormais
+une session valide avant d'être accessible ([§2.1](#21-se-connecter)). Trois
+idées à comprendre avant de commencer :
 
-1. **Vos données vivent d'abord dans le navigateur** (base locale IndexedDB). Rien
-   n'est envoyé nulle part tant que vous ne cliquez pas explicitement sur
-   « Synchroniser vers GitHub ».
+1. **Vos données de projet vivent d'abord dans le navigateur** (base locale
+   IndexedDB). Rien n'est envoyé nulle part tant que vous ne cliquez pas
+   explicitement sur « Synchroniser vers GitHub ».
 2. **GitHub est la source de vérité.** Un dépôt GitHub dédié stocke la copie
    officielle de vos projets/sections au format JSON. Vous vous « connectez » à ce
    dépôt via un jeton d'accès (PAT), configuré une seule fois pour toute
@@ -64,30 +67,48 @@ ni notion de session authentifiée. Trois idées à comprendre avant de commence
    sauvegarde manuel, par client, qui **écrase** son contenu à chaque sauvegarde
    ([§7](#7-miroir-google-drive-sauvegarde-manuelle)).
 
-Il existe cependant un **« Profil local »** ([§2](#2-le-profil-local-verrou-de-confirmation))
-qui demande un email, un « visa » (initiales) et un mot de passe. Ce n'est **pas**
-un compte : c'est un simple verrou local, stocké haché sur cet appareil, qui sert
-uniquement à confirmer une action d'archivage (client ou projet). Il ne protège
-rien contre quelqu'un ayant déjà accès à votre navigateur, et il n'est **jamais**
-présenté comme une authentification, une session ou une signature électronique
-réglementaire.
+Il existe par ailleurs un **« Profil local »** ([§2.3](#23-le-profil-local-verrou-de-confirmation)),
+distinct du compte de connexion ci-dessus : un enregistrement local par
+appareil (nom, prénom, email, « visa »/initiales), stocké haché sur cet
+appareil, qui sert uniquement à signer vos créations et archivages d'une
+identité lisible (« créé par », « archivé par »). Ce n'est **pas** un compte,
+ni une authentification, ni une signature électronique réglementaire — et il
+ne conditionne plus l'archivage : confirmer un archivage ou une suppression
+définitive redemande désormais votre vrai mot de passe de connexion
+([§3](#3-gérer-les-clients)).
 
-**Navigation générale (barre latérale)** — groupes de liens toujours visibles :
+**Navigation générale (barre latérale)** :
+- Si vous êtes connecté, un bandeau affiche le prénom et le nom du compte
+  courant avec un lien **« Se déconnecter »**.
 - **Accueil** → « Que voulez-vous faire ? » (`/`)
-- **Mon travail** → « Mes projets » (Tableau de bord) et « Bibliothèque de normes »
-- **Mon site** → dès qu'un client est actif (dernier client visité), la liste
-  complète de ses outils apparaît ici (Missions, Structure Système, Exigences et
-  tests, Exécution de tests, Paramètres critiques, Ingestion documentaire, Plans
-  de livrable, Risk Assessment (AMDEC), Stratégie de qualification, Impact
-  Assessment, Computer System Assessment, Assistant IA, Procédures, Journal
-  d'anomalies, Connecteurs QMS, Miroir Drive)
-- **Clients & configuration** → Clients, Configuration GitHub, Profil local
+- **Mon espace** → Profil (le profil local, [§2.3](#23-le-profil-local-verrou-de-confirmation)),
+  Paramètres (préférences d'affichage de cet appareil — thème clair/sombre/
+  système et police — jamais une donnée de projet ; écran non détaillé plus
+  loin dans ce guide), Guides & normes (Bibliothèque de normes) ; en Mode
+  Expert uniquement, Configuration GitHub ; si le compte connecté a le rôle
+  admin, Gestion des comptes ([§2.2](#22-gestion-des-comptes-admin)).
+- **Mon travail** → Mes clients, Tous mes projets (Tableau de bord).
+- Dès qu'un client est actif (dernier client visité), ses outils apparaissent
+  regroupés par intention :
+  - **Le site** — Vue d'ensemble (Fiche client), Architecture (Structure
+    Système), Process, Procédures, Templates & Formulaires, Projets
+    (Tableau de bord filtré), Missions.
+  - **Qualité & ingénierie** — Stratégie de qualification, Impact Assessment,
+    Computer System Assessment, Risk Assessment (AMDEC), Paramètres
+    critiques, Exigences et tests, Exécution de tests, Journal d'anomalies.
+  - **Connaissance & IA** — Ingestion documentaire, Plans de livrable,
+    Assistant IA.
+  - **Configuration du site** — Connecteurs QMS, Miroir Drive, IA du client.
 
 Un bouton **« Mode Expert » / « Mode Assistant »** apparaît en haut de la barre
-latérale. À ce jour, c'est une simple préférence d'affichage enregistrée dans le
-navigateur (`localStorage`) : **aucun écran ne change encore de comportement**
-selon le mode choisi (les deux modes utilisent exactement le même moteur). Ne
-vous attendez donc pas à un changement visible en cliquant dessus.
+latérale. En Mode Assistant, la barre latérale ne montre plus, dans les
+groupes ci-dessus, qu'un sous-ensemble jugé essentiel à un parcours guidé
+(Templates & Formulaires, Risk Assessment, Paramètres critiques, Exigences et
+tests, Exécution de tests, Journal d'anomalies, Ingestion documentaire, Plans
+de livrable, Connecteurs QMS, Miroir Drive, IA du client et Configuration
+GitHub disparaissent) ; le Mode Expert affiche toujours la liste complète.
+Aucun écran lui-même ne change de comportement selon le mode : seule la liste
+de liens proposée diffère.
 
 ---
 
@@ -113,8 +134,9 @@ dépôt et un seul relais IA, jamais un par client) :
 | Jeton d'accès personnel | mot de passe | oui | — |
 
 Boutons : **« Effacer »** (vide tout et réinitialise), **« Enregistrer »** (sauve
-la connexion), **« Tester la connexion »** (désactivé tant que rien n'est
-enregistré ; devient « Test en cours… » pendant l'appel).
+la connexion, affiche brièvement « ✓ Enregistré. »), **« Tester la connexion »**
+(désactivé tant que rien n'est enregistré ; devient « Test en cours… » pendant
+l'appel).
 
 - Succès : « Connexion réussie — branche « {branche} » au commit {7 premiers
   caractères du SHA}. »
@@ -131,18 +153,113 @@ enregistré ; devient « Test en cours… » pendant l'appel).
 | URL du relais | URL | oui | `https://relais.exemple.workers.dev` |
 | Jeton d'accès | mot de passe | oui | — |
 
-Mêmes boutons « Effacer » / « Enregistrer » (pas de test de connexion sur ce bloc).
+Mêmes boutons « Effacer » / « Enregistrer » (affiche aussi brièvement
+« ✓ Enregistré. » ; pas de test de connexion sur ce bloc).
 
 C'est ce relais qui est utilisé partout où l'IA intervient (chat expert,
 génération de brouillon, raisonnement de mission, etc.) — voir les sections
 correspondantes pour la configuration **par client** du fournisseur choisi
 ([§25](#25-configuration-ia-par-client)).
 
+### 1.3 Authentification (comptes réels)
+
+> Rappel affiché : « Worker Cloudflare + base D1 dédiés aux comptes/rôles/
+> clients de l'organisation — remplace le verrou local par une vraie session.
+> Aucun jeton fixe à saisir ici : la session s'obtient en se connectant sur
+> l'écran « Se connecter ». »
+
+| Champ | Type | Obligatoire | Placeholder |
+|---|---|---|---|
+| URL du Worker d'authentification | URL | oui | `https://auth.exemple.workers.dev` |
+
+Bouton **« Enregistrer »** (affiche brièvement « ✓ Enregistré. » ; pas de
+bouton « Effacer » ni de test de connexion sur ce bloc).
+
+Cet écran entier reste accessible même si vous n'êtes pas connecté — avec « Se
+connecter » lui-même, ce sont les deux seules routes exclues de la garde de
+session, puisqu'il faut pouvoir indiquer où se connecter avant de pouvoir vous
+connecter. Voir [§2.1](#21-se-connecter) pour l'écran de connexion.
+
 ---
 
-## 2. Le profil local (verrou de confirmation)
+## 2. Authentification et profil local
 
-**Écran** : « Profil local » — route `/profil-local`.
+Depuis l'ajout de l'authentification réelle multi-utilisateur (Worker
+Cloudflare + base D1), il ne faut pas confondre deux mécanismes distincts et
+non substituables :
+
+- **La session de connexion** ([§2.1](#21-se-connecter)-[§2.2](#22-gestion-des-comptes-admin)) :
+  un compte réel, email + mot de passe, vérifiés côté serveur, avec un rôle
+  (« admin » ou « utilisateur »). C'est elle qui protège désormais tout
+  l'accès à l'application (garde de routeur globale), et son mot de passe qui
+  est redemandé pour confirmer un archivage ou une suppression définitive
+  ([§3](#3-gérer-les-clients)).
+- **Le profil local** ([§2.3](#23-le-profil-local-verrou-de-confirmation)) :
+  un enregistrement local par appareil (nom, prénom, email, visa), distinct du
+  compte de connexion, qui sert uniquement à signer les créations et
+  archivages d'une identité lisible — ce n'est ni une authentification, ni un
+  second mot de passe de garde.
+
+### 2.1 Se connecter
+
+**Écran** : « Se connecter » — route `/connexion`.
+
+Si aucun Worker d'authentification n'est configuré sur cet appareil, un
+bandeau le rappelle : « Aucun Worker d'authentification configuré sur cet
+appareil. » avec un lien **« Configurer »** vers « Configuration client »
+([§1.3](#13-authentification-comptes-réels)).
+
+| Champ | Type | Obligatoire |
+|---|---|---|
+| Email | email | oui |
+| Mot de passe | mot de passe | oui |
+
+Bouton **« Se connecter »** (libellé « Connexion… » pendant l'appel). Messages
+d'erreur possibles :
+- « Email ou mot de passe incorrect. »
+- « Worker d'authentification non configuré — voir « Configuration client »
+  ci-dessous. »
+- « Une erreur inattendue est survenue. »
+
+Rappel affiché : « Aucune inscription libre — un administrateur crée votre
+compte (« Gestion des comptes »). »
+
+Une fois connecté, vous êtes redirigé vers la page initialement demandée (ou
+l'accueil). Toute route de l'application, sauf cet écran et « Configuration
+client », vous ramène ici tant qu'aucune session valide n'existe.
+
+### 2.2 Gestion des comptes (admin)
+
+**Écran** : « Gestion des comptes » — route `/admin/utilisateurs`, réservé au
+rôle admin (redirection automatique vers l'accueil pour tout autre rôle).
+
+Rappel affiché : « Aucune inscription libre — seul un admin crée un compte. La
+désactivation empêche immédiatement toute nouvelle connexion. »
+
+Bouton **« Nouveau compte »** → formulaire :
+
+| Champ | Type | Obligatoire | Détail |
+|---|---|---|---|
+| Prénom | texte | oui | — |
+| Nom | texte | oui | — |
+| Email | email | oui | — |
+| Mot de passe initial | mot de passe | oui | minimum 8 caractères |
+| Rôle | liste (Utilisateur / Admin) | — | défaut Utilisateur |
+
+Boutons **« Annuler »** / **« Créer le compte »**. Erreurs possibles : « Cet
+email est déjà utilisé par un autre compte. », « Adresse email invalide. »,
+« Le mot de passe doit contenir au moins 8 caractères. », « Le nom est
+obligatoire. », « Le prénom est obligatoire. »
+
+Chaque compte listé affiche son nom, son email, un badge de rôle
+(admin/utilisateur) et un badge de statut (actif/desactive), avec deux
+actions : **« Promouvoir admin » / « Rétrograder »** et **« Désactiver » /
+« Réactiver »**. Le premier compte admin de l'installation est créé en dehors
+de cette interface (`/auth/bootstrap-admin`).
+
+### 2.3 Le profil local (verrou de confirmation)
+
+**Écran** : « Profil » — route `/profil-local`.
 
 > Texte affiché à l'écran : « Ce mot de passe est un **verrou local de
 > confirmation** — requis pour archiver un client ou un projet — jamais une
@@ -150,14 +267,23 @@ correspondantes pour la configuration **par client** du fournisseur choisi
 > est stocké haché sur cet appareil uniquement et n'offre aucune protection contre
 > quelqu'un ayant déjà accès à ce navigateur. »
 
+Ce texte affiché à l'écran n'a pas été mis à jour depuis l'ajout de
+l'authentification réelle ci-dessus ([§2.1](#21-se-connecter)) : dans les
+faits, ce profil **ne conditionne plus** l'archivage — voir [§3](#3-gérer-les-clients),
+la confirmation d'archivage redemande désormais votre vrai mot de passe de
+connexion, jamais celui de ce profil. Ce profil sert aujourd'hui uniquement à
+signer vos créations et archivages d'une identité lisible.
+
 Champs (mode création ou modification) :
 
 | Champ | Type | Obligatoire | Détail |
 |---|---|---|---|
+| Prénom | texte | non | — |
+| Nom | texte | non | — |
 | Email | email | oui | — |
 | Visa (initiales) | texte | oui | placeholder `ex. QLD` |
 | Mot de passe actuel | mot de passe | oui, **seulement si un profil existe déjà** | requis pour toute modification |
-| Mot de passe / Nouveau mot de passe | mot de passe | oui | minimum 8 caractères |
+| Nouveau mot de passe / Mot de passe | mot de passe | oui | minimum 8 caractères |
 | Confirmer le mot de passe | mot de passe | oui | doit être identique au précédent |
 
 Messages d'erreur possibles :
@@ -166,50 +292,63 @@ Messages d'erreur possibles :
 - « Mot de passe actuel incorrect. » (en modification)
 
 Bouton **« Enregistrer »** (crée ou remplace le profil), **« Modifier le profil »**
-(rouvre le formulaire pré-rempli), **« Annuler »**. Confirmation après
-enregistrement : « Profil enregistré. »
+(rouvre le formulaire pré-rempli), **« Annuler »** (uniquement si un profil
+existe déjà). Confirmation après enregistrement : « Profil enregistré. »
 
 Techniquement, le mot de passe est haché en local par PBKDF2-SHA-256
 (100 000 itérations, sel aléatoire) via l'API Web Crypto du navigateur — il n'est
 **jamais** transmis à GitHub ni à un service tiers.
 
-Ce profil doit être configuré **avant** de pouvoir archiver un client ou un
-projet : si vous cliquez sur « Archiver » sans profil configuré, la fenêtre de
-confirmation affiche « Aucun profil local configuré. Configurez d'abord votre
-profil (email, visa, mot de passe) pour pouvoir archiver un client ou un projet. »
-avec un lien direct vers cet écran.
-
 ---
 
 ## 3. Gérer les clients
 
-**Écran** : « Clients » — route `/clients`.
+**Écran** : « Mes clients » — route `/clients`.
 
 Un « client » (ou « site ») est l'entité racine à laquelle sont rattachés tous
 les outils spécialisés (Structure Système, Missions, Assessments, etc.).
 
 ### Créer un client
-Bouton **« Nouveau client »** → formulaire avec un seul champ obligatoire :
-**« Nom du client »** (texte). Boutons « Annuler » / « Créer le client ».
+Bouton **« Nouveau client »** → formulaire :
+
+| Champ | Type | Obligatoire | Détail |
+|---|---|---|---|
+| Nom de l'entreprise | texte | oui | — |
+| Adresse | texte | non | — |
+| Secteur | liste déroulante | non | « — non renseigné — », **Pharmaceutique**, Dispositif médical, Autre |
+| Détails (produits fabriqués, contexte industriel…) | zone de texte | non | — |
+
+Boutons « Annuler » / « Créer le client ».
 
 État vide : « Aucun client actif pour l'instant — créez le premier avec le bouton
 ci-dessus. »
 
-### Accéder aux outils d'un client
-Chaque ligne de la liste des clients actifs propose des liens directs : Missions,
-Drive, IA, Chat, Structure Système, Stratégie de qualification, Impact
-Assessment, Computer System Assessment, Procédures. (Les autres outils —
-Paramètres critiques, Ingestion documentaire, Plans de livrable, Risk Assessment,
-Exigences et tests, Exécution de tests, Connecteurs QMS, Journal d'anomalies —
-sont accessibles depuis la barre latérale une fois ce client devenu « actif », par
-exemple en cliquant sur un de ses liens.)
+### Fiche client (accéder aux outils)
+Chaque ligne de la liste des clients actifs affiche son nom et, s'il est
+renseigné, un badge de secteur ; cliquer dessus ouvre sa **Fiche client**
+(route `/clients/:clientId`) — cet écran ne propose plus un lien par outil,
+ligne par ligne. La Fiche client expose :
+- Un bouton **« Modifier les informations »** qui rouvre le même formulaire
+  que ci-dessus (nom, adresse, secteur, détails).
+- Cinq « branches » sous forme de cartes, chacune vers un outil : **Architecture**
+  (Structure Système), **Process**, **Procédures**, **Templates & Formulaires**,
+  **Projets** (Tableau de bord filtré sur ce client).
+- Un aperçu **« Projets récents »** (jusqu'à 5) si ce client a déjà des projets.
+
+Les outils plus spécialisés (Missions, les Assessments, Exigences et tests,
+Exécution de tests, Ingestion documentaire, Plans de livrable, Connecteurs
+QMS, Miroir Drive, IA du client, Assistant IA, Journal d'anomalies…) restent
+accessibles depuis la barre latérale dès ce client devenu « actif » — par
+exemple en visitant sa Fiche client ou une de ses branches
+([§0](#0-comprendre-loutil-avant-de-commencer)).
 
 ### Archiver un client
-Bouton **« Archiver »** (rouge) sur chaque ligne → ouvre la modale de
-confirmation (voir encadré ci-dessous). **Un client archivé n'est jamais
-supprimé** : il disparaît de la liste principale mais reste consultable dans une
-section dépliable **« Afficher les clients archivés (N) »**, avec la mention
-« archivé le {date} par {identité} » et un bouton **« Désarchiver »**.
+Bouton **« Archiver »** (rouge) sur chaque ligne de « Mes clients » → ouvre la
+modale de confirmation (voir encadré ci-dessous). **Un client archivé n'est
+jamais supprimé** : il disparaît de la liste principale mais reste consultable
+dans une section dépliable **« Afficher les clients archivés (N) »** (le
+bouton devient « Masquer les clients archivés (N) » une fois dépliée), avec la
+mention « archivé le {date} par {identité} » et un bouton **« Désarchiver »**.
 
 > **Comment fonctionne la confirmation d'archivage** (identique pour un client et
 > pour un projet) :
@@ -218,13 +357,29 @@ section dépliable **« Afficher les clients archivés (N) »**, avec la mention
 >    restaurable depuis les archives. »
 > 2. Vous devez **retaper le nom exact** dans le champ « Retapez le nom pour
 >    confirmer » (erreur si différent : « Le nom saisi ne correspond pas. »).
-> 3. Vous devez saisir le **mot de passe de votre profil local** (erreur si
->    incorrect : « Mot de passe incorrect. »).
+> 3. Vous devez saisir **votre mot de passe de connexion** (celui du compte
+>    utilisé pour vous connecter, [§2.1](#21-se-connecter) — ce n'est plus
+>    celui du profil local ; erreur si incorrect : « Mot de passe
+>    incorrect. »).
 > 4. Bouton final **« Archiver »** (rouge) ou **« Annuler »**.
 >
 > Ni le nom retapé ni le mot de passe ne constituent une preuve d'identité
 > opposable — ce sont deux garde-fous contre un clic accidentel, pas une
 > signature électronique.
+
+### Suppression définitive (admin uniquement)
+Sur un client déjà archivé, un compte admin voit en plus un bouton **«
+Supprimer définitivement »**, qui ouvre une seconde modale, plus stricte :
+retaper le nom exact, saisir une **justification obligatoire** (zone de
+texte, placeholder `ex. Client fermé, demande écrite du 04/09/2026`), puis
+votre mot de passe de connexion. Bandeau d'avertissement affiché : « Action
+**irréversible** — « {nom} » et toutes ses données seront définitivement
+supprimés, jamais restaurables. Tracée dans le journal d'audit (qui vous a
+supprimé quoi, quand, pourquoi). » Erreurs possibles : « Le nom saisi ne
+correspond pas. », « La justification est obligatoire pour une suppression
+définitive. », « Mot de passe incorrect. » Bouton final **« Supprimer
+définitivement »** (libellé « Vérification… » pendant l'appel) ou
+**« Annuler »**.
 
 ---
 
@@ -269,6 +424,12 @@ Chaque ligne affiche le nom du projet, le nom du client rattaché (le cas
 échéant) et le nombre de sections. État vide : « Aucun projet actif pour
 l'instant — créez le premier avec le bouton ci-dessus. »
 
+Atteint depuis la branche « Projets » d'une Fiche client ([§3](#3-gérer-les-clients)),
+cet écran filtre automatiquement sur ce client : une bannière « Projets
+filtrés pour {client} » apparaît, avec un lien **« Voir tous les projets »**
+pour revenir à la vue portefeuille complète (état vide alors : « Aucun projet
+actif pour ce client — créez-en un avec le bouton ci-dessus. »).
+
 ### Archiver un projet
 Comme pour un client, une section dépliable **« Afficher les projets archivés
 (N) »** liste les projets archivés avec « archivé le {date} par {identité} »
@@ -290,6 +451,22 @@ le Tableau de bord.
 ### Contexte
 Rappel en lecture seule des trois champs saisis à la création (Contexte, Portée
 incluse, Portée exclue) — un tiret `—` s'affiche si un champ est vide.
+
+### Partage du projet
+Rappel affiché : « Lecture toujours ouverte à tous. Seuls le créateur et les
+personnes partagées en édition peuvent modifier ce projet — une convention
+d'affichage, pas une frontière de sécurité réelle (l'accès au dépôt Git reste
+au niveau du client). » Affiche « Créé par : {identité} ».
+
+Formulaire d'ajout d'un partage : email (obligatoire) + niveau d'accès
+(**lecture** / **édition**) → bouton **« Partager »**. Chaque partage déjà
+accordé peut être retiré (« Retirer »). État vide : « Pas encore partagé avec
+personne d'autre. »
+
+Si vous n'êtes ni le créateur ni une personne partagée en édition, un message
+« Lecture seule — vous n'êtes ni créateur ni partagé en édition. » remplace
+les actions de modification du reste de l'écran (sections, documents, partage
+inclus).
 
 ### Progression du dossier de qualification (pipeline guidé)
 Un bandeau **« Prochaine étape recommandée »** indique la première étape du
@@ -468,6 +645,28 @@ Visible tant que la section n'est pas verrouillée.
 Chaque export réussi journalise automatiquement l'événement dans l'audit trail
 de la section.
 
+### 6.9 Assistant contextuel de section
+Visible dès qu'un projet est rattaché à un client, quel que soit le statut de
+la section. Distinct du Chat expert ([§23](#23-chat-expert--assistant-ia)) et
+de la génération de brouillon ci-dessus ([§6.5](#65-génération-de-brouillon-par-adaptation-ia)) :
+pose une question sur cette section précise, à laquelle l'assistant répond en
+voyant son contenu actuel, avec les mêmes outils de traçabilité que le
+Reasoning Engine des Missions ([§8](#8-missions-et-espace-de-travail)).
+
+> Rappel affiché : « Pose une question sur cette section précise — l'assistant
+> voit son contenu actuel et dispose des mêmes outils de traçabilité que le
+> Reasoning Engine. Fournisseur actuel : {fournisseur}. Jamais une écriture
+> automatique dans la section — une réponse, jamais une action. »
+
+Champ **question** (zone de texte, placeholder `ex. Quels risques ne sont pas
+encore couverts par un test pour cet actif ?`) + bouton **« Poser la
+question »** (libellé « Réflexion en cours… » pendant l'appel). Chaque échange
+affiche la question posée, la réponse, et le même badge de confiance que les
+Missions ([§8](#8-missions-et-espace-de-travail)) : « Connu (vérifié) »,
+« Inféré », « Inconnu », « Conflit », « À vérifier ». Historique local à cette
+visite de l'écran — jamais rechargé depuis une visite précédente. Toute
+erreur est affichée explicitement, jamais silencieuse.
+
 ---
 
 ## 7. Miroir Google Drive (sauvegarde manuelle)
@@ -610,9 +809,12 @@ explicitement rattaché à cet actif — jamais de donnée fabriquée.
 Sections affichées : Identité (code, niveau, statut de qualification, échéance),
 Chaîne technique, Évaluations rattachées (ACFC, Impact Assessment, Computer
 System Assessment, Risk Assessment/AMDEC), Missions ancrées sur cet actif,
-Journal d'anomalies rattachées. Un dernier bloc précise explicitement que **les
-sections de gabarit de projet (DQ/IQ/OQ…) ne sont pas encore rattachables
-directement à un nœud** — retrouvez-les depuis la Fiche Projet concernée.
+Journal d'anomalies rattachées. Un dernier bloc, **« Périmètre non couvert par
+cet écran »**, précise : « Les sections de projet (DQ/FAT/SAT/IQ/OQ/PQ…) ne
+portent aujourd'hui aucun lien direct vers un nœud Structure Système — seul le
+lien section↔section (garde-fous de finalisation) existe. Ce dossier vivant
+n'agrège donc pas encore les livrables de gabarit ; retrouvez-les depuis la
+fiche du projet concerné. »
 
 ---
 
@@ -644,7 +846,7 @@ Chaque connecteur listé porte un badge « actif »/« inactif » et deux bouton
 
 > Avertissement permanent : « Change Control, Déviation, CAPA, Investigation,
 > Constat d'audit, Revue périodique. Un événement externe référencé n'est
-> jamais un verrou sur un autre module. »
+> jamais un verrou sur un autre module (DEC-002/DEC-055). »
 
 Formulaire de création :
 
@@ -1072,30 +1274,37 @@ maintenance.
 
 Un enchaînement minimal, du premier lancement jusqu'à l'archivage d'un projet :
 
-1. **Configuration GitHub** (`/configuration`) — owner, repo, branche, jeton →
-   « Enregistrer » → « Tester la connexion ». (§1)
-2. **Profil local** (`/profil-local`) — email, visa, mot de passe → 
-   « Enregistrer ». Indispensable avant tout archivage. (§2)
-3. **Créer un client** (`/clients`) — nom → « Créer le client ». (§3)
-4. **Créer un projet** (`/tableau-de-bord`) — nom, client rattaché, contexte,
+1. **Se connecter** (`/connexion`) — email + mot de passe d'un compte créé par
+   un admin → redirection vers l'accueil (ou la page demandée). (§2.1)
+2. **Configuration GitHub, relais IA et authentification** (`/configuration`,
+   atteignable même sans être connecté) — owner, repo, branche, jeton →
+   « Enregistrer » → « Tester la connexion » ; URL du relais IA ; URL du
+   Worker d'authentification. (§1)
+3. **Profil local** (`/profil-local`, optionnel) — nom, prénom, email, visa,
+   mot de passe → « Enregistrer ». Sert uniquement à signer vos créations et
+   archivages d'une identité lisible — n'est plus requis pour pouvoir
+   archiver. (§2.3)
+4. **Créer un client** (`/clients`) — nom, adresse, secteur, détails →
+   « Créer le client ». (§3)
+5. **Créer un projet** (`/tableau-de-bord`) — nom, client rattaché, contexte,
    portée → redirection automatique vers la fiche projet. (§4)
-5. **Ajouter des sections** depuis la fiche projet, en suivant le pipeline
+6. **Ajouter des sections** depuis la fiche projet, en suivant le pipeline
    recommandé (Contexte procédé → URS → DQ → …), ou importer un document de
    référence pour générer un brouillon adapté. (§5, §6.5)
-6. **Uploader les documents de référence** utiles (manuels, SOP fournisseur…)
+7. **Uploader les documents de référence** utiles (manuels, SOP fournisseur…)
    dans la section « Documents » de la fiche projet — toujours « référence de
    travail, non maître ». (§5)
-7. **Rédiger, faire relire et faire approuver** chaque section en suivant son
+8. **Rédiger, faire relire et faire approuver** chaque section en suivant son
    cycle de statut (Brouillon → En vérification → En approbation → Validé en
    interne), en liant les sections requises pour lever les garde-fous de
    finalisation. (§6)
-8. **Exporter** les livrables finalisés (JSON, Word, PDF, gabarit client) selon
+9. **Exporter** les livrables finalisés (JSON, Word, PDF, gabarit client) selon
    le besoin. (§6.8)
-9. **Synchroniser vers GitHub** régulièrement (« Synchroniser vers GitHub »
-   depuis le Tableau de bord) pour que le dépôt fasse foi ; résoudre tout
-   conflit détecté champ par champ. (§4, §26)
-10. **Sauvegarder manuellement vers Drive** si ce mécanisme est configuré pour
+10. **Synchroniser vers GitHub** régulièrement (« Synchroniser vers GitHub »
+    depuis le Tableau de bord) pour que le dépôt fasse foi ; résoudre tout
+    conflit détecté champ par champ. (§4, §26)
+11. **Sauvegarder manuellement vers Drive** si ce mécanisme est configuré pour
     le client. (§7)
-11. **Archiver le projet** une fois le dossier clos, en retapant son nom exact
-    et en saisissant le mot de passe du profil local — jamais une suppression
-    définitive. (§5, §3)
+12. **Archiver le projet** une fois le dossier clos, en retapant son nom exact
+    et en saisissant votre mot de passe de connexion — jamais une suppression
+    définitive (réservée aux admins, sur un client déjà archivé). (§5, §3)
