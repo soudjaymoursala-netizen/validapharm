@@ -1,8 +1,15 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Langue, LienProjet, Project } from '../../logique-metier/domaine/types'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import {
+  IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+  identifiantUtilisateurCourant,
+} from '../identite/identiteLocale'
+import { useProfilLocalStore } from './useProfilLocalStore'
 import { db } from '../../persistance/db'
+
+export type NiveauAccesPartage = 'lecture' | 'édition'
+export type ErreurPartageProjet = { erreur: 'introuvable' }
 
 export interface NouveauProjetInput {
   name: string
@@ -27,21 +34,38 @@ export type ErreurArchivageProjet = { erreur: 'introuvable' | 'deja_archive' | '
 export const useProjectsStore = defineStore('projects', () => {
   const projects = ref<Project[]>([])
   const enChargement = ref(false)
+  /**
+   * Identité résolue de l'utilisateur courant (Phase 37, TD-044) — mise à
+   * jour à chaque `chargerProjets`/`creerProjet`, consommée par les
+   * écrans pour la garde d'affichage `peutModifierProjet`. Vaut
+   * `IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1` tant qu'aucun profil local
+   * n'est défini (comportement Phase 1 inchangé).
+   */
+  const identiteCourante = ref<string>(IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1)
 
   const projetsActifs = computed(() => projects.value.filter((p) => p.statut !== 'archive'))
   const projetsArchives = computed(() => projects.value.filter((p) => p.statut === 'archive'))
+
+  async function resoudreIdentiteCourante(): Promise<string> {
+    const profilStore = useProfilLocalStore()
+    if (profilStore.profil === null) await profilStore.charger()
+    identiteCourante.value = identifiantUtilisateurCourant(profilStore.profil)
+    return identiteCourante.value
+  }
 
   async function chargerProjets(): Promise<void> {
     enChargement.value = true
     try {
       const tous = await db.projects.toArray()
       projects.value = tous.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      await resoudreIdentiteCourante()
     } finally {
       enChargement.value = false
     }
   }
 
   async function creerProjet(input: NouveauProjetInput): Promise<Project> {
+    const ownerId = await resoudreIdentiteCourante()
     const maintenant = new Date().toISOString()
     const projet: Project = {
       id: crypto.randomUUID(),
@@ -56,17 +80,73 @@ export const useProjectsStore = defineStore('projects', () => {
       documents: [],
       links: [],
       statut: 'actif',
+      owner_id: ownerId,
+      shared_with: [],
       archived_at: null,
       archived_by: null,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: ownerId, action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
     await db.projects.put(projet)
     projects.value = [projet, ...projects.value]
     return projet
+  }
+
+  /**
+   * Partage explicite d'un projet (Phase 37, TD-044) — ajoute ou met à
+   * jour le niveau d'accès d'un utilisateur dans `shared_with`, jamais
+   * déduit automatiquement. Le propriétaire lui-même n'a pas besoin d'un
+   * enregistrement de partage — `peutModifierProjet` le reconnaît déjà
+   * via `owner_id`.
+   */
+  async function partagerProjet(
+    projectId: string,
+    userId: string,
+    accessLevel: NiveauAccesPartage,
+  ): Promise<Project | ErreurPartageProjet> {
+    const projet = await db.projects.get(projectId)
+    if (!projet) return { erreur: 'introuvable' }
+    const maintenant = new Date().toISOString()
+    const acteur = identiteCourante.value
+    const autres = projet.shared_with.filter((p) => p.user_id !== userId)
+    const projetMisAJour: Project = {
+      ...projet,
+      shared_with: [...autres, { user_id: userId, access_level: accessLevel }],
+      updated_at: maintenant,
+      audit_log: [
+        ...projet.audit_log,
+        { timestamp: maintenant, actor: acteur, action: `partage_ajoute (${userId})` },
+      ],
+    }
+    await db.projects.put(projetMisAJour)
+    const index = projects.value.findIndex((p) => p.id === projectId)
+    if (index !== -1) projects.value[index] = projetMisAJour
+    return projetMisAJour
+  }
+
+  /** Retire un partage existant — le projet reste lisible par tous, seul le droit d'édition change. */
+  async function retirerPartage(
+    projectId: string,
+    userId: string,
+  ): Promise<Project | ErreurPartageProjet> {
+    const projet = await db.projects.get(projectId)
+    if (!projet) return { erreur: 'introuvable' }
+    const maintenant = new Date().toISOString()
+    const acteur = identiteCourante.value
+    const projetMisAJour: Project = {
+      ...projet,
+      shared_with: projet.shared_with.filter((p) => p.user_id !== userId),
+      updated_at: maintenant,
+      audit_log: [
+        ...projet.audit_log,
+        { timestamp: maintenant, actor: acteur, action: `partage_retire (${userId})` },
+      ],
+    }
+    await db.projects.put(projetMisAJour)
+    const index = projects.value.findIndex((p) => p.id === projectId)
+    if (index !== -1) projects.value[index] = projetMisAJour
+    return projetMisAJour
   }
 
   async function obtenirProjet(projectId: string): Promise<Project | undefined> {
@@ -223,6 +303,8 @@ export const useProjectsStore = defineStore('projects', () => {
     projetsActifs,
     projetsArchives,
     enChargement,
+    identiteCourante,
+    resoudreIdentiteCourante,
     chargerProjets,
     creerProjet,
     obtenirProjet,
@@ -230,5 +312,7 @@ export const useProjectsStore = defineStore('projects', () => {
     retirerLien,
     archiverProjet,
     desarchiverProjet,
+    partagerProjet,
+    retirerPartage,
   }
 })

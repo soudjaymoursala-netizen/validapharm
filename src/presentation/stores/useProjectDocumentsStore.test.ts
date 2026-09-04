@@ -19,6 +19,8 @@ function creerProjetMinimal(id: string) {
     documents: [],
     links: [],
     statut: 'actif',
+    owner_id: 'utilisateur-local-phase1',
+    shared_with: [],
     archived_at: null,
     archived_by: null,
     audit_log: [],
