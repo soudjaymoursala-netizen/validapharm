@@ -81,6 +81,21 @@ export interface Project {
   documents: string[]
   links: LienProjet[]
   statut: StatutArchivage
+  /**
+   * Partage de projet (Phase 37, TD-044) — identité résolue depuis le
+   * profil local (email, §4.31/URS-F-310bis), **jamais** une identité
+   * GitHub individuelle (TD-043 amendée : un compte GitHub par employé
+   * exclurait les clients sans compte GitHub individuel — le jeton
+   * GitHub reste au niveau de l'organisation/du client, inchangé).
+   * `owner_id` : identité résolue au moment de la création, `null`
+   * jamais utilisé (retombe sur `IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1`
+   * si aucun profil local n'est encore défini — additif, non bloquant).
+   * `shared_with` : même convention UX que `Section.owner_id`/`shared_with`
+   * (Phase 0) — un contrôle d'affichage, jamais une frontière de sécurité
+   * réelle (l'accès Git sous-jacent reste au niveau du dépôt entier).
+   */
+  owner_id: string
+  shared_with: Array<{ user_id: string; access_level: 'lecture' | 'édition' }>
   archived_at: string | null
   /**
    * Identité déclarée par l'utilisateur au moment de l'archivage (visa
