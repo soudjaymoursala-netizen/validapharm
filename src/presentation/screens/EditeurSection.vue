@@ -11,7 +11,12 @@ import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
 import { GabaritDocxInvalideError } from '../../connecteurs/office/erreurs'
 import { genererDocxPersonnalise } from '../../connecteurs/office/GenerationDocxAdapter'
 import { extraireTextePdf } from '../../connecteurs/pdf/PdfNatifAdapter'
-import type { Project, ProjectDocument, Section } from '../../logique-metier/domaine/types'
+import type {
+  EtatConfianceIA,
+  Project,
+  ProjectDocument,
+  Section,
+} from '../../logique-metier/domaine/types'
 import { construireDonneesExportGabarit } from '../../logique-metier/export/donneesExportGabarit'
 import { genererExportCSV } from '../../logique-metier/export/genererExportCSV'
 import { genererExportJSON } from '../../logique-metier/export/genererExportJSON'
@@ -19,6 +24,7 @@ import { genererExportWord } from '../../logique-metier/export/genererExportWord
 import { verifierBlocageExport } from '../../logique-metier/export/verifierBlocageExport'
 import { obtenirDefinitionGabarit } from '../../logique-metier/gabarits/catalogue'
 import type { ChampTableauDynamique } from '../../logique-metier/gabarits/definitionGabarit'
+import { construireObjectifAssistantSection } from '../../logique-metier/raisonnement/assistantSection'
 import RenduGabarit from '../composants/RenduGabarit.vue'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { libelleStatut, messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
@@ -28,6 +34,7 @@ import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 import { useGabaritExportStore } from '../stores/useGabaritExportStore'
 import { NOMS_FOURNISSEURS } from '../stores/usePanneauChatStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
+import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
 import { useSectionsStore, type ResultatActionSection } from '../stores/useSectionsStore'
 
 const props = defineProps<{ projectId: string; sectionId: string }>()
@@ -38,6 +45,7 @@ const projetsStore = useProjectsStore()
 const gabaritExportStore = useGabaritExportStore()
 const configStore = useClientConfigStore()
 const relaisStore = useConnexionRelaisIAStore()
+const reasoningStore = useReasoningEngineStore()
 const section = ref<Section | undefined>(undefined)
 const projet = ref<Project | undefined>(undefined)
 const gabaritSelectionneId = ref<string>('')
@@ -74,6 +82,30 @@ const documentReferenceUtilise = ref<ProjectDocument | undefined>(undefined)
  * silencieusement une confirmation d'une visite précédente.
  */
 const sousSectionsRevues = ref<Set<string>>(new Set())
+
+// Assistant contextuel par section (Phase 38, Option 1, TD-045) —
+// délègue au Reasoning Engine déjà construit (Phase 15), jamais un second
+// moteur : seul l'objectif envoyé change (contenu de la section injecté
+// comme contexte, voir `construireObjectifAssistantSection`). Historique
+// volontairement local à cet écran (non rechargé depuis le store) — même
+// discipline que `sousSectionsRevues` : une nouvelle visite démarre une
+// conversation neuve, `AIRequest`/`AIResponse` restent la trace durable.
+const questionAssistant = ref('')
+const assistantEnCours = ref(false)
+const erreurAssistant = ref<string | null>(null)
+interface EchangeAssistant {
+  question: string
+  reponse: string
+  etatConfiance: EtatConfianceIA
+}
+const historiqueAssistant = ref<EchangeAssistant[]>([])
+const LIBELLES_CONFIANCE_ASSISTANT: Record<EtatConfianceIA, string> = {
+  connu: 'Connu (vérifié)',
+  infere: 'Inféré',
+  inconnu: 'Inconnu',
+  conflit: 'Conflit',
+  a_verifier: 'À vérifier',
+}
 
 const definitionGabarit = computed(() =>
   section.value ? obtenirDefinitionGabarit(section.value.template_type) : undefined,
@@ -159,6 +191,7 @@ onMounted(async () => {
     await gabaritExportStore.charger(projet.value.client_id)
     await configStore.charger(projet.value.client_id)
     await relaisStore.charger()
+    await reasoningStore.charger(projet.value.client_id)
   }
   // Arrivée depuis "À partir d'un document" (Fiche Projet) — porte
   // directement l'attention sur le panneau §4.1bis déjà construit,
@@ -483,6 +516,41 @@ async function genererBrouillon(): Promise<void> {
   }
 }
 
+async function poserQuestionAssistant(): Promise<void> {
+  if (!section.value || !projet.value?.client_id || questionAssistant.value.trim().length === 0) {
+    return
+  }
+  const question = questionAssistant.value.trim()
+  erreurAssistant.value = null
+  assistantEnCours.value = true
+  try {
+    const estFournisseurCloud = (configStore.config?.ai_provider ?? 'claude') !== 'local'
+    const { principal, local } = construireAdaptateursIA({
+      estFournisseurCloud,
+      nomFournisseurActuel: nomFournisseurActuel.value,
+      relayUrl: relaisStore.connexion?.relayUrl,
+      jetonRelais: relaisStore.connexion?.jeton,
+    })
+    const { response } = await reasoningStore.executerRaisonnement(projet.value.client_id, {
+      objectif: construireObjectifAssistantSection(section.value, question),
+      missionId: null,
+      contextSnapshotId: null,
+      fournisseur: adaptateurAvecBascule(principal, local),
+      mode: 'chat_normatif',
+    })
+    historiqueAssistant.value = [
+      ...historiqueAssistant.value,
+      { question, reponse: response.texte, etatConfiance: response.etat_confiance },
+    ]
+    questionAssistant.value = ''
+  } catch (e) {
+    erreurAssistant.value =
+      e instanceof Error ? e.message : "Erreur inconnue lors de l'appel à l'assistant."
+  } finally {
+    assistantEnCours.value = false
+  }
+}
+
 async function assignerApprobateur(): Promise<void> {
   if (nouvelApprobateur.value.trim().length === 0) return
   await sectionsStore.assignerApprobateurFinal(props.sectionId, nouvelApprobateur.value.trim())
@@ -610,6 +678,38 @@ async function ajouterAvisRelecteur(): Promise<void> {
       >
         {{ enGeneration ? 'Génération en cours…' : 'Générer le brouillon' }}
       </button>
+    </section>
+
+    <section v-if="projet?.client_id" class="assistant-section no-print">
+      <h2>Assistant contextuel (Phase 38)</h2>
+      <p class="rappel">
+        Pose une question sur cette section précise — l'assistant voit son contenu actuel et dispose
+        des mêmes outils de traçabilité que le Reasoning Engine (§4.21). Fournisseur actuel :
+        {{ nomFournisseurActuel }}. Jamais une écriture automatique dans la section — une réponse,
+        jamais une action.
+      </p>
+      <ul v-if="historiqueAssistant.length > 0" class="historique-assistant">
+        <li v-for="(echange, index) in historiqueAssistant" :key="index">
+          <p class="question-assistant"><strong>Vous :</strong> {{ echange.question }}</p>
+          <p class="reponse-assistant">
+            <strong>Assistant :</strong> {{ echange.reponse }}
+            <span class="badge-confiance">{{
+              LIBELLES_CONFIANCE_ASSISTANT[echange.etatConfiance]
+            }}</span>
+          </p>
+        </li>
+      </ul>
+      <p v-if="erreurAssistant" class="bandeau-erreur" role="alert">{{ erreurAssistant }}</p>
+      <form class="formulaire-assistant" @submit.prevent="poserQuestionAssistant">
+        <textarea
+          v-model="questionAssistant"
+          rows="2"
+          placeholder="ex. Quels risques ne sont pas encore couverts par un test pour cet actif ?"
+        />
+        <button type="submit" :disabled="assistantEnCours || questionAssistant.trim().length === 0">
+          {{ assistantEnCours ? 'Réflexion en cours…' : 'Poser la question' }}
+        </button>
+      </form>
     </section>
 
     <section v-if="section.status === 'propose_par_ia_non_valide'" class="revue-ia no-print">
@@ -872,6 +972,7 @@ button {
 
 .workflow,
 .generation-brouillon,
+.assistant-section,
 .revue-ia {
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon);
@@ -882,9 +983,38 @@ button {
 }
 
 .generation-brouillon h2,
+.assistant-section h2,
 .revue-ia h2 {
   font-size: 1rem;
   margin: 0;
+}
+
+.historique-assistant {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.question-assistant,
+.reponse-assistant {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.badge-confiance {
+  margin-left: 0.4rem;
+  font-size: 0.75em;
+  font-style: italic;
+  color: var(--vp-texte-secondaire);
+}
+
+.formulaire-assistant {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .choix-reference,
