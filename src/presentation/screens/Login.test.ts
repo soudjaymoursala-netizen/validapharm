@@ -84,7 +84,13 @@ describe('Login — écran de connexion (TD-046)', () => {
     await wrapper.find('input[type="email"]').setValue('admin@pharmatech.example')
     await wrapper.find('input[type="password"]').setValue('CoffreFort!2026')
     await wrapper.find('form').trigger('submit.prevent')
-    await attendreQue(() => useAuthStore().estConnecte)
+    // `seConnecter` attend `authStore.login()` (qui bascule `estConnecte`)
+    // PUIS seulement ensuite `router.push('/')` — attendre uniquement
+    // `estConnecte` laisse une fenêtre de course où la navigation n'a pas
+    // encore abouti (flaky en CI, jamais reproduit en local : ordonnancement
+    // des microtâches différent). On attend donc les deux conditions
+    // ensemble, jamais l'une sans l'autre.
+    await attendreQue(() => useAuthStore().estConnecte && router.currentRoute.value.path === '/')
     await flushPromises()
 
     expect(useAuthStore().estConnecte).toBe(true)
