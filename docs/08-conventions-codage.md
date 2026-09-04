@@ -30,8 +30,8 @@ Ce document résout le point laissé ouvert en SDS §10 ("choix définitif de fr
 
 ## 3. Langue du code
 
-**Mixte assumée**, cohérente avec le vocabulaire déjà mixte des identifiants de domaine dans URS/FS/FDS/SDS (ex. `qualification_status`, `asset_node`) :
-- **Domaine métier** (fonctions/types qui implémentent une exigence URS/FS/FDS/SDS) : nommage **français** — ex. `calculerIPR`, `validerAbsenceDeCycle`, `presenterStatut`, `QualificationStatus`.
+**Mixte assumée**, cohérente avec le vocabulaire déjà mixte des identifiants de domaine dans FS/FDS/SDS (ex. `qualification_status`, `asset_node`) :
+- **Domaine métier** (fonctions/types qui implémentent une exigence FS/FDS/SDS) : nommage **français** — ex. `calculerIPR`, `validerAbsenceDeCycle`, `presenterStatut`, `QualificationStatus`.
 - **Infrastructure technique** (composants génériques, hooks/composables, utilitaires transverses sans lien direct avec une exigence métier) : nommage **anglais**, conforme aux conventions de l'écosystème TS/Vue — ex. `useDebounce`, `formatDate`.
 - En cas de doute sur la catégorie d'un élément : privilégier le français si l'élément porte un ID d'exigence en commentaire (§4), l'anglais sinon.
 
@@ -40,7 +40,7 @@ Ce document résout le point laissé ouvert en SDS §10 ("choix définitif de fr
 - **Chaque fonction de la Couche Logique métier** (SDS §2, dossier `src/logique-metier/`) porte un bloc TSDoc :
   - Une phrase sur ce qu'elle fait (pas une paraphrase du nom — ce que le nom ne dit pas).
   - `@param`/`@returns` typés et documentés.
-  - **`@requirement`** : le ou les ID(s) d'exigence qu'elle implémente (ex. `@requirement URS-F-050, FDS §3.9`) — permet à un QA ou un auditeur de retrouver instantanément la spécification correspondante depuis le code, et inversement depuis la matrice de traçabilité (FS §13, FDS §10, SDS §11) vers le code.
+  - **`@requirement`** : la ou les référence(s) de spécification qu'elle implémente (ex. `@requirement FDS §3.9`) — permet à un QA ou un auditeur de retrouver instantanément la spécification correspondante depuis le code, et inversement depuis la matrice de traçabilité (FDS §10, SDS §11) vers le code.
   - Toute contrainte ou cas limite non évident (ex. pourquoi un ordre de vérification précis, pourquoi une valeur ne peut jamais être `null` à cet endroit) — jamais un commentaire qui répète ce que le code dit déjà.
 - **Composants de présentation** (`src/presentation/`) : commentaire d'en-tête bref (rôle de l'écran, référence à l'écran FDS §2 correspondant) ; pas de TSDoc exhaustif par méthode, sauf logique non triviale locale à l'écran.
 - **Aucun commentaire de complaisance** ("// increment i") — un commentaire qui n'ajoute rien à la lecture du code est retiré en revue.

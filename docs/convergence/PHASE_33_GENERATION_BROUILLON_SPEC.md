@@ -1,19 +1,19 @@
 # Phase 33 — Génération de brouillon par adaptation d'un document de référence (§4.1bis)
 
-**Statut** : Terminée (28/08/2026). **TD-031**. Répond à URS-F-060 à 064 (documentées depuis la conception initiale, jamais construites), ajoute URS-F-064bis (limite assumée).
+**Statut** : Terminée (28/08/2026). **TD-031**. Répond au besoin spécifié en §4.1bis (documenté depuis la conception initiale, jamais construit), ajoute une limite assumée (voir §6).
 
 ## 1. Contexte et découverte
 
-Reprise "dans l'ordre" du backlog après la Phase 32 (mode audit simulé). §4.1bis/URS-F-060 à 064 décrivent la génération de brouillon par adaptation d'un document de référence — jamais construite jusqu'ici.
+Reprise "dans l'ordre" du backlog après la Phase 32 (mode audit simulé). §4.1bis décrit la génération de brouillon par adaptation d'un document de référence — jamais construite jusqu'ici.
 
-Investigation avant conception : URS-F-060 suppose un "document de référence fourni par l'utilisateur, joint via URS-F-031" — le mécanisme d'upload de documents de projet (URS-F-000quater, entité `ProjectDocument`) est modélisé dans le domaine depuis la Phase 8a (v12) mais n'est consommé **nulle part** dans le code : aucun écran d'upload, aucun stockage de contenu ou de texte extrait.
+Investigation avant conception : la spécification (§4.1bis) suppose un "document de référence fourni par l'utilisateur, joint via le mécanisme existant de jonction de documents" — le mécanisme d'upload de documents de projet (entité `ProjectDocument`) est modélisé dans le domaine depuis la Phase 8a (v12) mais n'est consommé **nulle part** dans le code : aucun écran d'upload, aucun stockage de contenu ou de texte extrait.
 
 ## 2. Décision de portée
 
 `AskUserQuestion` soumise explicitement à l'utilisateur, 3 options :
 
-1. **Référence = section existante du projet (recommandé)** — réutilise le mécanisme déjà construit "joindre section" du chat expert (URS-F-031/URS-F-000quinquies), aucune nouvelle fonctionnalité d'upload.
-2. Construire d'abord l'upload générique de documents (URS-F-000quater) comme prérequis — périmètre nettement plus large, deux chantiers en un.
+1. **Référence = section existante du projet (recommandé)** — réutilise le mécanisme déjà construit "joindre section" du chat expert, aucune nouvelle fonctionnalité d'upload.
+2. Construire d'abord l'upload générique de documents comme prérequis — périmètre nettement plus large, deux chantiers en un.
 3. Référence = texte collé directement par l'utilisateur — le plus simple techniquement.
 
 L'utilisateur répond vouloir **les deux** : "L'utilisateur doit avoir le choix entre coller du texte ou uploader un fichier sous divers formats" — ni la seule référence-section (option 1), ni la seule saisie de texte (option 3), et sans construire l'écran générique complet (option 2 dans son intégralité).
@@ -36,22 +36,22 @@ Limité aux champs scalaires du gabarit (`texte_court`/`texte_long`/`liste`/`dat
 
 **Garde-fou non négociable** : chaque valeur proposée est revalidée via `validerChamp` (§4.1/FDS §6, la même fonction que la saisie manuelle) avant d'être acceptée — une option de liste inconnue, un nombre hors plage, une date invalide sont silencieusement rejetés, jamais un état que l'écran de saisie manuelle refuserait lui-même. Un champ inconnu/halluciné (`section_key.field_key` ne correspondant à rien dans le gabarit) est également ignoré.
 
-`origineTechnique: boolean` par champ proposé — `true` si le champ est de type `nombre` : critère déterministe retenu pour "donnée technique/numérique" (URS-F-063), puisque dans ce moteur de gabarits un champ numérique EST par construction une valeur/tolérance/critère d'acceptation, jamais du texte libre.
+`origineTechnique: boolean` par champ proposé — `true` si le champ est de type `nombre` : critère déterministe retenu pour "donnée technique/numérique", puisque dans ce moteur de gabarits un champ numérique EST par construction une valeur/tolérance/critère d'acceptation, jamais du texte libre.
 
 ### 3.3 `useSectionsStore.genererBrouillonIA`
 
 Orchestration :
-1. Refuse si `confirmationDroitUsage` n'est pas `true` (URS-F-062) — action tracée dans `section.audit_log`, jamais une preuve juridique.
+1. Refuse si `confirmationDroitUsage` n'est pas `true` — action tracée dans `section.audit_log`, jamais une preuve juridique.
 2. Refuse si la section n'est pas `brouillon_aide`, ou si aucun gabarit n'est défini pour son `template_type`.
-3. Crée le `ProjectDocument` (filiation URS-F-064).
+3. Crée le `ProjectDocument` (filiation du document de référence).
 4. Appelle `genererBrouillonSection`.
 5. Fusionne les valeurs proposées dans `section.values` — **une valeur déjà saisie par l'utilisateur n'est jamais écrasée**, seuls les champs encore vides sont renseignés.
-6. `generation_source.generated_fields` liste uniquement les champs d'origine technique/numérique (pas tous les champs proposés) — c'est ce que l'écran utilise pour le surlignage distinct (URS-F-063).
+6. `generation_source.generated_fields` liste uniquement les champs d'origine technique/numérique (pas tous les champs proposés) — c'est ce que l'écran utilise pour le surlignage distinct.
 7. Statut → `propose_par_ia_non_valide`. Entrée `revisions` motif "génération assistée", auteur `système (${fournisseur})` (clarification ALCOA+, FS §3 v04).
 
-### 3.4 Interprétation retenue pour URS-F-061 ("section par section")
+### 3.4 Interprétation retenue pour le garde-fou "section par section"
 
-Le texte de l'URS ("chaque section doit être ouverte et explicitement validée/éditée une par une [...] jamais de validation globale en un clic") ne peut pas viser l'objet `Section` du domaine lui-même : une génération ne produit qu'**une** `Section`, avec **un seul** statut et **une seule** transition possible (`propose_par_ia_non_valide → brouillon_aide`, déjà câblée avant cette phase). La "section" visée est donc chaque `DefinitionSection` du gabarit (§4.1 — ex. "Généralités", "Tests").
+Le texte de la spécification ("chaque section doit être ouverte et explicitement validée/éditée une par une [...] jamais de validation globale en un clic") ne peut pas viser l'objet `Section` du domaine lui-même : une génération ne produit qu'**une** `Section`, avec **un seul** statut et **une seule** transition possible (`propose_par_ia_non_valide → brouillon_aide`, déjà câblée avant cette phase). La "section" visée est donc chaque `DefinitionSection` du gabarit (§4.1 — ex. "Généralités", "Tests").
 
 `EditeurSection.vue` matérialise cette granularité par une checklist locale ("J'ai relu et validé « … »" par `DefinitionSection`), non persistée — recharger la page force une nouvelle relecture complète, cohérent avec l'esprit du garde-fou (aucune confirmation implicite d'une visite antérieure). Le bouton "Valider cette section" reste désactivé tant que la checklist n'est pas complète.
 
@@ -63,14 +63,13 @@ Prop additif `champsSignales?: readonly string[]` — badge "⚠ donnée reprise
 
 - Bloc "Génération de brouillon par adaptation" affiché uniquement pour une section `brouillon_aide` avec gabarit défini **et** projet rattaché à un client (le fournisseur IA est configuré par client — même garde déjà utilisée pour les gabarits d'export client).
 - Choix coller/uploader (radio), extraction `.docx`/`.pdf` via les adaptateurs existants.
-- Case de confirmation du droit d'usage (URS-F-062, texte U-07 du dictionnaire de messages système).
+- Case de confirmation du droit d'usage (texte U-07 du dictionnaire de messages système).
 - Bouton désactivé tant que le texte de référence est vide ou la confirmation non cochée.
-- Bloc "Revue du brouillon proposé par IA" affiché pour une section `propose_par_ia_non_valide` : filiation du document (URS-F-064), checklist de relecture (§3.4).
+- Bloc "Revue du brouillon proposé par IA" affiché pour une section `propose_par_ia_non_valide` : filiation du document, checklist de relecture (§3.4).
 
 ### 3.7 Corrections connexes trouvées en cours de conception
 
 - `validerSectionIA` (`useSectionsStore.ts`) ne posait jamais l'entrée `revisions` motif "validation utilisateur" documentée depuis la clarification ALCOA+ (FS §3 v04) — jamais réellement câblée faute de fonction produisant le statut `propose_par_ia_non_valide` jusqu'ici. Corrigé dans ce lot.
-- `01-URS-outil.md` référençait "URS-F-060bis à 064" à deux endroits (URS-F-091, historique v16) — cet ID n'a jamais existé. Corrigé en "URS-F-061 à 064".
 
 ## 4. Tests
 
@@ -86,13 +85,12 @@ Vérifié avec un navigateur Chromium réel (Playwright) contre le serveur de d�
 
 ## 6. Limites assumées
 
-- Génération limitée aux champs scalaires du gabarit — jamais les lignes d'un `tableau_dynamique` (URS-F-064bis).
-- Aucun écran générique de bibliothèque de documents de projet (URS-F-000quater) — `ProjectDocument` reste consommé uniquement pour ce besoin ponctuel de §4.1bis.
-- Le catalogue de gabarits actuel n'a aucun champ scalaire de type `nombre` au niveau section (les champs `nombre` existants sont tous des colonnes de `tableau_dynamique`, hors périmètre) — le mécanisme de signalement URS-F-063 est réel et testé, mais ne se déclenchera dans la pratique que lorsqu'un futur gabarit ajoutera un champ scalaire numérique.
+- Génération limitée aux champs scalaires du gabarit — jamais les lignes d'un `tableau_dynamique`.
+- Aucun écran générique de bibliothèque de documents de projet — `ProjectDocument` reste consommé uniquement pour ce besoin ponctuel de §4.1bis.
+- Le catalogue de gabarits actuel n'a aucun champ scalaire de type `nombre` au niveau section (les champs `nombre` existants sont tous des colonnes de `tableau_dynamique`, hors périmètre) — le mécanisme de signalement de donnée technique/numérique est réel et testé, mais ne se déclenchera dans la pratique que lorsqu'un futur gabarit ajoutera un champ scalaire numérique.
 
 ## 7. Documentation alignée
 
-- `01-URS-outil.md` v61 — §4.1bis/URS-F-060 à 064 implémentées, ajout URS-F-064bis, correction de la référence croisée erronée dans URS-F-091 et l'historique v16.
 - `03-specifications-fonctionnelles.md` v51 — §4.1bis complétée, modèle `project_document.extracted_text`.
 - `docs/convergence/TECHNICAL_DECISIONS.md` — TD-031.
 - `docs/convergence/CONVERGENCE_PLAN.md` — Phase 33 terminée.

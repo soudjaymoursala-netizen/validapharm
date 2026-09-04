@@ -74,7 +74,6 @@ Non construite dans ce lot — même discipline que `tracer_chaine_technique` (P
 
 ## 7. Documentation alignée
 
-- `01-URS-outil.md` v59 — §4.15/URS-F-150undecies.
 - `03-specifications-fonctionnelles.md` v49 — §4.15.
 - `docs/convergence/TECHNICAL_DECISIONS.md` — TD-029.
 - `docs/convergence/CONVERGENCE_PLAN.md` — Phase 31 terminée, Phase 31 (Template Intelligence) renumérotée Phase 32.

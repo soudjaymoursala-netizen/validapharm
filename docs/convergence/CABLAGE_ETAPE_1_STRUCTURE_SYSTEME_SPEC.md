@@ -39,7 +39,7 @@ Phase 11 (`PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`) a construit `Organization`/
 
 ## E6 — Documentation impactée
 
-`01-URS-outil.md`/`03-specifications-fonctionnelles.md` §4.10 (Structure Système) complétés avec le nouveau champ et son comportement ; `CONVERGENCE_PLAN.md` et `CONTEXTE-REPRISE-SESSION.md` §5.10 mis à jour pour refléter ce premier incrément réalisé et pointer vers le suivant.
+`03-specifications-fonctionnelles.md` §4.10 (Structure Système) complétée avec le nouveau champ et son comportement ; `CONVERGENCE_PLAN.md` et `CONTEXTE-REPRISE-SESSION.md` §5.10 mis à jour pour refléter ce premier incrément réalisé et pointer vers le suivant.
 
 ## E7 — Décision de conception
 

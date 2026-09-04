@@ -5,7 +5,7 @@
 | **Référence** | VMP-VALIDAPHARM-2026-001 |
 | **Version** | 01 (brouillon de travail) |
 | **Statut** | En rédaction |
-| **Documents de référence** | URS-VALIDAPHARM-2026-001, AR-VALIDAPHARM-2026-001, FS-VALIDAPHARM-2026-001 |
+| **Documents de référence** | AR-VALIDAPHARM-2026-001, FS-VALIDAPHARM-2026-001 |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
@@ -61,7 +61,6 @@ Les fonctions à faible risque (ex. mise en forme de l'export PDF, libellés de 
 
 ## 6. Livrables du dossier de validation
 
-- [x] URS (URS-VALIDAPHARM-2026-001)
 - [x] Analyse de risque (AR-VALIDAPHARM-2026-001)
 - [x] Spécifications fonctionnelles (FS-VALIDAPHARM-2026-001)
 - [x] Plan de validation (ce document)
@@ -78,7 +77,7 @@ Tout résultat de test non conforme lors de l'IQ/OQ/PQ est consigné, analysé (
 ## 8. Maintien de l'état validé
 
 - Toute évolution du moteur de calcul ou du cycle de vie des statuts déclenche une ré-exécution des tests unitaires et fonctionnels concernés avant mise à jour (répond à R-11).
-- Les gabarits de contenu (normes, structure des livrables) étant versionnés indépendamment du moteur (URS-REG-003), leur mise à jour n'entraîne pas systématiquement une nouvelle qualification complète — à évaluer au cas par cas selon l'impact.
+- Les gabarits de contenu (normes, structure des livrables) étant versionnés indépendamment du moteur, leur mise à jour n'entraîne pas systématiquement une nouvelle qualification complète — à évaluer au cas par cas selon l'impact.
 - Une revue périodique de l'outil (fréquence à définir en Phase 3) sera formalisée lors du passage à l'usage multi-utilisateur.
 
 ## 9. Critères d'acceptation de la Phase 1 (reprise d'URS §9)

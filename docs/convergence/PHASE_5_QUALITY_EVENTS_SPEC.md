@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Statut** | Spec de phase (étape "Agentic Planning" du cycle de convergence, `CONVERGENCE_PLAN.md` §"Suivi d'avancement"). Rédigée **avant** tout code, conformément au processus de revue collégiale déjà établi (`00-cadrage-projet.md` §6bis, panel E1-E7), appliqué ici explicitement au design d'une phase de code plutôt qu'à une seule révision documentaire — première fois que ce panel est mobilisé sous cette forme dans le chantier de convergence. |
-| **Sources** | `03_DOMAIN_DATA_MODEL.md` (liste des entités : `QualityEvent, ChangeControl, Deviation, CAPA, Investigation, AuditFinding, Incident, PeriodicReview`), `02_DECISION_LEDGER_FROM_CONVERSATION.md` (DEC-002, DEC-055), `01-URS-outil.md` catalogue §10 famille H/I. |
+| **Sources** | `03_DOMAIN_DATA_MODEL.md` (liste des entités : `QualityEvent, ChangeControl, Deviation, CAPA, Investigation, AuditFinding, Incident, PeriodicReview`), `02_DECISION_LEDGER_FROM_CONVERSATION.md` (DEC-002, DEC-055), catalogue de gabarits famille H/I. |
 
 ---
 
