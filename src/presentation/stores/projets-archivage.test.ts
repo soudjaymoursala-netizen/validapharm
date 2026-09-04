@@ -87,3 +87,53 @@ describe('useProjectsStore — archivage (§4.31/URS-F-310, TD-033)', () => {
     expect(await store.desarchiverProjet(projet.id, 'QLD')).toEqual({ erreur: 'deja_actif' })
   })
 })
+
+describe('useProjectsStore — partage de projet (Phase 37, TD-044)', () => {
+  test("un projet créé sans profil local a pour owner_id l'espace réservé Phase 1", async () => {
+    const projet = await creerProjet()
+    expect(projet.owner_id).toBe('utilisateur-local-phase1')
+    expect(projet.shared_with).toEqual([])
+  })
+
+  test('partagerProjet ajoute un utilisateur avec un niveau d’accès, tracé dans audit_log', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+
+    const resultat = await store.partagerProjet(projet.id, 'bob@ex.com', 'édition')
+    expect('erreur' in resultat).toBe(false)
+    if ('erreur' in resultat) return
+
+    expect(resultat.shared_with).toEqual([{ user_id: 'bob@ex.com', access_level: 'édition' }])
+    expect(resultat.audit_log.at(-1)?.action).toContain('partage_ajoute')
+  })
+
+  test('partagerProjet deux fois pour le même utilisateur met à jour le niveau, jamais un doublon', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+
+    await store.partagerProjet(projet.id, 'bob@ex.com', 'lecture')
+    const resultat = await store.partagerProjet(projet.id, 'bob@ex.com', 'édition')
+    if ('erreur' in resultat) throw new Error('unreachable')
+
+    expect(resultat.shared_with).toEqual([{ user_id: 'bob@ex.com', access_level: 'édition' }])
+  })
+
+  test('retirerPartage retire un utilisateur, le projet reste lisible (statut inchangé)', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+    await store.partagerProjet(projet.id, 'bob@ex.com', 'édition')
+
+    const resultat = await store.retirerPartage(projet.id, 'bob@ex.com')
+    if ('erreur' in resultat) throw new Error('unreachable')
+
+    expect(resultat.shared_with).toEqual([])
+    expect(resultat.statut).toBe('actif')
+  })
+
+  test('partagerProjet refuse un projet introuvable', async () => {
+    const store = useProjectsStore()
+    expect(await store.partagerProjet('inconnu', 'bob@ex.com', 'lecture')).toEqual({
+      erreur: 'introuvable',
+    })
+  })
+})
