@@ -362,11 +362,15 @@ Confirmé (TD-034) comme une reformulation narrative de la Target Architecture v
 - **Limite assumée** : câblage limité au niveau `Project` dans ce lot — `Section.owner_id`/`shared_with` (niveau section, déjà modélisé) reste backlog, à traiter si un second cas réel le justifie.
 - **Statut** : **implémentée**, sur demande explicite de l'utilisateur.
 
-## Phase 38 — Couche IA : les deux options d'interaction (assistant contextuel + génération assistée)
+## Phase 38 — Couche IA : les deux options d'interaction (implémentée le 03/09/2026)
 
 - **Dependencies** : Phase 15 (Reasoning Engine), Phase 33 (génération de brouillon par adaptation, scope scalaire).
 - **Contexte** : l'utilisateur confirme vouloir les deux options du §50 du master prompt, pas un choix entre elles.
-- **Statut** : **engagée le 03/09/2026** — Option 1 (assistant contextuel par section, câblage du Reasoning Engine existant hors du seul panneau de chat) et Option 2 (génération assistée étendue au-delà des champs scalaires) à construire.
+- **Décision (TD-045)** : aucun nouveau moteur ni relais — les deux options réutilisent des mécanismes déjà construits (Reasoning Engine, génération de brouillon).
+- **Implémentation** : Option 1 — `construireObjectifAssistantSection` (fonction pure) + panneau "Assistant contextuel" dans `EditeurSection.vue`, invoque `useReasoningEngineStore.executerRaisonnement` tel quel. Option 2 — `genererBrouillonSection` étendu d'un protocole `LIGNE_TABLEAU|<section_key>.<field_key>|<col>=<valeur>;...`, plafonné à 20 lignes/tableau, jamais pour un tableau déjà rempli, chaque cellule revalidée par `validerChamp`.
+- **Vérification** : 12 tests unitaires nouveaux + 2 tests d'intégration store, 820 tests (suite complète), typecheck et lint propres. Vérifié en navigateur réel : section "Contexte procédé" créée, question posée à l'assistant contextuel → appel réseau réel déclenché, échec propre du relais non configuré affiché à l'utilisateur (« Appel au relais IA échoué (404) »), aucun crash.
+- **Limite assumée** : aucun relais IA configuré dans cet environnement — le round-trip complet avec une vraie réponse de fournisseur n'a pas pu être vérifié en navigateur (seul le chemin jusqu'à l'appel réseau et la gestion d'erreur l'a été), même limite déjà documentée pour `DocumentIntelligenceProvider` (TD-019/TD-020).
+- **Statut** : **implémentée**, sur demande explicite de l'utilisateur.
 
 ---
 
@@ -431,5 +435,6 @@ Conformément à `13_TRACEABILITY_ACCEPTANCE.md` : le framework exact, le modèl
 | 35 (Test Design Engine — proposition déterministe de candidats depuis l'AMDEC + détection de couverture) | **Terminée (03/09/2026)** | voir historique git de la branche | `01-URS-outil.md` v67 (§4.12/URS-F-120octies-nonies), `03-specifications-fonctionnelles.md` v55 (§4.12bis), `TECHNICAL_DECISIONS.md` (TD-036) |
 | 36 (Import d'architecture XLSX) | **Terminée (03/09/2026)** | PR #12 | `01-URS-outil.md` v66 (URS-F-100terdecies/quaterdecies), `03-specifications-fonctionnelles.md` v54 (§4.10), `TECHNICAL_DECISIONS.md` (TD-042) |
 | 37 (Authentification multi-utilisateur — profil local — + partage projet) | **Terminée (03/09/2026)** | voir historique git de la branche | `01-URS-outil.md` v68 (URS-F-000decies-undecies), `03-specifications-fonctionnelles.md` v56 (§4.0bis), `TECHNICAL_DECISIONS.md` (TD-043 amendée par TD-044), `ARCHITECTURE_CONFLICTS.md` (CONFLICT-004) |
+| 38 (Couche IA — assistant contextuel par section + génération assistée étendue aux tableaux) | **Terminée (03/09/2026)** | voir historique git de la branche | `01-URS-outil.md` v69 (URS-F-210septies, URS-F-064ter), `03-specifications-fonctionnelles.md` v57 (§4.21, §4.1bis), `TECHNICAL_DECISIONS.md` (TD-045) |
 
 **Discipline appliquée à partir de la Phase 1 (inspirée de BMAD — *Breakthrough Method for Agile AI-driven Development*, méthode agentique en deux piliers "Agentic Planning" + "Context-Engineered Development" ; adaptée ici sans installer son framework/CLI, la structure documentaire de ce dossier `convergence/` remplissant déjà un rôle équivalent) : chaque phase suit désormais explicitement un cycle Spec → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → **Alignement documentaire** (URS/FS/FDS/AR corrigés si leur description du mécanisme devient inexacte) → Commit/Push → mise à jour de cette table. L'alignement documentaire n'est pas une étape optionnelle de fin de plan : c'est une porte de sortie de chaque phase, au même titre que les tests.
