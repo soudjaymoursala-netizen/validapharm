@@ -124,7 +124,7 @@ describe('useSectionsStore — création', () => {
   })
 })
 
-describe('useSectionsStore — mettreAJourValeurs (URS-F-009)', () => {
+describe('useSectionsStore — mettreAJourValeurs', () => {
   test('persiste les valeurs saisies', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await sections.mettreAJourValeurs(section.id, { contenu: "Texte rédigé par l'utilisateur" })
@@ -132,7 +132,7 @@ describe('useSectionsStore — mettreAJourValeurs (URS-F-009)', () => {
     expect(sectionEnBase?.values.contenu).toBe("Texte rédigé par l'utilisateur")
   })
 
-  test('refuse silencieusement toute écriture sur une section verrouillée (URS-F-012)', async () => {
+  test('refuse silencieusement toute écriture sur une section verrouillée', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await db.sections.put({ ...section, status: 'valide_en_interne', values: { contenu: 'v1' } })
     await sections.mettreAJourValeurs(section.id, { contenu: 'tentative après verrouillage' })
@@ -339,13 +339,13 @@ describe("useSectionsStore — cycle complet jusqu'à valide_en_interne", () => 
     const sectionFinale = await db.sections.get(section.id)
     expect(sectionFinale?.status).toBe('valide_en_interne')
 
-    // Verrouillée : toute nouvelle transition est refusée (URS-F-012).
+    // Verrouillée : toute nouvelle transition est refusée.
     const tentative = await sections.transmettreApprobation(section.id)
     expect(tentative).toEqual({ ok: false, raisonTransition: 'section_verrouillee' })
   })
 })
 
-describe('useSectionsStore — journaliserExport (FS §4.3, URS-F-027)', () => {
+describe('useSectionsStore — journaliserExport (FS §4.3)', () => {
   test('journalise "export" par défaut', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await sections.journaliserExport(section.id, false)
@@ -369,7 +369,7 @@ describe('useSectionsStore — journaliserExport (FS §4.3, URS-F-027)', () => {
   })
 })
 
-describe('useSectionsStore — importerSection (FS §4.3, URS-F-021)', () => {
+describe('useSectionsStore — importerSection (FS §4.3)', () => {
   test('crée une section nouvelle (id distinct), rattachée au projet cible, avec entrée "import"', async () => {
     const { sections, projet } = await creerProjetEtSection('contexte_procede')
     const donnees = {
@@ -408,8 +408,8 @@ describe('useSectionsStore — importerSection (FS §4.3, URS-F-021)', () => {
   })
 })
 
-describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33, URS-F-060 à 064)', () => {
-  test('refuse sans confirmation explicite du droit d’usage (URS-F-062)', async () => {
+describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33)', () => {
+  test('refuse sans confirmation explicite du droit d’usage', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     const resultat = await sections.genererBrouillonIA(
       section.id,
@@ -472,7 +472,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33, URS-F-060
     )
     expect(sectionEnBase?.values.conditions_operatoires).toBe('Température ambiante contrôlée.')
     // Gabarit "contexte_procede" n'a aucun champ scalaire `nombre' — aucun
-    // champ n'est donc d'origine technique/numérique dans ce cas (URS-F-063).
+    // champ n'est donc d'origine technique/numérique dans ce cas.
     expect(sectionEnBase?.generation_source.generated_fields).toEqual([])
     const sourceDocumentId = sectionEnBase?.generation_source.source_document_id
     expect(sourceDocumentId).toBeTruthy()
@@ -588,7 +588,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33, URS-F-060
   })
 })
 
-describe('useSectionsStore — validerSectionIA (URS-F-061, clarification ALCOA+ FS §3 v04)', () => {
+describe('useSectionsStore — validerSectionIA (clarification ALCOA+ FS §3 v04)', () => {
   test('transition propose_par_ia_non_valide -> brouillon_aide avec une entrée revisions distincte motif "validation utilisateur"', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await db.sections.put({

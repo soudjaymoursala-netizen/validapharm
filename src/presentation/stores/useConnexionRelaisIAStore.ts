@@ -15,7 +15,7 @@ const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
  * `useConnexionGitHubStore` : un seul relais serverless pour toute
  * l'installation).
  *
- * @requirement SDS §10quater, URS-NF-044ter
+ * @requirement SDS §10quater
  */
 export const useConnexionRelaisIAStore = defineStore('connexionRelaisIA', () => {
   const connexion = ref<EnregistrementConnexionRelaisIA | null>(null)

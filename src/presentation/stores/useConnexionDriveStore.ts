@@ -18,7 +18,7 @@ export type ResultatTestConnexionDrive =
  * prennent donc explicitement le `client_id` concerné, plutôt qu'un état
  * de connexion unique comme `useConnexionGitHubStore`.
  *
- * @requirement SDS §5bis, §7, URS-NF-044
+ * @requirement SDS §5bis, §7
  */
 export const useConnexionDriveStore = defineStore('connexionDrive', () => {
   const connexion = ref<EnregistrementConnexionDrive | null>(null)

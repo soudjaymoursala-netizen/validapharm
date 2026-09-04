@@ -17,12 +17,12 @@ const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
 
 /**
  * Store de Configuration client (FDS §2, "Configuration client") pour la
- * connexion au dépôt GitHub dédié — URS-NF-044 : le jeton est stocké
+ * connexion au dépôt GitHub dédié — le jeton est stocké
  * exclusivement dans le stockage du navigateur (IndexedDB via Dexie),
  * jamais dans un fichier suivi par Git, jamais journalisé (ni dans
  * `audit_log`, ni dans aucun message affiché à l'écran).
  *
- * @requirement URS-NF-044, URS-NF-044bis, SDS §5
+ * @requirement SDS §5
  */
 export const useConnexionGitHubStore = defineStore('connexionGitHub', () => {
   const connexion = ref<EnregistrementConnexionGitHub | null>(null)

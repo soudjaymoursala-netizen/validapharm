@@ -37,7 +37,7 @@ export interface NouvelleEvaluationInput {
  * évaluations passées restent reproductibles telles qu'elles ont été
  * produites (principe `ContextSnapshot` du package Target Architecture).
  *
- * @requirement URS-F-050 (F2, Analyse de risque)
+ * @requirement Analyse de risque
  */
 export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => {
   const profils = ref<MethodProfileACFC[]>([])

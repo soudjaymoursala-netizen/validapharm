@@ -39,7 +39,7 @@ const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
  * ici au-delà de l'orchestration : la détection de conflit et
  * l'atomicité restent entièrement dans `GitHubConnector`.
  *
- * @requirement SDS §3, §5, URS-NF-012, cadrage principe n°3 ("zéro perte
+ * @requirement SDS §3, §5, cadrage principe n°3 ("zéro perte
  * de données au changement de machine")
  *
  * Portée délibérément limitée à cet incrément : `synchroniser()` pousse

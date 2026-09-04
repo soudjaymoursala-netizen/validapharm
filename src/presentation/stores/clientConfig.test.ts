@@ -46,7 +46,7 @@ describe('useClientConfigStore — definirFournisseur', () => {
   })
 })
 
-describe('useClientConfigStore — acquitterConditions (URS-F-032ter)', () => {
+describe('useClientConfigStore — acquitterConditions', () => {
   test('consigne le fournisseur et un horodatage', async () => {
     const store = useClientConfigStore()
     await store.acquitterConditions('client-1', 'claude')
@@ -54,7 +54,7 @@ describe('useClientConfigStore — acquitterConditions (URS-F-032ter)', () => {
     expect(store.config?.ai_provider_conditions_acquittees?.date).toBeTruthy()
   })
 
-  test('isolation stricte par client (URS-F-024) : le client B n’est jamais affecté par un acquittement du client A', async () => {
+  test('isolation stricte par client : le client B n’est jamais affecté par un acquittement du client A', async () => {
     const store = useClientConfigStore()
     await store.acquitterConditions('client-A', 'claude')
     await store.charger('client-B')
@@ -62,7 +62,7 @@ describe('useClientConfigStore — acquitterConditions (URS-F-032ter)', () => {
   })
 })
 
-describe('useClientConfigStore — enregistrerQualification (URS-F-032quater, séparée par mode depuis URS-F-038bis)', () => {
+describe('useClientConfigStore — enregistrerQualification (séparée par mode)', () => {
   test('consigne la qualification complète, y compris moteur_version_qualifiee, pour le mode donné', async () => {
     const store = useClientConfigStore()
     await store.enregistrerQualification('client-1', 'chat_normatif', {

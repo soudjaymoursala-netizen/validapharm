@@ -55,7 +55,7 @@ describe('useTestDefinitionStore — chaîne de définition de base', () => {
     await store.charger('client-1')
 
     const requirement = await store.creerRequirement('client-1', {
-      reference: 'URS-F-100',
+      reference: 'REQ-100',
       titre: 'Isolation par client du référentiel',
       description: '',
       assetNodeId: null,
@@ -95,7 +95,7 @@ describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Test',
       description: '',
       assetNodeId: null,
@@ -124,7 +124,7 @@ describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Test',
       description: '',
       assetNodeId: null,
@@ -159,7 +159,7 @@ describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Test',
       description: '',
       assetNodeId: null,
@@ -208,7 +208,7 @@ describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Test',
       description: '',
       assetNodeId: null,
@@ -243,14 +243,14 @@ describe('useTestDefinitionStore — Couverture (N:M Requirement <-> Test)', () 
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const req1 = await store.creerRequirement('client-1', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Exigence 1',
       description: '',
       assetNodeId: null,
       processId: null,
     })
     const req2 = await store.creerRequirement('client-1', {
-      reference: 'URS-NF-046',
+      reference: 'REQ-NF-046',
       titre: 'Exigence 2 (intégrité des données)',
       description: '',
       assetNodeId: null,
@@ -286,7 +286,7 @@ describe('useTestDefinitionStore — Couverture (N:M Requirement <-> Test)', () 
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Exigence',
       description: '',
       assetNodeId: null,
@@ -326,7 +326,7 @@ describe('useTestDefinitionStore — isolation stricte par client', () => {
     const store = useTestDefinitionStore()
     await store.charger('client-A')
     await store.creerRequirement('client-A', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Exigence A',
       description: '',
       assetNodeId: null,
@@ -344,7 +344,7 @@ describe('useTestDefinitionStore — Test Design Engine (Phase 35, TD-036)', () 
     await store.charger('client-1')
 
     const requirement = await store.creerRequirement('client-1', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Exigence liée au nœud à risque',
       description: '',
       assetNodeId: 'noeud-1',
@@ -371,7 +371,7 @@ describe('useTestDefinitionStore — Test Design Engine (Phase 35, TD-036)', () 
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Exigence',
       description: '',
       assetNodeId: 'noeud-1',
@@ -402,7 +402,7 @@ describe('useTestDefinitionStore — Test Design Engine (Phase 35, TD-036)', () 
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Exigence',
       description: '',
       assetNodeId: 'noeud-1',

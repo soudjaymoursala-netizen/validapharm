@@ -41,9 +41,9 @@ export interface MessageChatAffiche {
 /**
  * Panneau Chat expert (FDS §3.4, FS §4.4) — orchestre l'envoi via le
  * routeur IA (`envoyerAvecBascule`) et journalise la session (pas le
- * contenu échangé) à la fermeture, conformément à URS-F-037.
+ * contenu échangé) à la fermeture.
  *
- * @requirement FDS §3.4, URS-F-030 à 037, URS-F-032quinquies
+ * @requirement FDS §3.4
  */
 export const usePanneauChatStore = defineStore('panneauChat', () => {
   const configStore = useClientConfigStore()
@@ -65,10 +65,10 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
   )
 
   /**
-   * URS-F-032quinquies : dérive détectée entre le dernier moteur journalisé
-   * et la version qualifiée — **pour le mode donné** (URS-F-038bis, Phase
-   * 32) : la qualification de chat_normatif ne dit rien de la fiabilité du
-   * mode audit_simule, et réciproquement.
+   * Dérive détectée entre le dernier moteur journalisé et la version
+   * qualifiée — **pour le mode donné** : la qualification de
+   * chat_normatif ne dit rien de la fiabilité du mode audit_simule, et
+   * réciproquement.
    */
   function alerteDerive(mode: ModeUsageIA): boolean {
     return deriveVersionDetectee(
@@ -164,9 +164,9 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
   }
 
   /**
-   * Sections disponibles à joindre (URS-F-031 : accès à un document précis
+   * Sections disponibles à joindre (accès à un document précis
    * uniquement via une action explicite) — celles des projets de ce
-   * client, jamais celles d'un autre client (URS-F-024).
+   * client, jamais celles d'un autre client.
    */
   async function listerSectionsDisponibles(idClient: string): Promise<SectionDisponibleAJoindre[]> {
     const projets = await db.projects.where('client_id').equals(idClient).toArray()

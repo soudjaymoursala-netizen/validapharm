@@ -15,10 +15,10 @@ const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
  * depuis GitHub et l'écrit dans le dossier Drive dédié du client
  * (OQ-41 : "le miroir Drive reflète l'état du dépôt Git à l'identique").
  *
- * @requirement SDS §5bis, URS-NF-010/011/047
+ * @requirement SDS §5bis
  *
  * Déclenchement manuel uniquement dans cet incrément ("Sauvegarder
- * maintenant", URS-NF-011) — le déclenchement automatique par heuristique
+ * maintenant") — le déclenchement automatique par heuristique
  * d'inactivité/fermeture de session (SDS §5bis) reste backlog : il
  * suppose une détection de fin de session qui n'existe pas encore dans
  * l'application, et un faux déclenchement automatique non testé serait

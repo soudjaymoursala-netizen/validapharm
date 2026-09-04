@@ -13,7 +13,7 @@ export type ResultatLogin = { ok: true } | { ok: false; erreur: string }
  * (TD-033) comme unique système d'identité de l'application : un jeton
  * JWT obtenu via `/auth/login`, vérifié côté serveur à chaque appel.
  *
- * @requirement URS-F-320 à octies, TD-046
+ * @requirement TD-046
  */
 export const useAuthStore = defineStore('auth', () => {
   const utilisateur = ref<UtilisateurWire | null>(null)

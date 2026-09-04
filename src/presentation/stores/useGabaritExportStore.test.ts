@@ -57,7 +57,7 @@ describe('useGabaritExportStore — importerGabarit (Phase 26, TD-024)', () => {
     expect(relu[0]?.nom).toBe('Gabarit Sanofi')
   })
 
-  test('un gabarit sans les balises obligatoires est refusé, jamais enregistré (URS-F-026)', async () => {
+  test('un gabarit sans les balises obligatoires est refusé, jamais enregistré', async () => {
     const store = useGabaritExportStore()
     await store.charger('client-1')
     const fichier = await construireGabaritDocx(GABARIT_INCOMPLET)
@@ -76,7 +76,7 @@ describe('useGabaritExportStore — importerGabarit (Phase 26, TD-024)', () => {
     expect(await db.gabaritsExportClient.toArray()).toHaveLength(0)
   })
 
-  test('isolation stricte par client : le gabarit d’un client n’apparaît jamais chez un autre (URS-F-024)', async () => {
+  test('isolation stricte par client : le gabarit d’un client n’apparaît jamais chez un autre', async () => {
     const store = useGabaritExportStore()
     await store.charger('client-A')
     await store.importerGabarit(

@@ -29,7 +29,6 @@ export type ErreurArchivageProjet = { erreur: 'introuvable' | 'deja_archive' | '
  * contient aucune règle métier elle-même — les décisions restent dans
  * `logique-metier/` ; ce store ne fait qu'appeler/persister.
  *
- * @requirement URS-F-000 à 000nonies
  */
 export const useProjectsStore = defineStore('projects', () => {
   const projects = ref<Project[]>([])
@@ -240,7 +239,7 @@ export const useProjectsStore = defineStore('projects', () => {
   }
 
   /**
-   * Archivage (§4.31/URS-F-310, TD-033) — jamais une suppression physique
+   * Archivage (§4.31, TD-033) — jamais une suppression physique
    * (ALCOA+) : `statut` bascule à `archive`, le projet reste lisible et
    * restaurable. La garde de confirmation (nom retapé + mot de passe
    * local) est vérifiée par l'appelant avant d'invoquer cette fonction,

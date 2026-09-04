@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Garde d'archivage (§4.31/URS-F-310) — double confirmation délibérément
+// Garde d'archivage (§4.31) — double confirmation délibérément
 // demandée pour se protéger d'une suppression accidentelle : (1) retaper
 // le nom exact du client/projet (pattern GitHub "type the repo name to
 // confirm"), (2) re-saisir le **vrai** mot de passe de connexion.

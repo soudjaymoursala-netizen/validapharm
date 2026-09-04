@@ -25,7 +25,7 @@ describe('useImpactAssessmentStore — aucun profil configuré', () => {
   })
 })
 
-describe('useImpactAssessmentStore — creerNouvelleVersion (URS-F-050, F1)', () => {
+describe('useImpactAssessmentStore — creerNouvelleVersion (F1)', () => {
   test("crée un profil avec les questions du client, mot pour mot, aucune valeur d'origine dans le code", async () => {
     const store = useImpactAssessmentStore()
     await store.charger('client-1')

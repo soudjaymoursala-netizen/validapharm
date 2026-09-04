@@ -59,15 +59,13 @@ export type ResultatCreationRelationTechnique =
   | { ok: false; raison: 'clients_differents' }
 
 /**
- * Store de la Couche Présentation pour le référentiel d'actifs (FS §4.10,
- * URS-F-100 à 100decies) — hiérarchie configurable + CRUD de nœuds avec
+ * Store de la Couche Présentation pour le référentiel d'actifs (FS §4.10) —
+ * hiérarchie configurable + CRUD de nœuds avec
  * les deux garde-fous non négociables (absence de cycle, unicité du code
- * par client), relations techniques (URS-F-240) et statut de
- * qualification (URS-F-101/101bis, édition manuelle uniquement). Le
+ * par client), relations techniques et statut de
+ * qualification (édition manuelle uniquement). Le
  * graphe `associated_nodes[]` et le pull QMS restent hors périmètre
  * (backlog).
- *
- * @requirement URS-F-100, URS-F-100bis, URS-F-100ter, URS-F-100nonies, URS-F-101, URS-F-101bis, URS-F-240
  */
 export const useStructureSystemeStore = defineStore('structureSysteme', () => {
   const schema = ref<AssetHierarchySchema | null>(null)
@@ -219,7 +217,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
   }
 
   /**
-   * Reparentage (URS-F-100octies) : revalide l'absence de cycle "avec la
+   * Reparentage : revalide l'absence de cycle "avec la
    * même rigueur qu'à la création", jamais silencieux (journalisé).
    */
   async function reparenterNoeud(
@@ -312,7 +310,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
 
   /**
    * Modification manuelle du statut de qualification et de la
-   * périodicité (URS-F-101, URS-F-101bis) — jamais de transition
+   * périodicité — jamais de transition
    * automatique fabriquée par l'outil (même discipline que partout
    * ailleurs : rien n'est déduit à la place de l'utilisateur sur une
    * donnée à impact GMP). Trouvé figé à `non_qualifie` sans aucun moyen

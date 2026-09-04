@@ -6,7 +6,7 @@
 // npm ajouté pour une dizaine de pictogrammes). `stroke="currentColor"`
 // systématique — la couleur suit toujours le texte parent, jamais fixée
 // ici (cohérent avec la discipline couleur+icône+texte, jamais la
-// couleur seule, URS-NF-054ter).
+// couleur seule).
 export type NomIcone =
   | 'accueil'
   | 'dossier'

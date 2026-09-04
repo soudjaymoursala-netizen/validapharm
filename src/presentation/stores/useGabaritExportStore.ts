@@ -8,11 +8,11 @@ export type ResultatImportGabarit =
   { ok: true; gabarit: GabaritExportClient } | { ok: false; tagsManquants: string[] }
 
 /**
- * Store des gabarits d'export `.docx` personnalisés (Phase 26, TD-024,
- * URS-F-023 à 026) — isolation stricte par `client_id`, même principe que
+ * Store des gabarits d'export `.docx` personnalisés (Phase 26, TD-024)
+ * — isolation stricte par `client_id`, même principe que
  * `useProcedureStore`/`AssetNode` (jamais de mélange entre deux clients).
  *
- * **Garde-fou non négociable (URS-F-026)** : un gabarit dont il manque un
+ * **Garde-fou non négociable** : un gabarit dont il manque un
  * élément obligatoire (bloc de signatures, historique des révisions) est
  * refusé à l'import — jamais enregistré en base "à corriger plus tard".
  */
