@@ -77,6 +77,7 @@ const ENTREES_BASE = {
   texteDocumentReference: 'Document de référence.',
   contexteNouveauCas: 'Nouveau cas.',
   langue: 'fr' as const,
+  tablesExistantes: {},
 }
 
 describe('genererBrouillonSection', () => {
@@ -135,5 +136,57 @@ describe('genererBrouillonSection', () => {
     const provider = providerRepondant('CHAMP|generalites.objectif|Objectif recopié.')
     const resultat = await genererBrouillonSection(ENTREES_BASE, provider)
     expect(resultat.texteReponseBrute).toBe('CHAMP|generalites.objectif|Objectif recopié.')
+  })
+})
+
+describe('genererBrouillonSection — lignes de tableau dynamique (Phase 38, Option 2, TD-045)', () => {
+  test('propose des lignes valides pour un tableau vide', async () => {
+    const provider = providerRepondant(
+      [
+        'LIGNE_TABLEAU|tests.lignes|description=Vérifier A',
+        'LIGNE_TABLEAU|tests.lignes|description=Vérifier B',
+      ].join('\n'),
+    )
+    const resultat = await genererBrouillonSection(ENTREES_BASE, provider)
+    expect(resultat.lignesTableaux).toEqual([
+      {
+        section_key: 'tests',
+        field_key: 'lignes',
+        lignes: [{ description: 'Vérifier A' }, { description: 'Vérifier B' }],
+      },
+    ])
+  })
+
+  test('ne propose jamais de ligne pour un tableau déjà rempli — jamais un ajout aux lignes existantes', async () => {
+    const provider = providerRepondant('LIGNE_TABLEAU|tests.lignes|description=Nouvelle ligne')
+    const resultat = await genererBrouillonSection(
+      { ...ENTREES_BASE, tablesExistantes: { lignes: [{ description: 'Déjà là' }] } },
+      provider,
+    )
+    expect(resultat.lignesTableaux).toEqual([])
+  })
+
+  test('rejette la ligne entière si une seule cellule référence une colonne inconnue', async () => {
+    const provider = providerRepondant(
+      'LIGNE_TABLEAU|tests.lignes|description=Vérifier A;colonne_inventee=x',
+    )
+    const resultat = await genererBrouillonSection(ENTREES_BASE, provider)
+    expect(resultat.lignesTableaux).toEqual([])
+  })
+
+  test('ignore un tableau inconnu/halluciné', async () => {
+    const provider = providerRepondant('LIGNE_TABLEAU|tests.tableau_invente|description=x')
+    const resultat = await genererBrouillonSection(ENTREES_BASE, provider)
+    expect(resultat.lignesTableaux).toEqual([])
+  })
+
+  test('plafonne le nombre de lignes proposées par tableau', async () => {
+    const lignes = Array.from(
+      { length: 30 },
+      (_, i) => `LIGNE_TABLEAU|tests.lignes|description=Ligne ${i}`,
+    )
+    const provider = providerRepondant(lignes.join('\n'))
+    const resultat = await genererBrouillonSection(ENTREES_BASE, provider)
+    expect(resultat.lignesTableaux[0]?.lignes).toHaveLength(20)
   })
 })
