@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import type { ClientWire } from '../../connecteurs/auth/AuthApiClient'
 import type { Client, SecteurClient } from '../../logique-metier/domaine/types'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
-import { db } from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 
 export interface NouveauClientInput {
   name: string
@@ -18,20 +18,54 @@ export interface ModificationClientInput {
   details: string | null
 }
 
-export type ErreurArchivageClient = { erreur: 'introuvable' | 'deja_archive' | 'deja_actif' }
+export type ErreurClient = { erreur: string }
+
+function wireVersClient(w: ClientWire): Client {
+  return {
+    id: w.id,
+    name: w.name,
+    adresse: w.adresse,
+    secteur: w.secteur,
+    details: w.details,
+    statut: w.statut,
+    archived_at: w.archivedAt,
+    archived_by: w.archivedBy,
+    // L'audit d'un client géré par le Worker vit désormais côté serveur
+    // (table `audit_log` D1, consultable par un admin via `/admin/audit`)
+    // — jamais dupliqué ici (TD-046).
+    audit_log: [],
+    created_at: w.createdAt,
+    created_by_user_id: w.createdByUserId,
+    shared_with: w.sharedWith,
+  }
+}
+
+function trierParNom(clients: Client[]): Client[] {
+  return [...clients].sort((a, b) => a.name.localeCompare(b.name))
+}
 
 /**
- * Store de la Couche Présentation (SDS §6) pour l'entité `client` (FS §3
- * v12) — identité minimale (nom), distincte des réglages `ClientConfig`.
- * Nécessaire pour isoler par `client_id` la configuration du miroir Drive
- * (SDS §5bis/§7) et, plus tard, le fournisseur IA (`client_config`).
+ * Store de la Couche Présentation (SDS §6) pour l'entité `client` — depuis
+ * la Phase 39 (TD-046), un client REST du Worker d'authentification
+ * (Cloudflare D1 devient la source de vérité), plus un accès Dexie direct
+ * : nécessaire pour qu'un admin voie réellement tous les clients de
+ * l'organisation, structurellement impossible avec un stockage seulement
+ * local par navigateur. `Project`/`Section`/gabarits restent inchangés
+ * (IndexedDB + synchronisation GitHub, TD-005).
  *
  * **Archivage (§4.31/URS-F-310, TD-033)** : jamais une suppression
  * physique (ALCOA+) — `archiverClient` change `statut`, le client reste
- * lisible et restaurable. La garde de confirmation (nom retapé + mot de
- * passe local) est vérifiée par l'appelant (composant) avant d'invoquer
- * `archiverClient`, jamais dans le store lui-même — cohérent avec le
- * reste de l'app (les garde-fous sont explicites côté appelant).
+ * lisible et restaurable. Contrairement à avant Phase 39, l'identité de
+ * l'acteur (`archived_by`) est désormais résolue **côté serveur** depuis
+ * la session authentifiée, jamais déclarée par l'appelant — la garde de
+ * confirmation (re-saisie du vrai mot de passe, `useAuthStore.
+ * verifierMotDePasse`) reste côté appelant (composant), avant d'invoquer
+ * `archiverClient`, cohérent avec le reste de l'app.
+ *
+ * **Suppression définitive** (`supprimerDefinitivement`, TD-046) :
+ * réservée au rôle admin (vérifié côté serveur, jamais seulement côté
+ * client), justification obligatoire, tracée en audit — jamais pour les
+ * autres entités (`Project`/`Section` restent archivage-only).
  */
 export const useClientsStore = defineStore('clients', () => {
   const clients = ref<Client[]>([])
@@ -43,36 +77,41 @@ export const useClientsStore = defineStore('clients', () => {
   async function chargerClients(): Promise<void> {
     enChargement.value = true
     try {
-      const tous = await db.clients.toArray()
-      clients.value = tous.sort((a, b) => a.name.localeCompare(b.name))
+      const authStore = useAuthStore()
+      const api = await authStore.client()
+      if (!api || !authStore.jeton) {
+        clients.value = []
+        return
+      }
+      const resultat = await api.listerClients(authStore.jeton)
+      clients.value = resultat.ok ? trierParNom(resultat.donnees.clients.map(wireVersClient)) : []
     } finally {
       enChargement.value = false
     }
   }
 
-  async function creerClient(input: NouveauClientInput): Promise<Client> {
-    const maintenant = new Date().toISOString()
-    const client: Client = {
-      id: crypto.randomUUID(),
-      name: input.name,
-      adresse: input.adresse ?? null,
-      secteur: input.secteur ?? null,
-      details: input.details ?? null,
-      statut: 'actif',
-      archived_at: null,
-      archived_by: null,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
-      created_at: maintenant,
-    }
-    await db.clients.put(client)
-    clients.value = [...clients.value, client].sort((a, b) => a.name.localeCompare(b.name))
+  async function creerClient(input: NouveauClientInput): Promise<Client | ErreurClient> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return { erreur: 'relais_non_configure' }
+
+    const resultat = await api.creerClient(authStore.jeton, input)
+    if (!resultat.ok) return { erreur: resultat.erreur }
+
+    const client = wireVersClient(resultat.donnees.client)
+    clients.value = trierParNom([...clients.value, client])
     return client
   }
 
   async function obtenirClient(clientId: string): Promise<Client | undefined> {
-    return db.clients.get(clientId)
+    const existant = clients.value.find((c) => c.id === clientId)
+    if (existant) return existant
+
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return undefined
+    const resultat = await api.obtenirClient(authStore.jeton, clientId)
+    return resultat.ok ? wireVersClient(resultat.donnees.client) : undefined
   }
 
   /**
@@ -83,70 +122,68 @@ export const useClientsStore = defineStore('clients', () => {
   async function modifierClient(
     clientId: string,
     input: ModificationClientInput,
-  ): Promise<Client | { erreur: 'introuvable' }> {
-    const existant = await db.clients.get(clientId)
-    if (!existant) return { erreur: 'introuvable' }
+  ): Promise<Client | ErreurClient> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return { erreur: 'relais_non_configure' }
 
-    const misAJour: Client = {
-      ...existant,
-      name: input.name,
-      adresse: input.adresse,
-      secteur: input.secteur,
-      details: input.details,
-    }
-    await db.clients.put(misAJour)
-    clients.value = clients.value
-      .map((c) => (c.id === clientId ? misAJour : c))
-      .sort((a, b) => a.name.localeCompare(b.name))
-    return misAJour
+    const resultat = await api.modifierClient(authStore.jeton, clientId, input)
+    if (!resultat.ok) return { erreur: resultat.erreur }
+
+    const client = wireVersClient(resultat.donnees.client)
+    clients.value = trierParNom(clients.value.map((c) => (c.id === clientId ? client : c)))
+    return client
   }
 
-  async function archiverClient(
-    clientId: string,
-    identiteDeclaree: string,
-  ): Promise<Client | ErreurArchivageClient> {
-    const existant = await db.clients.get(clientId)
-    if (!existant) return { erreur: 'introuvable' }
-    if (existant.statut === 'archive') return { erreur: 'deja_archive' }
+  async function archiverClient(clientId: string): Promise<Client | ErreurClient> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return { erreur: 'relais_non_configure' }
 
-    const maintenant = new Date().toISOString()
-    const misAJour: Client = {
-      ...existant,
-      statut: 'archive',
-      archived_at: maintenant,
-      archived_by: identiteDeclaree,
-      audit_log: [
-        ...existant.audit_log,
-        { timestamp: maintenant, actor: identiteDeclaree, action: 'archivage' },
-      ],
-    }
-    await db.clients.put(misAJour)
-    clients.value = clients.value.map((c) => (c.id === clientId ? misAJour : c))
-    return misAJour
+    const resultat = await api.modifierClient(authStore.jeton, clientId, { statut: 'archive' })
+    if (!resultat.ok) return { erreur: resultat.erreur }
+
+    const client = wireVersClient(resultat.donnees.client)
+    clients.value = clients.value.map((c) => (c.id === clientId ? client : c))
+    return client
   }
 
-  async function desarchiverClient(
-    clientId: string,
-    identiteDeclaree: string,
-  ): Promise<Client | ErreurArchivageClient> {
-    const existant = await db.clients.get(clientId)
-    if (!existant) return { erreur: 'introuvable' }
-    if (existant.statut !== 'archive') return { erreur: 'deja_actif' }
+  async function desarchiverClient(clientId: string): Promise<Client | ErreurClient> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return { erreur: 'relais_non_configure' }
 
-    const maintenant = new Date().toISOString()
-    const misAJour: Client = {
-      ...existant,
-      statut: 'actif',
-      archived_at: null,
-      archived_by: null,
-      audit_log: [
-        ...existant.audit_log,
-        { timestamp: maintenant, actor: identiteDeclaree, action: 'désarchivage' },
-      ],
-    }
-    await db.clients.put(misAJour)
-    clients.value = clients.value.map((c) => (c.id === clientId ? misAJour : c))
-    return misAJour
+    const resultat = await api.modifierClient(authStore.jeton, clientId, { statut: 'actif' })
+    if (!resultat.ok) return { erreur: resultat.erreur }
+
+    const client = wireVersClient(resultat.donnees.client)
+    clients.value = clients.value.map((c) => (c.id === clientId ? client : c))
+    return client
+  }
+
+  /**
+   * Suppression **définitive** — admin uniquement (vérifié côté serveur),
+   * justification obligatoire, jamais un simple bouton côté client sans
+   * garde réelle (TD-046, contrairement à `archiverClient` qui reste
+   * réversible).
+   */
+  async function supprimerDefinitivement(
+    clientId: string,
+    justification: string,
+  ): Promise<{ ok: true } | ErreurClient> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return { erreur: 'relais_non_configure' }
+
+    const resultat = await api.supprimerClientDefinitivement(
+      authStore.jeton,
+      clientId,
+      justification,
+    )
+    if (!resultat.ok) return { erreur: resultat.erreur }
+
+    clients.value = clients.value.filter((c) => c.id !== clientId)
+    return { ok: true }
   }
 
   return {
@@ -160,5 +197,6 @@ export const useClientsStore = defineStore('clients', () => {
     modifierClient,
     archiverClient,
     desarchiverClient,
+    supprimerDefinitivement,
   }
 })

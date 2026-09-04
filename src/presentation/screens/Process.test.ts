@@ -1,9 +1,14 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useClientsStore } from '../stores/useClientsStore'
 import Process from './Process.vue'
 
@@ -35,19 +40,28 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.clients.clear()
   await db.processes.clear()
   await db.fonctionsActif.clear()
   await db.associationsFonctionProcess.clear()
   await db.associationsFonctionAssetNode.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('Process — écran Process/Fonction (§6 du prompt maître, Phase 40)', () => {
   test('crée un process, une fonction, puis les rattache l’un à l’autre', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })
+    if ('erreur' in client) throw client
 
     const router = routeurDeTest()
     await router.push({ name: 'gestion-process', params: { clientId: client.id } })
@@ -90,6 +104,7 @@ describe('Process — écran Process/Fonction (§6 du prompt maître, Phase 40)'
   test('affiche un état vide tant qu’aucun process ni fonction n’existe', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({ name: 'Client Vide' })
+    if ('erreur' in client) throw client
 
     const router = routeurDeTest()
     await router.push({ name: 'gestion-process', params: { clientId: client.id } })

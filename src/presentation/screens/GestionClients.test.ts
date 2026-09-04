@@ -1,10 +1,14 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
-import { useProfilLocalStore } from '../stores/useProfilLocalStore'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
+import { useClientsStore } from '../stores/useClientsStore'
 import GestionClients from './GestionClients.vue'
 
 function routeurDeTest() {
@@ -74,50 +78,29 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.clients.clear()
-  await db.profilLocal.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
 })
 
-describe('GestionClients — archivage (§4.31/URS-F-310, TD-033)', () => {
-  test('archiver un client sans profil local configuré affiche une invite à configurer le profil, aucune écriture', async () => {
-    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
-    await flushPromises()
+afterEach(() => {
+  demonter()
+})
 
-    const formulaire = wrapper.find('.formulaire-client')
-    // Le formulaire est masqué par défaut — ouvrir via le bouton d'en-tête.
-    if (!formulaire.exists()) {
-      await wrapper.find('header button').trigger('click')
-    }
-    await wrapper.find('.formulaire-client input[type="text"]').setValue('PharmaTech Solutions')
-    await wrapper.find('.formulaire-client').trigger('submit.prevent')
-    await attendreQue(async () => (await db.clients.count()) > 0)
-
-    await wrapper.find('.bouton-archiver').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('.modale').text()).toContain('Aucun profil local configuré')
-    expect((await db.clients.toArray())[0]?.statut).toBe('actif')
-  })
-
-  test('archive un client après double confirmation (nom retapé + mot de passe local), le client bascule dans les archives', async () => {
-    const profilStore = useProfilLocalStore()
-    await profilStore.definirProfil({
-      nom: 'Lead',
-      prenom: 'Quentin',
-      email: 'q.lead@pharmatech.example',
-      visa: 'QLD',
-      motDePasse: 'CoffreFort!2026',
-    })
-
+describe('GestionClients — archivage (§4.31/URS-F-310, TD-046 — vraie session)', () => {
+  test('archive un client après double confirmation (nom retapé + vrai mot de passe), le client bascule dans les archives', async () => {
+    const clientsStore = useClientsStore()
     const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
     await flushPromises()
 
     await wrapper.find('header button').trigger('click')
     await wrapper.find('.formulaire-client input[type="text"]').setValue('PharmaTech Solutions')
     await wrapper.find('.formulaire-client').trigger('submit.prevent')
-    await attendreQue(async () => (await db.clients.count()) > 0)
+    await attendreQue(() => clientsStore.clients.length > 0)
 
     await wrapper.find('.bouton-archiver').trigger('click')
     await flushPromises()
@@ -130,7 +113,7 @@ describe('GestionClients — archivage (§4.31/URS-F-310, TD-033)', () => {
     await modale.find('form').trigger('submit.prevent')
     await flushPromises()
     expect(modale.find('.bandeau-erreur').text()).toContain('ne correspond pas')
-    expect((await db.clients.toArray())[0]?.statut).toBe('actif')
+    expect(clientsStore.clients[0]?.statut).toBe('actif')
 
     // Nom correct, mauvais mot de passe.
     await inputs[0]?.setValue('PharmaTech Solutions')
@@ -141,22 +124,57 @@ describe('GestionClients — archivage (§4.31/URS-F-310, TD-033)', () => {
       return bandeau.exists() && bandeau.text().includes('Mot de passe incorrect')
     })
     expect(modale.find('.bandeau-erreur').text()).toContain('Mot de passe incorrect')
-    expect((await db.clients.toArray())[0]?.statut).toBe('actif')
+    expect(clientsStore.clients[0]?.statut).toBe('actif')
 
-    // Les deux corrects — archivage accepté.
+    // Les deux corrects (vrai mot de passe du compte connecté) — archivage accepté.
     await inputs[0]?.setValue('PharmaTech Solutions')
     await inputs[1]?.setValue('CoffreFort!2026')
     await modale.find('form').trigger('submit.prevent')
-    await attendreQue(async () => (await db.clients.toArray())[0]?.statut === 'archive')
+    await attendreQue(() => clientsStore.clientsArchives.length > 0)
 
-    const clientArchive = (await db.clients.toArray())[0]
+    const clientArchive = clientsStore.clientsArchives[0]
     expect(clientArchive?.statut).toBe('archive')
-    expect(clientArchive?.archived_by).toContain('QLD')
+    expect(clientArchive?.archived_by).toContain('admin@pharmatech.example')
     expect(wrapper.find('.modale').exists()).toBe(false)
 
     // Le client archivé n'apparaît plus dans la liste active (0 client actif restant).
     await flushPromises()
     expect(wrapper.find('.etat-vide').exists()).toBe(true)
     expect(wrapper.find('.liste-clients').exists()).toBe(false)
+  })
+
+  test('suppression définitive (admin) exige justification + vrai mot de passe, retire le client', async () => {
+    const clientsStore = useClientsStore()
+    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
+    await flushPromises()
+
+    await wrapper.find('header button').trigger('click')
+    await wrapper.find('.formulaire-client input[type="text"]').setValue('Client à supprimer')
+    await wrapper.find('.formulaire-client').trigger('submit.prevent')
+    await attendreQue(() => clientsStore.clients.length > 0)
+
+    await wrapper.find('.bouton-archiver').trigger('click')
+    const modaleArchivage = wrapper.find('.modale')
+    const inputsArchivage = modaleArchivage.findAll('input')
+    await inputsArchivage[0]?.setValue('Client à supprimer')
+    await inputsArchivage[1]?.setValue('CoffreFort!2026')
+    await modaleArchivage.find('form').trigger('submit.prevent')
+    await attendreQue(() => clientsStore.clientsArchives.length > 0)
+
+    await wrapper.find('.lien-archives').trigger('click')
+    await flushPromises()
+    await wrapper.find('.liste-clients--archives .bouton-danger').trigger('click')
+    await flushPromises()
+
+    const modaleSuppression = wrapper.find('.modale')
+    expect(modaleSuppression.text()).toContain('irréversible')
+    const inputsSuppression = modaleSuppression.findAll('input')
+    await inputsSuppression[0]?.setValue('Client à supprimer')
+    await modaleSuppression.find('textarea').setValue('Test — nettoyage')
+    await inputsSuppression[1]?.setValue('CoffreFort!2026')
+    await modaleSuppression.find('form').trigger('submit.prevent')
+
+    await attendreQue(() => clientsStore.clientsArchives.length === 0)
+    expect(clientsStore.clients).toHaveLength(0)
   })
 })

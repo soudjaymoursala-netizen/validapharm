@@ -9,6 +9,7 @@ import {
   useConnexionGitHubStore,
   type ResultatTestConnexion,
 } from '../stores/useConnexionGitHubStore'
+import { useConnexionAuthentificationStore } from '../stores/useConnexionAuthentificationStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 
 const store = useConnexionGitHubStore()
@@ -18,6 +19,14 @@ const testEnCours = ref(false)
 
 const relaisStore = useConnexionRelaisIAStore()
 const brouillonRelais = reactive({ relayUrl: '', jeton: '' })
+
+// Worker d'authentification (TD-046) — volontairement séparé du relais IA
+// ci-dessous : sans jeton fixe (le jeton de session s'obtient dynamiquement
+// via /auth/login), et accessible AVANT toute connexion (cet écran entier
+// est exclu de la garde de routeur globale, `router/index.ts`) puisque
+// l'utilisateur doit pouvoir indiquer où se connecter avant de se connecter.
+const authentificationStore = useConnexionAuthentificationStore()
+const brouillonAuthentification = reactive({ relayUrl: '' })
 
 onMounted(async () => {
   await store.charger()
@@ -32,6 +41,11 @@ onMounted(async () => {
   if (relaisStore.connexion) {
     brouillonRelais.relayUrl = relaisStore.connexion.relayUrl
     brouillonRelais.jeton = relaisStore.connexion.jeton
+  }
+
+  await authentificationStore.charger()
+  if (authentificationStore.connexion) {
+    brouillonAuthentification.relayUrl = authentificationStore.connexion.relayUrl
   }
 })
 
@@ -66,6 +80,10 @@ async function effacerRelais(): Promise<void> {
   await relaisStore.effacer()
   brouillonRelais.relayUrl = ''
   brouillonRelais.jeton = ''
+}
+
+async function enregistrerAuthentification(): Promise<void> {
+  await authentificationStore.enregistrer({ ...brouillonAuthentification })
 }
 </script>
 
@@ -142,6 +160,30 @@ async function effacerRelais(): Promise<void> {
         </label>
         <div class="actions">
           <button type="button" @click="effacerRelais">Effacer</button>
+          <button type="submit">Enregistrer</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="bloc-authentification">
+      <h2>Authentification (comptes réels)</h2>
+      <p class="rappel">
+        Worker Cloudflare + base D1 dédiés aux comptes/rôles/clients de l'organisation (TD-046) —
+        remplace le verrou local par une vraie session. Aucun jeton fixe à saisir ici : la session
+        s'obtient en se connectant sur l'écran « Se connecter ».
+      </p>
+
+      <form class="formulaire" @submit.prevent="enregistrerAuthentification">
+        <label>
+          URL du Worker d'authentification
+          <input
+            v-model="brouillonAuthentification.relayUrl"
+            type="url"
+            required
+            placeholder="https://auth.exemple.workers.dev"
+          />
+        </label>
+        <div class="actions">
           <button type="submit">Enregistrer</button>
         </div>
       </form>

@@ -7,20 +7,25 @@
 // plus directement les outils (avant Phase 40 : 8 liens par ligne), il ne
 // fait que créer/archiver/désarchiver l'identité du client.
 //
-// Archivage (§4.31/URS-F-310, TD-033) : jamais une suppression physique
-// (ALCOA+) — voir `ModaleConfirmationArchivage.vue` pour la double garde
-// (nom retapé + mot de passe local, jamais une authentification).
+// Archivage (§4.31/URS-F-310) : jamais une suppression physique (ALCOA+)
+// — voir `ModaleConfirmationArchivage.vue` pour la double garde (nom
+// retapé + vraie session, TD-046). Suppression **définitive** (admin
+// uniquement, justification obligatoire) : voir `ModaleSuppressionDefinitive.vue`,
+// nouvelle capacité Phase 39 (TD-046) — jamais pour un rôle non-admin.
 import { onMounted, ref } from 'vue'
 import ModaleConfirmationArchivage from '../composants/ModaleConfirmationArchivage.vue'
+import ModaleSuppressionDefinitive from '../composants/ModaleSuppressionDefinitive.vue'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientsStore } from '../stores/useClientsStore'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import type { Client, SecteurClient } from '../../logique-metier/domaine/types'
 
 const store = useClientsStore()
+const authStore = useAuthStore()
 const formulaireOuvert = ref(false)
 const brouillon = ref({ name: '', adresse: '', secteur: '' as SecteurClient | '', details: '' })
 const afficherArchives = ref(false)
 const clientAArchiver = ref<Client | null>(null)
+const clientASupprimer = ref<Client | null>(null)
 
 const LIBELLES_SECTEUR: Record<SecteurClient, string> = {
   pharma: 'Pharma',
@@ -44,14 +49,20 @@ async function creerClient(): Promise<void> {
   brouillon.value = { name: '', adresse: '', secteur: '', details: '' }
 }
 
-async function confirmerArchivage(identiteDeclaree: string): Promise<void> {
+async function confirmerArchivage(): Promise<void> {
   if (!clientAArchiver.value) return
-  await store.archiverClient(clientAArchiver.value.id, identiteDeclaree)
+  await store.archiverClient(clientAArchiver.value.id)
   clientAArchiver.value = null
 }
 
 async function desarchiver(client: Client): Promise<void> {
-  await store.desarchiverClient(client.id, IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1)
+  await store.desarchiverClient(client.id)
+}
+
+async function confirmerSuppressionDefinitive(justification: string): Promise<void> {
+  if (!clientASupprimer.value) return
+  await store.supprimerDefinitivement(clientASupprimer.value.id, justification)
+  clientASupprimer.value = null
 }
 </script>
 
@@ -122,7 +133,17 @@ async function desarchiver(client: Client): Promise<void> {
         <li v-for="client in store.clientsArchives" :key="client.id">
           {{ client.name }}
           <span class="meta">archivé le {{ client.archived_at }} par {{ client.archived_by }}</span>
-          <button type="button" @click="desarchiver(client)">Désarchiver</button>
+          <div class="actions-archive">
+            <button type="button" @click="desarchiver(client)">Désarchiver</button>
+            <button
+              v-if="authStore.estAdmin"
+              type="button"
+              class="bouton-danger"
+              @click="clientASupprimer = client"
+            >
+              Supprimer définitivement
+            </button>
+          </div>
         </li>
       </ul>
     </section>
@@ -132,6 +153,12 @@ async function desarchiver(client: Client): Promise<void> {
       :nom="clientAArchiver.name"
       @confirme="confirmerArchivage"
       @annule="clientAArchiver = null"
+    />
+    <ModaleSuppressionDefinitive
+      v-if="clientASupprimer"
+      :nom="clientASupprimer.name"
+      @confirme="confirmerSuppressionDefinitive"
+      @annule="clientASupprimer = null"
     />
   </main>
 </template>
@@ -236,6 +263,18 @@ button {
 .bouton-archiver {
   background-color: var(--vp-couleur-erreur, #b00020);
   flex-shrink: 0;
+}
+
+.actions-archive {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.bouton-danger {
+  background-color: transparent;
+  color: var(--vp-couleur-erreur, #b00020);
+  border: 1px solid var(--vp-couleur-erreur, #b00020);
 }
 
 .bloc-archives {

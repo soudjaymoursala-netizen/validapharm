@@ -1,0 +1,13 @@
+# Configuration Cloudflare Workers (TD-046) — ce fichier ne porte aucun
+# secret (voir README.md pour `wrangler secret put`) ; le binding D1
+# ci-dessous référence un `database_id` à générer par l'utilisateur
+# (`wrangler d1 create validapharm-auth`), jamais un identifiant fictif.
+
+name = "validapharm-auth-worker"
+main = "src/index.ts"
+compatibility_date = "2026-08-25"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "validapharm-auth"
+database_id = "REMPLACER_PAR_L_ID_REEL_APRES_wrangler_d1_create"

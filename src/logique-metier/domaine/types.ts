@@ -189,6 +189,18 @@ export type SecteurClient = 'pharma' | 'dispositif_medical' | 'autre'
  * du 03/09/2026, « nom de l'entreprise, adresse, secteur, informations
  * complémentaires ») — tous optionnels (`null` par défaut), un client créé
  * avant cette version reste valide sans ces champs.
+ *
+ * **Phase 39 (TD-046)** : le Worker d'authentification (Cloudflare D1)
+ * devient la source de vérité de cette entité — nécessaire pour qu'un
+ * admin voie réellement tous les clients de l'organisation, structurellement
+ * impossible avec un stockage seulement local (IndexedDB par navigateur).
+ * `created_by_user_id`/`shared_with` sont additifs (même convention que
+ * `Project.owner_id`/`shared_with`, TD-043/TD-044 — mais désormais
+ * réellement appliqués côté serveur, pas seulement une convention
+ * d'affichage). `audit_log` reste présent pour compatibilité de forme mais
+ * n'est plus alimenté par `useClientsStore` — l'audit d'un client géré par
+ * le Worker vit désormais côté serveur (`audit_log` D1, table dédiée,
+ * consultable par un admin via `/admin/audit`), jamais dupliqué ici.
  */
 export interface Client {
   id: string
@@ -203,6 +215,10 @@ export interface Client {
   archived_by: string | null
   audit_log: EntreeJournalAudit[]
   created_at: string
+  /** Phase 39 (TD-046) — id de l'utilisateur réel (Worker) qui a créé ce client. */
+  created_by_user_id: string | null
+  /** Phase 39 (TD-046) — ids d'utilisateurs réels avec qui ce client est partagé (lecture+écriture). */
+  shared_with: string[]
 }
 
 /**

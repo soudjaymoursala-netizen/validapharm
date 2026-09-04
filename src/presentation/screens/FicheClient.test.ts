@@ -1,9 +1,14 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import FicheClient from './FicheClient.vue'
@@ -58,10 +63,18 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.clients.clear()
   await db.projects.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('FicheClient — page d’entrée d’un client (§13-15 du prompt maître, Phase 40)', () => {
@@ -73,6 +86,7 @@ describe('FicheClient — page d’entrée d’un client (§13-15 du prompt maî
       secteur: 'pharma',
       details: 'Fabrication de formes sèches',
     })
+    if ('erreur' in client) throw client
 
     const router = routeurDeTest()
     await router.push({ name: 'fiche-client', params: { clientId: client.id } })
@@ -103,6 +117,7 @@ describe('FicheClient — page d’entrée d’un client (§13-15 du prompt maî
   test('modifier les informations persiste via useClientsStore.modifierClient', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({ name: 'Client Initial' })
+    if ('erreur' in client) throw client
 
     const router = routeurDeTest()
     await router.push({ name: 'fiche-client', params: { clientId: client.id } })
@@ -119,9 +134,12 @@ describe('FicheClient — page d’entrée d’un client (§13-15 du prompt maî
     await formulaire.find('select').setValue('dispositif_medical')
     await formulaire.trigger('submit.prevent')
 
-    await attendreQue(async () => (await db.clients.get(client.id))?.name === 'Client Renommé')
-    const enBase = await db.clients.get(client.id)
-    expect(enBase?.secteur).toBe('dispositif_medical')
+    await attendreQue(async () => {
+      const relu = await clientsStore.obtenirClient(client.id)
+      return relu?.name === 'Client Renommé'
+    })
+    const relu = await clientsStore.obtenirClient(client.id)
+    expect(relu?.secteur).toBe('dispositif_medical')
     await attendreQue(() => wrapper.find('h1').text() === 'Client Renommé')
   })
 
@@ -130,6 +148,8 @@ describe('FicheClient — page d’entrée d’un client (§13-15 du prompt maî
     const projetsStore = useProjectsStore()
     const client = await clientsStore.creerClient({ name: 'Client A' })
     const autreClient = await clientsStore.creerClient({ name: 'Client B' })
+    if ('erreur' in client || 'erreur' in autreClient)
+      throw new Error('préparation de test échouée')
 
     await projetsStore.creerProjet({
       name: 'Projet de Client A',

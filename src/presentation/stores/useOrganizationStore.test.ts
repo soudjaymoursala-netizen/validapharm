@@ -1,31 +1,38 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
+import type { Client } from '../../logique-metier/domaine/types'
+import { useClientsStore } from './useClientsStore'
 import { useOrganizationStore } from './useOrganizationStore'
+
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.clients.clear()
   await db.organizations.clear()
   await db.workspaces.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
 })
 
-async function creerClient(nom: string) {
-  const client = {
-    id: crypto.randomUUID(),
-    name: nom,
-    adresse: null,
-    secteur: null,
-    details: null,
-    statut: 'actif' as const,
-    archived_at: null,
-    archived_by: null,
-    audit_log: [],
-    created_at: new Date().toISOString(),
-  }
-  await db.clients.put(client)
-  return client
+afterEach(() => {
+  demonter()
+})
+
+// Le Client (Phase 39, TD-046) vit désormais côté Worker/D1 — ce helper
+// passe par le vrai store plutôt que par un insert Dexie direct, cohérent
+// avec le nouveau contrat de `useOrganizationStore.migrerClient`.
+async function creerClient(nom: string): Promise<Client> {
+  const resultat = await useClientsStore().creerClient({ name: nom })
+  if ('erreur' in resultat) throw new Error(`échec de préparation de test : ${resultat.erreur}`)
+  return resultat
 }
 
 describe('useOrganizationStore — migration Client -> Organization (décision structurante : id préservé)', () => {

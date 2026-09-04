@@ -6,6 +6,7 @@ import {
   type RegleEffective,
 } from '../../logique-metier/organisation/resolutionEffective'
 import { db } from '../../persistance/db'
+import { useClientsStore } from './useClientsStore'
 
 export interface NouveauWorkspaceSiteInput {
   nom: string
@@ -48,7 +49,7 @@ export const useOrganizationStore = defineStore('organization', () => {
     const existante = await db.organizations.get(clientId)
     if (existante) return existante
 
-    const client = await db.clients.get(clientId)
+    const client = await useClientsStore().obtenirClient(clientId)
     if (!client) return { erreur: 'client_introuvable' }
 
     const maintenant = new Date().toISOString()
@@ -70,7 +71,9 @@ export const useOrganizationStore = defineStore('organization', () => {
   }
 
   async function migrerTousLesClients(): Promise<Organization[]> {
-    const tousLesClients = await db.clients.toArray()
+    const clientsStore = useClientsStore()
+    await clientsStore.chargerClients()
+    const tousLesClients = clientsStore.clients
     const resultats: Organization[] = []
     for (const client of tousLesClients) {
       const resultat = await migrerClient(client.id)

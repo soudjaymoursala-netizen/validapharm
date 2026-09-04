@@ -1,23 +1,20 @@
 <script setup lang="ts">
-// Garde d'archivage (§4.31/URS-F-310) — double confirmation délibérément
-// demandée pour se protéger d'une suppression accidentelle : (1) retaper
-// le nom exact du client/projet (pattern GitHub "type the repo name to
-// confirm"), (2) re-saisir le **vrai** mot de passe de connexion.
-//
-// TD-046 (Phase 39, décision explicite de l'utilisateur — « Remplacer par
-// la vraie session ») : le verrou local (TD-033, mot de passe vérifié
-// uniquement côté navigateur) est retiré, remplacé par une
-// ré-authentification serveur (`useAuthStore.verifierMotDePasse`,
-// `POST /auth/verify-password`) — un seul système d'identité désormais,
-// jamais deux mécanismes de mot de passe parallèles.
+// Suppression DÉFINITIVE (TD-046, Phase 39) — jamais pour un rôle
+// non-admin (vérifié côté serveur, `DELETE /clients/:id`), jamais sans
+// justification, jamais sans re-saisie du vrai mot de passe. Contrairement
+// à `ModaleConfirmationArchivage.vue` (réversible), cette action est
+// irréversible côté serveur — triple garde volontairement plus stricte :
+// (1) retaper le nom, (2) justification obligatoire non vide, (3) mot de
+// passe re-vérifié.
 import { ref } from 'vue'
 import { useAuthStore } from '../stores/useAuthStore'
 
 const props = defineProps<{ nom: string }>()
-const emit = defineEmits<{ confirme: [identiteDeclaree: string]; annule: [] }>()
+const emit = defineEmits<{ confirme: [justification: string]; annule: [] }>()
 
 const authStore = useAuthStore()
 const nomSaisi = ref('')
+const justification = ref('')
 const motDePasseSaisi = ref('')
 const erreur = ref<string | null>(null)
 const verificationEnCours = ref(false)
@@ -26,6 +23,10 @@ async function confirmer(): Promise<void> {
   erreur.value = null
   if (nomSaisi.value.trim() !== props.nom.trim()) {
     erreur.value = 'Le nom saisi ne correspond pas.'
+    return
+  }
+  if (justification.value.trim().length === 0) {
+    erreur.value = 'La justification est obligatoire pour une suppression définitive.'
     return
   }
   verificationEnCours.value = true
@@ -38,27 +39,32 @@ async function confirmer(): Promise<void> {
   } finally {
     verificationEnCours.value = false
   }
-  const utilisateur = authStore.utilisateur
-  emit(
-    'confirme',
-    utilisateur ? `${utilisateur.prenom} ${utilisateur.nom} (${utilisateur.email})` : 'inconnu',
-  )
+  emit('confirme', justification.value.trim())
 }
 </script>
 
 <template>
   <div class="fond-modale" role="dialog" aria-modal="true">
     <div class="modale">
-      <h2>Confirmer l'archivage</h2>
-
-      <p>
-        Cette action archive <strong>« {{ nom }} »</strong> — les données ne sont jamais supprimées,
-        l'élément reste restaurable depuis les archives.
+      <h2>Suppression définitive</h2>
+      <p class="bandeau-erreur" role="alert">
+        Action <strong>irréversible</strong> — « {{ nom }} » et toutes ses données seront
+        définitivement supprimés, jamais restaurables. Tracée dans le journal d'audit (qui vous a
+        supprimé quoi, quand, pourquoi).
       </p>
       <form class="formulaire" @submit.prevent="confirmer">
         <label>
           Retapez le nom pour confirmer
           <input v-model="nomSaisi" type="text" required autofocus />
+        </label>
+        <label>
+          Justification (obligatoire)
+          <textarea
+            v-model="justification"
+            required
+            rows="2"
+            placeholder="ex. Client fermé, demande écrite du 04/09/2026"
+          />
         </label>
         <label>
           Votre mot de passe
@@ -73,7 +79,7 @@ async function confirmer(): Promise<void> {
         <div class="actions">
           <button type="button" @click="emit('annule')">Annuler</button>
           <button type="submit" class="bouton-danger" :disabled="verificationEnCours">
-            {{ verificationEnCours ? 'Vérification…' : 'Archiver' }}
+            {{ verificationEnCours ? 'Vérification…' : 'Supprimer définitivement' }}
           </button>
         </div>
       </form>
@@ -115,10 +121,12 @@ label {
   gap: 0.25rem;
 }
 
-input {
+input,
+textarea {
   padding: 0.4rem;
   border: 1px solid var(--vp-bordure, #ccc);
   border-radius: 0.25rem;
+  font-family: inherit;
 }
 
 .actions {

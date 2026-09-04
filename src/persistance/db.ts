@@ -168,6 +168,42 @@ export interface EnregistrementConnexionRelaisOCR {
 }
 
 /**
+ * Configuration de connexion au Worker d'authentification (TD-046,
+ * `docs/convergence/TECHNICAL_DECISIONS.md`) — même principe que le relais
+ * IA/OCR : enregistrement unique, pas par client, un seul Worker
+ * serverless pour toute l'installation. Contrairement aux autres relais,
+ * ne porte jamais de jeton d'accès permanent : le jeton de session
+ * (`useAuthStore`) est obtenu dynamiquement via `/auth/login`, jamais
+ * stocké ici.
+ */
+export interface EnregistrementConnexionAuthentification {
+  id: 'unique'
+  relayUrl: string
+}
+
+/**
+ * Session d'authentification persistée (TD-046) — jeton JWT + copie du
+ * profil public de l'utilisateur connecté, pour survivre à un rechargement
+ * de page sans devoir se reconnecter à chaque fois. Le jeton expire côté
+ * serveur (12h, `workers/auth-worker/src/jwt.ts`) — une copie expirée ici
+ * échoue simplement au premier appel authentifié, `useAuthStore` renvoie
+ * alors vers l'écran de connexion.
+ */
+export interface EnregistrementSessionAuthentification {
+  id: 'unique'
+  jeton: string
+  utilisateur: {
+    id: string
+    email: string
+    nom: string
+    prenom: string
+    role: 'admin' | 'utilisateur'
+    statut: 'actif' | 'desactive'
+    createdAt: string
+  }
+}
+
+/**
  * Cache local IndexedDB (SDS §3) — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée en
@@ -251,6 +287,8 @@ export class ValidaPharmDatabase extends Dexie {
   methodProfilesRiskAssessment!: EntityTable<MethodProfileRiskAssessment, 'id'>
   risksAssessment!: EntityTable<RiskAssessment, 'id'>
   profilLocal!: EntityTable<EnregistrementProfilLocal, 'id'>
+  connexionAuthentification!: EntityTable<EnregistrementConnexionAuthentification, 'id'>
+  sessionAuthentification!: EntityTable<EnregistrementSessionAuthentification, 'id'>
 
   constructor(nomBaseDeDonnees = 'validapharm') {
     super(nomBaseDeDonnees)
@@ -456,6 +494,25 @@ export class ValidaPharmDatabase extends Dexie {
      */
     this.version(28).stores({
       profilLocal: 'id',
+    })
+    /**
+     * Phase 39 (TD-046, `docs/convergence/TECHNICAL_DECISIONS.md`) —
+     * authentification réelle multi-utilisateur (Cloudflare Worker + D1) :
+     * enregistrement de l'URL du Worker, même patron que
+     * `connexionRelaisIA`/`connexionRelaisOCR`. `clients` reste déclarée
+     * ci-dessus pour compatibilité descendante (anciens enregistrements
+     * locaux jamais purgés automatiquement, ALCOA+) mais n'est plus lue
+     * par `useClientsStore` — D1 devient la source de vérité (nécessaire
+     * pour qu'un admin voie réellement tous les clients de
+     * l'organisation, structurellement impossible avec un stockage
+     * seulement local). Limite assumée : les clients créés avant cette
+     * version restent dans cette table, invisibles de l'application tant
+     * qu'ils n'ont pas été recréés côté Worker — aucun outil de migration
+     * automatique n'existe dans ce lot (voir `workers/auth-worker/README.md`).
+     */
+    this.version(29).stores({
+      connexionAuthentification: 'id',
+      sessionAuthentification: 'id',
     })
   }
 }

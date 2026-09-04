@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientActifStore } from '../stores/useClientActifStore'
 
 /**
@@ -19,6 +20,19 @@ export const router = createRouter({
       path: '/',
       name: 'accueil',
       component: () => import('../screens/AccueilQueVoulezVousFaire.vue'),
+    },
+    {
+      // Écran de connexion (TD-046) — exclu de la garde ci-dessous (§
+      // `router.beforeEach`), sans quoi personne ne pourrait jamais
+      // l'atteindre pour se connecter.
+      path: '/connexion',
+      name: 'connexion',
+      component: () => import('../screens/Login.vue'),
+    },
+    {
+      path: '/admin/utilisateurs',
+      name: 'admin-utilisateurs',
+      component: () => import('../screens/AdminUtilisateurs.vue'),
     },
     {
       // Déplacée de `/` vers `/tableau-de-bord` (Phase 16) — le nom de
@@ -219,4 +233,29 @@ router.afterEach((to) => {
   if (typeof clientId === 'string') {
     useClientActifStore().definirClientActif(clientId)
   }
+})
+
+/**
+ * Garde d'authentification globale (TD-046) — remplace le verrou local
+ * (TD-033) : toute route exige désormais une session réelle, sauf « Se
+ * connecter » elle-même et « Configuration client » (doit rester
+ * atteignable pour indiquer où se connecter, cf. `ConfigurationClient.vue`
+ * — chicken-and-egg documenté dans le README de `workers/auth-worker`).
+ * `/admin/utilisateurs` est en plus réservée au rôle admin.
+ */
+const ROUTES_SANS_GARDE = new Set(['connexion', 'configuration-client'])
+
+router.beforeEach(async (to) => {
+  if (typeof to.name === 'string' && ROUTES_SANS_GARDE.has(to.name)) return true
+
+  const authStore = useAuthStore()
+  if (!authStore.sessionInitialisee) await authStore.charger()
+
+  if (!authStore.estConnecte) {
+    return { name: 'connexion', query: { redirect: to.fullPath } }
+  }
+  if (to.name === 'admin-utilisateurs' && !authStore.estAdmin) {
+    return { name: 'accueil' }
+  }
+  return true
 })

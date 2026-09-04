@@ -2,9 +2,14 @@ import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import JSZip from 'jszip'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useClientsStore } from '../stores/useClientsStore'
 import TemplatesFormulaires from './TemplatesFormulaires.vue'
 
@@ -76,16 +81,25 @@ async function deposerFichier(
   await inputFichier.trigger('change')
 }
 
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.clients.clear()
   await db.gabaritsExportClient.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maître, Phase 40)', () => {
   test('un gabarit valide (balises obligatoires) est importé et listé', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })
+    if ('erreur' in client) throw client
 
     const router = routeurDeTest()
     await router.push({ name: 'templates-formulaires', params: { clientId: client.id } })
@@ -107,6 +121,7 @@ describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maî
   test('un gabarit sans les balises obligatoires est refusé, jamais listé (URS-F-026)', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })
+    if ('erreur' in client) throw client
 
     const router = routeurDeTest()
     await router.push({ name: 'templates-formulaires', params: { clientId: client.id } })
@@ -128,6 +143,7 @@ describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maî
   test('supprimer un gabarit le retire de la liste et de la base', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })
+    if ('erreur' in client) throw client
 
     const router = routeurDeTest()
     await router.push({ name: 'templates-formulaires', params: { clientId: client.id } })

@@ -16,6 +16,8 @@
 // du prompt maître) ; cette sidebar reste le Mode 2 (« expert ») — l'accès
 // direct aux briques ne disparaît jamais, conformément à ce même §12.
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientActifStore } from '../stores/useClientActifStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useModeAffichageStore, type ModeAffichage } from '../stores/useModeAffichageStore'
@@ -24,6 +26,13 @@ import IconeSvg, { type NomIcone } from './IconeSvg.vue'
 const clientActifStore = useClientActifStore()
 const clientsStore = useClientsStore()
 const modeStore = useModeAffichageStore()
+const authStore = useAuthStore()
+const router = useRouter()
+
+async function seDeconnecter(): Promise<void> {
+  await authStore.deconnecter()
+  await router.push({ name: 'connexion' })
+}
 
 const nomClientActif = ref<string | null>(null)
 
@@ -231,6 +240,15 @@ function basculerMode(nouveauMode: ModeAffichage): void {
       <span class="sidebar__nom-produit">ValidaPharm</span>
     </div>
 
+    <div v-if="authStore.utilisateur" class="sidebar__utilisateur">
+      <span class="sidebar__utilisateur-nom">
+        {{ authStore.utilisateur.prenom }} {{ authStore.utilisateur.nom }}
+      </span>
+      <button type="button" class="sidebar__deconnexion" @click="seDeconnecter">
+        Se déconnecter
+      </button>
+    </div>
+
     <div class="sidebar__bascule-mode" role="group" aria-label="Mode d'affichage">
       <button
         type="button"
@@ -274,6 +292,10 @@ function basculerMode(nouveauMode: ModeAffichage): void {
         <RouterLink v-if="modeStore.mode === 'expert'" :to="{ name: 'configuration-client' }">
           <IconeSvg nom="engrenage" :taille="16" />
           Configuration GitHub
+        </RouterLink>
+        <RouterLink v-if="authStore.estAdmin" :to="{ name: 'admin-utilisateurs' }">
+          <IconeSvg nom="utilisateur" :taille="16" />
+          Gestion des comptes
         </RouterLink>
       </div>
 
@@ -371,6 +393,35 @@ function basculerMode(nouveauMode: ModeAffichage): void {
   flex-direction: column;
   gap: 1.5rem;
   padding-bottom: 1.25rem;
+}
+
+.sidebar__utilisateur {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.sidebar__utilisateur-nom {
+  font-size: 0.8rem;
+  font-weight: var(--vp-poids-medium);
+  color: var(--vp-texte-principal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__deconnexion {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--vp-texte-secondaire);
+  font-size: 0.72rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
 }
 
 .sidebar__bascule-mode {
