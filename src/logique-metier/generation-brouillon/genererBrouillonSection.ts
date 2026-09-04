@@ -9,7 +9,7 @@ import type { Langue, Section } from '../domaine/types'
 
 /**
  * Génération de brouillon par adaptation d'un document de référence
- * (§4.1bis, Phase 33, TD-031 — URS-F-060 à 064 ; étendue Phase 38 Option 2,
+ * (§4.1bis, Phase 33, TD-031 ; étendue Phase 38 Option 2,
  * TD-045, aux lignes de tableau dynamique).
  *
  * Fonction pure côté client (aucune logique métier dans le prompt lui-même
@@ -31,7 +31,7 @@ import type { Langue, Section } from '../domaine/types'
  * limite assumée de la Phase 33. Une ligne dont une seule cellule échoue
  * `validerChamp` est rejetée entièrement — jamais une ligne partielle.
  *
- * @requirement URS-F-060, URS-F-063, FS §4.1bis, FS §4.1bis (Phase 38)
+ * @requirement FS §4.1bis, FS §4.1bis (Phase 38)
  */
 
 const NOMBRE_MAX_LIGNES_PAR_TABLEAU = 20
@@ -51,7 +51,7 @@ export interface ChampProposeIA {
   valeur: string | number
   /**
    * `true` si le champ est de type `nombre` — critère déterministe retenu
-   * pour "donnée technique/numérique" (URS-F-063 : valeur, tolérance,
+   * pour "donnée technique/numérique" (valeur, tolérance,
    * critère d'acceptation) : dans ce moteur de gabarits, un champ numérique
    * EST par construction une valeur/tolérance/critère, jamais du texte
    * libre. Consommé par l'écran pour le surlignage distinct exigé.

@@ -6,7 +6,7 @@ import { GabaritDocxInvalideError } from './erreurs'
 /**
  * Génération réelle d'un document `.docx` (OOXML natif) à partir d'un
  * gabarit Word fourni par un client (Phase 26 de convergence
- * architecturale, TD-024, URS-F-023 à 026) — remplace, pour ce cas précis,
+ * architecturale, TD-024) — remplace, pour ce cas précis,
  * l'astuce "HTML encapsulé en `.doc`" (`genererExportWord.ts`, inchangée
  * pour le gabarit par défaut de l'outil).
  *
@@ -18,7 +18,7 @@ import { GabaritDocxInvalideError } from './erreurs'
  * (`{tag}`) par les valeurs de `DonneesExportGabarit` — la **même**
  * structure de données que `genererExportWord` (voir
  * `logique-metier/export/donneesExportGabarit.ts`), ce qui garantit
- * l'équivalence de contenu exigée par URS-F-025 par construction : les
+ * l'équivalence de contenu exigée par construction : les
  * deux renderers ne peuvent pas diverger sur les valeurs, seule la mise en
  * forme du gabarit client diffère.
  *
@@ -46,7 +46,7 @@ export interface ResultatVerificationGabaritExportClient {
 }
 
 /**
- * Éléments obligatoires (URS-F-026) : le bloc de signatures (rédacteur(s)
+ * Éléments obligatoires : le bloc de signatures (rédacteur(s)
  * + approbateur final) et l'historique des révisions. `redacteurs`/
  * `approbateur_final`/`historique_revisions` sont les noms de balises
  * exacts exposés par `DonneesExportGabarit` — un gabarit client qui ne les
@@ -57,7 +57,7 @@ const TAGS_OBLIGATOIRES = ['redacteurs', 'approbateur_final', 'historique_revisi
 
 /**
  * Vérifie qu'un gabarit `.docx` client mappe bien les éléments
- * obligatoires (URS-F-026), avant d'autoriser son enregistrement/usage —
+ * obligatoires, avant d'autoriser son enregistrement/usage —
  * jamais après coup, à la première génération manquée.
  */
 export function verifierGabaritExportClient(
@@ -112,7 +112,7 @@ interface StructureTagsBrute {
   footers: Array<{ target: string; tags: Record<string, unknown> }>
 }
 
-/** Aplatit l'arbre de balises (toutes portées de boucle confondues) en un ensemble de noms — suffisant pour vérifier la simple présence d'une balise (URS-F-026), sans distinction de profondeur. */
+/** Aplatit l'arbre de balises (toutes portées de boucle confondues) en un ensemble de noms — suffisant pour vérifier la simple présence d'une balise, sans distinction de profondeur. */
 function extraireNomsTags(brut: StructureTagsBrute): string[] {
   const noms = new Set<string>()
   function visiterPortee(portee: unknown): void {

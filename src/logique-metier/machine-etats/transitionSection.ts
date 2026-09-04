@@ -34,17 +34,17 @@ export type ResultatTransition =
  *
  * @param contexte État courant de la section et disponibilité des garde-fous.
  * @param action Action demandée par l'utilisateur.
- * @requirement URS-F-010 à 014quinquies, FDS §3.2
+ * @requirement FDS §3.2
  *
- * Interprétation retenue pour la garde "rôles renseignés" (URS-F-011,
- * FDS §3.2) — décision d'implémentation à confirmer en revue : le
+ * Interprétation retenue pour la garde "rôles renseignés" (FDS §3.2) —
+ * décision d'implémentation à confirmer en revue : le
  * diagramme FDS §3.2 place cette garde sur la toute première transition
  * (`brouillon_aide` → `en_verification`, action "Engager le cycle"), pas
- * sur le seul passage à `en_approbation` comme le texte URS-F-011 pourrait
+ * sur le seul passage à `en_approbation` comme le texte de l'exigence pourrait
  * le laisser croire isolément — retenu ici que rédacteur(s) et approbateur
  * final doivent être connus dès l'engagement du cycle (sinon il n'y a
  * personne vers qui transmettre plus tard), tandis que les relecteurs
- * peuvent être ajoutés en cours de route (URS-F-014bis, "à tout moment").
+ * peuvent être ajoutés en cours de route ("à tout moment").
  * Le relecteur devient requis seulement à la transmission vers
  * l'approbation (`transmettre_approbation`), pas avant.
  */
@@ -62,7 +62,7 @@ export function appliquerTransition(
     case 'en_approbation':
       return transitionDepuisEnApprobation(contexte, action)
     case 'valide_en_interne':
-      // URS-F-012 : le corps d'une section verrouillée ne se rouvre jamais
+      // Le corps d'une section verrouillée ne se rouvre jamais
       // par transition de statut — seule une nouvelle révision (nouvel
       // objet Section, hors périmètre de cette fonction) reprend le cycle.
       return { autorisee: false, raison: 'section_verrouillee' }

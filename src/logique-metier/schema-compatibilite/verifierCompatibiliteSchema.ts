@@ -13,7 +13,7 @@ export type ResultatCompatibiliteSchema =
  * @param versionDepot Version du schéma des données (`schema_version.json`, SDS §3).
  * @param versionMaxConnue Version de schéma maximale connue par cette version de l'application.
  * @returns Compatible sans migration, compatible avec migration requise, ou incompatible (U-12).
- * @requirement URS-NF-055bis, URS-NF-046, FDS §7 (U-12)
+ * @requirement FDS §7 (U-12)
  *
  * Vérification prioritaire et non négociable (SDS §3) : un schéma postérieur
  * à `versionMaxConnue` (cas d'un retour à une version antérieure de

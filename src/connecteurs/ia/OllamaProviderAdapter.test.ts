@@ -23,7 +23,7 @@ function adaptateur(): OllamaProviderAdapter {
 }
 
 describe('OllamaProviderAdapter', () => {
-  test('nomAffiche/estCloud identifient clairement le repli local (URS-F-033)', () => {
+  test('nomAffiche/estCloud identifient clairement le repli local', () => {
     const a = adaptateur()
     expect(a.estCloud).toBe(false)
     expect(a.nomAffiche).toContain('local')

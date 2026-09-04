@@ -21,7 +21,7 @@ import {
  * `evaluerVerdictImpactAssessment.ts`. Comportement et signature publique
  * inchangés.
  *
- * @requirement URS-F-050 (F2, Analyse de risque)
+ * @requirement F2, Analyse de risque
  */
 export function evaluerVerdictACFC(
   questions: readonly QuestionACFC[],

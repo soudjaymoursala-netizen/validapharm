@@ -1,8 +1,8 @@
 import type { DefinitionGabarit } from '../definitionGabarit'
 
 /**
- * Gabarit "Plan de maintenance préventive" (catalogue URS §10, famille M
- * "Maintenance") — lié à la clôture de l'OQ (URS-F-000nonies, EudraLex
+ * Gabarit "Plan de maintenance préventive" (famille M du catalogue de
+ * gabarits, "Maintenance") — lié à la clôture de l'OQ (EudraLex
  * Annexe 15 §3.12). Purement tabulaire, même style que
  * `planMetrologie.ts`.
  */

@@ -3,17 +3,17 @@ import type { DefinitionGabarit } from '../gabarits/definitionGabarit'
 import { construireDonneesExportGabarit, type DonneesExportGabarit } from './donneesExportGabarit'
 
 /**
- * Export Word (FS §4.3, URS-F-020) — "document HTML structuré encapsulé
+ * Export Word (FS §4.3) — "document HTML structuré encapsulé
  * `.doc` (compatible Microsoft Word)". Technique volontaire et documentée
  * par la spec elle-même : pas un vrai binaire OOXML, un fichier HTML avec
  * les espaces de noms Word ouvert nativement par le filtre d'import HTML
  * de Word quand l'extension est `.doc` — aucune dépendance tierce.
  *
- * @requirement URS-F-020, URS-F-011bis, URS-F-028ter, FS §4.3
+ * @requirement FS §4.3
  *
  * En-tête/statut en toutes lettres/historique de révisions/bloc de rôles
  * (exigés par FS §4.3) + rappel de transfert de responsabilité
- * (URS-F-028ter) quand `valide_en_interne` — présent sur l'export au même
+ * quand `valide_en_interne` — présent sur l'export au même
  * titre qu'à l'écran, jamais seulement l'un des deux (FS §4.2).
  *
  * Consomme `construireDonneesExportGabarit` (Phase 26, TD-024) — la même
@@ -21,7 +21,7 @@ import { construireDonneesExportGabarit, type DonneesExportGabarit } from './don
  * (`connecteurs/office/GenerationDocxAdapter.ts`) : les deux renderers
  * reçoivent exactement les mêmes valeurs, ce qui garantit par construction
  * l'équivalence de contenu exigée entre gabarit par défaut et personnalisé
- * (URS-F-025) — jamais deux chemins de lecture des données divergents.
+ * — jamais deux chemins de lecture des données divergents.
  */
 export function genererExportWord(
   section: Section,

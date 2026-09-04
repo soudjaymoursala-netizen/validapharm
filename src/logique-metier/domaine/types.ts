@@ -64,7 +64,7 @@ export interface SignatureRole {
  * `actif`/`archive` — un projet archivé n'est jamais supprimé physiquement
  * (ALCOA+, jamais de perte de donnée) : il disparaît de la liste
  * principale mais reste intégralement lisible, restaurable et présent
- * dans le dépôt GitHub. Voir §4.31/URS-F-310 (TD-033).
+ * dans le dépôt GitHub. Voir §4.31 (TD-033).
  */
 export type StatutArchivage = 'actif' | 'archive'
 
@@ -83,7 +83,7 @@ export interface Project {
   statut: StatutArchivage
   /**
    * Partage de projet (Phase 37, TD-044) — identité résolue depuis le
-   * profil local (email, §4.31/URS-F-310bis), **jamais** une identité
+   * profil local (email, §4.31), **jamais** une identité
    * GitHub individuelle (TD-043 amendée : un compte GitHub par employé
    * exclurait les clients sans compte GitHub individuel — le jeton
    * GitHub reste au niveau de l'organisation/du client, inchangé).
@@ -99,7 +99,7 @@ export interface Project {
   archived_at: string | null
   /**
    * Identité déclarée par l'utilisateur au moment de l'archivage (visa
-   * saisi dans le profil local, §4.31/URS-F-310bis) — jamais vérifiée
+   * saisi dans le profil local, §4.31) — jamais vérifiée
    * cryptographiquement, jamais une signature électronique opposable
    * (même limite qu'`EntreeJournalAudit.actor`, TD-011).
    */
@@ -148,16 +148,16 @@ export interface ProjectDocument {
   /**
    * Texte extrait (docx/pdf natif) ou collé directement par l'utilisateur —
    * ajouté Phase 33 (TD-031), pour servir de document de référence à la
-   * génération de brouillon par adaptation (§4.1bis, URS-F-060). Chaîne
+   * génération de brouillon par adaptation (§4.1bis). Chaîne
    * vide pour un document chargé depuis la section "Documents" générique
-   * (§4.9, URS-F-000quater) — l'extraction de texte n'est pas requise
+   * (§4.9) — l'extraction de texte n'est pas requise
    * par cette exigence, seulement le chargement/l'horodatage/l'étiquetage.
    */
   extracted_text: string
   /**
    * Contenu binaire réel du fichier — absent (`null`) pour un document créé
    * par le seul besoin ponctuel de §4.1bis avant l'ajout de la section
-   * "Documents" générique (ajouté v20, URS-F-000quater — le champ
+   * "Documents" générique (ajouté v20 — le champ
    * `extracted_text` seul ne permettait ni de retélécharger ni de
    * prévisualiser le fichier d'origine, contrairement à ce que l'exigence
    * "section Documents pour charger des fichiers de référence" impose).
@@ -224,7 +224,7 @@ export interface Client {
 /**
  * Une qualification de fiabilité (FS §3 v14) — voir `ClientConfig.
  * ai_provider_reliability_qualification` pour le garde-fou de séparation
- * par mode d'usage (URS-F-038bis, Phase 32).
+ * par mode d'usage (Phase 32).
  */
 export interface QualificationFiabiliteIA {
   date: string
@@ -253,8 +253,8 @@ export interface ClientConfig {
    */
   ai_provider_conditions_acquittees: { fournisseur: string; date: string } | null
   /**
-   * Qualification de fiabilité, **une par mode d'usage** (Phase 32, TD-030,
-   * URS-F-038bis) — chat normatif et audit simulé n'ont pas le même profil
+   * Qualification de fiabilité, **une par mode d'usage** (Phase 32, TD-030)
+   * — chat normatif et audit simulé n'ont pas le même profil
    * de risque, une qualification unique ne couvre pas les deux. Avant la
    * Phase 32, ce champ était un objet unique partagé entre modes ; migré
    * vers un enregistrement indexé par `ModeUsageIA`, jamais réinterprété
@@ -266,7 +266,7 @@ export interface ClientConfig {
 }
 
 /**
- * Schéma de hiérarchie des actifs (FS §3, URS-F-100bis) — par client,
+ * Schéma de hiérarchie des actifs (FS §3) — par client,
  * aucune structure imposée par défaut. `levels[]` est ordonné du plus
  * générique au plus spécifique (ex. Site > Zone > Système > Équipement),
  * mais cet ordre n'est pas encore appliqué comme garde-fou dans cet
@@ -280,8 +280,8 @@ export interface AssetHierarchySchema {
 }
 
 /**
- * Nœud du référentiel d'actifs (FS §3, URS-F-100 à 102quinquies) — arbre
- * (`parent_id`, sans cycle, URS-F-100ter/nonies) et graphe libre
+ * Nœud du référentiel d'actifs (FS §3) — arbre
+ * (`parent_id`, sans cycle) et graphe libre
  * (`associated_nodes[]`, cycles acceptés). `qms_connector_id` et
  * `periodic_qualification`/`qualification_status` sont modélisés dès
  * cette version (alignés sur FS §3) mais leur exploitation (pull QMS,
@@ -325,7 +325,7 @@ export interface AssetNode {
 }
 
 /**
- * Journal de session de chat (FS §3 v16, URS-F-037) — jamais le contenu
+ * Journal de session de chat (FS §3 v16) — jamais le contenu
  * échangé, seulement horodatage début/fin, fournisseur, moteur exact et
  * indication qu'un document a été joint. `section.audit_log` ne pouvait
  * pas porter cette information : une session peut se dérouler sans
@@ -374,7 +374,7 @@ export type OrigineMethodeACFC = 'procedure_client' | 'defini_utilisateur' | 'ba
  * qu'une seule valeur pour l'instant, pas par choix de conception mais
  * par absence de contre-exemple réel documenté.
  *
- * @requirement URS-F-050 (F2, Analyse de risque)
+ * @requirement F2, Analyse de risque
  */
 export interface MethodProfileACFC {
   id: string
@@ -524,7 +524,7 @@ export interface CQA {
  * distinct de `MethodProfileACFC`/`EvaluationACFC` en base : F1 et F2 sont
  * deux briques séquentielles distinctes (URS v26/v27), jamais fusionnées.
  *
- * @requirement URS-F-050 (F1, Impact Assessment / System Classification)
+ * @requirement F1, Impact Assessment / System Classification
  */
 export interface QuestionImpactAssessment {
   id: string
@@ -578,7 +578,7 @@ export type CategorieGAMP5 = 1 | 2 | 3 | 4 | 5
  * avec elles (erreur documentée et corrigée en Phase 0bis, `docs/
  * convergence/ARCHITECTURE_CONFLICTS.md` CONFLICT-002).
  *
- * @requirement URS-F-050 (F3, Computer System Assessment)
+ * @requirement F3, Computer System Assessment
  */
 export interface EvaluationCSVAssessment {
   id: string
@@ -1946,9 +1946,9 @@ export interface TableauDocx {
 
 /**
  * Gabarit d'export personnalisé fourni par un client (Phase 26 de
- * convergence architecturale, TD-024, URS-F-023 à 026) — isolé strictement
+ * convergence architecturale, TD-024) — isolé strictement
  * par `client_id`, jamais partagé entre deux clients (propriété
- * intellectuelle du client, même principe que URS-F-024/`AssetNode`).
+ * intellectuelle du client, même principe que `AssetNode`).
  * `tags_trouves`/`tags_obligatoires_manquants` sont figés au moment de
  * l'import (`verifierGabaritExportClient`) — un gabarit dont il manque un
  * élément obligatoire (bloc de signatures, historique des révisions) est

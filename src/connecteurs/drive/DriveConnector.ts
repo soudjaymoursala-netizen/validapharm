@@ -24,12 +24,12 @@ const TYPE_MIME_CONTENU = 'application/json'
 /**
  * Connecteur Drive (SDS §5bis) — un seul point d'entrée (`miroir()`), aucune
  * logique métier propre. N'est **jamais une source de vérité, jamais lu par
- * l'application** (répond à URS-NF-010) : `miroir()` écrit un instantané
+ * l'application** : `miroir()` écrit un instantané
  * dans le dossier Drive dédié du client, en écrasant systématiquement le
  * contenu existant — jamais de tentative de fusion (cohérent avec "jamais
  * lu comme source").
  *
- * @requirement SDS §5bis, URS-NF-010/011/047
+ * @requirement SDS §5bis
  *
  * Aucun accès disque natif, aucune bibliothèque cliente Drive tierce —
  * exclusivement l'API REST Drive v3 via `fetch` (mêmes conventions que
@@ -39,8 +39,8 @@ const TYPE_MIME_CONTENU = 'application/json'
  * d'écriture groupée atomique multi-fichiers — chaque fichier nécessite sa
  * propre recherche (existe-t-il déjà ?) puis sa propre écriture
  * (création ou mise à jour du contenu). Compromis assumé : le miroir Drive
- * est un filet de secours déclenché manuellement/en fin de session
- * (URS-NF-011), pas un chemin chaud à fort volume comme la synchronisation
+ * est un filet de secours déclenché manuellement/en fin de session,
+ * pas un chemin chaud à fort volume comme la synchronisation
  * GitHub — la simplicité et la correction priment ici sur le nombre
  * d'appels.
  */

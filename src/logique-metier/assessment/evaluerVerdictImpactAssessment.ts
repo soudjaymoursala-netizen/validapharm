@@ -7,7 +7,7 @@ import {
 
 /**
  * Moteur de décision Impact Assessment / System Classification (F1 du
- * catalogue §10, URS-F-050 — Phase 3 de convergence architecturale).
+ * catalogue §10 — Phase 3 de convergence architecturale).
  *
  * Règle confirmée sur 2 sources réelles indépendantes (Ferring FSMP Project
  * Master Plan, ISPE Baseline Guide "System Classification", session du
@@ -17,7 +17,7 @@ import {
  * 2ᵉ édition retire explicitement la notion "Indirect Impact" (ternaire) de
  * sa 1ʳᵉ édition.
  *
- * @requirement URS-F-050 (F1, Impact Assessment / System Classification)
+ * @requirement F1, Impact Assessment / System Classification
  */
 export function evaluerVerdictImpactAssessment(
   questions: readonly QuestionImpactAssessment[],

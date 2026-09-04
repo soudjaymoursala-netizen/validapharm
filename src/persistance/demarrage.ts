@@ -15,10 +15,10 @@ export type ResultatDemarrage =
 
 /**
  * Vérifie la compatibilité de schéma **avant tout autre accès** à la base
- * locale — première opération de démarrage de l'application (SDS §3,
- * URS-NF-055bis), avant même la vérification de migration ascendante.
+ * locale — première opération de démarrage de l'application (SDS §3),
+ * avant même la vérification de migration ascendante.
  *
- * @requirement URS-NF-055bis, FDS §7 (U-12), SDS §3
+ * @requirement FDS §7 (U-12), SDS §3
  *
  * Une base neuve (jamais initialisée, aucun enregistrement
  * `schemaVersion`) est compatible par construction — il n'y a encore

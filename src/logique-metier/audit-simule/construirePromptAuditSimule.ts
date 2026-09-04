@@ -1,6 +1,6 @@
 /**
  * Mode audit simulé du chat expert (Phase 32 de convergence architecturale,
- * TD-030 — URS-F-038/039/039bis/038bis, jamais construit jusqu'ici bien que
+ * TD-030 — jamais construit jusqu'ici bien que
  * `ModeUsageIA` porte `'audit_simule'` depuis la conception du relais de
  * production, REV-URS-VALIDAPHARM-2026-010).
  *
@@ -19,8 +19,6 @@
  * patron "audit Swissmedic/FDA/cabinet de conseil GxP/QA spécialisée"
  * (posture d'inspecteur contradictoire, classification Majeur/Mineur/
  * Observation, "Constat/Analyse/Base réglementaire/Sévérité").
- *
- * @requirement URS-F-038, URS-F-038bis, URS-F-039, URS-F-039bis
  */
 export type PersonaAuditSimule = 'swissmedic' | 'fda' | 'cabinet_conseil_gxp' | 'qa_specialisee'
 
@@ -38,7 +36,7 @@ export interface EntreesPromptAuditSimule {
 
 /**
  * Rappel qu'une simulation de persona réglementaire ne constitue en aucun
- * cas un audit réglementaire réel ni un avis opposable (URS-F-039bis) —
+ * cas un audit réglementaire réel ni un avis opposable —
  * réaffirmé dans le texte du prompt en plus du bandeau UI non négociable
  * affiché à chaque activation du mode (porté par l'écran, pas ce module).
  */

@@ -9,7 +9,7 @@ const FORMAT_DATE_ISO = /^\d{4}-\d{2}-\d{2}$/
  * messages d'erreur exactement ceux de la table FDS §6, jamais un message
  * générique.
  *
- * @requirement URS-F-003, FDS §6
+ * @requirement FDS §6
  *
  * Une valeur vide (`null`/`''`) est toujours valide ici, y compris pour un
  * champ `required` : le caractère obligatoire est une décision de

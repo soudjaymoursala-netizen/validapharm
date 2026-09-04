@@ -1,11 +1,11 @@
 import type { DefinitionGabarit } from '../definitionGabarit'
 
 /**
- * Gabarit "OQ — Qualification opérationnelle" (catalogue URS §10, famille
- * C "Protocoles"). Deux liens obligatoires distincts s'appliquent à cette
+ * Gabarit "OQ — Qualification opérationnelle" (famille C du catalogue de
+ * gabarits, "Protocoles"). Deux liens obligatoires distincts s'appliquent à cette
  * section à deux points de contrôle différents (`gardesFinalisation.ts`) :
- * Contexte procédé à l'entrée en vérification (URS-F-000septies) et Plan
- * de maintenance préventive à la clôture (URS-F-000nonies). Le schéma de
+ * Contexte procédé à l'entrée en vérification et Plan
+ * de maintenance préventive à la clôture. Le schéma de
  * gabarit ne porte qu'un seul `required_link_type` par section (limitation
  * déjà documentée dans `definitionGabarit.ts`) — `plan_maintenance` est
  * retenu ici car c'est la contrainte la plus tardive/spécifique à l'OQ.

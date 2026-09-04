@@ -10,7 +10,7 @@ export interface ConfigRelayProviderAdapter {
   /** URL du relais serverless (SDS §10quater, Cloudflare Workers) — jamais l'API du fournisseur directement. */
   relayUrl: string
   jeton?: string
-  /** Nom du fournisseur configuré côté relais — affichage seul (URS-F-034), le relais route déjà en fonction de `client_config.ai_provider`. */
+  /** Nom du fournisseur configuré côté relais — affichage seul, le relais route déjà en fonction de `client_config.ai_provider`. */
   nomAffiche: string
   /** Délai d'attente réseau en ms avant `TimeoutError` (défaut 30s — plus long qu'un appel API classique, une génération IA prend du temps). */
   delaiMaxMs?: number
@@ -21,12 +21,12 @@ const DELAI_MAX_PAR_DEFAUT_MS = 30_000
 /**
  * Adaptateur fournisseur cloud (SDS §6/§10quater) — n'appelle jamais un
  * fournisseur IA directement, uniquement le relais serverless sans état
- * qui masque la clé API (répond à URS-NF-044ter, corrige AR-R-64).
+ * qui masque la clé API (corrige AR-R-64).
  *
- * @requirement SDS §6, §10quater, URS-F-032, URS-NF-044ter
+ * @requirement SDS §6, §10quater
  *
  * Le relais route déjà vers le bon fournisseur/modèle selon `mode`
- * (`chat_normatif` | `audit_simule`, URS-F-038bis) et la configuration
+ * (`chat_normatif` | `audit_simule`) et la configuration
  * serveur associée au client — ce connecteur ne connaît que l'URL du
  * relais, jamais l'identité du fournisseur final ni sa clé API.
  */

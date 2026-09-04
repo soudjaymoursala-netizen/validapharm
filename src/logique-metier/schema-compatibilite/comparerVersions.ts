@@ -4,7 +4,6 @@
  * @param a Première version (ex. "1.2.0").
  * @param b Seconde version.
  * @returns -1 si a < b, 0 si a = b, 1 si a > b.
- * @requirement URS-NF-055bis, URS-NF-046
  *
  * Une comparaison naïve de chaînes ("2.10.0" < "2.9.0") serait incorrecte —
  * chaque segment doit être comparé numériquement.

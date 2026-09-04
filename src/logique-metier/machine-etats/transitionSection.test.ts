@@ -131,7 +131,7 @@ describe('appliquerTransition — valide_en_interne (verrouillé)', () => {
     'approuver',
     'rejeter',
     'valider_section_ia',
-  ] as const)('toute action (%s) est bloquée — URS-F-012, corps verrouillé', (action) => {
+  ] as const)('toute action (%s) est bloquée — corps verrouillé', (action) => {
     const resultat = appliquerTransition(contexte({ statutActuel: 'valide_en_interne' }), action)
     expect(resultat).toEqual({ autorisee: false, raison: 'section_verrouillee' })
   })

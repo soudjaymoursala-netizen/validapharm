@@ -13,7 +13,7 @@ describe('construirePromptAuditSimule', () => {
     expect(prompt).toContain('La section IQ est-elle prête pour approbation ?')
   })
 
-  test('le rappel de non-opposabilité (URS-F-039bis) est toujours présent', () => {
+  test('le rappel de non-opposabilité est toujours présent', () => {
     const prompt = construirePromptAuditSimule({ question: 'Question', personas: [] })
     expect(prompt).toContain('ne constitue en aucun cas un audit réglementaire réel')
   })

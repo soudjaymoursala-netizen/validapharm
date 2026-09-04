@@ -20,10 +20,10 @@ const ECHELLE_PAR_DEFAUT: EchelleIPR = { min: 1, max: 5 }
  * @param occurrence Occurrence (O), ou `null` si non encore saisie.
  * @param detectabilite Détectabilité (D), ou `null` si non encore saisie.
  * @param echelle Plage autorisée pour S/O/D — dépend du gabarit (ex. [1,5] ou [1,10]), défaut [1,5].
- * @requirement URS-F-004, URS-NF-001/002, FDS §5
+ * @requirement FDS §5
  *
- * Fonction pure déterministe — jamais déléguée à l'IA générative
- * (URS-F-004). Une valeur absente (`null`) ne calcule pas l'IPR mais n'est
+ * Fonction pure déterministe — jamais déléguée à l'IA générative.
+ * Une valeur absente (`null`) ne calcule pas l'IPR mais n'est
  * jamais une erreur (FDS §5 : "valeurs vides → IPR non calculé, aucune
  * erreur") — une saisie hors plage est en revanche rejetée explicitement,
  * jamais silencieusement bornée ("clampée").

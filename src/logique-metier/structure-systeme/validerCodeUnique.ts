@@ -2,7 +2,7 @@ import type { AssetNode } from '../domaine/types'
 
 /**
  * Unicité du code d'un nœud au sein du référentiel de son client
- * (URS-F-100nonies, mitige AR-R-53) — "rejet explicite en cas de
+ * (mitige AR-R-53) — "rejet explicite en cas de
  * doublon". Exclut le nœud lui-même lors d'une modification (identifié
  * par `nodeIdExclu`), pour ne pas rejeter un nœud dont le code n'a pas
  * changé.

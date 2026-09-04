@@ -5,7 +5,7 @@
  * spécifique au-delà du choix de l'adaptateur actif
  * (`client_config.ai_provider`).
  *
- * @requirement SDS §6, URS-F-030 à 037
+ * @requirement SDS §6
  */
 
 export type ModeUsageIA = 'chat_normatif' | 'audit_simule'
@@ -15,28 +15,28 @@ export type ModeUsageIA = 'chat_normatif' | 'audit_simule'
  * `contenu` absent) du cas "contenu joint après confirmation utilisateur"
  * (true) — jamais un simple champ optionnel : le routeur (§6 SDS) refuse
  * de transmettre un contenu si ce indicateur n'est pas `true`, quelle que
- * soit la présence de `contenu` (répond à URS-F-031, mitige AR-R-06).
+ * soit la présence de `contenu` (mitige AR-R-06).
  */
 export type ContexteEnvoi =
   { contenu_joint: false } | { contenu_joint: true; contenu: string; titre_document: string }
 
 export interface Reponse {
   texte: string
-  /** Identifiant de version de modèle, quand le fournisseur l'expose (URS-F-032quinquies). */
+  /** Identifiant de version de modèle, quand le fournisseur l'expose. */
   version_moteur: string | null
-  /** Normes/référentiels cités par la réponse, quand pertinent (URS-F-035). */
+  /** Normes/référentiels cités par la réponse, quand pertinent. */
   citations: string[]
 }
 
 export interface ProviderAdapter {
-  /** Nom d'affichage du fournisseur (URS-F-034 : "bandeau nomme explicitement le fournisseur actif"). */
+  /** Nom d'affichage du fournisseur ("bandeau nomme explicitement le fournisseur actif"). */
   readonly nomAffiche: string
-  /** `true` pour un fournisseur cloud, `false` pour le modèle local (URS-F-034 : "[cloud] ou [local]"). */
+  /** `true` pour un fournisseur cloud, `false` pour le modèle local ("[cloud] ou [local]"). */
   readonly estCloud: boolean
 
   /**
-   * @throws {TimeoutError} Délai dépassé — déclenche la bascule automatique (URS-F-033).
-   * @throws {IndisponibleError} Fournisseur injoignable — déclenche la bascule automatique (URS-F-033).
+   * @throws {TimeoutError} Délai dépassé — déclenche la bascule automatique.
+   * @throws {IndisponibleError} Fournisseur injoignable — déclenche la bascule automatique.
    * @throws {QuotaExceededError} Quota dépassé — jamais de bascule automatique.
    * @throws {ReponseInvalideError} Réponse illisible — jamais de bascule automatique.
    */

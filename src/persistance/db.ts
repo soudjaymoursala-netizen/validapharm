@@ -76,7 +76,7 @@ export interface EnregistrementVersionSchema {
 }
 
 /**
- * Profil utilisateur local (§4.31/URS-F-310bis, TD-033) — enregistrement
+ * Profil utilisateur local (§4.31, TD-033) — enregistrement
  * unique, pas par client (un seul poste, un seul utilisateur local, même
  * raisonnement que `EnregistrementConnexionGitHub`). Porte le verrou de
  * confirmation (mot de passe haché, jamais en clair — voir
@@ -99,7 +99,7 @@ export interface EnregistrementProfilLocal {
 }
 
 /**
- * Configuration de connexion au dépôt GitHub dédié (URS-NF-044) —
+ * Configuration de connexion au dépôt GitHub dédié —
  * enregistrement unique, pas par client : SDS §3 décrit un seul dépôt de
  * données pour l'ensemble de l'installation locale (`/data/projects/...`),
  * pas un dépôt par client.
@@ -135,7 +135,7 @@ export interface EnregistrementConnexionDrive {
   jeton: string
 }
 
-/** Horodatage du dernier miroir Drive réussi par client (URS-NF-047 : alerte si > 1 session). */
+/** Horodatage du dernier miroir Drive réussi par client (alerte si > 1 session). */
 export interface EnregistrementEtatMiroirDrive {
   client_id: string
   dernierMiroirReussi: string | null
@@ -209,7 +209,7 @@ export interface EnregistrementSessionAuthentification {
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée en
  * SDS §3.
  *
- * @requirement SDS §3, URS-NF-046, URS-NF-012
+ * @requirement SDS §3
  */
 export class ValidaPharmDatabase extends Dexie {
   clients!: EntityTable<Client, 'id'>
@@ -464,8 +464,8 @@ export class ValidaPharmDatabase extends Dexie {
     })
     /**
      * Phase 26 (`docs/convergence/PHASE_26_GABARITS_EXPORT_CLIENT_SPEC.md`,
-     * TD-024) — gabarits d'export `.docx` personnalisés par client
-     * (URS-F-023 à 026), isolés par `client_id`.
+     * TD-024) — gabarits d'export `.docx` personnalisés par client,
+     * isolés par `client_id`.
      */
     this.version(26).stores({
       gabaritsExportClient: 'id, client_id, nom',
@@ -481,7 +481,7 @@ export class ValidaPharmDatabase extends Dexie {
       risksAssessment: 'id, client_id, method_profile_id, asset_node_id, parameter_id, created_at',
     })
     /**
-     * §4.31 (`URS-F-310`, TD-033) — profil utilisateur local (verrou de
+     * §4.31 (TD-033) — profil utilisateur local (verrou de
      * confirmation pour l'archivage de client/projet) + champs additifs
      * `statut`/`archived_at`/`archived_by` sur `clients`/`projects` (non
      * indexés : le volume par installation reste modeste, filtrage
