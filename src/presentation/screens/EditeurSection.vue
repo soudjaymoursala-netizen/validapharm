@@ -24,6 +24,10 @@ import { genererExportWord } from '../../logique-metier/export/genererExportWord
 import { verifierBlocageExport } from '../../logique-metier/export/verifierBlocageExport'
 import { obtenirDefinitionGabarit } from '../../logique-metier/gabarits/catalogue'
 import type { ChampTableauDynamique } from '../../logique-metier/gabarits/definitionGabarit'
+import {
+  detecterFormulationsFaiblesSection,
+  type FormulationFaibleParChamp,
+} from '../../logique-metier/qualite-redaction/detecterFormulationsFaibles'
 import { construireObjectifAssistantSection } from '../../logique-metier/raisonnement/assistantSection'
 import RenduGabarit from '../composants/RenduGabarit.vue'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
@@ -118,6 +122,24 @@ const toutesLesSousSectionsRevues = computed(() =>
 
 const nomFournisseurActuel = computed(
   () => NOMS_FOURNISSEURS[configStore.config?.ai_provider ?? 'claude'] ?? 'Claude',
+)
+
+/**
+ * Revue de style (inspirée de l'outil "Strong Editor") — signal purement
+ * informatif, jamais un verdict de conformité ni un blocage : le rédacteur
+ * reste seul juge de la reformulation. Balaie soit les champs du gabarit
+ * (values/tables), soit le champ de contenu générique en repli.
+ */
+const revueDeStyle = computed<FormulationFaibleParChamp[]>(() => {
+  if (!section.value) return []
+  if (definitionGabarit.value) {
+    return detecterFormulationsFaiblesSection(section.value.values, section.value.tables)
+  }
+  return detecterFormulationsFaiblesSection({ contenu: contenu.value }, {})
+})
+
+const nombreFormulationsFaibles = computed(() =>
+  revueDeStyle.value.reduce((total, champ) => total + champ.formulations.length, 0),
 )
 
 async function recharger(): Promise<void> {
@@ -589,6 +611,29 @@ async function ajouterAvisRelecteur(): Promise<void> {
       <strong>{{ libelleStatut(section.status, section.language) }}</strong>
     </p>
 
+    <details v-if="nombreFormulationsFaibles > 0" class="revue-de-style no-print">
+      <summary>
+        Revue de style — {{ nombreFormulationsFaibles }} formulation{{
+          nombreFormulationsFaibles > 1 ? 's' : ''
+        }}
+        à reconsidérer
+      </summary>
+      <p class="rappel">
+        Signal purement informatif, jamais un verdict de conformité — à vous d'apprécier si une
+        reformulation est utile.
+      </p>
+      <ul>
+        <li v-for="champ in revueDeStyle" :key="champ.champ">
+          <strong>{{ champ.champ }}</strong>
+          <ul>
+            <li v-for="(formulation, index) in champ.formulations" :key="index">
+              « {{ formulation.extrait }} » — {{ formulation.motif }}. {{ formulation.suggestion }}
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </details>
+
     <RenduGabarit
       v-if="definitionGabarit"
       :key="section.id"
@@ -949,6 +994,36 @@ async function ajouterAvisRelecteur(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.revue-de-style {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.75rem 1rem;
+  background-color: var(--vp-fond-carte);
+}
+
+.revue-de-style summary {
+  cursor: pointer;
+  font-weight: var(--vp-poids-medium);
+}
+
+.revue-de-style ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.revue-de-style ul ul {
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+
+.revue-de-style li {
+  font-size: 0.9em;
 }
 
 textarea,
