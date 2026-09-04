@@ -387,7 +387,7 @@ describe('routerRequete — clients (D1 = source de vérité, TD-046)', () => {
 
     const creation = await requete(ctx, 'POST', '/clients', {
       jeton: jetonA,
-      body: { name: 'PharmaTech Solutions', secteur: 'pharma' },
+      body: { name: 'PharmaTech Solutions', secteur: 'pharmaceutique' },
     })
     expect(creation.status).toBe(201)
     const clientId = creation.corps.client.id

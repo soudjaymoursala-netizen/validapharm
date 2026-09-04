@@ -29,7 +29,7 @@ const brouillon = ref({
 })
 
 const LIBELLES_SECTEUR: Record<SecteurClient, string> = {
-  pharma: 'Pharma',
+  pharmaceutique: 'Pharmaceutique',
   dispositif_medical: 'Dispositif médical',
   autre: 'Autre',
 }
@@ -150,7 +150,7 @@ const projetsDuClient = computed(() =>
         Secteur
         <select v-model="brouillon.secteur">
           <option value="">— non renseigné —</option>
-          <option value="pharma">Pharma</option>
+          <option value="pharmaceutique">Pharmaceutique</option>
           <option value="dispositif_medical">Dispositif médical</option>
           <option value="autre">Autre</option>
         </select>

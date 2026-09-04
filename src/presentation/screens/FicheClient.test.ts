@@ -83,7 +83,7 @@ describe('FicheClient — page d’entrée d’un client (§13-15 du prompt maî
     const client = await clientsStore.creerClient({
       name: 'PharmaTech Solutions',
       adresse: '12 rue de la Zone Industrielle',
-      secteur: 'pharma',
+      secteur: 'pharmaceutique',
       details: 'Fabrication de formes sèches',
     })
     if ('erreur' in client) throw client

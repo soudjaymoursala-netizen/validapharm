@@ -111,12 +111,18 @@ describe('AuthApiClient — clients', () => {
     fetchMock.mockResolvedValueOnce(
       reponseMock({ client: { id: 'c1', name: 'Client A' } }, { status: 201 }),
     )
-    const resultat = await client().creerClient('jwt-xyz', { name: 'Client A', secteur: 'pharma' })
+    const resultat = await client().creerClient('jwt-xyz', {
+      name: 'Client A',
+      secteur: 'pharmaceutique',
+    })
     expect(resultat.ok).toBe(true)
 
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('https://auth.exemple.workers.dev/clients')
-    expect(JSON.parse(options.body as string)).toEqual({ name: 'Client A', secteur: 'pharma' })
+    expect(JSON.parse(options.body as string)).toEqual({
+      name: 'Client A',
+      secteur: 'pharmaceutique',
+    })
   })
 
   test('supprimerClientDefinitivement DELETE /clients/:id avec la justification', async () => {

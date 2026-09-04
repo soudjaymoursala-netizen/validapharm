@@ -50,7 +50,7 @@ export interface ClientEnregistre {
   id: string
   name: string
   adresse: string | null
-  secteur: 'pharma' | 'dispositif_medical' | 'autre' | null
+  secteur: 'pharmaceutique' | 'dispositif_medical' | 'autre' | null
   details: string | null
   statut: StatutClient
   archivedAt: string | null

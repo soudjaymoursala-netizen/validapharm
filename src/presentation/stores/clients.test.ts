@@ -121,13 +121,13 @@ describe('useClientsStore (Worker/D1, TD-046)', () => {
     const resultat = await store.creerClient({
       name: 'Client A',
       adresse: '12 rue de la Zone Industrielle',
-      secteur: 'pharma',
+      secteur: 'pharmaceutique',
       details: 'Fabrication de formes sèches',
     })
     if ('erreur' in resultat) throw resultat
 
     expect(resultat.adresse).toBe('12 rue de la Zone Industrielle')
-    expect(resultat.secteur).toBe('pharma')
+    expect(resultat.secteur).toBe('pharmaceutique')
     expect(resultat.details).toBe('Fabrication de formes sèches')
   })
 

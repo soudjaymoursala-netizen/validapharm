@@ -176,7 +176,7 @@ export interface ProjectDocument {
  * cohérent avec le périmètre annoncé du produit (cadrage §1) ; pas de
  * nomenclature extensible fabriquée sans besoin réel démontré.
  */
-export type SecteurClient = 'pharma' | 'dispositif_medical' | 'autre'
+export type SecteurClient = 'pharmaceutique' | 'dispositif_medical' | 'autre'
 
 /**
  * Entité `client` — identité minimale (FS §3, v12, gap trouvé en

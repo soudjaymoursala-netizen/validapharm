@@ -14,7 +14,7 @@ export interface ClientWire {
   id: string
   name: string
   adresse: string | null
-  secteur: 'pharma' | 'dispositif_medical' | 'autre' | null
+  secteur: 'pharmaceutique' | 'dispositif_medical' | 'autre' | null
   details: string | null
   statut: 'actif' | 'archive'
   archivedAt: string | null
