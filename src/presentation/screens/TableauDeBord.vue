@@ -2,8 +2,8 @@
 // Tableau de bord / Vue portefeuille (FDS §2) — version minimale de cet
 // incrément : liste des projets + création (URS-F-070 à 073 pour la
 // version complète avec statuts agrégés/alertes, backlog).
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import type { Langue } from '../../logique-metier/domaine/types'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useProjectsStore, type NouveauProjetInput } from '../stores/useProjectsStore'
@@ -18,8 +18,29 @@ const projetsStore = useProjectsStore()
 const clientsStore = useClientsStore()
 const syncStore = useSynchronisationStore()
 const router = useRouter()
+const route = useRoute()
 const formulaireOuvert = ref(false)
 const afficherArchives = ref(false)
+
+/**
+ * Filtrage optionnel par client (Phase 40, accès depuis la Fiche Client —
+ * branche « Projets ») — `query.clientId`, jamais un paramètre de route
+ * dédié : ce tableau de bord reste aussi la vue portefeuille globale
+ * (accès direct depuis « Mon travail »), le filtre est une lentille
+ * réversible sur les mêmes données, pas un écran séparé.
+ */
+const filtreClientId = computed(() =>
+  typeof route.query.clientId === 'string' ? route.query.clientId : null,
+)
+const nomClientFiltre = computed(() =>
+  filtreClientId.value ? (nomClient(filtreClientId.value) ?? filtreClientId.value) : null,
+)
+const projetsActifsAffiches = computed(() =>
+  filtreClientId.value
+    ? projetsStore.projetsActifs.filter((p) => p.client_id === filtreClientId.value)
+    : projetsStore.projetsActifs,
+)
+
 const dernierResultatSync = ref<ResultatSynchronisation | ResultatRecuperation | undefined>(
   undefined,
 )
@@ -60,6 +81,14 @@ onMounted(() => {
   void clientsStore.chargerClients()
 })
 
+watch(
+  filtreClientId,
+  (clientId) => {
+    if (clientId) brouillon.client_id = clientId
+  },
+  { immediate: true },
+)
+
 async function creerProjet(): Promise<void> {
   if (brouillon.name.trim().length === 0) return
   const projet = await projetsStore.creerProjet({ ...brouillon })
@@ -91,7 +120,7 @@ function nomClient(clientId: string | null): string | null {
     <header>
       <div>
         <h1>Tableau de bord</h1>
-        <p class="sous-titre">{{ projetsStore.projetsActifs.length }} projet(s) actif(s)</p>
+        <p class="sous-titre">{{ projetsActifsAffiches.length }} projet(s) actif(s)</p>
       </div>
       <div class="actions-entete">
         <RouterLink class="bouton-secondaire" :to="{ name: 'gestion-clients' }">
@@ -142,6 +171,13 @@ function nomClient(clientId: string | null): string | null {
       </RouterLink>
     </section>
 
+    <div v-if="filtreClientId" class="carte filtre-client">
+      <span
+        >Projets filtrés pour <strong>{{ nomClientFiltre }}</strong></span
+      >
+      <RouterLink :to="{ name: 'tableau-de-bord' }">Voir tous les projets</RouterLink>
+    </div>
+
     <form v-if="formulaireOuvert" class="carte formulaire-projet" @submit.prevent="creerProjet">
       <label>
         Nom du projet
@@ -177,15 +213,21 @@ function nomClient(clientId: string | null): string | null {
     </form>
 
     <div
-      v-if="!projetsStore.enChargement && projetsStore.projetsActifs.length === 0"
+      v-if="!projetsStore.enChargement && projetsActifsAffiches.length === 0"
       class="carte etat-vide"
     >
       <IconeSvg nom="dossier" :taille="28" />
-      <p>Aucun projet actif pour l'instant — créez le premier avec le bouton ci-dessus.</p>
+      <p>
+        {{
+          filtreClientId
+            ? 'Aucun projet actif pour ce client — créez-en un avec le bouton ci-dessus.'
+            : "Aucun projet actif pour l'instant — créez le premier avec le bouton ci-dessus."
+        }}
+      </p>
     </div>
 
     <ul v-else class="liste-projets">
-      <li v-for="projet in projetsStore.projetsActifs" :key="projet.id">
+      <li v-for="projet in projetsActifsAffiches" :key="projet.id">
         <RouterLink
           class="liste-projets__lien"
           :to="{ name: 'fiche-projet', params: { projectId: projet.id } }"
@@ -315,6 +357,26 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+}
+
+.filtre-client {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.88rem;
+  color: var(--vp-texte-secondaire);
+}
+
+.filtre-client a {
+  color: var(--vp-marque);
+  text-decoration: none;
+  font-weight: var(--vp-poids-medium);
+  white-space: nowrap;
+}
+
+.filtre-client a:hover {
+  text-decoration: underline;
 }
 
 .actions-sync {

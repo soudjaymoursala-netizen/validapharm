@@ -10,6 +10,8 @@ import { db, type EnregistrementProfilLocal } from '../../persistance/db'
 const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
 
 export interface DefinirProfilInput {
+  nom: string
+  prenom: string
   email: string
   visa: string
   motDePasse: string
@@ -50,6 +52,8 @@ export const useProfilLocalStore = defineStore('profilLocal', () => {
     const maintenant = new Date().toISOString()
     const enregistrement: EnregistrementProfilLocal = {
       id: IDENTIFIANT_ENREGISTREMENT_UNIQUE,
+      nom: input.nom,
+      prenom: input.prenom,
       email: input.email,
       visa: input.visa,
       motDePasseHash,

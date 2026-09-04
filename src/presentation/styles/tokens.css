@@ -1,11 +1,19 @@
 /**
  * Jetons de conception — écran de travail (FDS §2bis, "Indigo premium +
- * accents vifs"). Thème clair uniquement pour l'instant (le mode sombre est
- * Should, explicitement non prioritaire Phase 1, FDS §2bis).
+ * accents vifs"). Thème sombre ajouté en Phase 40 (§9 du prompt maître du
+ * 03/09/2026, écran Paramètres — « thème clair/sombre ») : un bloc
+ * `:root[data-theme='sombre']` redéfinit uniquement les jetons de
+ * surface/texte/structure/ombre ci-dessous, jamais les couleurs
+ * sémantiques de statut (qualification_status/StatutSection) qui doivent
+ * rester reconnaissables à l'identique dans les deux thèmes. Activé/
+ * désactivé par `usePreferencesAffichageStore` (attribut `data-theme` sur
+ * `<html>`, persisté en `localStorage`, jamais une donnée métier).
  *
  * Séparation stricte écran/export (URS-NF-054bis, SDS §7bis) : ce fichier
  * n'est JAMAIS importé par le moteur de génération d'export (backlog) —
- * uniquement par la Couche Présentation.
+ * uniquement par la Couche Présentation. Un export reste toujours rendu
+ * comme un document imprimé classique (fond blanc, texte noir), quel que
+ * soit le thème d'affichage choisi par l'utilisateur.
  *
  * Police Inter documentée en FDS §2bis mais pas encore chargée en asset
  * local du bundle (aucun fichier de police fourni à ce stade) — utiliser
@@ -90,9 +98,79 @@
   --vp-section-valide-fond: #ecfdf3;
 }
 
+/*
+ * Trois états à couvrir (préférence « Thème » de l'écran Paramètres) :
+ * clair (explicite), sombre (explicite), système (aucun `data-theme` posé
+ * — suit `prefers-color-scheme`). D'où les deux blocs ci-dessous : le
+ * premier couvre le choix explicite « sombre » quel que soit l'OS, le
+ * second couvre « système » sur un OS déjà en mode sombre — même jeu de
+ * jetons dans les deux cas, dupliqué faute de mécanisme de partage de
+ * bloc en CSS natif (pas de préprocesseur dans ce projet).
+ */
+:root[data-theme='sombre'] {
+  /* Fond */
+  --vp-fond-page: #12131c;
+  --vp-fond-carte: #1a1c29;
+
+  /* Texte */
+  --vp-texte-principal: #f1f2f8;
+  --vp-texte-secondaire: #a3a6bd;
+
+  /* Marque (indigo, légèrement éclairci pour le contraste sur fond sombre) */
+  --vp-marque: #818cf8;
+  --vp-marque-survol: #a5b0fb;
+  --vp-marque-fond-leger: #262a44;
+
+  /* Structure */
+  --vp-bordure: #2c2f42;
+  --vp-bordure-forte: #3d4159;
+
+  /* Élévation — ombres plus marquées, nécessaires sur fond sombre pour
+     rester perceptibles (une ombre calquée sur le thème clair y devient
+     invisible). */
+  --vp-ombre-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --vp-ombre-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --vp-ombre-lg: 0 14px 36px rgba(0, 0, 0, 0.55);
+
+  /* État sémantique générique — fonds légers réajustés pour rester lisibles
+     sur fond sombre ; les couleurs de premier plan (succès/attention/
+     danger/info) restent identiques au thème clair (reconnaissance). */
+  --vp-succes-fond-leger: #0f2b1c;
+  --vp-attention-fond-leger: #2e2408;
+  --vp-danger-fond-leger: #2e1414;
+  --vp-info-fond-leger: #101f36;
+}
+
+@media (prefers-color-scheme: dark) {
+  /* `:not([data-theme='clair'])` : un choix explicite « clair » gagne
+     toujours sur la préférence système, cohérent avec `data-theme='sombre'`
+     qui gagne toujours sur un OS resté en thème clair. */
+  :root:not([data-theme='clair']) {
+    --vp-fond-page: #12131c;
+    --vp-fond-carte: #1a1c29;
+    --vp-texte-principal: #f1f2f8;
+    --vp-texte-secondaire: #a3a6bd;
+    --vp-marque: #818cf8;
+    --vp-marque-survol: #a5b0fb;
+    --vp-marque-fond-leger: #262a44;
+    --vp-bordure: #2c2f42;
+    --vp-bordure-forte: #3d4159;
+    --vp-ombre-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --vp-ombre-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+    --vp-ombre-lg: 0 14px 36px rgba(0, 0, 0, 0.55);
+    --vp-succes-fond-leger: #0f2b1c;
+    --vp-attention-fond-leger: #2e2408;
+    --vp-danger-fond-leger: #2e1414;
+    --vp-info-fond-leger: #101f36;
+  }
+}
+
 body {
   background-color: var(--vp-fond-page);
   color: var(--vp-texte-principal);
   font-family: var(--vp-police);
   font-size: var(--vp-taille-texte-min);
+  transition:
+    background-color var(--vp-transition),
+    color var(--vp-transition);
 }

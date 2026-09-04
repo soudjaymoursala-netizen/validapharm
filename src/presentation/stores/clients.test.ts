@@ -103,4 +103,54 @@ describe('useClientsStore', () => {
     const client = await store.creerClient({ name: 'Client A' })
     expect(await store.desarchiverClient(client.id, 'QLD')).toEqual({ erreur: 'deja_actif' })
   })
+
+  test('creerClient persiste adresse/secteur/détails (§13 du prompt maître, Phase 40)', async () => {
+    const store = useClientsStore()
+    const client = await store.creerClient({
+      name: 'Client A',
+      adresse: '12 rue de la Zone Industrielle',
+      secteur: 'pharma',
+      details: 'Fabrication de formes sèches',
+    })
+
+    expect(client.adresse).toBe('12 rue de la Zone Industrielle')
+    expect(client.secteur).toBe('pharma')
+    expect(client.details).toBe('Fabrication de formes sèches')
+  })
+
+  test('modifierClient met à jour nom/adresse/secteur/détails sans toucher au statut', async () => {
+    const store = useClientsStore()
+    const client = await store.creerClient({ name: 'Client A' })
+
+    const resultat = await store.modifierClient(client.id, {
+      name: 'Client A Renommé',
+      adresse: '1 avenue des Laboratoires',
+      secteur: 'dispositif_medical',
+      details: 'Nouveau contexte industriel',
+    })
+    expect('erreur' in resultat).toBe(false)
+    if ('erreur' in resultat) return
+
+    expect(resultat.name).toBe('Client A Renommé')
+    expect(resultat.adresse).toBe('1 avenue des Laboratoires')
+    expect(resultat.secteur).toBe('dispositif_medical')
+    expect(resultat.details).toBe('Nouveau contexte industriel')
+    expect(resultat.statut).toBe('actif')
+
+    const enBase = await db.clients.get(client.id)
+    expect(enBase?.name).toBe('Client A Renommé')
+
+    expect(store.clients.find((c) => c.id === client.id)?.name).toBe('Client A Renommé')
+  })
+
+  test('modifierClient refuse un client introuvable', async () => {
+    const store = useClientsStore()
+    const resultat = await store.modifierClient('inconnu', {
+      name: 'X',
+      adresse: null,
+      secteur: null,
+      details: null,
+    })
+    expect(resultat).toEqual({ erreur: 'introuvable' })
+  })
 })

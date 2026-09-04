@@ -20,6 +20,8 @@ describe('useProfilLocalStore', () => {
   test('définit un profil puis vérifie le mot de passe correct/incorrect', async () => {
     const store = useProfilLocalStore()
     await store.definirProfil({
+      nom: 'Lead',
+      prenom: 'Quentin',
       email: 'q.lead@pharmatech-solutions.example',
       visa: 'QLD',
       motDePasse: 'CoffreFort!2026',
@@ -35,10 +37,22 @@ describe('useProfilLocalStore', () => {
 
   test('redéfinir le profil conserve created_at mais met à jour updated_at', async () => {
     const store = useProfilLocalStore()
-    await store.definirProfil({ email: 'a@example.com', visa: 'AAA', motDePasse: 'Premier!1' })
+    await store.definirProfil({
+      nom: 'A',
+      prenom: 'Aa',
+      email: 'a@example.com',
+      visa: 'AAA',
+      motDePasse: 'Premier!1',
+    })
     const creeLe = store.profil?.created_at
 
-    await store.definirProfil({ email: 'b@example.com', visa: 'BBB', motDePasse: 'Second!2' })
+    await store.definirProfil({
+      nom: 'B',
+      prenom: 'Bb',
+      email: 'b@example.com',
+      visa: 'BBB',
+      motDePasse: 'Second!2',
+    })
     expect(store.profil?.created_at).toBe(creeLe)
     expect(store.profil?.email).toBe('b@example.com')
     expect(await store.verifierMotDePasseActuel('Premier!1')).toBe(false)
@@ -47,7 +61,13 @@ describe('useProfilLocalStore', () => {
 
   test('charger() relit le profil déjà persisté', async () => {
     const store1 = useProfilLocalStore()
-    await store1.definirProfil({ email: 'a@example.com', visa: 'AAA', motDePasse: 'Premier!1' })
+    await store1.definirProfil({
+      nom: 'A',
+      prenom: 'Aa',
+      email: 'a@example.com',
+      visa: 'AAA',
+      motDePasse: 'Premier!1',
+    })
 
     setActivePinia(createPinia())
     const store2 = useProfilLocalStore()

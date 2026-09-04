@@ -10,6 +10,7 @@ function routeurDeTest() {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
+      { path: '/', name: 'accueil', component: { template: '<div />' } },
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
       { path: '/profil-local', name: 'profil-local', component: { template: '<div />' } },
     ],
@@ -44,8 +45,11 @@ describe('ProfilLocal', () => {
     await flushPromises()
 
     const formulaire = wrapper.find('.formulaire')
+    const champsTexteInitiaux = formulaire.findAll('input[type="text"]')
+    await champsTexteInitiaux[0]?.setValue('Quentin')
+    await champsTexteInitiaux[1]?.setValue('Lead')
     await formulaire.find('input[type="email"]').setValue('q.lead@pharmatech.example')
-    await formulaire.find('input[type="text"]').setValue('QLD')
+    await champsTexteInitiaux[2]?.setValue('QLD')
     const motsDePasse = formulaire.findAll('input[type="password"]')
     await motsDePasse[0]?.setValue('CoffreFort!2026')
     await motsDePasse[1]?.setValue('CoffreFort!2026')
@@ -65,7 +69,7 @@ describe('ProfilLocal', () => {
     await flushPromises()
     const formulaireEdition = wrapper.find('.formulaire')
     const champsTexte = formulaireEdition.findAll('input[type="text"]')
-    await champsTexte[0]?.setValue('QL2')
+    await champsTexte[2]?.setValue('QL2')
     const champsMdp = formulaireEdition.findAll('input[type="password"]')
     await champsMdp[0]?.setValue('mauvais-mot-de-passe')
     await champsMdp[1]?.setValue('NouveauMdp!99')

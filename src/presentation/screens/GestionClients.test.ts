@@ -11,8 +11,14 @@ function routeurDeTest() {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/', name: 'tableau-de-bord', component: { template: '<div />' } },
+      { path: '/', name: 'accueil', component: { template: '<div />' } },
+      { path: '/tableau-de-bord', name: 'tableau-de-bord', component: { template: '<div />' } },
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
+      {
+        path: '/clients/:clientId',
+        name: 'fiche-client',
+        component: { template: '<div />' },
+      },
       { path: '/profil-local', name: 'profil-local', component: { template: '<div />' } },
       {
         path: '/clients/:clientId/missions',
@@ -98,6 +104,8 @@ describe('GestionClients — archivage (§4.31/URS-F-310, TD-033)', () => {
   test('archive un client après double confirmation (nom retapé + mot de passe local), le client bascule dans les archives', async () => {
     const profilStore = useProfilLocalStore()
     await profilStore.definirProfil({
+      nom: 'Lead',
+      prenom: 'Quentin',
       email: 'q.lead@pharmatech.example',
       visa: 'QLD',
       motDePasse: 'CoffreFort!2026',

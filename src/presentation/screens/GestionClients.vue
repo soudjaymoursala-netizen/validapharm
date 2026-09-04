@@ -1,7 +1,11 @@
 <script setup lang="ts">
-// Gestion des clients (FS §3 v12) — écran minimal : identité seule (nom).
-// Prérequis pour isoler par client_id la configuration du miroir Drive
-// (SDS §5bis/§7, tâche #25) et, plus tard, le fournisseur IA (tâche #14).
+// Mes clients (§4/§13 du prompt maître du 03/09/2026, Phase 40) — chaque
+// client représente un site industriel pour lequel l'utilisateur travaille
+// (nom, adresse, secteur, détails). Cliquer sur un client ouvre sa Fiche
+// (`FicheClient.vue`), qui expose les 5 branches (Architecture, Process,
+// Procédures, Templates & Formulaires, Projets) — cet écran ne liste donc
+// plus directement les outils (avant Phase 40 : 8 liens par ligne), il ne
+// fait que créer/archiver/désarchiver l'identité du client.
 //
 // Archivage (§4.31/URS-F-310, TD-033) : jamais une suppression physique
 // (ALCOA+) — voir `ModaleConfirmationArchivage.vue` pour la double garde
@@ -10,23 +14,34 @@ import { onMounted, ref } from 'vue'
 import ModaleConfirmationArchivage from '../composants/ModaleConfirmationArchivage.vue'
 import { useClientsStore } from '../stores/useClientsStore'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
-import type { Client } from '../../logique-metier/domaine/types'
+import type { Client, SecteurClient } from '../../logique-metier/domaine/types'
 
 const store = useClientsStore()
 const formulaireOuvert = ref(false)
-const nom = ref('')
+const brouillon = ref({ name: '', adresse: '', secteur: '' as SecteurClient | '', details: '' })
 const afficherArchives = ref(false)
 const clientAArchiver = ref<Client | null>(null)
+
+const LIBELLES_SECTEUR: Record<SecteurClient, string> = {
+  pharma: 'Pharma',
+  dispositif_medical: 'Dispositif médical',
+  autre: 'Autre',
+}
 
 onMounted(async () => {
   await store.chargerClients()
 })
 
 async function creerClient(): Promise<void> {
-  if (nom.value.trim().length === 0) return
-  await store.creerClient({ name: nom.value.trim() })
+  if (brouillon.value.name.trim().length === 0) return
+  await store.creerClient({
+    name: brouillon.value.name.trim(),
+    adresse: brouillon.value.adresse.trim() || null,
+    secteur: brouillon.value.secteur || null,
+    details: brouillon.value.details.trim() || null,
+  })
   formulaireOuvert.value = false
-  nom.value = ''
+  brouillon.value = { name: '', adresse: '', secteur: '', details: '' }
 }
 
 async function confirmerArchivage(identiteDeclaree: string): Promise<void> {
@@ -43,15 +58,32 @@ async function desarchiver(client: Client): Promise<void> {
 <template>
   <main class="gestion-clients">
     <header>
-      <RouterLink :to="{ name: 'tableau-de-bord' }">&larr; Tableau de bord</RouterLink>
-      <h1>Clients</h1>
+      <RouterLink :to="{ name: 'accueil' }">&larr; Accueil</RouterLink>
+      <h1>Mes clients</h1>
       <button type="button" @click="formulaireOuvert = true">Nouveau client</button>
     </header>
 
     <form v-if="formulaireOuvert" class="formulaire-client" @submit.prevent="creerClient">
       <label>
-        Nom du client
-        <input v-model="nom" type="text" required autofocus />
+        Nom de l'entreprise
+        <input v-model="brouillon.name" type="text" required autofocus />
+      </label>
+      <label>
+        Adresse
+        <input v-model="brouillon.adresse" type="text" />
+      </label>
+      <label>
+        Secteur
+        <select v-model="brouillon.secteur">
+          <option value="">— non renseigné —</option>
+          <option value="pharma">Pharma</option>
+          <option value="dispositif_medical">Dispositif médical</option>
+          <option value="autre">Autre</option>
+        </select>
+      </label>
+      <label>
+        Détails (produits fabriqués, contexte industriel…)
+        <textarea v-model="brouillon.details" rows="2" />
       </label>
       <div class="actions">
         <button type="button" @click="formulaireOuvert = false">Annuler</button>
@@ -65,35 +97,14 @@ async function desarchiver(client: Client): Promise<void> {
 
     <ul v-else class="liste-clients">
       <li v-for="client in store.clientsActifs" :key="client.id">
-        {{ client.name }}
-        <RouterLink :to="{ name: 'liste-missions', params: { clientId: client.id } }">
-          Missions
-        </RouterLink>
-        <RouterLink :to="{ name: 'configuration-drive', params: { clientId: client.id } }">
-          Drive
-        </RouterLink>
-        <RouterLink :to="{ name: 'configuration-ia', params: { clientId: client.id } }">
-          IA
-        </RouterLink>
-        <RouterLink :to="{ name: 'panneau-chat', params: { clientId: client.id } }">
-          Chat
-        </RouterLink>
-        <RouterLink :to="{ name: 'structure-systeme', params: { clientId: client.id } }">
-          Structure Système
-        </RouterLink>
         <RouterLink
-          :to="{ name: 'assistant-strategie-qualification', params: { clientId: client.id } }"
+          :to="{ name: 'fiche-client', params: { clientId: client.id } }"
+          class="lien-client"
         >
-          Stratégie de qualification
-        </RouterLink>
-        <RouterLink :to="{ name: 'impact-assessment', params: { clientId: client.id } }">
-          Impact Assessment
-        </RouterLink>
-        <RouterLink :to="{ name: 'csv-assessment', params: { clientId: client.id } }">
-          Computer System Assessment
-        </RouterLink>
-        <RouterLink :to="{ name: 'revue-structure-procedure', params: { clientId: client.id } }">
-          Procédures
+          <span class="nom-client">{{ client.name }}</span>
+          <span v-if="client.secteur" class="badge-secteur">{{
+            LIBELLES_SECTEUR[client.secteur]
+          }}</span>
         </RouterLink>
         <button type="button" class="bouton-archiver" @click="clientAArchiver = client">
           Archiver
@@ -164,6 +175,16 @@ button {
   gap: 0.25rem;
 }
 
+.formulaire-client input,
+.formulaire-client select,
+.formulaire-client textarea {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon-sm);
+  padding: 0.5rem;
+  font-family: inherit;
+  color: var(--vp-texte-principal);
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;
@@ -187,12 +208,34 @@ button {
   gap: 1rem;
 }
 
-.liste-clients li > :first-child {
+.lien-client {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   margin-right: auto;
+  color: var(--vp-texte-principal);
+  text-decoration: none;
+}
+
+.lien-client:hover .nom-client {
+  color: var(--vp-marque);
+}
+
+.nom-client {
+  font-weight: var(--vp-poids-medium);
+}
+
+.badge-secteur {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background-color: var(--vp-marque-fond-leger);
+  color: var(--vp-marque);
 }
 
 .bouton-archiver {
   background-color: var(--vp-couleur-erreur, #b00020);
+  flex-shrink: 0;
 }
 
 .bloc-archives {

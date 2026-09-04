@@ -13,8 +13,25 @@ function routeurDeTest(): Router {
       { path: '/', name: 'accueil', component: { template: '<div />' } },
       { path: '/tableau-de-bord', name: 'tableau-de-bord', component: { template: '<div />' } },
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
+      {
+        path: '/clients/:clientId',
+        name: 'fiche-client',
+        component: { template: '<div />' },
+      },
+      { path: '/profil-local', name: 'profil-local', component: { template: '<div />' } },
+      { path: '/parametres', name: 'parametres', component: { template: '<div />' } },
       { path: '/configuration', name: 'configuration-client', component: { template: '<div />' } },
       { path: '/normes', name: 'bibliotheque-normes', component: { template: '<div />' } },
+      {
+        path: '/clients/:clientId/process',
+        name: 'gestion-process',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/clients/:clientId/templates',
+        name: 'templates-formulaires',
+        component: { template: '<div />' },
+      },
       {
         path: '/clients/:clientId/missions',
         name: 'liste-missions',
@@ -86,11 +103,6 @@ function routeurDeTest(): Router {
         component: { template: '<div />' },
       },
       {
-        path: '/profil-local',
-        name: 'profil-local',
-        component: { template: '<div />' },
-      },
-      {
         path: '/clients/:clientId/anomalies',
         name: 'journal-anomalies',
         component: { template: '<div />' },
@@ -98,6 +110,11 @@ function routeurDeTest(): Router {
       {
         path: '/clients/:clientId/connecteurs-qms',
         name: 'configuration-connecteurs-qms',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/clients/:clientId/ia',
+        name: 'configuration-ia',
         component: { template: '<div />' },
       },
     ],
@@ -110,15 +127,17 @@ beforeEach(() => {
 })
 
 describe('BarreLaterale — groupes de navigation', () => {
-  test('affiche les groupes Accueil, Mon travail, Clients & configuration', async () => {
+  test('affiche les groupes Accueil, Mon espace, Mon travail', async () => {
     const router = routeurDeTest()
     await router.push('/')
     const wrapper = mount(BarreLaterale, { global: { plugins: [router] } })
 
     expect(wrapper.text()).toContain('Que voulez-vous faire ?')
-    expect(wrapper.text()).toContain('Mes projets')
-    expect(wrapper.text()).toContain('Bibliothèque de normes')
-    expect(wrapper.text()).toContain('Clients')
+    expect(wrapper.text()).toContain('Profil')
+    expect(wrapper.text()).toContain('Paramètres')
+    expect(wrapper.text()).toContain('Guides & normes')
+    expect(wrapper.text()).toContain('Mes clients')
+    expect(wrapper.text()).toContain('Tous mes projets')
     expect(wrapper.text()).toContain('Configuration GitHub')
   })
 
@@ -128,21 +147,31 @@ describe('BarreLaterale — groupes de navigation', () => {
     const wrapper = mount(BarreLaterale, { global: { plugins: [router] } })
 
     expect(wrapper.text()).toContain('Choisissez un client pour accéder à ses outils')
-    expect(wrapper.text()).not.toContain('Structure Système')
+    expect(wrapper.text()).not.toContain('Architecture')
   })
 
-  test('un client mémorisé : accès direct à ses outils', async () => {
+  test('un client mémorisé : accès direct à ses outils, regroupés par intention', async () => {
     useClientActifStore().definirClientActif('client-1')
     const router = routeurDeTest()
     await router.push('/')
     const wrapper = mount(BarreLaterale, { global: { plugins: [router] } })
 
-    expect(wrapper.text()).toContain('Structure Système')
+    // Groupe « Le site » — les 5 branches du parcours + Missions.
+    expect(wrapper.text()).toContain('Vue d’ensemble')
+    expect(wrapper.text()).toContain('Architecture')
+    expect(wrapper.text()).toContain('Process')
+    expect(wrapper.text()).toContain('Procédures')
+    expect(wrapper.text()).toContain('Templates & Formulaires')
+    expect(wrapper.text()).toContain('Projets')
+    // Groupe « Qualité & ingénierie ».
     expect(wrapper.text()).toContain('Stratégie de qualification')
+    // Groupe « Connaissance & IA ».
     expect(wrapper.text()).toContain('Assistant IA')
+    // Groupe « Configuration du site ».
+    expect(wrapper.text()).toContain('Connecteurs QMS')
 
-    const lienStructure = wrapper.findAll('a').find((a) => a.text() === 'Structure Système')
-    expect(lienStructure?.attributes('href')).toContain('client-1')
+    const lienArchitecture = wrapper.findAll('a').find((a) => a.text() === 'Architecture')
+    expect(lienArchitecture?.attributes('href')).toContain('client-1')
   })
 })
 
@@ -186,7 +215,7 @@ describe('BarreLaterale — bascule Mode Expert / Assistant', () => {
 
     // Mode Assistant : le parcours guidé reste visible…
     expect(wrapper.text()).toContain('Missions')
-    expect(wrapper.text()).toContain('Structure Système')
+    expect(wrapper.text()).toContain('Architecture')
     expect(wrapper.text()).toContain('Stratégie de qualification')
     // …mais les écrans de configuration avancée disparaissent — jamais
     // supprimés du routeur, seulement masqués tant que le Mode Expert

@@ -61,9 +61,34 @@ export const router = createRouter({
       component: () => import('../screens/GestionClients.vue'),
     },
     {
+      // Fiche Client / Site (Phase 40) — page d'entrée d'un client, 5
+      // branches (Architecture/Process/Procédures/Templates/Projets).
+      path: '/clients/:clientId',
+      name: 'fiche-client',
+      component: () => import('../screens/FicheClient.vue'),
+      props: true,
+    },
+    {
       path: '/profil-local',
       name: 'profil-local',
       component: () => import('../screens/ProfilLocal.vue'),
+    },
+    {
+      path: '/parametres',
+      name: 'parametres',
+      component: () => import('../screens/Parametres.vue'),
+    },
+    {
+      path: '/clients/:clientId/process',
+      name: 'gestion-process',
+      component: () => import('../screens/Process.vue'),
+      props: true,
+    },
+    {
+      path: '/clients/:clientId/templates',
+      name: 'templates-formulaires',
+      component: () => import('../screens/TemplatesFormulaires.vue'),
+      props: true,
     },
     {
       path: '/clients/:clientId/drive',

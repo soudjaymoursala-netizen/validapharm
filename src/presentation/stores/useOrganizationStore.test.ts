@@ -15,6 +15,9 @@ async function creerClient(nom: string) {
   const client = {
     id: crypto.randomUUID(),
     name: nom,
+    adresse: null,
+    secteur: null,
+    details: null,
     statut: 'actif' as const,
     archived_at: null,
     archived_by: null,

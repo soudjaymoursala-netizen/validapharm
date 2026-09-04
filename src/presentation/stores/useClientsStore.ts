@@ -1,11 +1,21 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { Client } from '../../logique-metier/domaine/types'
+import type { Client, SecteurClient } from '../../logique-metier/domaine/types'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouveauClientInput {
   name: string
+  adresse?: string | null
+  secteur?: SecteurClient | null
+  details?: string | null
+}
+
+export interface ModificationClientInput {
+  name: string
+  adresse: string | null
+  secteur: SecteurClient | null
+  details: string | null
 }
 
 export type ErreurArchivageClient = { erreur: 'introuvable' | 'deja_archive' | 'deja_actif' }
@@ -45,6 +55,9 @@ export const useClientsStore = defineStore('clients', () => {
     const client: Client = {
       id: crypto.randomUUID(),
       name: input.name,
+      adresse: input.adresse ?? null,
+      secteur: input.secteur ?? null,
+      details: input.details ?? null,
       statut: 'actif',
       archived_at: null,
       archived_by: null,
@@ -60,6 +73,32 @@ export const useClientsStore = defineStore('clients', () => {
 
   async function obtenirClient(clientId: string): Promise<Client | undefined> {
     return db.clients.get(clientId)
+  }
+
+  /**
+   * Modification des informations d'entreprise (§13 du prompt maître,
+   * Phase 40) — jamais le nom seul comme le faisait l'écran initial :
+   * adresse/secteur/détails éditables après création, sans re-création.
+   */
+  async function modifierClient(
+    clientId: string,
+    input: ModificationClientInput,
+  ): Promise<Client | { erreur: 'introuvable' }> {
+    const existant = await db.clients.get(clientId)
+    if (!existant) return { erreur: 'introuvable' }
+
+    const misAJour: Client = {
+      ...existant,
+      name: input.name,
+      adresse: input.adresse,
+      secteur: input.secteur,
+      details: input.details,
+    }
+    await db.clients.put(misAJour)
+    clients.value = clients.value
+      .map((c) => (c.id === clientId ? misAJour : c))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    return misAJour
   }
 
   async function archiverClient(
@@ -118,6 +157,7 @@ export const useClientsStore = defineStore('clients', () => {
     chargerClients,
     creerClient,
     obtenirClient,
+    modifierClient,
     archiverClient,
     desarchiverClient,
   }

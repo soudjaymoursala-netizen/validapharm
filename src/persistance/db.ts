@@ -87,6 +87,9 @@ export interface EnregistrementVersionSchema {
  */
 export interface EnregistrementProfilLocal {
   id: 'unique'
+  /** Ajoutés en Phase 40 (§8.1 du prompt maître, écran Profil) — `null` pour un profil créé avant cette version. */
+  nom: string | null
+  prenom: string | null
   email: string
   visa: string
   motDePasseHash: string

@@ -1,25 +1,20 @@
 <script setup lang="ts">
 // Sidebar de navigation par intention (Phase 16, `docs/convergence/
-// PHASE_16_COQUILLE_UX_SPEC.md` §3) — remplace la logique implicite
-// "chaque écran construit son propre bandeau" par une coquille partagée,
-// groupée par intention plutôt qu'une liste plate d'écrans.
+// PHASE_16_COQUILLE_UX_SPEC.md` §3 ; restructurée Phase 40, §11 du prompt
+// maître du 03/09/2026 — demande explicite : « refonte UX comme prévue,
+// ultra améliorée et optimisée »).
 //
-// Refonte visuelle v20 (demande explicite : "super UX/UI moderne...
-// guider l'utilisateur") : icônes par intention, badge du client actif
-// (nom réel, pas seulement son id technique), sidebar fixe pendant le
-// défilement du contenu — aucun changement de logique de navigation,
-// seulement de présentation.
-//
-// Différenciation réelle Mode Expert/Mode Assistant (v21, 31/08/2026) —
-// comble URS-F-220quinquies : jusqu'ici le bouton changeait seulement son
-// propre état visuel, "aucune différenciation comportementale" n'existant
-// nulle part ailleurs, bloquée sur l'absence de la Phase 17 (Mission
-// workspace) — désormais construite (§4.23). Mode Assistant restreint la
-// navigation aux outils du parcours guidé (Missions comme point d'entrée,
-// évaluations, procédures) ; Mode Expert garde l'accès complet, y compris
-// aux écrans de configuration avancée. Jamais un nouveau moteur ni un
-// écran retiré (URS-F-220quinquies) — seulement une vue filtrée du même
-// menu, réversible à tout instant.
+// Avant Phase 40 : la section « Mon site » listait les ~16 outils d'un
+// client à plat, sans hiérarchie. Cette refonte les regroupe par intention
+// (Architecture/Process/Procédures/Templates/Projets — les 5 branches
+// exactes du parcours demandé — puis Qualité & Ingénierie / Connaissance &
+// IA / Configuration pour le reste), cohérent avec §11 du prompt maître qui
+// propose exactement ce découpage. Chaque outil garde son drapeau `guide`
+// (Mode Assistant = parcours restreint) — aucun changement de ce mécanisme,
+// seulement de présentation. Le lien « Fiche client » (`fiche-client`,
+// Phase 40) est le point d'entrée du Mode 1 (« travail contextuel », §12
+// du prompt maître) ; cette sidebar reste le Mode 2 (« expert ») — l'accès
+// direct aux briques ne disparaît jamais, conformément à ce même §12.
 import { computed, ref, watch } from 'vue'
 import { useClientActifStore } from '../stores/useClientActifStore'
 import { useClientsStore } from '../stores/useClientsStore'
@@ -55,115 +50,173 @@ const initialesClient = computed(() => {
 interface OutilClient {
   nom: string
   icone: NomIcone
-  route: { name: string; params: Record<string, string> }
+  route: { name: string; params?: Record<string, string>; query?: Record<string, string> }
   /** Visible en Mode Assistant — parcours guidé restreint (v21). */
   guide: boolean
 }
 
-const TOUS_LES_OUTILS_CLIENT = (clientId: string): OutilClient[] => [
+interface GroupeOutils {
+  titre: string
+  outils: OutilClient[]
+}
+
+const GROUPES_OUTILS_CLIENT = (clientId: string): GroupeOutils[] => [
   {
-    nom: 'Missions',
-    icone: 'reseau',
-    route: { name: 'liste-missions', params: { clientId } },
-    guide: true,
+    titre: 'Le site',
+    outils: [
+      {
+        nom: 'Vue d’ensemble',
+        icone: 'utilisateur',
+        route: { name: 'fiche-client', params: { clientId } },
+        guide: true,
+      },
+      {
+        nom: 'Architecture',
+        icone: 'batiment',
+        route: { name: 'structure-systeme', params: { clientId } },
+        guide: true,
+      },
+      {
+        nom: 'Process',
+        icone: 'flux',
+        route: { name: 'gestion-process', params: { clientId } },
+        guide: true,
+      },
+      {
+        nom: 'Procédures',
+        icone: 'reglettes',
+        route: { name: 'revue-structure-procedure', params: { clientId } },
+        guide: true,
+      },
+      {
+        nom: 'Templates & Formulaires',
+        icone: 'dossier',
+        route: { name: 'templates-formulaires', params: { clientId } },
+        guide: false,
+      },
+      {
+        nom: 'Projets',
+        icone: 'graphique',
+        route: { name: 'tableau-de-bord', query: { clientId } },
+        guide: true,
+      },
+      {
+        nom: 'Missions',
+        icone: 'reseau',
+        route: { name: 'liste-missions', params: { clientId } },
+        guide: true,
+      },
+    ],
   },
   {
-    nom: 'Structure Système',
-    icone: 'batiment',
-    route: { name: 'structure-systeme', params: { clientId } },
-    guide: true,
+    titre: 'Qualité & ingénierie',
+    outils: [
+      {
+        nom: 'Stratégie de qualification',
+        icone: 'bouclier',
+        route: { name: 'assistant-strategie-qualification', params: { clientId } },
+        guide: true,
+      },
+      {
+        nom: 'Impact Assessment',
+        icone: 'bouclier',
+        route: { name: 'impact-assessment', params: { clientId } },
+        guide: true,
+      },
+      {
+        nom: 'Computer System Assessment',
+        icone: 'bouclier',
+        route: { name: 'csv-assessment', params: { clientId } },
+        guide: true,
+      },
+      {
+        nom: 'Risk Assessment (AMDEC)',
+        icone: 'flacon',
+        route: { name: 'risk-assessment-amdec', params: { clientId } },
+        guide: false,
+      },
+      {
+        nom: 'Paramètres critiques',
+        icone: 'reglettes',
+        route: { name: 'parametres-critiques', params: { clientId } },
+        guide: false,
+      },
+      {
+        nom: 'Exigences et tests',
+        icone: 'reglettes',
+        route: { name: 'definition-tests', params: { clientId } },
+        guide: false,
+      },
+      {
+        nom: 'Exécution de tests',
+        icone: 'graphique',
+        route: { name: 'execution-tests', params: { clientId } },
+        guide: false,
+      },
+      {
+        nom: "Journal d'anomalies",
+        icone: 'alerte-triangle',
+        route: { name: 'journal-anomalies', params: { clientId } },
+        guide: false,
+      },
+    ],
   },
   {
-    nom: 'Exigences et tests',
-    icone: 'reglettes',
-    route: { name: 'definition-tests', params: { clientId } },
-    guide: false,
+    titre: 'Connaissance & IA',
+    outils: [
+      {
+        nom: 'Ingestion documentaire',
+        icone: 'nuage',
+        route: { name: 'source-intelligence', params: { clientId } },
+        guide: false,
+      },
+      {
+        nom: 'Plans de livrable',
+        icone: 'dossier',
+        route: { name: 'content-plan', params: { clientId } },
+        guide: false,
+      },
+      {
+        nom: 'Assistant IA',
+        icone: 'etincelles',
+        route: { name: 'panneau-chat', params: { clientId } },
+        guide: true,
+      },
+    ],
   },
   {
-    nom: 'Exécution de tests',
-    icone: 'graphique',
-    route: { name: 'execution-tests', params: { clientId } },
-    guide: false,
-  },
-  {
-    nom: 'Paramètres critiques',
-    icone: 'reglettes',
-    route: { name: 'parametres-critiques', params: { clientId } },
-    guide: false,
-  },
-  {
-    nom: 'Ingestion documentaire',
-    icone: 'nuage',
-    route: { name: 'source-intelligence', params: { clientId } },
-    guide: false,
-  },
-  {
-    nom: 'Plans de livrable',
-    icone: 'dossier',
-    route: { name: 'content-plan', params: { clientId } },
-    guide: false,
-  },
-  {
-    nom: 'Risk Assessment (AMDEC)',
-    icone: 'flacon',
-    route: { name: 'risk-assessment-amdec', params: { clientId } },
-    guide: false,
-  },
-  {
-    nom: 'Stratégie de qualification',
-    icone: 'bouclier',
-    route: { name: 'assistant-strategie-qualification', params: { clientId } },
-    guide: true,
-  },
-  {
-    nom: 'Impact Assessment',
-    icone: 'bouclier',
-    route: { name: 'impact-assessment', params: { clientId } },
-    guide: true,
-  },
-  {
-    nom: 'Computer System Assessment',
-    icone: 'bouclier',
-    route: { name: 'csv-assessment', params: { clientId } },
-    guide: true,
-  },
-  {
-    nom: 'Assistant IA',
-    icone: 'etincelles',
-    route: { name: 'panneau-chat', params: { clientId } },
-    guide: true,
-  },
-  {
-    nom: 'Procédures',
-    icone: 'flux',
-    route: { name: 'revue-structure-procedure', params: { clientId } },
-    guide: true,
-  },
-  {
-    nom: "Journal d'anomalies",
-    icone: 'alerte-triangle',
-    route: { name: 'journal-anomalies', params: { clientId } },
-    guide: false,
-  },
-  {
-    nom: 'Connecteurs QMS',
-    icone: 'lien',
-    route: { name: 'configuration-connecteurs-qms', params: { clientId } },
-    guide: false,
-  },
-  {
-    nom: 'Miroir Drive',
-    icone: 'nuage',
-    route: { name: 'configuration-drive', params: { clientId } },
-    guide: false,
+    titre: 'Configuration du site',
+    outils: [
+      {
+        nom: 'Connecteurs QMS',
+        icone: 'lien',
+        route: { name: 'configuration-connecteurs-qms', params: { clientId } },
+        guide: false,
+      },
+      {
+        nom: 'Miroir Drive',
+        icone: 'nuage',
+        route: { name: 'configuration-drive', params: { clientId } },
+        guide: false,
+      },
+      {
+        nom: 'IA du client',
+        icone: 'etincelles',
+        route: { name: 'configuration-ia', params: { clientId } },
+        guide: false,
+      },
+    ],
   },
 ]
 
-const outilsClientActif = computed<OutilClient[] | null>(() => {
+const groupesOutilsClientActif = computed<GroupeOutils[] | null>(() => {
   const clientId = clientActifStore.clientActifId
   if (!clientId) return null
-  const outils = TOUS_LES_OUTILS_CLIENT(clientId)
-  return modeStore.mode === 'assistant' ? outils.filter((o) => o.guide) : outils
+  const groupes = GROUPES_OUTILS_CLIENT(clientId)
+  if (modeStore.mode !== 'assistant') return groupes
+  return groupes
+    .map((groupe) => ({ ...groupe, outils: groupe.outils.filter((o) => o.guide) }))
+    .filter((groupe) => groupe.outils.length > 0)
 })
 
 function basculerMode(nouveauMode: ModeAffichage): void {
@@ -205,19 +258,39 @@ function basculerMode(nouveauMode: ModeAffichage): void {
       </div>
 
       <div class="sidebar__groupe">
-        <p class="sidebar__titre-groupe">Mon travail</p>
-        <RouterLink :to="{ name: 'tableau-de-bord' }">
-          <IconeSvg nom="dossier" :taille="16" />
-          Mes projets
+        <p class="sidebar__titre-groupe">Mon espace</p>
+        <RouterLink :to="{ name: 'profil-local' }">
+          <IconeSvg nom="cadenas" :taille="16" />
+          Profil
+        </RouterLink>
+        <RouterLink :to="{ name: 'parametres' }">
+          <IconeSvg nom="engrenage" :taille="16" />
+          Paramètres
         </RouterLink>
         <RouterLink :to="{ name: 'bibliotheque-normes' }">
           <IconeSvg nom="livre" :taille="16" />
-          Bibliothèque de normes
+          Guides &amp; normes
+        </RouterLink>
+        <RouterLink v-if="modeStore.mode === 'expert'" :to="{ name: 'configuration-client' }">
+          <IconeSvg nom="engrenage" :taille="16" />
+          Configuration GitHub
         </RouterLink>
       </div>
 
       <div class="sidebar__groupe">
-        <div v-if="outilsClientActif" class="sidebar__badge-client">
+        <p class="sidebar__titre-groupe">Mon travail</p>
+        <RouterLink :to="{ name: 'gestion-clients' }">
+          <IconeSvg nom="utilisateur" :taille="16" />
+          Mes clients
+        </RouterLink>
+        <RouterLink :to="{ name: 'tableau-de-bord' }">
+          <IconeSvg nom="dossier" :taille="16" />
+          Tous mes projets
+        </RouterLink>
+      </div>
+
+      <template v-if="groupesOutilsClientActif">
+        <div class="sidebar__badge-client">
           <span class="sidebar__avatar-client" aria-hidden="true">{{
             initialesClient || '?'
           }}</span>
@@ -228,37 +301,22 @@ function basculerMode(nouveauMode: ModeAffichage): void {
             }}</span>
           </div>
         </div>
-        <p v-else class="sidebar__titre-groupe">Mon site</p>
-        <p v-if="modeStore.mode === 'assistant' && outilsClientActif" class="sidebar__note-mode">
+        <p v-if="modeStore.mode === 'assistant'" class="sidebar__note-mode">
           Parcours guidé — le Mode Expert donne accès à tous les outils.
         </p>
-        <template v-if="outilsClientActif">
-          <RouterLink v-for="outil in outilsClientActif" :key="outil.nom" :to="outil.route">
+        <div v-for="groupe in groupesOutilsClientActif" :key="groupe.titre" class="sidebar__groupe">
+          <p class="sidebar__titre-groupe">{{ groupe.titre }}</p>
+          <RouterLink v-for="outil in groupe.outils" :key="outil.nom" :to="outil.route">
             <IconeSvg :nom="outil.icone" :taille="16" />
             {{ outil.nom }}
           </RouterLink>
-        </template>
-        <RouterLink v-else :to="{ name: 'gestion-clients' }" class="sidebar__invite">
+        </div>
+      </template>
+      <div v-else class="sidebar__groupe">
+        <p class="sidebar__titre-groupe">Mon site</p>
+        <RouterLink :to="{ name: 'gestion-clients' }" class="sidebar__invite">
           Choisissez un client pour accéder à ses outils
         </RouterLink>
-      </div>
-
-      <div class="sidebar__groupe">
-        <p class="sidebar__titre-groupe">Clients &amp; configuration</p>
-        <RouterLink :to="{ name: 'gestion-clients' }">
-          <IconeSvg nom="utilisateur" :taille="16" />
-          Clients
-        </RouterLink>
-        <template v-if="modeStore.mode === 'expert'">
-          <RouterLink :to="{ name: 'configuration-client' }">
-            <IconeSvg nom="engrenage" :taille="16" />
-            Configuration GitHub
-          </RouterLink>
-          <RouterLink :to="{ name: 'profil-local' }">
-            <IconeSvg nom="cadenas" :taille="16" />
-            Profil local
-          </RouterLink>
-        </template>
       </div>
     </div>
   </nav>

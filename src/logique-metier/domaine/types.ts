@@ -171,15 +171,32 @@ export interface ProjectDocument {
 }
 
 /**
+ * Secteur d'activité d'un client (§4.0ter, Phase 40, refonte du parcours
+ * « Mes clients » demandée le 04/09/2026) — trois valeurs seulement,
+ * cohérent avec le périmètre annoncé du produit (cadrage §1) ; pas de
+ * nomenclature extensible fabriquée sans besoin réel démontré.
+ */
+export type SecteurClient = 'pharma' | 'dispositif_medical' | 'autre'
+
+/**
  * Entité `client` — identité minimale (FS §3, v12, gap trouvé en
  * construisant le connecteur Drive) : `client_id` était référencé partout
  * (`Project.client_id`, `ClientConfig`, `asset_hierarchy_schema`,
  * `asset_node`) sans jamais être lui-même modélisé. Volontairement
  * minimal — l'identité seule ; c'est `ClientConfig` qui porte les réglages.
+ *
+ * `adresse`/`secteur`/`details` ajoutés en Phase 40 (§13 du prompt maître
+ * du 03/09/2026, « nom de l'entreprise, adresse, secteur, informations
+ * complémentaires ») — tous optionnels (`null` par défaut), un client créé
+ * avant cette version reste valide sans ces champs.
  */
 export interface Client {
   id: string
   name: string
+  adresse: string | null
+  secteur: SecteurClient | null
+  /** Champ libre — activité, produits fabriqués, contexte industriel (§13 du prompt maître). */
+  details: string | null
   statut: StatutArchivage
   archived_at: string | null
   /** Voir `Project.archived_by` — même limite (déclaratif, jamais une signature électronique). */
