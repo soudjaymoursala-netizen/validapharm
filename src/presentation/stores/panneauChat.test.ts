@@ -61,7 +61,7 @@ describe('usePanneauChatStore — envoyerQuestion (fournisseur cloud)', () => {
     expect(store.erreur).toBeNull()
   })
 
-  test('indisponibilité cloud -> bascule automatique vers le modèle local (URS-F-033)', async () => {
+  test('indisponibilité cloud -> bascule automatique vers le modèle local', async () => {
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
     fetchMock.mockResolvedValueOnce(reponseMock({ response: 'Réponse locale' }))
 
@@ -124,7 +124,7 @@ describe('usePanneauChatStore — envoyerQuestion (fournisseur cloud)', () => {
   })
 })
 
-describe('usePanneauChatStore — fermerSession (URS-F-037)', () => {
+describe('usePanneauChatStore — fermerSession', () => {
   test('journalise horodatage, fournisseur, moteur, document joint — jamais le contenu échangé', async () => {
     fetchMock.mockResolvedValueOnce(
       reponseMock({ texte: 'x', version_moteur: 'claude-v2', citations: [] }),
@@ -155,7 +155,7 @@ describe('usePanneauChatStore — fermerSession (URS-F-037)', () => {
   })
 })
 
-describe('usePanneauChatStore — alerteDerive (URS-F-032quinquies, séparée par mode depuis URS-F-038bis)', () => {
+describe('usePanneauChatStore — alerteDerive (séparée par mode)', () => {
   test('aucune session antérieure connue -> pas de fausse alerte', async () => {
     const store = usePanneauChatStore()
     await store.demarrerSession('client-1')

@@ -24,7 +24,7 @@ async function creerTestApprouve(clientId: string) {
   const definition = useTestDefinitionStore()
   await definition.charger(clientId)
   const requirement = await definition.creerRequirement(clientId, {
-    reference: 'URS-F-001',
+    reference: 'REQ-001',
     titre: 'Exigence',
     description: '',
     assetNodeId: null,
@@ -108,7 +108,7 @@ describe('useExecutionStore — garde-fous', () => {
     const definition = useTestDefinitionStore()
     await definition.charger('client-1')
     const requirement = await definition.creerRequirement('client-1', {
-      reference: 'URS-F-001',
+      reference: 'REQ-001',
       titre: 'Exigence',
       description: '',
       assetNodeId: null,

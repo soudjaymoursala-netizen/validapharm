@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // Pastille de statut de section (ajouté v20, refonte UX guidée) —
 // couleur ET icône ET texte systématiques (même discipline que la
-// palette qualification_status, URS-NF-054ter), jamais la couleur seule.
+// palette qualification_status), jamais la couleur seule.
 //
 // **Garde-fou non négociable hérité** : le libellé complet
 // (`libelleStatut`, `logique-metier/i18n/libellesStatut.ts`) reste
 // affiché mot pour mot, y compris le rappel "pas une signature
-// électronique opposable" sur `valide_en_interne` (URS-F-011bis) —
+// électronique opposable" sur `valide_en_interne` —
 // cette pastille habille visuellement ce texte, elle ne le raccourcit
 // jamais.
 import { computed } from 'vue'

@@ -27,7 +27,7 @@ const props = withDefaults(
     /**
      * Champs (`field_key`) à signaler visuellement comme donnée
      * technique/numérique reprise ou adaptée depuis un document de
-     * référence (§4.1bis, Phase 33, URS-F-063) — surlignage distinct,
+     * référence (§4.1bis, Phase 33) — surlignage distinct,
      * jamais fusionné avec l'affichage normal d'un champ.
      */
     champsSignales?: readonly string[]

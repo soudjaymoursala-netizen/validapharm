@@ -13,8 +13,8 @@ const MODE_PAR_DEFAUT: ModeAffichage = 'expert'
  * même moteur" (vision produit) : aucun nouveau moteur n'est créé pour le
  * mode Assistant, seulement une vue filtrée du même menu.
  *
- * Différenciation réelle ajoutée v21 (31/08/2026, URS-F-220quinquies
- * comblé) — `BarreLaterale.vue` restreint la navigation "Mon site" au
+ * Différenciation réelle ajoutée v21 (31/08/2026) — `BarreLaterale.vue`
+ * restreint la navigation "Mon site" au
  * parcours guidé en Mode Assistant (Missions, Structure Système,
  * Stratégie de qualification, évaluations, Procédures, Assistant IA) et
  * masque les écrans de configuration avancée (Configuration GitHub,

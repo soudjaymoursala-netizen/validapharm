@@ -9,7 +9,7 @@ beforeEach(async () => {
   await db.evaluationsCSVAssessment.clear()
 })
 
-describe('useCSVAssessmentStore — Computer System Assessment (F3, URS-F-050)', () => {
+describe('useCSVAssessmentStore — Computer System Assessment (F3)', () => {
   test('crée une évaluation avec une catégorie GAMP5 parmi les 5 fixes, justifiée', async () => {
     const store = useCSVAssessmentStore()
     await store.charger('client-1')

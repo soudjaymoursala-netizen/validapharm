@@ -32,8 +32,8 @@ function configParDefaut(clientId: string): ClientConfig {
 
 /**
  * Store de configuration IA par client (FS §4.4, `client_config`) — choix
- * du fournisseur, accusé des conditions de traitement (URS-F-032ter),
- * qualification de fiabilité (URS-F-032quater). Isolé par `client_id`,
+ * du fournisseur, accusé des conditions de traitement,
+ * qualification de fiabilité. Isolé par `client_id`,
  * comme `useConnexionDriveStore` — jamais un enregistrement global,
  * contrairement au relais lui-même (`useConnexionRelaisIAStore`).
  */
@@ -57,9 +57,9 @@ export const useClientConfigStore = defineStore('clientConfig', () => {
   /**
    * Changer de fournisseur invalide l'accusé de conditions précédent
    * (propre à l'ancien fournisseur) — jamais réinterprété comme valable
-   * pour le nouveau (URS-F-032ter, FS §3 v15) ; la qualification de
+   * pour le nouveau (FS §3 v15) ; la qualification de
    * fiabilité est également remise à zéro, une qualification ne valant
-   * que pour le fournisseur qu'elle a évalué (URS-F-032quater).
+   * que pour le fournisseur qu'elle a évalué.
    */
   async function definirFournisseur(clientId: string, fournisseur: string): Promise<void> {
     const actuel = await obtenirOuCreer(clientId)
@@ -85,7 +85,7 @@ export const useClientConfigStore = defineStore('clientConfig', () => {
 
   /**
    * Enregistre la qualification de fiabilité **pour le mode donné
-   * uniquement** (URS-F-038bis, Phase 32) — la qualification de l'autre
+   * uniquement** (Phase 32) — la qualification de l'autre
    * mode n'est jamais affectée, elles ne partagent pas le même profil de
    * risque.
    */

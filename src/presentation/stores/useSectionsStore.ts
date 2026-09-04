@@ -37,10 +37,10 @@ export type ResultatActionSection =
 
 /**
  * Entrées de la génération de brouillon par adaptation (§4.1bis, Phase 33,
- * TD-031) — `nomDocumentReference` sert uniquement de nom affiché
- * (URS-F-064), jamais de contenu ; le texte réellement transmis à l'IA est
+ * TD-031) — `nomDocumentReference` sert uniquement de nom affiché,
+ * jamais de contenu ; le texte réellement transmis à l'IA est
  * `texteDocumentReference` (collé directement ou déjà extrait d'un fichier
- * .docx/.pdf côté écran, URS-F-060).
+ * .docx/.pdf côté écran).
  */
 export interface EntreesGenerationBrouillonIA {
   texteDocumentReference: string
@@ -119,10 +119,10 @@ export const useSectionsStore = defineStore('sections', () => {
 
   /**
    * Génération de brouillon par adaptation d'un document de référence
-   * (§4.1bis, Phase 33, TD-031 — URS-F-060 à 064).
+   * (§4.1bis, Phase 33, TD-031).
    *
    * Garde-fous non négociables, dans l'ordre :
-   * - URS-F-062 : refuse tant que `confirmationDroitUsage` n'est pas
+   * - Refuse tant que `confirmationDroitUsage` n'est pas
    *   `true` — cette confirmation n'est PAS une preuve juridique de droit
    *   d'usage (elle reste de la responsabilité de l'utilisateur), mais une
    *   action tracée dans `section.audit_log`, jamais silencieuse.
@@ -130,13 +130,13 @@ export const useSectionsStore = defineStore('sections', () => {
    *   réellement défini (le repli générique "champ contenu libre" n'a pas
    *   de champs adressables — génération sans objet).
    * - Le document de référence est persisté comme `ProjectDocument` réel
-   *   (URS-F-000quater, jusqu'ici jamais consommé) pour que
-   *   `generation_source.source_document_id` (URS-F-064) référence un
+   *   (jusqu'ici jamais consommé) pour que
+   *   `generation_source.source_document_id` référence un
    *   objet réel plutôt qu'un simple label perdu.
    * - Une valeur déjà saisie par l'utilisateur n'est jamais écrasée par une
    *   proposition IA — seuls les champs encore vides sont renseignés.
    * - `generation_source.generated_fields` liste uniquement les champs
-   *   d'origine technique/numérique (URS-F-063) — c'est ce que l'écran
+   *   d'origine technique/numérique — c'est ce que l'écran
    *   utilise pour le surlignage distinct exigé, pas la liste de tous les
    *   champs proposés.
    */
@@ -269,13 +269,13 @@ export const useSectionsStore = defineStore('sections', () => {
     }
   }
 
-  /** Filiation URS-F-064 : nom du document de référence utilisé pour une génération de brouillon donnée. */
+  /** Filiation : nom du document de référence utilisé pour une génération de brouillon donnée. */
   async function obtenirDocumentReference(id: string): Promise<ProjectDocument | undefined> {
     return db.projectDocuments.get(id)
   }
 
   /**
-   * Recrée une section importée depuis un export JSON (FS §4.3, URS-F-021,
+   * Recrée une section importée depuis un export JSON (FS §4.3,
    * "transfert entre postes") comme une section **nouvelle** dans le
    * projet cible — jamais un écrasement par id, qui risquerait une
    * collision entre installations (voir `analyserImportJSON.ts`).
@@ -318,7 +318,7 @@ export const useSectionsStore = defineStore('sections', () => {
    * `valide_en_interne` (l'export d'une section validée est précisément
    * l'usage principal, FS §4.3), contrairement à `mettreAJourValeurs`.
    *
-   * @requirement URS-F-027, FS §4.3
+   * @requirement FS §4.3
    */
   async function journaliserExport(sectionId: string, force: boolean): Promise<void> {
     const section = await chargerSection(sectionId)
@@ -338,13 +338,13 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
-   * Sauvegarde automatique locale des valeurs saisies (URS-F-009,
-   * debounce à la charge de l'appelant — ce store ne fait qu'écrire).
+   * Sauvegarde automatique locale des valeurs saisies (debounce à la
+   * charge de l'appelant — ce store ne fait qu'écrire).
    * Refuse silencieusement toute modification si la section est
-   * verrouillée (URS-F-012) plutôt que d'écrire un corps qui devrait
+   * verrouillée plutôt que d'écrire un corps qui devrait
    * passer par une nouvelle révision (backlog).
    *
-   * @requirement URS-NF-030/031 — `audit_log.action` inclut explicitement
+   * @requirement `audit_log.action` inclut explicitement
    * "modification" dans le modèle pivot (FS §3) : une sauvegarde de
    * contenu qui ne laisserait aucune trace serait un écart de
    * traçabilité, pas seulement un détail d'implémentation. Une entrée
@@ -367,8 +367,8 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
-   * Sauvegarde automatique locale des lignes d'un tableau dynamique (FDS §4,
-   * URS-F-009/003) — même discipline que `mettreAJourValeurs` (verrouillage,
+   * Sauvegarde automatique locale des lignes d'un tableau dynamique (FDS §4)
+   * — même discipline que `mettreAJourValeurs` (verrouillage,
    * piste d'audit), pour la partie `Section.tables` du modèle pivot plutôt
    * que `Section.values`.
    */
@@ -394,10 +394,8 @@ export const useSectionsStore = defineStore('sections', () => {
 
   /**
    * Renseigne l'approbateur final du workflow (FDS §3.2 : requis dès
-   * l'engagement du cycle — URS-F-011, voir note d'interprétation sur
+   * l'engagement du cycle, voir note d'interprétation sur
    * `appliquerTransition`).
-   *
-   * @requirement URS-F-014quater
    */
   async function assignerApprobateurFinal(sectionId: string, userId: string): Promise<void> {
     const section = await chargerSection(sectionId)
@@ -411,7 +409,7 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
-   * Ajoute l'avis d'un relecteur (URS-F-014ter, "plusieurs relecteurs,
+   * Ajoute l'avis d'un relecteur ("plusieurs relecteurs,
    * chacun pouvant émettre un avis distinct"). Requis avant de pouvoir
    * transmettre la section à l'approbation.
    */
@@ -469,7 +467,7 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
-   * URS-F-061/§4.1bis, clarification ALCOA+ (FS §3, v04) : le passage de
+   * §4.1bis, clarification ALCOA+ (FS §3, v04) : le passage de
    * `propose_par_ia_non_valide` à `brouillon_aide` DOIT laisser une entrée
    * `revisions` distincte motif "validation utilisateur" — jamais fusionnée
    * avec l'entrée "génération assistée" déjà posée par

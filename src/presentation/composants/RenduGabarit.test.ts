@@ -79,7 +79,7 @@ const definitionAvecChampScalaire: DefinitionGabarit = {
   ],
 }
 
-describe('RenduGabarit — champsSignales (§4.1bis, Phase 33, URS-F-063)', () => {
+describe('RenduGabarit — champsSignales (§4.1bis, Phase 33)', () => {
   function monterAvecSignalement(champsSignales: string[]) {
     return mount(RenduGabarit, {
       props: {

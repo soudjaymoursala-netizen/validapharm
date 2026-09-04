@@ -198,7 +198,7 @@ describe('BarreLaterale — bascule Mode Expert / Assistant', () => {
     expect(localStorage.getItem('validapharm.mode_affichage')).toBe('assistant')
   })
 
-  test('Mode Assistant restreint réellement la navigation au parcours guidé (URS-F-220quinquies comblé)', async () => {
+  test('Mode Assistant restreint réellement la navigation au parcours guidé', async () => {
     useClientActifStore().definirClientActif('client-1')
     const router = routeurDeTest()
     await router.push('/')

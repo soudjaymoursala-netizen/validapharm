@@ -18,13 +18,13 @@ export interface DefinirProfilInput {
 }
 
 /**
- * Store du profil utilisateur local (§4.31/URS-F-310bis, TD-033) — un
+ * Store du profil utilisateur local (§4.31, TD-033) — un
  * enregistrement unique par installation, pas un compte multi-utilisateur.
  * Porte le verrou de confirmation (mot de passe haché localement, jamais
  * une authentification ni une signature électronique — voir
  * `verrouLocal.ts` et TD-011/TD-033) requis pour archiver un client/projet.
  *
- * @requirement URS-F-310bis, TD-033
+ * @requirement TD-033
  */
 export const useProfilLocalStore = defineStore('profilLocal', () => {
   const profil = ref<EnregistrementProfilLocal | null>(null)

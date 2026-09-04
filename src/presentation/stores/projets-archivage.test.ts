@@ -22,7 +22,7 @@ async function creerProjet() {
   })
 }
 
-describe('useProjectsStore — archivage (§4.31/URS-F-310, TD-033)', () => {
+describe('useProjectsStore — archivage (§4.31, TD-033)', () => {
   test('un projet créé est actif, apparaît dans projetsActifs et pas dans projetsArchives', async () => {
     const store = useProjectsStore()
     const projet = await creerProjet()

@@ -27,7 +27,7 @@ async function creerExecutionEnCours(clientId: string) {
   const definition = useTestDefinitionStore()
   await definition.charger(clientId)
   const requirement = await definition.creerRequirement(clientId, {
-    reference: 'URS-F-001',
+    reference: 'REQ-001',
     titre: 'Exigence',
     description: '',
     assetNodeId: null,

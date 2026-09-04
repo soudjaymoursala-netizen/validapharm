@@ -6,8 +6,8 @@ import { db } from '../../persistance/db'
 export type NouveauConnecteurInput = { nom: string; actif: boolean } & ConfigConnector
 
 /**
- * Configuration des connecteurs QMS/documentaires tiers (URS-F-090 à
- * 090ter) — le type de domaine `Connector` et sa table Dexie existaient
+ * Configuration des connecteurs QMS/documentaires tiers — le type de
+ * domaine `Connector` et sa table Dexie existaient
  * depuis la Phase 10 sans jamais avoir de store ni d'écran (trouvé en
  * inventoriant les écarts §12 de la FDS, corrigé le 31/08/2026).
  *

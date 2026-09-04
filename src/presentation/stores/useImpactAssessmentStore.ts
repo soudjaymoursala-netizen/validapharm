@@ -34,7 +34,7 @@ export interface NouvelleEvaluationImpactInput {
  * `useMethodProfileACFCStore` (Phase 1) : une nouvelle version de méthode
  * ne mute jamais la précédente.
  *
- * @requirement URS-F-050 (F1, Impact Assessment / System Classification)
+ * @requirement Impact Assessment / System Classification
  */
 export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
   const profils = ref<MethodProfileImpactAssessment[]>([])

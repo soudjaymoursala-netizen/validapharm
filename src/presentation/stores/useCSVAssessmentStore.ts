@@ -22,7 +22,7 @@ export interface NouvelleEvaluationCSVInput {
  * configurable par client — chaque évaluation sélectionne directement une
  * catégorie parmi les 5, avec justification.
  *
- * @requirement URS-F-050 (F3, Computer System Assessment)
+ * @requirement Computer System Assessment
  */
 export const useCSVAssessmentStore = defineStore('csvAssessment', () => {
   const evaluations = ref<EvaluationCSVAssessment[]>([])

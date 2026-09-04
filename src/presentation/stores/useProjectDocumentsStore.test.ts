@@ -35,7 +35,7 @@ beforeEach(async () => {
   await db.projects.clear()
 })
 
-describe('useProjectDocumentsStore — importerDocument (URS-F-000quater)', () => {
+describe('useProjectDocumentsStore — importerDocument', () => {
   test('accepte un fichier de n’importe quel format et le marque toujours "référence de travail, non maître"', async () => {
     await creerProjetMinimal('projet-1')
     const store = useProjectDocumentsStore()

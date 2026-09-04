@@ -9,7 +9,7 @@ beforeEach(async () => {
   await db.connectors.clear()
 })
 
-describe('useConnecteursQMSStore — creerConnecteur (URS-F-090 à 090ter)', () => {
+describe('useConnecteursQMSStore — creerConnecteur', () => {
   test('crée un connecteur Veeva Vault et le persiste', async () => {
     const store = useConnecteursQMSStore()
     await store.charger('client-1')

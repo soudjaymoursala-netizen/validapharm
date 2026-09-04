@@ -29,7 +29,7 @@ describe('useStructureSystemeStore — charger', () => {
   })
 })
 
-describe('useStructureSystemeStore — ajouterNiveau (URS-F-100bis)', () => {
+describe('useStructureSystemeStore — ajouterNiveau', () => {
   test('ajoute un niveau à la hiérarchie du client', async () => {
     const store = useStructureSystemeStore()
     await store.charger('client-1')
@@ -78,7 +78,7 @@ describe('useStructureSystemeStore — creerNoeud', () => {
     expect(store.noeuds[0]?.audit_log[0]?.action).toBe('création')
   })
 
-  test('code déjà utilisé chez ce client -> rejet explicite (URS-F-100nonies)', async () => {
+  test('code déjà utilisé chez ce client -> rejet explicite', async () => {
     const store = useStructureSystemeStore()
     await store.charger('client-1')
     await store.creerNoeud('client-1', {
@@ -97,7 +97,7 @@ describe('useStructureSystemeStore — creerNoeud', () => {
     expect(store.noeuds).toHaveLength(1)
   })
 
-  test('isolation stricte par client (URS-F-100) : même code accepté pour un autre client', async () => {
+  test('isolation stricte par client : même code accepté pour un autre client', async () => {
     const store = useStructureSystemeStore()
     await store.charger('client-A')
     await store.creerNoeud('client-A', {
@@ -117,7 +117,7 @@ describe('useStructureSystemeStore — creerNoeud', () => {
   })
 })
 
-describe('useStructureSystemeStore — reparenterNoeud (URS-F-100octies)', () => {
+describe('useStructureSystemeStore — reparenterNoeud', () => {
   test('reparentage valide : parent_id mis à jour, journalisé', async () => {
     const store = useStructureSystemeStore()
     await store.charger('client-1')
@@ -404,7 +404,7 @@ describe('useStructureSystemeStore — Architecture Technique (Phase 18, TD-013)
   })
 })
 
-describe('useStructureSystemeStore — modifierQualificationNoeud (URS-F-101, URS-F-101bis)', () => {
+describe('useStructureSystemeStore — modifierQualificationNoeud', () => {
   test('un nœud neuf est toujours créé "non_qualifie", jamais de périodicité applicable', async () => {
     const store = useStructureSystemeStore()
     await store.charger('client-1')

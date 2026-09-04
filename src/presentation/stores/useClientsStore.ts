@@ -53,7 +53,7 @@ function trierParNom(clients: Client[]): Client[] {
  * local par navigateur. `Project`/`Section`/gabarits restent inchangés
  * (IndexedDB + synchronisation GitHub, TD-005).
  *
- * **Archivage (§4.31/URS-F-310, TD-033)** : jamais une suppression
+ * **Archivage (§4.31, TD-033)** : jamais une suppression
  * physique (ALCOA+) — `archiverClient` change `statut`, le client reste
  * lisible et restaurable. Contrairement à avant Phase 39, l'identité de
  * l'acteur (`archived_by`) est désormais résolue **côté serveur** depuis

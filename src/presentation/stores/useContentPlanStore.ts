@@ -27,7 +27,7 @@ export type ErreurEcritureContentPlan = {
 }
 
 /**
- * Garde-fou non négociable (URS-F-160septies) — un `ContentPlan` dont
+ * Garde-fou non négociable — un `ContentPlan` dont
  * `readiness` n'est pas `pret` ne peut jamais être gelé. Implémenté depuis
  * la Phase 30 (TD-028) via le Compliance Engine généralisé
  * (`evaluerReglesConformite`) — comportement strictement identique à avant
