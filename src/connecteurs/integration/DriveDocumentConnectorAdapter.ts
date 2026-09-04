@@ -4,7 +4,7 @@ import type { ConnecteurDocumentaire, DocumentExterne } from './ConnecteurDocume
 
 /**
  * ADAPT (TD-005) : enveloppe `DriveConnector` déjà existant et testé.
- * `DriveConnector` est un miroir d'écriture seule (URS-NF-010 : "jamais lu
+ * `DriveConnector` est un miroir d'écriture seule ("jamais lu
  * comme source") — `listerDocuments`/`lireDocument` lèvent donc
  * délibérément `OperationNonSupporteeError`, ce n'est pas un oubli.
  */

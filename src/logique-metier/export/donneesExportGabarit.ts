@@ -9,7 +9,7 @@ import { libelleStatut } from '../i18n/libellesStatut'
  * gabarit client — Phase 26, TD-024) — jamais reconstruites séparément par
  * chaque renderer. C'est ce partage qui garantit par construction
  * l'équivalence de contenu exigée entre gabarit par défaut et gabarit
- * personnalisé (URS-F-025) : les deux renderers reçoivent exactement les
+ * personnalisé : les deux renderers reçoivent exactement les
  * mêmes valeurs, seule la mise en forme differe.
  *
  * Toutes les chaînes sont **brutes, non échappées** — l'échappement (HTML
@@ -20,7 +20,7 @@ export interface DonneesExportGabaritChamp {
   valeur: string
 }
 
-/** `lignes`/`entetes` déjà aplaties en texte (une ligne par cellule jointe) — la fidélité structurelle complète d'un tableau dynamique reste portée par son export CSV dédié (URS-F-021), inchangé. */
+/** `lignes`/`entetes` déjà aplaties en texte (une ligne par cellule jointe) — la fidélité structurelle complète d'un tableau dynamique reste portée par son export CSV dédié, inchangé. */
 export interface DonneesExportGabaritTableau {
   libelle: string
   entetes: string

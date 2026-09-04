@@ -1,8 +1,8 @@
 import type { DefinitionGabarit } from '../definitionGabarit'
 
 /**
- * Gabarit "FAT — Test d'usine" (Factory Acceptance Test, catalogue URS
- * §10, famille C "Protocoles").
+ * Gabarit "FAT — Test d'usine" (Factory Acceptance Test, famille C du
+ * catalogue de gabarits, "Protocoles").
  */
 export const definitionFAT: DefinitionGabarit = {
   template_id: 'fat',

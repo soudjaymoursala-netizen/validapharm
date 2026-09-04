@@ -10,7 +10,7 @@
  * à la SDS doit retrouver exactement ces noms.
  */
 
-/** Délai d'attente réseau dépassé — déclenche la bascule automatique vers le modèle local (URS-F-033). */
+/** Délai d'attente réseau dépassé — déclenche la bascule automatique vers le modèle local. */
 export class TimeoutError extends Error {
   constructor(message = "Délai d'attente dépassé lors de l'appel au fournisseur IA.") {
     super(message)
@@ -34,7 +34,7 @@ export class ReponseInvalideError extends Error {
   }
 }
 
-/** Fournisseur injoignable (panne, réseau) — déclenche la bascule automatique vers le modèle local (URS-F-033). */
+/** Fournisseur injoignable (panne, réseau) — déclenche la bascule automatique vers le modèle local. */
 export class IndisponibleError extends Error {
   constructor(message = 'Fournisseur IA indisponible.') {
     super(message)

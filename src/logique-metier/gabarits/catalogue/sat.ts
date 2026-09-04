@@ -1,8 +1,8 @@
 import type { DefinitionGabarit } from '../definitionGabarit'
 
 /**
- * Gabarit "SAT — Test sur site" (Site Acceptance Test, catalogue URS §10,
- * famille C "Protocoles") — même structure que le FAT, réalisé après
+ * Gabarit "SAT — Test sur site" (Site Acceptance Test, famille C du
+ * catalogue de gabarits, "Protocoles") — même structure que le FAT, réalisé après
  * installation sur le site final plutôt que chez le fournisseur.
  */
 export const definitionSAT: DefinitionGabarit = {

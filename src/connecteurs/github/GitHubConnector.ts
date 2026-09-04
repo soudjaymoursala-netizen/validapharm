@@ -46,7 +46,7 @@ const VERSION_API = '2022-11-28'
  * Aucun binaire `git`, aucun accès disque : exclusivement l'API REST
  * GitHub via `fetch` (conventions §2).
  *
- * @requirement SDS §5, URS-NF-030, AR-R-34, AR-R-63
+ * @requirement SDS §5, AR-R-34, AR-R-63
  *
  * Stratégie d'appels délibérément alignée sur SDS §5/09-architecture-
  * detaillee.md §5 : lecture en masse via l'API Git Trees (un seul appel
@@ -54,7 +54,7 @@ const VERSION_API = '2022-11-28'
  * groupée via l'API Git Data (blob+arbre+commit, nombre d'appels constant
  * indépendant du nombre de fichiers modifiés) — jamais une boucle
  * lire/écrire fichier par fichier qui épuiserait le quota de 5000
- * requêtes/heure avant le volume de référence (URS-NF-052).
+ * requêtes/heure avant le volume de référence.
  */
 export class GitHubConnector {
   private readonly branche: string

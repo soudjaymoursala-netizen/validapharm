@@ -1,8 +1,8 @@
 import type { DefinitionGabarit } from '../definitionGabarit'
 
 /**
- * Gabarit "Contexte procédé" (FS §4.0, famille A "Cadrage", catalogue
- * URS §10). Champs explicitement listés en FS §4.0 : description procédé,
+ * Gabarit "Contexte procédé" (FS §4.0, famille A "Cadrage" du
+ * catalogue de gabarits). Champs explicitement listés en FS §4.0 : description procédé,
  * CPP, CQA, conditions opératoires, références de validation existantes.
  *
  * CPP/CQA modélisés en `tableau_dynamique` (un procédé réel en compte

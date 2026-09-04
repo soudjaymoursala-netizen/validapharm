@@ -30,7 +30,7 @@ describe('DriveDocumentConnectorAdapter — écriture seule, jamais lu comme sou
     expect(await adaptateur.tester()).toBe(true)
   })
 
-  test('listerDocuments()/lireDocument() lèvent OperationNonSupporteeError — jamais lu comme source (URS-NF-010)', async () => {
+  test('listerDocuments()/lireDocument() lèvent OperationNonSupporteeError — jamais lu comme source', async () => {
     const adaptateur = new DriveDocumentConnectorAdapter({
       dossierId: 'dossier-1',
       jeton: 'jeton-test',

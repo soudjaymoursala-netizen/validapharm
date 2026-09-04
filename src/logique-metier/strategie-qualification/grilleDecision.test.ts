@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { determinerConclusion, LIBELLES_CONCLUSION, type NiveauComplexite } from './grilleDecision'
 
-describe('determinerConclusion — table de décision fermée (URS-F-050, FDS §5, adaptée 25/08/2026 au verdict binaire ACFC)', () => {
+describe('determinerConclusion — table de décision fermée (FDS §5, adaptée 25/08/2026 au verdict binaire ACFC)', () => {
   test('couverture exhaustive de toutes les combinaisons criticité×complexité définies', () => {
     const attendu: Record<string, ReturnType<typeof determinerConclusion>> = {
       non_critique_catalogue: 'revue_documentaire',

@@ -6,7 +6,7 @@ import type { ColonneTableau, ChampNombre } from './definitionGabarit'
  * jamais saisissable directement, toujours dérivée des autres colonnes de
  * la même ligne.
  *
- * @requirement URS-F-004, FDS §5
+ * @requirement FDS §5
  *
  * Une seule formule implémentée à ce stade (`ipr`) — c'est la seule
  * référencée par un gabarit réel du catalogue actuel (`dq`, tâche #12).

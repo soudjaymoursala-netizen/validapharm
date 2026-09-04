@@ -4,7 +4,7 @@ import type { Langue, StatutSection } from '../domaine/types'
  * Libellés de statut de section (FS §4.2) — jamais le nom technique brut
  * de l'enum affiché tel quel à l'utilisateur.
  *
- * @requirement URS-F-011bis, mitige AR-R-14
+ * @requirement mitige AR-R-14
  *
  * **Garde-fou non négociable** : `valide_en_interne` DOIT toujours
  * afficher le rappel "pas une signature électronique opposable", **à

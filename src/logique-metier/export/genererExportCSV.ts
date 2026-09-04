@@ -3,10 +3,10 @@ import type { Langue } from '../domaine/types'
 import { evaluerColonneCalculee } from '../gabarits/evaluerColonneCalculee'
 
 /**
- * Export CSV d'un tableau dynamique (FS §4.3, URS-F-022 : "export CSV/XLSX
+ * Export CSV d'un tableau dynamique (FS §4.3 : "export CSV/XLSX
  * pour les tableaux dynamiques, ex. registre AMDEC").
  *
- * @requirement URS-F-022, FS §4.3
+ * @requirement FS §4.3
  *
  * CSV plutôt que XLSX binaire dans cet incrément : "CSV/XLSX" de l'URS
  * n'impose pas les deux formats, et CSV couvre sans perte l'usage

@@ -1,10 +1,10 @@
 import type { DefinitionGabarit } from '../definitionGabarit'
 
 /**
- * Gabarit "IQ — Qualification d'installation" (catalogue URS §10, famille
- * C "Protocoles"). `required_link_type: 'plan_metrologie'` reflète
- * URS-F-000octies (finalisation bloquée sans lien vers un Plan de
- * métrologie/étalonnage) — purement informationnel dans cet incrément, le
+ * Gabarit "IQ — Qualification d'installation" (famille C du catalogue de
+ * gabarits, "Protocoles"). `required_link_type: 'plan_metrologie'` reflète
+ * la finalisation bloquée sans lien vers un Plan de
+ * métrologie/étalonnage — purement informationnel dans cet incrément, le
  * garde-fou réel reste porté par `gardesFinalisation.ts`.
  */
 export const definitionIQ: DefinitionGabarit = {

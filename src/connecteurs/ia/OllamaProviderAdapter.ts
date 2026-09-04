@@ -12,17 +12,17 @@ const URL_PAR_DEFAUT = 'http://localhost:11434'
 const DELAI_MAX_PAR_DEFAUT_MS = 30_000
 
 /**
- * Adaptateur "modèle local" (cadrage §principe 5 "dégradation gracieuse",
- * URS-F-033) — Ollama exécuté sur le poste de l'utilisateur, aucune
+ * Adaptateur "modèle local" (cadrage §principe 5 "dégradation gracieuse") —
+ * Ollama exécuté sur le poste de l'utilisateur, aucune
  * dépendance réseau externe. Dernier recours de `envoyerAvecBascule`
  * quand aucun fournisseur cloud n'est joignable.
  *
- * @requirement URS-F-033, mitige AR-R-12
+ * @requirement mitige AR-R-12
  *
  * N'expose jamais de citation de normes (contrairement à un fournisseur
  * cloud qualifié) — capacité en repli dégradé, pas une garantie de
  * qualité équivalente ; l'indicateur de bascule (`envoyerAvecBascule`)
- * reste visible à l'utilisateur pour cette raison (URS-F-033 : "en
+ * reste visible à l'utilisateur pour cette raison ("en
  * informant l'utilisateur du changement de moteur").
  */
 export class OllamaProviderAdapter implements ProviderAdapter {

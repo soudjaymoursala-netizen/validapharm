@@ -1,7 +1,7 @@
 import type { DefinitionGabarit } from '../definitionGabarit'
 
 /**
- * Gabarit "URS — Exigences utilisateur" (catalogue URS §10, famille A
+ * Gabarit "URS — Exigences utilisateur" (famille A du catalogue de gabarits,
  * "Cadrage").
  */
 export const definitionURS: DefinitionGabarit = {

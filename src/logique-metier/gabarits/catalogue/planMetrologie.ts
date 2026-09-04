@@ -1,9 +1,9 @@
 import type { DefinitionGabarit } from '../definitionGabarit'
 
 /**
- * Gabarit "Plan de métrologie/étalonnage" (catalogue URS §10, famille L
- * "Métrologie") — "liste d'instruments, fréquences, tolérances,
- * certificats", lié à l'IQ (URS-F-000octies). Purement tabulaire, sans
+ * Gabarit "Plan de métrologie/étalonnage" (famille L du catalogue de
+ * gabarits, "Métrologie") — "liste d'instruments, fréquences, tolérances,
+ * certificats", lié à l'IQ. Purement tabulaire, sans
  * champ scalaire ni colonne calculée — démontre le cas le plus simple.
  */
 export const definitionPlanMetrologie: DefinitionGabarit = {

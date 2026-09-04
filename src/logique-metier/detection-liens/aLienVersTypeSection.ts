@@ -14,7 +14,7 @@ export interface SectionMinimale {
  * garde-fous de finalisation (FDS §3.3, gardesFinalisation.ts)
  *
  * Un lien (`project.links[]`) est créé par sélection explicite
- * source + cible (URS-F-000ter), sans direction canonique imposée par le
+ * source + cible, sans direction canonique imposée par le
  * modèle — pour la question posée ici ("cette section est-elle liée à une
  * section Contexte procédé/Métrologie/Maintenance ?"), les deux sens
  * comptent : ce qui importe est l'existence du lien, pas qui l'a créé en

@@ -1,13 +1,13 @@
 import type { AssetNode } from '../domaine/types'
 
 /**
- * Détection de cycle sur le lien hiérarchique `parent_id` (FS §3,
- * URS-F-100ter/nonies) — l'arbre du référentiel d'actifs ne doit jamais
+ * Détection de cycle sur le lien hiérarchique `parent_id` (FS §3) —
+ * l'arbre du référentiel d'actifs ne doit jamais
  * contenir de cycle, contrairement à `associated_nodes[]` (graphe libre,
  * cycles acceptés, ex. une utilité desservant plusieurs systèmes).
  *
- * @requirement URS-F-100ter, URS-F-100octies (revalidation au reparentage
- * "avec la même rigueur qu'à la création")
+ * @requirement revalidation au reparentage
+ * "avec la même rigueur qu'à la création"
  *
  * Remonte la chaîne des parents depuis `nouveauParentId` : si `nodeId` y
  * apparaît (ou si `nouveauParentId === nodeId`, un nœud ne peut être son

@@ -6,7 +6,7 @@ import type { FournisseurOcr } from './fournisseurs/FournisseurOcr'
  * dépendre du runtime Workers réel. `index.ts` ne fait que construire le
  * `FournisseurOcr` à partir des secrets et déléguer ici.
  *
- * Sans état (URS-NF-044ter appliqué par analogie, TD-001) : aucune donnée
+ * Sans état (principe d'absence d'état appliqué par analogie, TD-001) : aucune donnée
  * de la requête ou de la réponse n'est conservée au-delà du traitement en
  * cours — pas d'écriture KV/D1/Durable Object dans ce module.
  *

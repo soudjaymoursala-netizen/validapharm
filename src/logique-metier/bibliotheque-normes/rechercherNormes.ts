@@ -2,13 +2,13 @@ import { listerTousLesGabarits } from '../gabarits/catalogue'
 import type { TemplateType } from '../domaine/types'
 
 /**
- * Bibliothèque de normes (§4.5, Phase 34, URS-F-040) — agrégation
+ * Bibliothèque de normes (§4.5, Phase 34) — agrégation
  * déterministe des `normes_associees` déjà portées par chaque gabarit du
  * catalogue (FDS §4) : aucune norme n'est saisie ou dupliquée ici, cette
  * fonction ne fait qu'indexer ce qui existe déjà pour permettre la
  * recherche par mot-clé exigée par l'URS.
  *
- * @requirement URS-F-040, FS §4.5
+ * @requirement FS §4.5
  */
 export interface NormeReferencee {
   norme: string

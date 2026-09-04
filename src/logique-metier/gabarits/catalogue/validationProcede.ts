@@ -1,12 +1,12 @@
 import type { DefinitionGabarit } from '../definitionGabarit'
 
 /**
- * Gabarit "Validation de procédé — classique (3 lots)" (catalogue URS
- * §10, famille D "Validation de procédé"). Les approches "vérification
+ * Gabarit "Validation de procédé — classique (3 lots)" (famille D du
+ * catalogue de gabarits, "Validation de procédé"). Les approches "vérification
  * continue" et "hybride" identifiées par le catalogue restent hors
  * périmètre de cet incrément (aucun `TemplateType` dédié à ce stade).
- * Contexte procédé requis à l'entrée en vérification (URS-F-000septies,
- * `gardesFinalisation.ts`) — non reflété ici, `required_link_type` reste
+ * Contexte procédé requis à l'entrée en vérification (`gardesFinalisation.ts`)
+ * — non reflété ici, `required_link_type` reste
  * informationnel (voir `definitionGabarit.ts`).
  */
 export const definitionValidationProcede: DefinitionGabarit = {

@@ -8,7 +8,7 @@ const lienEntre = (a: string, b: string) => ({
   created_at: '2026-01-01T00:00:00.000Z',
 })
 
-describe('detecterEcartsStructurels — URS-F-082 (section URS isolée)', () => {
+describe('detecterEcartsStructurels — section URS isolée', () => {
   test('signale une section urs sans aucun lien', () => {
     const sections = [{ id: 's-urs-1', template_type: 'urs' as const }]
     const ecarts = detecterEcartsStructurels(sections, [])
@@ -50,7 +50,7 @@ describe('detecterEcartsStructurels — URS-F-082 (section URS isolée)', () => 
     expect(ecarts.map((e) => e.sectionId).sort()).toEqual(['s-urs-1', 's-urs-2'])
   })
 
-  test('URS-F-083 : le message ne contient jamais un verdict tranché ("conforme"/"non conforme")', () => {
+  test('le message ne contient jamais un verdict tranché ("conforme"/"non conforme")', () => {
     const sections = [{ id: 's-urs-1', template_type: 'urs' as const }]
     const [ecart] = detecterEcartsStructurels(sections, [])
     expect(ecart?.message.toLowerCase()).not.toMatch(/non conforme|est conforme/)

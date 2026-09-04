@@ -20,7 +20,7 @@ export interface ResultatEnvoiRoute {
  * (un quota dépassé n'est pas une indisponibilité, ne doit pas déclencher
  * un changement de fournisseur silencieux).
  *
- * @requirement URS-F-033, SDS §6, mitige AR-R-12
+ * @requirement SDS §6, mitige AR-R-12
  *
  * Fonction pure d'orchestration — ne décide d'aucune règle métier
  * au-delà de ce routage ; les adaptateurs eux-mêmes (connecteurs/ia/)

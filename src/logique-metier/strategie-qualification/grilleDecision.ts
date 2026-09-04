@@ -1,5 +1,5 @@
 /**
- * Table de décision (FS §4.6, URS-F-050) — mappe (criticité ACFC binaire,
+ * Table de décision (FS §4.6) — mappe (criticité ACFC binaire,
  * complexité) vers une conclusion parmi la liste fermée déjà fixée en FS.
  * **Table de décision fermée au sens FDS §5** : un calcul réglementaire
  * versionné indépendamment, jamais une extrapolation — toute combinaison
@@ -16,7 +16,7 @@
  * **PROVISOIRE** : le mapping vers FAT/SAT/IQ/IQ+OQ/IQ+OQ+PQ reste une
  * première proposition, jamais validée par un expert qualification réel.
  *
- * @requirement URS-F-050, URS-F-053, FDS §5
+ * @requirement FDS §5
  */
 
 export type NiveauComplexite = 'catalogue' | 'specifique'

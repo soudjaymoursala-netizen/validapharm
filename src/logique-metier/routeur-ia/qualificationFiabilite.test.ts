@@ -17,7 +17,7 @@ function qualification(surcharge: Partial<QualificationFiabilite> = {}): Qualifi
   }
 }
 
-describe('peutActiverFournisseur (URS-F-032quater)', () => {
+describe('peutActiverFournisseur', () => {
   test('bloque tant qu’aucune qualification n’est consignée', () => {
     expect(peutActiverFournisseur(null)).toBe(false)
   })
@@ -27,7 +27,7 @@ describe('peutActiverFournisseur (URS-F-032quater)', () => {
   })
 })
 
-describe('conditionsTraitementAcquittees (URS-F-032ter)', () => {
+describe('conditionsTraitementAcquittees', () => {
   test('aucun accusé -> non acquittées', () => {
     expect(conditionsTraitementAcquittees(null, 'claude')).toBe(false)
   })
@@ -45,7 +45,7 @@ describe('conditionsTraitementAcquittees (URS-F-032ter)', () => {
   })
 })
 
-describe('deriveVersionDetectee (URS-F-032quinquies)', () => {
+describe('deriveVersionDetectee', () => {
   test('aucune qualification -> jamais de dérive', () => {
     expect(deriveVersionDetectee('claude-v2', null)).toBe(false)
   })

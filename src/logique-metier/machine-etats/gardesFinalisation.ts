@@ -54,7 +54,7 @@ const REGLES_GARDES_FINALISATION: readonly RegleGardeFinalisation[] = [
  * Détermine les blocages de finalisation applicables (FDS §3.3), pour un
  * point de contrôle donné du cycle de vie d'une section.
  *
- * @requirement URS-F-000septies, URS-F-000octies, URS-F-000nonies, FDS §3.3 (U-01/U-02/U-03)
+ * @requirement FDS §3.3 (U-01/U-02/U-03)
  *
  * Asymétrie délibérée (FDS §3.3, justifiée par Annexe 15 §3.12) : le
  * Contexte procédé (U-01) et le Plan de métrologie (U-02) sont exigés à

@@ -3,7 +3,7 @@ import type { Langue, TemplateType } from '../domaine/types'
 /**
  * Types du moteur de gabarits déclaratif (FDS §4).
  *
- * @requirement URS-F-001/002/003, URS-REG-003, FDS §4
+ * @requirement FDS §4
  *
  * Miroir strict du schéma JSON documenté en FDS §4 — mêmes noms de champs
  * (`field_key`, `labels`, `required_link_type`…) pour la même raison que le

@@ -14,7 +14,7 @@ import { definitionValidationProcede } from './validationProcede'
 
 /**
  * Registre des gabarits réellement définis (FDS §4). Catalogue complet
- * pour les familles A/C/D/L/M (URS §10) — B (DQ) déjà couvert
+ * pour les familles A/C/D/L/M — B (DQ) déjà couvert
  * séparément.
  *
  * Ajouter un gabarit manquant : un nouveau fichier dans ce dossier +

@@ -18,7 +18,7 @@ import type { FournisseurOcr, ResultatExtractionOcr } from './FournisseurOcr'
  *    ligne.
  *
  * Aucune donnée n'est conservée par ce fournisseur au-delà du traitement
- * de la requête en cours (cohérent avec URS-NF-044ter appliqué par
+ * de la requête en cours (principe d'absence d'état appliqué par
  * analogie au relais OCR, TD-001) — le sondage interroge Azure lui-même,
  * ce Worker ne persiste rien de son côté.
  */

@@ -1,9 +1,9 @@
 import type { DefinitionGabarit } from '../definitionGabarit'
 
 /**
- * Gabarit "PQ — Qualification de performance" (catalogue URS §10, famille
- * C "Protocoles"). Contexte procédé requis à l'entrée en vérification
- * (URS-F-000septies, `gardesFinalisation.ts`) — non reflété ici,
+ * Gabarit "PQ — Qualification de performance" (famille C du catalogue de
+ * gabarits, "Protocoles"). Contexte procédé requis à l'entrée en vérification
+ * (`gardesFinalisation.ts`) — non reflété ici,
  * `required_link_type` reste informationnel (voir `definitionGabarit.ts`).
  */
 export const definitionPQ: DefinitionGabarit = {

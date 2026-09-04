@@ -1,5 +1,5 @@
 /**
- * Verrou local par mot de passe (§4.31/URS-F-310, TD-033) — **pas** un
+ * Verrou local par mot de passe (§4.31, TD-033) — **pas** un
  * mécanisme d'authentification ni une signature électronique. Le mot de
  * passe est haché (PBKDF2-SHA-256, 100 000 itérations, sel aléatoire) et
  * stocké/vérifié uniquement côté client (aucun backend, Web Crypto API) :
@@ -14,7 +14,7 @@
  * n'est jamais présenté dans l'UI ou l'export comme une authentification,
  * une session, ou une preuve de conformité 21 CFR Part 11/Annexe 11.
  *
- * @requirement URS-F-310, TD-033
+ * @requirement TD-033
  */
 
 const ITERATIONS_PBKDF2 = 100_000
