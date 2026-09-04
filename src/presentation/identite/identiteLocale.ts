@@ -1,18 +1,27 @@
 /**
- * Identité de l'utilisateur local — Phase 1 (mono-utilisateur, sans
- * authentification, URS-NF-023 = Phase ultérieure).
+ * Identité de l'utilisateur local — espace réservé tant qu'aucun profil
+ * local (§4.31/URS-F-310bis) n'a encore été défini sur ce poste.
  *
  * @requirement SDS §5 (attribution)
  *
- * Ce n'est **pas** le mécanisme d'attribution retenu à terme : SDS §5
- * (`22-SDS-outil.md`) prévoit que l'attribution réelle vienne de
- * l'identité GitHub authentifiée par le jeton, au moment où chaque
- * enregistrement est committé (connecteur GitHub, backlog tâche #15) —
- * pas d'une saisie locale. Tant que ce connecteur n'existe pas, il n'y a
- * aucune identité authentifiée disponible : cette constante est un
- * espace réservé Phase 1 explicite, centralisé ici pour n'exister qu'à
- * un seul endroit (jamais recopiée en dur écran par écran) et pour être
- * trivialement remplaçable par l'identité réelle une fois le connecteur
- * GitHub câblé.
+ * Historique : le SDS prévoyait à l'origine que l'attribution réelle
+ * vienne d'une identité GitHub authentifiée par jeton. **Amendé Phase 37
+ * (TD-044)** : un compte GitHub individuel par employé exclurait les
+ * clients dont les utilisateurs n'ont pas de compte GitHub — l'identité
+ * multi-utilisateur retenue est désormais le profil local
+ * (`ProfilLocal`, email) déjà construit pour l'archivage (TD-033), pas un
+ * compte GitHub par personne. Le jeton GitHub reste un réglage au niveau
+ * de l'organisation/du client, inchangé. Voir `identifiantUtilisateurCourant`.
  */
 export const IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 = 'utilisateur-local-phase1'
+
+/**
+ * Résout l'identité de l'utilisateur courant pour `owner_id`/`shared_with`
+ * (Phase 37, TD-044) — le profil local (email) s'il existe, sinon
+ * l'espace réservé Phase 1. Jamais une exception : un poste sans profil
+ * local encore défini reste pleinement fonctionnel (comportement Phase 1
+ * inchangé), cohérent avec le caractère additif de ce chantier.
+ */
+export function identifiantUtilisateurCourant(profil: { email: string } | null): string {
+  return profil?.email || IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1
+}
