@@ -11,7 +11,7 @@ import { useRouter } from 'vue-router'
 import { detecterEcartsStructurels } from '../../logique-metier/analyse-projet/detecterEcartsStructurels'
 import type { Project, TemplateType } from '../../logique-metier/domaine/types'
 import { analyserImportJSON } from '../../logique-metier/export/analyserImportJSON'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { peutModifierProjet } from '../../logique-metier/permissions/permissionsProjet'
 import ModaleConfirmationArchivage from '../composants/ModaleConfirmationArchivage.vue'
 import PastilleStatutSection from '../composants/PastilleStatutSection.vue'
 import PipelineQualification from '../composants/PipelineQualification.vue'
@@ -33,6 +33,35 @@ const nouveauTemplateType = ref<TemplateType>('contexte_procede')
 const erreurImport = ref<string | null>(null)
 const modaleArchivageOuverte = ref(false)
 const erreurImportDocument = ref<string | null>(null)
+const nouvelUtilisateurPartage = ref('')
+const nouveauNiveauPartage = ref<'lecture' | 'édition'>('lecture')
+
+/**
+ * Garde d'affichage du partage de projet (Phase 37, TD-044) — convention
+ * UX, jamais une frontière de sécurité réelle (voir `permissionsProjet.ts`).
+ * `true` tant que le projet n'est pas encore chargé, pour ne jamais
+ * masquer les contrôles pendant le chargement initial.
+ */
+const peutModifier = computed(() =>
+  projet.value ? peutModifierProjet(projet.value, projetsStore.identiteCourante) : true,
+)
+
+async function ajouterPartage(): Promise<void> {
+  const userId = nouvelUtilisateurPartage.value.trim()
+  if (userId.length === 0) return
+  const resultat = await projetsStore.partagerProjet(
+    props.projectId,
+    userId,
+    nouveauNiveauPartage.value,
+  )
+  if (!('erreur' in resultat)) projet.value = resultat
+  nouvelUtilisateurPartage.value = ''
+}
+
+async function retirerPartage(userId: string): Promise<void> {
+  const resultat = await projetsStore.retirerPartage(props.projectId, userId)
+  if (!('erreur' in resultat)) projet.value = resultat
+}
 
 async function confirmerArchivage(identiteDeclaree: string): Promise<void> {
   await projetsStore.archiverProjet(props.projectId, identiteDeclaree)
@@ -75,6 +104,7 @@ function titreSection(sectionId: string): string {
 
 onMounted(async () => {
   projet.value = await projetsStore.obtenirProjet(props.projectId)
+  await projetsStore.resoudreIdentiteCourante()
   await sectionsStore.chargerSectionsDuProjet(props.projectId)
   await documentsStore.charger(props.projectId)
 })
@@ -92,11 +122,7 @@ async function importerDocument(evenement: Event): Promise<void> {
   ;(evenement.target as HTMLInputElement).value = ''
 
   try {
-    await documentsStore.importerDocument(
-      props.projectId,
-      fichier,
-      IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
-    )
+    await documentsStore.importerDocument(props.projectId, fichier, projetsStore.identiteCourante)
   } catch {
     erreurImportDocument.value = 'Échec du chargement du document — réessayez.'
   }
@@ -132,7 +158,7 @@ async function ajouterSection(depuisDocument = false): Promise<void> {
     template_type: nouveauTemplateType.value,
     language: projet.value?.language_default ?? 'fr',
     titre: nouveauTitre.value,
-    owner_id: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+    owner_id: projetsStore.identiteCourante,
   })
   formulaireOuvert.value = false
   nouveauTitre.value = ''
@@ -167,7 +193,7 @@ async function importerFichier(evenement: Event): Promise<void> {
   await sectionsStore.importerSection(
     props.projectId,
     resultat.donnees,
-    IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+    projetsStore.identiteCourante,
   )
 }
 </script>
@@ -186,7 +212,12 @@ async function importerFichier(evenement: Event): Promise<void> {
           Échéance : {{ projet.deadline }}
         </p>
       </div>
-      <button type="button" class="bouton-archiver" @click="modaleArchivageOuverte = true">
+      <button
+        v-if="peutModifier"
+        type="button"
+        class="bouton-archiver"
+        @click="modaleArchivageOuverte = true"
+      >
         <IconeSvg nom="archive" :taille="15" />
         Archiver ce projet
       </button>
@@ -204,6 +235,43 @@ async function importerFichier(evenement: Event): Promise<void> {
       </dl>
     </section>
 
+    <section class="carte partage">
+      <h2 class="carte__titre-discret">Partage (Phase 37)</h2>
+      <p class="rappel">
+        Lecture toujours ouverte à tous. Seuls le créateur et les personnes partagées en édition
+        peuvent modifier ce projet — une convention d'affichage, pas une frontière de sécurité
+        réelle (l'accès au dépôt Git reste au niveau du client).
+      </p>
+      <p class="meta-proprietaire">Créé par : {{ projet.owner_id }}</p>
+      <ul v-if="projet.shared_with.length > 0" class="liste-partages">
+        <li v-for="partage in projet.shared_with" :key="partage.user_id">
+          {{ partage.user_id }} — {{ partage.access_level }}
+          <button
+            v-if="peutModifier"
+            type="button"
+            class="bouton-texte-danger"
+            @click="retirerPartage(partage.user_id)"
+          >
+            Retirer
+          </button>
+        </li>
+      </ul>
+      <p v-else class="etat-vide">Pas encore partagé avec personne d'autre.</p>
+      <form v-if="peutModifier" class="formulaire-partage" @submit.prevent="ajouterPartage">
+        <input
+          v-model="nouvelUtilisateurPartage"
+          type="email"
+          placeholder="email@exemple.com"
+          required
+        />
+        <select v-model="nouveauNiveauPartage">
+          <option value="lecture">lecture</option>
+          <option value="édition">édition</option>
+        </select>
+        <button type="submit" class="bouton-secondaire">Partager</button>
+      </form>
+    </section>
+
     <section class="carte pipeline">
       <h2 class="carte__titre-discret">Progression du dossier de qualification</h2>
       <PipelineQualification
@@ -217,7 +285,7 @@ async function importerFichier(evenement: Event): Promise<void> {
     <section class="carte sections">
       <header>
         <h2>Sections</h2>
-        <div class="actions-entete">
+        <div v-if="peutModifier" class="actions-entete">
           <label class="bouton-fichier">
             <IconeSvg nom="dossier" :taille="15" />
             Importer une section (JSON)
@@ -228,11 +296,14 @@ async function importerFichier(evenement: Event): Promise<void> {
             Ajouter une section
           </button>
         </div>
+        <p v-else class="meta-lecture-seule">
+          Lecture seule — vous n'êtes ni créateur ni partagé en édition.
+        </p>
       </header>
       <p v-if="erreurImport" class="erreur-import" role="alert">{{ erreurImport }}</p>
 
       <form
-        v-if="formulaireOuvert"
+        v-if="formulaireOuvert && peutModifier"
         class="formulaire-section"
         @submit.prevent="ajouterSection(false)"
       >
@@ -263,7 +334,7 @@ async function importerFichier(evenement: Event): Promise<void> {
         </div>
       </form>
 
-      <div v-if="sections.length === 0" class="guide-demarrage">
+      <div v-if="sections.length === 0 && peutModifier" class="guide-demarrage">
         <p class="guide-demarrage__titre">Comment voulez-vous démarrer ce dossier ?</p>
         <div class="guide-demarrage__options">
           <button type="button" class="guide-demarrage__option" @click="formulaireOuvert = true">
@@ -283,6 +354,7 @@ async function importerFichier(evenement: Event): Promise<void> {
           </label>
         </div>
       </div>
+      <p v-else-if="sections.length === 0" class="etat-vide">Aucune section pour l'instant.</p>
       <ul v-else class="liste-sections">
         <li v-for="section in sections" :key="section.id">
           <RouterLink
@@ -310,7 +382,7 @@ async function importerFichier(evenement: Event): Promise<void> {
             (URS-F-000quater).
           </p>
         </div>
-        <label class="bouton-fichier">
+        <label v-if="peutModifier" class="bouton-fichier">
           <IconeSvg nom="dossier" :taille="15" />
           Importer un document
           <input type="file" @change="importerDocument" />
@@ -687,6 +759,36 @@ button {
 .etat-vide {
   color: var(--vp-texte-secondaire);
   font-size: 0.9rem;
+}
+
+.meta-proprietaire,
+.meta-lecture-seule {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.85rem;
+}
+
+.liste-partages {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.liste-partages li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+}
+
+.formulaire-partage {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.formulaire-partage input {
+  flex: 1;
 }
 
 .guide-demarrage__titre {
