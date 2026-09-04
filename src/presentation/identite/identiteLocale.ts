@@ -1,6 +1,6 @@
 /**
  * Identité de l'utilisateur local — espace réservé tant qu'aucun profil
- * local (§4.31/URS-F-310bis) n'a encore été défini sur ce poste.
+ * local (§4.31) n'a encore été défini sur ce poste.
  *
  * @requirement SDS §5 (attribution)
  *

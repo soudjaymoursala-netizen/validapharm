@@ -2,10 +2,9 @@ import type { Langue } from '../../logique-metier/domaine/types'
 
 /**
  * Dictionnaire de messages système (FDS §7, "garde-fous non négociables"),
- * multilingue dès Phase 1 (URS-NF-040/040bis) — jamais codé en dur dans une
- * seule langue.
+ * multilingue dès Phase 1 — jamais codé en dur dans une seule langue.
  *
- * @requirement FDS §7, URS-NF-040/040bis
+ * @requirement FDS §7
  *
  * Seuls les codes déjà mobilisés par un écran construit à ce stade sont
  * transcrits (U-01/U-02/U-03/U-05/U-06/U-07/U-08/U-12) — les autres (U-04,
@@ -67,14 +66,14 @@ export const messagesSysteme = {
   // chemin de blocage lui-même, trouvé en simulant un vrai parcours de
   // qualification de bout en bout (projet "achat d'équipement").
   'U-13': {
-    fr: "Le rédacteur et l'approbateur final doivent être renseignés avant de poursuivre (URS-F-011).",
-    en: 'The author and the final approver must be assigned before continuing (URS-F-011).',
-    de: 'Der Verfasser und der endgültige Genehmiger müssen vor dem Fortfahren angegeben werden (URS-F-011).',
+    fr: "Le rédacteur et l'approbateur final doivent être renseignés avant de poursuivre.",
+    en: 'The author and the final approver must be assigned before continuing.',
+    de: 'Der Verfasser und der endgültige Genehmiger müssen vor dem Fortfahren angegeben werden.',
   },
   'U-14': {
-    fr: "Au moins un avis de relecteur est requis avant de transmettre cette section à l'approbation (URS-F-014ter).",
-    en: 'At least one reviewer opinion is required before submitting this section for approval (URS-F-014ter).',
-    de: 'Vor der Weiterleitung dieses Abschnitts zur Genehmigung ist mindestens eine Gutachterstellungnahme erforderlich (URS-F-014ter).',
+    fr: "Au moins un avis de relecteur est requis avant de transmettre cette section à l'approbation.",
+    en: 'At least one reviewer opinion is required before submitting this section for approval.',
+    de: 'Vor der Weiterleitung dieses Abschnitts zur Genehmigung ist mindestens eine Gutachterstellungnahme erforderlich.',
   },
   'U-15': {
     fr: 'Un motif est obligatoire pour rejeter cette section.',
@@ -82,9 +81,9 @@ export const messagesSysteme = {
     de: 'Für die Ablehnung dieses Abschnitts ist eine Begründung erforderlich.',
   },
   'U-16': {
-    fr: 'Cette section est verrouillée (validée en interne) — son corps ne peut plus être modifié directement ; créez une nouvelle révision pour la faire évoluer (URS-F-012).',
-    en: 'This section is locked (internally validated) — its body can no longer be modified directly; create a new revision to change it (URS-F-012).',
-    de: 'Dieser Abschnitt ist gesperrt (intern validiert) — sein Inhalt kann nicht mehr direkt geändert werden; erstellen Sie eine neue Revision, um ihn zu ändern (URS-F-012).',
+    fr: 'Cette section est verrouillée (validée en interne) — son corps ne peut plus être modifié directement ; créez une nouvelle révision pour la faire évoluer.',
+    en: 'This section is locked (internally validated) — its body can no longer be modified directly; create a new revision to change it.',
+    de: 'Dieser Abschnitt ist gesperrt (intern validiert) — sein Inhalt kann nicht mehr direkt geändert werden; erstellen Sie eine neue Revision, um ihn zu ändern.',
   },
   'U-17': {
     fr: "Cette action n'est pas autorisée dans l'état actuel de cette section.",
@@ -111,7 +110,7 @@ export function messageSysteme(
   )
 }
 
-// Libellés de statut de section (URS-F-011bis) : déplacés dans
+// Libellés de statut de section : déplacés dans
 // logique-metier/i18n/libellesStatut.ts — genererExportWord.ts (pur, sans
 // dépendance Vue) en a besoin lui aussi pour respecter le garde-fou "à
 // l'écran ET sur les exports" (FS §4.2/§4.3), et logique-metier ne peut

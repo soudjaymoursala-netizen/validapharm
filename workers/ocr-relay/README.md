@@ -73,7 +73,7 @@ suivantes restent **à faire par l'utilisateur** :
    les Phases 7-8 (Source Intelligence) ont besoin, il n'est pas encore
    consommé par un écran).
 
-## Sans état (TD-001, URS-NF-044ter appliqué par analogie)
+## Sans état (TD-001)
 
 Aucune donnée de la requête (image envoyée, texte extrait) n'est persistée
 par ce Worker au-delà du traitement de la requête en cours — pas de

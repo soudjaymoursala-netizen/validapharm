@@ -1,6 +1,6 @@
 # Configuration locale (non versionnée)
 
-Ce dossier accueille la configuration locale de l'instance ValidaPharm : clés API des fournisseurs IA, jetons Git, secrets des connecteurs QMS tiers (Veeva/SAP/TrackWise), isolés par `client_id` (SDS §6bis, §7 — répond à URS-NF-044).
+Ce dossier accueille la configuration locale de l'instance ValidaPharm : clés API des fournisseurs IA, jetons Git, secrets des connecteurs QMS tiers (Veeva/SAP/TrackWise), isolés par `client_id` (SDS §6bis, §7).
 
 Aucun fichier de secrets réel ne doit être suivi par Git : voir `.gitignore` (`config/secrets.local.json`).
 

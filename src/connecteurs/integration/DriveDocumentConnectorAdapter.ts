@@ -22,13 +22,13 @@ export class DriveDocumentConnectorAdapter implements ConnecteurDocumentaire {
 
   async listerDocuments(): Promise<DocumentExterne[]> {
     throw new OperationNonSupporteeError(
-      'Le miroir Drive est écriture seule (URS-NF-010) — jamais lu comme source de documents.',
+      'Le miroir Drive est écriture seule — jamais lu comme source de documents.',
     )
   }
 
   async lireDocument(): Promise<string> {
     throw new OperationNonSupporteeError(
-      'Le miroir Drive est écriture seule (URS-NF-010) — jamais lu comme source de documents.',
+      'Le miroir Drive est écriture seule — jamais lu comme source de documents.',
     )
   }
 }
