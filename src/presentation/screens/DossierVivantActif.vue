@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Dossier vivant d'un actif (FS §3.9, URS-F-101 à 101septies) — écran
+// Dossier vivant d'un actif (FS §3.9) — écran
 // manquant trouvé le 31/08/2026 en simulant une requalification
 // périodique réelle : le commentaire d'en-tête de `StructureSysteme.vue`
 // listait lui-même cette absence. **Périmètre de ce premier incrément** :
@@ -119,7 +119,7 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
       <h1>Dossier vivant — {{ noeud.name }}</h1>
       <p class="bandeau-disclaimer">
         Agrégation en lecture seule des données déjà rattachées à cet actif — aucune donnée
-        fabriquée, uniquement ce qui a été explicitement lié (URS-F-101).
+        fabriquée, uniquement ce qui a été explicitement lié.
       </p>
 
       <section class="bloc-identite">
@@ -139,7 +139,7 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
       </section>
 
       <section class="bloc-chaine">
-        <h2>Chaîne technique (URS-F-240)</h2>
+        <h2>Chaîne technique</h2>
         <ol v-if="chaineTechnique.length > 0">
           <li v-for="etape in chaineTechnique" :key="etape.relation.id">
             {{ LIBELLES_TYPE_RELATION[etape.relation.type_relation] }} {{ etape.noeud.name }}

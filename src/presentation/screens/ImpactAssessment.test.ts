@@ -36,7 +36,7 @@ beforeEach(async () => {
 })
 
 describe('ImpactAssessment', () => {
-  test("n'affiche aucune question par défaut tant qu'aucune méthode n'est configurée (URS-F-056ter)", async () => {
+  test("n'affiche aucune question par défaut tant qu'aucune méthode n'est configurée", async () => {
     const wrapper = mount(ImpactAssessment, {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },
@@ -46,7 +46,7 @@ describe('ImpactAssessment', () => {
     expect(wrapper.text()).toContain("Aucune méthode Impact Assessment n'est configurée")
   })
 
-  test('configure une méthode puis calcule le verdict Direct Impact sur une réponse "oui" (URS-F-056/056bis)', async () => {
+  test('configure une méthode puis calcule le verdict Direct Impact sur une réponse "oui"', async () => {
     const wrapper = mount(ImpactAssessment, {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },

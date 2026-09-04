@@ -50,7 +50,7 @@ beforeEach(async () => {
   await db.qualityEvents.clear()
 })
 
-describe('DossierVivantActif (URS-F-101 à 101septies)', () => {
+describe('DossierVivantActif', () => {
   test('agrège le statut de qualification et les évaluations rattachées à l’actif', async () => {
     const maintenant = new Date().toISOString()
     await db.assetNodes.put({

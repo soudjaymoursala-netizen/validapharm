@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Configuration du miroir Drive par client (SDS §5bis) — dossier Drive
 // dédié + jeton, isolés par client_id. Déclenchement manuel uniquement
-// dans cet incrément ("Sauvegarder maintenant", URS-NF-011) ; le
+// dans cet incrément ("Sauvegarder maintenant") ; le
 // déclenchement automatique par heuristique de fin de session reste
 // backlog (voir useMiroirDriveStore.ts).
 import { computed, onMounted, reactive, ref } from 'vue'

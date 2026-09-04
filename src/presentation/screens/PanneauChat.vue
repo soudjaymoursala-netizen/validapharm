@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // Panneau Chat expert (FDS §3.4, FS §4.4) — panneau séparé de l'espace de
-// rédaction (URS-F-030). Mode "audit simulé" (URS-F-038/039/039bis/038bis,
-// Phase 32, TD-030) : bascule explicite entre `chat_normatif` et
+// rédaction. Mode "audit simulé" (Phase 32, TD-030) : bascule explicite entre `chat_normatif` et
 // `audit_simule`, sélection de persona(s) d'auditeur simulé, bandeau de
 // rappel non négociable affiché à chaque activation.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -95,7 +94,7 @@ function demanderEnvoi(): void {
 }
 
 /**
- * Mode audit_simule (URS-F-038/039bis, Phase 32) : la question réellement
+ * Mode audit_simule (Phase 32) : la question réellement
  * envoyée au fournisseur porte le prompt engineered (débat contradictoire +
  * personas), jamais la question brute — celle-ci reste ce qui s'affiche
  * dans l'historique via `questionAffichee`.
@@ -180,7 +179,7 @@ async function reouvrirSession(): Promise<void> {
       <p class="bandeau-avertissement" role="alert">
         ⚠ Mode audit simulé : débat contradictoire multi-angles et, si des profils sont
         sélectionnés, simulation de persona(s) d'auditeur. Cette simulation ne constitue en aucun
-        cas un audit réglementaire réel ni un avis opposable (URS-F-039bis).
+        cas un audit réglementaire réel ni un avis opposable.
       </p>
       <fieldset class="bloc-personas">
         <legend>Persona(s) d'auditeur simulé (optionnel)</legend>
@@ -192,7 +191,7 @@ async function reouvrirSession(): Promise<void> {
     </template>
 
     <section v-if="sessionFermeePourInactivite" class="bloc-inactivite">
-      <p>Session fermée pour cause d'inactivité — consignée au journal (URS-F-037).</p>
+      <p>Session fermée pour cause d'inactivité — consignée au journal.</p>
       <button type="button" @click="reouvrirSession">Rouvrir une session</button>
     </section>
 
@@ -231,7 +230,7 @@ async function reouvrirSession(): Promise<void> {
           ></textarea>
         </label>
         <label>
-          Joindre ce document à la question (action explicite, URS-F-031)
+          Joindre ce document à la question (action explicite)
           <select v-model="sectionAJoindreId">
             <option value="">— aucun —</option>
             <option v-for="s in sectionsDisponibles" :key="s.id" :value="s.id">

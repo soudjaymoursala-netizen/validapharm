@@ -1,12 +1,12 @@
 <script setup lang="ts">
-// Computer System Assessment (F3 du catalogue §10, URS-F-057/057bis) —
+// Computer System Assessment (F3 du catalogue §10) —
 // écran manquant trouvé le 29/08/2026 en comparant l'inventaire d'écrans
 // réel à celui documenté depuis la FDS v15 (Phase 3, 25/08/2026) : le
 // store `useCSVAssessmentStore` existait depuis la Phase 3 sans jamais
 // avoir de composant. Contrairement à l'ACFC (F2) et l'Impact Assessment
 // (F1), pas de `MethodProfile` : la catégorie GAMP5 est une grille
 // normative fixe (PIC/S PI 011-3), jamais configurable par client
-// (URS-F-057bis) — sélection directe parmi les 5 valeurs fixes.
+// — sélection directe parmi les 5 valeurs fixes.
 import { computed, onMounted, ref } from 'vue'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useCSVAssessmentStore } from '../stores/useCSVAssessmentStore'
@@ -89,9 +89,7 @@ function nouvelleEvaluation(): void {
   <main class="csv-assessment">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Computer System Assessment — {{ nomClient ?? props.clientId }}</h1>
-    <p class="bandeau-disclaimer">
-      Aide à la décision, non une décision de classification (URS-F-057).
-    </p>
+    <p class="bandeau-disclaimer">Aide à la décision, non une décision de classification.</p>
 
     <section v-if="!evaluationEnregistree" class="bloc-evaluation">
       <form class="formulaire" @submit.prevent="enregistrerEvaluation">
@@ -110,7 +108,7 @@ function nouvelleEvaluation(): void {
         </label>
 
         <fieldset class="categorie">
-          <legend>Catégorie GAMP5 (grille fixe, non modulable par client — URS-F-057bis)</legend>
+          <legend>Catégorie GAMP5 (grille fixe, non modulable par client)</legend>
           <label v-for="n in [1, 2, 3, 4, 5] as CategorieGAMP5[]" :key="n">
             <input v-model.number="categorieGamp5" type="radio" :value="n" />
             {{ LIBELLES_CATEGORIE[n] }}

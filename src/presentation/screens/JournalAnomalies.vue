@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Journal d'anomalies (URS-NF-053, FDS §3.7) — écran manquant trouvé le
+// Journal d'anomalies (FDS §3.7) — écran manquant trouvé le
 // 31/08/2026 : le type de domaine `QualityEvent` (famille Change
 // Control/Deviation/CAPA/Investigation/Audit finding/Revue périodique),
 // sa table Dexie et son store (`useQualityEventStore.ts`, Phase 5 de
@@ -126,9 +126,8 @@ function titreEvenement(id: string): string {
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Journal d'anomalies — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">
-      Change Control, Déviation, CAPA, Investigation, Constat d'audit, Revue périodique
-      (URS-NF-053). Un événement externe référencé n'est jamais un verrou sur un autre module
-      (DEC-002/DEC-055).
+      Change Control, Déviation, CAPA, Investigation, Constat d'audit, Revue périodique. Un
+      événement externe référencé n'est jamais un verrou sur un autre module (DEC-002/DEC-055).
     </p>
 
     <form class="formulaire" @submit.prevent="creerEvenement">

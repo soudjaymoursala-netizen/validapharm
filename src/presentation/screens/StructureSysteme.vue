@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Structure Système — référentiel d'actifs (FS §4.10, URS-F-100 à
-// 100decies). Hiérarchie configurable + CRUD de nœuds avec absence de
-// cycle et unicité du code, relations techniques (URS-F-240) et statut
-// de qualification (URS-F-101/101bis). Hors périmètre : graphe
+// Structure Système — référentiel d'actifs (FS §4.10). Hiérarchie
+// configurable + CRUD de nœuds avec absence de
+// cycle et unicité du code, relations techniques et statut
+// de qualification. Hors périmètre : graphe
 // `associated_nodes[]`, pull QMS, dossier vivant agrégé (voir
 // `DossierVivantActif.vue`), liaison projet↔nœud.
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -29,7 +29,7 @@ const brouillonNoeud = reactive({ level_key: '', name: '', code: '', parent_id: 
 const resultatCreation = ref<ResultatActionNoeud | undefined>(undefined)
 const reparentageEnErreur = reactive<Record<string, string>>({})
 
-// --- Relations techniques (URS-F-240, Phase 18) — logique déjà présente
+// --- Relations techniques (Phase 18) — logique déjà présente
 // dans le store depuis la Phase 18, jamais exposée à l'écran jusqu'ici
 // (trouvé en simulant un vrai parcours de requalification, 31/08/2026).
 const LIBELLES_TYPE_RELATION: Record<TypeRelationTechnique, string> = {
@@ -78,7 +78,7 @@ const chaineAffichee = computed(() =>
     : [],
 )
 
-// --- Statut de qualification (URS-F-101, URS-F-101bis) — modélisé dans
+// --- Statut de qualification — modélisé dans
 // `AssetNode` depuis la conception mais jamais éditable après la création
 // (toujours figé à `non_qualifie`, trouvé identique en simulant une
 // requalification périodique réelle, 31/08/2026). Édition manuelle
@@ -243,7 +243,7 @@ const noeudsAffiches = computed(() =>
     <h1>Structure Système — {{ nomClient ?? props.clientId }}</h1>
 
     <section class="bloc-hierarchie">
-      <h2>Hiérarchie configurable (URS-F-100bis)</h2>
+      <h2>Hiérarchie configurable</h2>
       <ul class="liste-niveaux">
         <li v-for="niveau in structureStore.schema?.levels ?? []" :key="niveau.key">
           {{ niveau.label.fr }} ({{ niveau.key }})
@@ -411,7 +411,7 @@ const noeudsAffiches = computed(() =>
     </section>
 
     <section class="bloc-relations">
-      <h2>Relations techniques (URS-F-240)</h2>
+      <h2>Relations techniques</h2>
       <p class="rappel">
         Relation typée et dirigée entre deux nœuds (ex. « le PLC-01 contrôle l'Isolateur-02 ») —
         permet de tracer une chaîne technique complète (composant → équipement → PLC → SCADA →

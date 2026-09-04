@@ -1,15 +1,15 @@
 <script setup lang="ts">
 // Configuration IA par client (FS §4.4, `client_config`) — choix du
 // fournisseur, accusé des conditions de traitement des données
-// (URS-F-032ter) et qualification de fiabilité (URS-F-032quater/quinquies).
+// et qualification de fiabilité.
 // Isolé par client_id, comme la config Drive ; le relais lui-même
 // (URL/jeton) est global à l'installation et se configure sur l'écran
 // Configuration (voir ConfigurationClient.vue).
 //
 // Le modèle local (Ollama) ne quitte jamais le poste de l'utilisateur :
-// les gardes URS-F-032ter/quater (conditions de traitement des données,
+// les gardes (conditions de traitement des données,
 // qualification de fiabilité) ne visent explicitement que les
-// « fournisseurs cloud » (texte URS-F-032ter/quater) — ce garde-fou n'a
+// « fournisseurs cloud » — ce garde-fou n'a
 // donc pas de sens à lui appliquer et il est délibérément exempté ici.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { messageSysteme } from '../i18n/messages'
@@ -37,8 +37,8 @@ const FOURNISSEURS_CLOUD = [
 const FOURNISSEUR_LOCAL = { id: 'local', nom: 'Modèle local (Ollama)' } as const
 
 /**
- * Qualification de fiabilité séparée par mode d'usage (URS-F-038bis,
- * Phase 32) — chat normatif et audit simulé n'ont pas le même profil de
+ * Qualification de fiabilité séparée par mode d'usage (Phase 32) —
+ * chat normatif et audit simulé n'ont pas le même profil de
  * risque, jamais une qualification unique réputée valable pour les deux.
  */
 const MODES_USAGE: ReadonlyArray<{ id: ModeUsageIA; nom: string }> = [
@@ -153,10 +153,10 @@ async function enregistrerQualification(): Promise<void> {
       </section>
 
       <section class="bloc-qualification">
-        <h2>Qualification de fiabilité (URS-F-032quater/quinquies)</h2>
+        <h2>Qualification de fiabilité</h2>
         <p class="rappel">
-          Une qualification distincte est requise pour chaque mode d'usage (URS-F-038bis) — le chat
-          normatif et le mode audit simulé n'ont pas le même profil de risque.
+          Une qualification distincte est requise pour chaque mode d'usage — le chat normatif et le
+          mode audit simulé n'ont pas le même profil de risque.
         </p>
         <fieldset>
           <label v-for="m in MODES_USAGE" :key="m.id">
@@ -224,7 +224,7 @@ async function enregistrerQualification(): Promise<void> {
 
     <p v-else class="rappel">
       Le modèle local ne transmet aucune donnée à un tiers : ni accusé de conditions de traitement,
-      ni qualification de fiabilité cloud ne s'appliquent (URS-F-032ter/quater).
+      ni qualification de fiabilité cloud ne s'appliquent.
     </p>
   </main>
 </template>

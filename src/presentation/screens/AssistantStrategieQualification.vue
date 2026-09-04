@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// Assistant de stratégie de qualification (FS §4.6, URS-F-050 à 055) —
-// module par client (URS-F-054) ; l'accès depuis une section Change
-// Control en cours de rédaction (même URS-F-054) reste hors périmètre de
+// Assistant de stratégie de qualification (FS §4.6) —
+// module par client ; l'accès depuis une section Change
+// Control en cours de rédaction reste hors périmètre de
 // cet incrément — `change_control` n'existe pas encore comme
-// `TemplateType` dans ce projet. Aucune génération IA ici (URS-F-050bis) :
+// `TemplateType` dans ce projet. Aucune génération IA ici :
 // différée avec le reste du routage par mode (tâches #28/#29).
 //
 // Section 1 (ACFC) réécrite le 25/08/2026 (Phase 1 de convergence

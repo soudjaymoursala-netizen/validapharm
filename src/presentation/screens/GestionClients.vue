@@ -7,7 +7,7 @@
 // plus directement les outils (avant Phase 40 : 8 liens par ligne), il ne
 // fait que créer/archiver/désarchiver l'identité du client.
 //
-// Archivage (§4.31/URS-F-310) : jamais une suppression physique (ALCOA+)
+// Archivage (§4.31) : jamais une suppression physique (ALCOA+)
 // — voir `ModaleConfirmationArchivage.vue` pour la double garde (nom
 // retapé + vraie session, TD-046). Suppression **définitive** (admin
 // uniquement, justification obligatoire) : voir `ModaleSuppressionDefinitive.vue`,
