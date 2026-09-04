@@ -327,6 +327,16 @@ button[type='submit']:hover:not(:disabled) {
   color: var(--vp-marque-bouton-texte);
 }
 
+/* `input` volontairement exclu de la base globale précédente (Phase 41) —
+   bug réel trouvé après coup, signalé par l'utilisateur : sans cette
+   règle, un `<input>` sans style local garde le fond blanc natif du
+   navigateur tout en héritant le texte clair du thème sombre (`body`) —
+   texte blanc sur fond blanc, invisible à la saisie. Exclusion explicite
+   des types qui ont leur propre rendu natif (case à cocher, bouton,
+   fichier…), qui ne doivent jamais recevoir cette bordure/ce fond. */
+input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type='button']):not(
+    [type='file']
+  ):not([type='range']):not([type='color']):not([type='image']):not([type='reset']),
 select,
 textarea {
   font-family: inherit;
