@@ -39,7 +39,7 @@ beforeEach(async () => {
   await db.assetNodes.clear()
 })
 
-describe('JournalAnomalies (URS-NF-053)', () => {
+describe('JournalAnomalies', () => {
   test('le bouton de création reste désactivé tant que le type et le titre ne sont pas renseignés', async () => {
     const wrapper = mount(JournalAnomalies, {
       props: { clientId: 'client-1' },

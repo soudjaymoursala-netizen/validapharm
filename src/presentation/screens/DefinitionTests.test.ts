@@ -74,7 +74,7 @@ describe('DefinitionTests', () => {
       async () => (await db.testCandidates.where('client_id').equals('client-1').count()) > 0,
     )
 
-    // Accepter le candidat — jamais automatique (URS-F, garde-fou 7a)
+    // Accepter le candidat — jamais automatique (garde-fou 7a)
     await wrapper.find('.liste-candidats button').trigger('click')
     await attendreQue(async () => (await db.testCandidates.toArray())[0]?.statut === 'accepte')
 

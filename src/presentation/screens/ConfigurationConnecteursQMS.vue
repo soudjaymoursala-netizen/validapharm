@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Configuration des connecteurs QMS/documentaires tiers (URS-F-090 à
-// 090ter) — écran manquant trouvé le 31/08/2026 (FDS §12) : le type de
+// Configuration des connecteurs QMS/documentaires tiers —
+// écran manquant trouvé le 31/08/2026 (FDS §12) : le type de
 // domaine `Connector` et sa table Dexie existent depuis la Phase 10, sans
 // jamais avoir eu de store ni d'écran. CRUD de configuration uniquement,
 // cf. `useConnecteursQMSStore.ts` pour le détail du périmètre.
@@ -157,9 +157,9 @@ async function creerConnecteur(): Promise<void> {
     <RouterLink :to="{ name: 'gestion-clients' }">&larr; Clients</RouterLink>
     <h1>Connecteurs QMS/documentaires — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">
-      Configuration uniquement (URS-F-090). Les adaptateurs Veeva Vault, SharePoint, dossier réseau
-      et EDMS générique ne sont pas encore implémentés — aucun test de connexion réel n'est possible
-      depuis cet écran pour ces types.
+      Configuration uniquement. Les adaptateurs Veeva Vault, SharePoint, dossier réseau et EDMS
+      générique ne sont pas encore implémentés — aucun test de connexion réel n'est possible depuis
+      cet écran pour ces types.
     </p>
 
     <form class="formulaire" @submit.prevent="creerConnecteur">

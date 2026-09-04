@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// Bibliothèque de normes (FS §4.5, URS-F-040) — agrégation déterministe des
+// Bibliothèque de normes (FS §4.5) — agrégation déterministe des
 // normes/référentiels déjà portés par chaque gabarit du catalogue (FDS §4).
-// URS-F-041 (association de documents normatifs propres à l'utilisateur,
-// Could) reste backlog : nécessiterait un écran générique de bibliothèque de
-// documents (URS-F-000quater) non construit à ce stade — voir TD-032.
+// L'association de documents normatifs propres à l'utilisateur
+// (Could) reste backlog : nécessiterait un écran générique de bibliothèque de
+// documents non construit à ce stade — voir TD-032.
 import { computed, ref } from 'vue'
 import { rechercherNormes } from '../../logique-metier/bibliotheque-normes/rechercherNormes'
 

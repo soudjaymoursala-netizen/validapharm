@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Profil utilisateur local (§4.31/URS-F-310bis, TD-033 ; §8.1 du prompt
+// Profil utilisateur local (§4.31, TD-033 ; §8.1 du prompt
 // maître du 03/09/2026, Phase 40 — nom/prénom ajoutés). Porte le verrou
 // de confirmation (mot de passe haché localement) requis pour archiver un
 // client/projet. Ce n'est PAS un compte, PAS une authentification de

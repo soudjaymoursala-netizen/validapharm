@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Tableau de bord / Vue portefeuille (FDS §2) — version minimale de cet
-// incrément : liste des projets + création (URS-F-070 à 073 pour la
-// version complète avec statuts agrégés/alertes, backlog).
+// incrément : liste des projets + création (version complète avec
+// statuts agrégés/alertes, backlog).
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { Langue } from '../../logique-metier/domaine/types'

@@ -37,7 +37,7 @@ beforeEach(async () => {
   await db.connectors.clear()
 })
 
-describe('ConfigurationConnecteursQMS (URS-F-090 à 090ter)', () => {
+describe('ConfigurationConnecteursQMS', () => {
   test('crée un connecteur Veeva Vault et affiche le rappel "adaptateur non implémenté"', async () => {
     const wrapper = mount(ConfigurationConnecteursQMS, {
       props: { clientId: 'client-1' },

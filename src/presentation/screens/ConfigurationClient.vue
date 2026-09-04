@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Configuration client (FDS §2) — connexion au dépôt GitHub dédié
-// (URS-NF-044) + relais IA (SDS §10quater), tous deux globaux à
+// + relais IA (SDS §10quater), tous deux globaux à
 // l'installation (un seul dépôt/relais, pas un par client — contrairement
 // au fournisseur IA/qualification de fiabilité, qui sont par client et se
 // configurent sur l'écran Configuration IA d'un client, GestionClients.vue).
@@ -96,7 +96,7 @@ async function enregistrerAuthentification(): Promise<void> {
       <h2>Dépôt GitHub dédié</h2>
       <p class="rappel">
         Utilisez un jeton d'accès personnel (PAT) à portée strictement restreinte à ce seul dépôt —
-        jamais un jeton donnant accès à l'ensemble de votre compte GitHub (URS-NF-044bis).
+        jamais un jeton donnant accès à l'ensemble de votre compte GitHub.
       </p>
 
       <form class="formulaire" @submit.prevent="enregistrer">
@@ -141,7 +141,7 @@ async function enregistrerAuthentification(): Promise<void> {
       <p class="rappel">
         Le navigateur ne contacte jamais un fournisseur d'IA directement : toutes les requêtes
         passent par ce relais serverless unique, qui détient la clé du fournisseur configuré côté
-        serveur (SDS §10quater, URS-NF-044ter).
+        serveur (SDS §10quater).
       </p>
 
       <form class="formulaire" @submit.prevent="enregistrerRelais">

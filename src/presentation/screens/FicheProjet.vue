@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // Fiche Projet (FDS §2) — contexte/portée, sections liées, ajout de
-// section depuis le catalogue (URS-F-000 à 000nonies). Version minimale
+// section depuis le catalogue. Version minimale
 // de cet incrément : la vue de traçabilité (graphe des liens) reste
-// backlog (tâche #12). Section "Documents" (URS-F-000quater, §4.9)
+// backlog (tâche #12). Section "Documents" (§4.9)
 // ajoutée v20 — comblait un écart Must documenté (le seul chargement de
 // fichier existant était le besoin ponctuel §4.1bis de génération de
 // brouillon, pas un écran générique de bibliothèque de documents).
@@ -89,7 +89,7 @@ const CATALOGUE_DISPONIBLE: readonly TemplateType[] = [
 const sections = computed(() => sectionsStore.sectionsParProjet[props.projectId] ?? [])
 
 /**
- * Analyse structurelle du dossier (§4.8, Phase 34, URS-F-082/083) —
+ * Analyse structurelle du dossier (§4.8, Phase 34) —
  * déterministe, jamais un appel IA. Recalculée à chaque changement de
  * sections/liens plutôt que mise en cache, le volume de sections d'un
  * projet restant modeste (cohérent avec le reste de l'écran).
@@ -110,8 +110,8 @@ onMounted(async () => {
 })
 
 /**
- * Import d'un document de référence sous n'importe quel format (URS-F-000quater,
- * §4.9) — aucune restriction de type ni de taille fabriquée ici : le seul
+ * Import d'un document de référence sous n'importe quel format
+ * (§4.9) — aucune restriction de type ni de taille fabriquée ici : le seul
  * garde-fou exigé est l'étiquetage automatique "référence de travail, non
  * maître" (porté par le store, jamais contournable depuis cet écran).
  */
@@ -172,7 +172,7 @@ async function ajouterSection(depuisDocument = false): Promise<void> {
 }
 
 /**
- * Import JSON (FS §4.3, URS-F-021 : "réutilisable pour sauvegarde
+ * Import JSON (FS §4.3 : "réutilisable pour sauvegarde
  * manuelle ou transfert entre postes") — crée toujours une section
  * nouvelle dans ce projet, jamais un écrasement.
  */
@@ -378,8 +378,7 @@ async function importerFichier(evenement: Event): Promise<void> {
           <h2>Documents</h2>
           <p class="rappel">
             Fichiers de référence (documentation fournisseur, manuels, SOP…) sous n'importe quel
-            format — toujours des références de travail, jamais des documents maîtres du QMS
-            (URS-F-000quater).
+            format — toujours des références de travail, jamais des documents maîtres du QMS.
           </p>
         </div>
         <label v-if="peutModifier" class="bouton-fichier">
@@ -430,8 +429,7 @@ async function importerFichier(evenement: Event): Promise<void> {
     <section v-if="ecartsStructurels.length > 0" class="carte analyse-structurelle">
       <h2 class="carte__titre-discret">Analyse structurelle du dossier (§4.8)</h2>
       <p class="rappel">
-        Constats déterministes, jamais un verdict de conformité — à vérifier par l'utilisateur
-        (URS-F-083).
+        Constats déterministes, jamais un verdict de conformité — à vérifier par l'utilisateur.
       </p>
       <ul class="liste-ecarts">
         <li v-for="ecart in ecartsStructurels" :key="ecart.sectionId">

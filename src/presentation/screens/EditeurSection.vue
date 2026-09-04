@@ -4,7 +4,7 @@
 // template_type de la section ; repli sur un champ de contenu générique
 // sinon (gabarits pas encore définis dans le catalogue — voir
 // logique-metier/gabarits/catalogue/index.ts). Transitions de statut avec
-// garde-fous fidèles (FDS §3.2/§3.3), sauvegarde automatique (URS-F-009).
+// garde-fous fidèles (FDS §3.2/§3.3), sauvegarde automatique.
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
@@ -61,8 +61,7 @@ const sectionCibleLienId = ref('')
 const dernierResultat = ref<ResultatActionSection | undefined>(undefined)
 let minuteurSauvegarde: ReturnType<typeof setTimeout> | undefined
 
-// Génération de brouillon par adaptation (§4.1bis, Phase 33, TD-031,
-// URS-F-060 à 064).
+// Génération de brouillon par adaptation (§4.1bis, Phase 33, TD-031).
 const modeReference = ref<'coller' | 'uploader'>('coller')
 const texteDocumentReference = ref('')
 const nomDocumentReference = ref('')
@@ -74,7 +73,7 @@ const enGeneration = ref(false)
 const erreurGeneration = ref<string | null>(null)
 const documentReferenceUtilise = ref<ProjectDocument | undefined>(undefined)
 /**
- * URS-F-061 : "jamais de validation globale en un clic" — chaque section
+ * "Jamais de validation globale en un clic" — chaque section
  * du gabarit (au sens `DefinitionSection`, pas l'objet `Section` lui-même)
  * doit être explicitement relue avant que le bouton de validation ne
  * s'active. Volontairement non persisté : recharger la page en cours de
@@ -205,7 +204,7 @@ onMounted(async () => {
   }
 })
 
-// Sauvegarde automatique locale, debounce court (URS-F-009) — uniquement
+// Sauvegarde automatique locale, debounce court — uniquement
 // pour le repli générique (pas de gabarit défini pour ce template_type) ;
 // RenduGabarit gère son propre debounce par champ pour un gabarit défini.
 watch(contenu, (valeur) => {
@@ -233,7 +232,7 @@ async function majTableGabarit(
   await recharger()
 }
 
-// Export (FS §4.3, URS-F-020/021/022/027/028ter).
+// Export (FS §4.3).
 const blocageExport = computed(() =>
   section.value ? verifierBlocageExport(section.value) : { bloque: false as const },
 )
@@ -284,10 +283,10 @@ async function exporterWord(): Promise<void> {
 }
 
 /**
- * Import d'un gabarit `.docx` client (Phase 26, TD-024, URS-F-023/024) —
+ * Import d'un gabarit `.docx` client (Phase 26, TD-024) —
  * refusé par le store lui-même (`importerGabarit`) si les éléments
  * obligatoires (bloc de signatures, historique des révisions) ne sont pas
- * mappés (URS-F-026), jamais enregistré "à corriger plus tard".
+ * mappés, jamais enregistré "à corriger plus tard".
  */
 async function importerGabaritExport(evenement: Event): Promise<void> {
   erreurGabaritExport.value = null
@@ -321,7 +320,7 @@ async function importerGabaritExport(evenement: Event): Promise<void> {
   }
 }
 
-/** Exporte au format `.docx` OOXML réel du gabarit client sélectionné — équivalence de contenu avec `exporterWord` garantie par `construireDonneesExportGabarit` (URS-F-025). */
+/** Exporte au format `.docx` OOXML réel du gabarit client sélectionné — équivalence de contenu avec `exporterWord` garantie par `construireDonneesExportGabarit`. */
 async function exporterWordGabaritClient(): Promise<void> {
   erreurGabaritExport.value = null
   if (!section.value) return
@@ -615,7 +614,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
       <p class="rappel">
         Adapte un document de référence (structure, langage, raisonnement) au contexte du nouveau
         cas — le résultat reste au statut « proposé par IA — non validé » tant que chaque section du
-        gabarit n'a pas été relue explicitement (URS-F-061).
+        gabarit n'a pas été relue explicitement.
       </p>
 
       <fieldset class="choix-reference">
@@ -713,9 +712,9 @@ async function ajouterAvisRelecteur(): Promise<void> {
     </section>
 
     <section v-if="section.status === 'propose_par_ia_non_valide'" class="revue-ia no-print">
-      <h2>Revue du brouillon proposé par IA (URS-F-061)</h2>
+      <h2>Revue du brouillon proposé par IA</h2>
       <p v-if="documentReferenceUtilise">
-        Document de référence : « {{ documentReferenceUtilise.filename }} » (URS-F-064)
+        Document de référence : « {{ documentReferenceUtilise.filename }} »
       </p>
       <p class="rappel">
         Relisez explicitement chaque section ci-dessus avant de pouvoir valider — aucune validation
@@ -775,7 +774,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
     </section>
 
     <section v-if="section.status !== 'valide_en_interne'" class="workflow no-print">
-      <h2>Workflow (URS-F-011, URS-F-014ter/quater)</h2>
+      <h2>Workflow</h2>
       <p>
         Approbateur final :
         <strong>{{ section.workflow.approver_final ?? 'non renseigné' }}</strong>
@@ -894,7 +893,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
       </div>
 
       <div v-if="projet?.client_id" class="gabarit-export-client">
-        <h3>Gabarit d'export personnalisé (URS-F-023 à 026)</h3>
+        <h3>Gabarit d'export personnalisé</h3>
         <p v-if="erreurGabaritExport" class="bandeau-erreur" role="alert">
           {{ erreurGabaritExport }}
         </p>

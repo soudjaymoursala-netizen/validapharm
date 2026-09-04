@@ -46,7 +46,7 @@ describe('ComputerSystemAssessment', () => {
     expect(submitBtn.attributes('disabled')).toBeDefined()
   })
 
-  test('enregistre une évaluation complète (catégorie fixe, jamais configurable par client — URS-F-057bis)', async () => {
+  test('enregistre une évaluation complète (catégorie fixe, jamais configurable par client)', async () => {
     const wrapper = mount(ComputerSystemAssessment, {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },

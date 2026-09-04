@@ -118,7 +118,7 @@ describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maî
     expect(wrapper.find('.bandeau-erreur').exists()).toBe(false)
   })
 
-  test('un gabarit sans les balises obligatoires est refusé, jamais listé (URS-F-026)', async () => {
+  test('un gabarit sans les balises obligatoires est refusé, jamais listé', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })
     if ('erreur' in client) throw client
