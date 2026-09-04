@@ -32,26 +32,23 @@ CONFLICT-004 pour le contexte.
 
 ## Ce qui NE PEUT PAS être fait depuis une session Claude Code distante
 
-Cette session n'a pas accès au compte Cloudflare de l'utilisateur — comme
-pour `workers/ocr-relay/`, les étapes suivantes restent **à faire par
-l'utilisateur** :
+Initialement écrit en supposant aucun accès Cloudflare — le 04/09/2026,
+l'utilisateur a connecté le connecteur MCP « Cloudflare Developer
+Platform » à cette session, qui a alors pu réaliser les étapes 1 et 2
+réellement (base D1 créée sous le compte réel de l'utilisateur, schéma
+appliqué). Ce connecteur ne fournit toutefois aucun moyen d'uploader le
+code d'un Worker ni de poser un secret (`wrangler secret put` n'a pas
+d'équivalent MCP disponible) — les étapes 3 à 7 restent donc **à faire
+par l'utilisateur**, avec ou sans ce connecteur :
 
-1. **Créer la base D1** :
-   ```
-   cd workers/auth-worker
-   npm install
-   wrangler login
-   wrangler d1 create validapharm-auth
-   ```
-   Copier le `database_id` renvoyé dans `wrangler.toml` (remplace
-   `REMPLACER_PAR_L_ID_REEL_APRES_wrangler_d1_create`).
+1. ~~**Créer la base D1**~~ — **fait** (04/09/2026, via le connecteur MCP) :
+   base `validapharm-auth`, `database_id` `5fb762ef-fe99-4e68-9086-e57126c5c2aa`,
+   déjà renseigné dans `wrangler.toml`.
 
-2. **Appliquer le schéma** :
-   ```
-   npm run migrate:remote
-   ```
-   (`npm run migrate:local` pour tester avec `wrangler dev` en local
-   d'abord, recommandé avant le déploiement réel.)
+2. ~~**Appliquer le schéma**~~ — **fait** (04/09/2026, migration `0001_init.sql`
+   appliquée statement par statement via le connecteur MCP) : tables
+   `users`/`clients`/`audit_log` + les 2 index existent réellement sur la
+   base ci-dessus, vérifiées par une requête sur `sqlite_master`.
 
 3. **Configurer les secrets** (jamais commités) :
    ```
