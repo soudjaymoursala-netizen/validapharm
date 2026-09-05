@@ -8,6 +8,7 @@ import {
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import { useAuthStore } from './useAuthStore'
+import { useClientActifStore } from './useClientActifStore'
 import { useConnexionAuthentificationStore } from './useConnexionAuthentificationStore'
 
 let demonter: () => void
@@ -70,6 +71,19 @@ describe('useAuthStore', () => {
     expect(useAuthStore().utilisateur).toBeNull()
     expect(await db.sessionAuthentification.get('unique')).toBeUndefined()
   })
+
+  test(
+    'deconnecter() réinitialise le client actif — sans quoi, sur un poste ' +
+      'partagé, le prochain utilisateur connecté hérite du dernier client ' +
+      "visité par le précédent (même un client qu'il n'a pas le droit de voir)",
+    async () => {
+      await connecterAdminDeTest('admin@pharmatech.example', 'CoffreFort!2026')
+      useClientActifStore().definirClientActif('client-du-precedent-utilisateur')
+      await useAuthStore().deconnecter()
+
+      expect(useClientActifStore().clientActifId).toBeNull()
+    },
+  )
 
   test('verifierMotDePasse confirme le vrai mot de passe, infirme un mauvais', async () => {
     await connecterAdminDeTest('admin@pharmatech.example', 'CoffreFort!2026')

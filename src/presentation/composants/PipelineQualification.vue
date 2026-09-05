@@ -169,17 +169,19 @@ function libelleCourtStatut(etape: EtapeCalculee): string {
     <div v-if="plansSupport.some((p) => p.sections.length > 0)" class="plans-support">
       <p class="plans-support__titre">Plans de support (liés, pas séquentiels)</p>
       <ul>
-        <li v-for="plan in plansSupport" v-show="plan.sections.length > 0" :key="plan.type">
-          <RouterLink
-            :to="{
-              name: 'editeur-section',
-              params: { projectId, sectionId: plan.sections[0]?.id },
-            }"
-          >
-            {{ plan.libelle }}
-          </RouterLink>
-          <span class="etape__statut">{{ libelleCourtStatut(plan) }}</span>
-        </li>
+        <template v-for="plan in plansSupport" :key="plan.type">
+          <li v-if="plan.sections.length > 0">
+            <RouterLink
+              :to="{
+                name: 'editeur-section',
+                params: { projectId, sectionId: plan.sections[0]?.id },
+              }"
+            >
+              {{ plan.libelle }}
+            </RouterLink>
+            <span class="etape__statut">{{ libelleCourtStatut(plan) }}</span>
+          </li>
+        </template>
       </ul>
     </div>
   </section>

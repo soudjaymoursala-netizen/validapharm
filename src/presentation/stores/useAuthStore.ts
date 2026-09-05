@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { AuthApiClient, type UtilisateurWire } from '../../connecteurs/auth/AuthApiClient'
 import { db } from '../../persistance/db'
+import { useClientActifStore } from './useClientActifStore'
 import { useConnexionAuthentificationStore } from './useConnexionAuthentificationStore'
 
 const IDENTIFIANT_SESSION_UNIQUE = 'unique'
@@ -67,6 +68,13 @@ export const useAuthStore = defineStore('auth', () => {
     jeton.value = null
     utilisateur.value = null
     await db.sessionAuthentification.delete(IDENTIFIANT_SESSION_UNIQUE)
+    // Le "client actif" (localStorage, commodité de navigation) est mémorisé
+    // par poste, pas par session — sans ce reset, un poste partagé (courant
+    // en environnement industriel) fait hériter le prochain utilisateur
+    // connecté du dernier client visité par le précédent, y compris un
+    // client qu'il n'a pas le droit de voir (trouvé en simulant un
+    // changement d'utilisateur sur le même poste).
+    useClientActifStore().reinitialiser()
   }
 
   /** Re-authentification pour un geste sensible (archivage, suppression définitive) — remplace le verrou local historique. */
