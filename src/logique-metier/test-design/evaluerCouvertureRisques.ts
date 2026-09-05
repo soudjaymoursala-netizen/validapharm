@@ -2,7 +2,7 @@ import type { Requirement, RiskAssessment, TestCandidate } from '../domaine/type
 
 /**
  * Détection déterministe des risques non couverts par un candidat de test
- * (Phase 35 — Test Design Engine, TD-036) — un `RiskAssessment` dont le
+ * (Test Design Engine) — un `RiskAssessment` dont le
  * verdict est `action_requise` mais qui n'a aucun candidat de test associé
  * (dans un statut non écarté) est un gap réel, jamais silencieux. Même
  * discipline que `construireReadinessContentPlan` : un statut explicite
@@ -13,7 +13,7 @@ import type { Requirement, RiskAssessment, TestCandidate } from '../domaine/type
  * `accepte`) ou déjà transformé en `Test` démontre une intention réelle de
  * test.
  *
- * @requirement docs/convergence/CONVERGENCE_PLAN.md Phase 35, TD-036
+ * @requirement Test Design Engine — évaluation de couverture des risques
  */
 export type StatutCouvertureRisque = 'couvert' | 'non_couvert'
 

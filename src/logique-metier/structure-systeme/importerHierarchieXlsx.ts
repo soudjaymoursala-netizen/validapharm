@@ -2,7 +2,7 @@ import type { AssetHierarchySchema, AssetNode } from '../domaine/types'
 
 /**
  * Planification pure de l'import d'une hiérarchie d'actifs depuis une
- * grille tabulaire (Phase 36, TD-042, `TECHNICAL_DECISIONS.md`) — jamais
+ * grille tabulaire — jamais
  * d'écriture ici : une fonction pure testable qui transforme une grille
  * en plan d'actions, à charge du store de l'exécuter (même discipline
  * que `evaluerVerdictRiskAssessment.ts`/`construireReadinessContentPlan.ts`).

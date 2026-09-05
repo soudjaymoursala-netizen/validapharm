@@ -139,7 +139,7 @@ describe('genererBrouillonSection', () => {
   })
 })
 
-describe('genererBrouillonSection — lignes de tableau dynamique (Phase 38, Option 2, TD-045)', () => {
+describe('genererBrouillonSection — lignes de tableau dynamique', () => {
   test('propose des lignes valides pour un tableau vide', async () => {
     const provider = providerRepondant(
       [

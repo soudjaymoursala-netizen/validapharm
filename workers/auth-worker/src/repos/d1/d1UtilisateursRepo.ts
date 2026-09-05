@@ -33,7 +33,7 @@ function ligneVersUtilisateur(ligne: LigneUtilisateur): UtilisateurEnregistre {
 }
 
 /**
- * Implémentation D1 du dépôt utilisateurs (TD-046) — volontairement mince
+ * Implémentation D1 du dépôt utilisateurs — volontairement mince
  * (mapping SQL direct), la logique métier réelle vit dans `routeur.ts`,
  * testé contre `UtilisateursRepoMemoire`. Cohérent avec `index.ts` de
  * `workers/ocr-relay` : le câblage `env`/D1 lui-même n'est pas testé

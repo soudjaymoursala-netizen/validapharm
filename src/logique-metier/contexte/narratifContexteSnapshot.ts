@@ -6,9 +6,8 @@ import type {
 } from '../domaine/types'
 
 /**
- * Narratif enrichi d'un `ContextSnapshot` (Phase 27 de convergence
- * architecturale, TD-025) — organise les éléments déjà résolus par
- * `assemblerElementsContextSnapshot` (Phase 14) en facettes narratives
+ * Narratif enrichi d'un `ContextSnapshot` — organise les éléments déjà
+ * résolus par `assemblerElementsContextSnapshot` en facettes narratives
  * (OÙ/QUOI/COMMENT/POURQUOI-IMPACT), au lieu de la simple liste plate
  * d'objets typés existant jusqu'ici (`ContextSnapshotItem[]`, affichée
  * telle quelle dans `MissionWorkspace.vue`).
@@ -19,8 +18,8 @@ import type {
  * contexte.
  *
  * `comment` (procédure applicable) reste **toujours vide** dans ce lot —
- * `Procedure` (Phase 20) n'a aucun rattachement `AssetNode`/`Workspace` à
- * ce jour (limite déjà documentée, TD-016) ; l'ajouter serait une
+ * `Procedure` n'a aucun rattachement `AssetNode`/`Workspace` à
+ * ce jour (limite déjà documentée) ; l'ajouter serait une
  * résolution non éprouvée, jamais fabriquée ici.
  */
 export interface FaitNarratif {
@@ -117,7 +116,7 @@ export function serialiserNarratifContexte(narratif: NarratifContexteSnapshot): 
   return sections.join('\n\n')
 }
 
-/** Identifiants des faits du narratif — traités comme obtenus avec la même garantie qu'un appel d'outil (données déterministes déjà résolues), pour la vérification de citation (spec Phase 15 §4). */
+/** Identifiants des faits du narratif — traités comme obtenus avec la même garantie qu'un appel d'outil (données déterministes déjà résolues), pour la vérification de citation (spec §4 du Reasoning Engine). */
 export function idsNarratifContexte(narratif: NarratifContexteSnapshot): string[] {
   return [...narratif.ou, ...narratif.quoi, ...narratif.comment, ...narratif.pourquoiImpact].map(
     (f) => f.id,

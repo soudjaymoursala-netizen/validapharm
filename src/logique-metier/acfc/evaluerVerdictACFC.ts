@@ -5,8 +5,7 @@ import {
 } from '../assessment/moteurQuestionsOuiNon'
 
 /**
- * Moteur de décision ACFC (FS §4.6bis, remplace `grilleCriticite.ts` —
- * `docs/convergence/TECHNICAL_DECISIONS.md` TD-002).
+ * Moteur de décision ACFC (remplace `grilleCriticite.ts`).
  *
  * Une seule règle de décision est confirmée sur source réelle à ce jour
  * (Ferring, Sanofi Marcy, Sanofi Lyon-Gerland, ISPE Baseline Guide — 4
@@ -15,7 +14,7 @@ import {
  * critique**, jamais moyennée ni pondérée. `sans_objet`/`inconnu` ne
  * comptent jamais comme un "oui".
  *
- * **(Phase 3, 25/08/2026)** Délègue au moteur générique
+ * **(25/08/2026)** Délègue au moteur générique
  * `assessment/moteurQuestionsOuiNon.ts`, extrait une fois confirmé que le
  * même mécanisme s'applique aussi à l'Impact Assessment (F1) — voir
  * `evaluerVerdictImpactAssessment.ts`. Comportement et signature publique

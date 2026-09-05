@@ -5,10 +5,9 @@ import type { ConnecteurDocumentaire, DocumentExterne } from './ConnecteurDocume
 const VERSION_API = 'v25.1'
 
 /**
- * Squelette d'adaptateur Veeva Vault (Phase 10, spec
- * `docs/convergence/PHASE_10_INTEGRATION_GATEWAY_SPEC.md`) — **non testé
+ * Squelette d'adaptateur Veeva Vault — **non testé
  * en conditions réelles**, aucun compte/identifiant Veeva réel disponible
- * dans cette session (même limite que le relais OCR Azure, Phase 6).
+ * dans cette session (même limite que le relais OCR Azure).
  *
  * Seul le flux d'authentification a été vérifié par recherche web le
  * 25/08/2026 (developer.veevavault.com) : chaque appel à l'API Vault

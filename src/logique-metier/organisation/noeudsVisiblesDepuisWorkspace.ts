@@ -7,10 +7,10 @@ import { ancetresWorkspace } from './ancetresWorkspace'
  * s'il est assigné à l'un de ses ancêtres (héritage descendant), ou s'il
  * n'a pas encore été assigné (`workspace_id: null`, non-régression).
  *
- * Extrait de `useStructureSystemeStore` (Phase 14, `PHASE_14_CONTEXT_
- * ENGINE_SPEC.md`) pour être réutilisé par l'assemblage de `ContextSnapshot`
+ * Extrait de `useStructureSystemeStore` pour être réutilisé par
+ * l'assemblage de `ContextSnapshot`
  * sans dupliquer la logique — même traitement que l'extraction
- * d'`ancetresWorkspace` en Phase 12.
+ * d'`ancetresWorkspace`.
  */
 export function noeudsVisiblesDepuisWorkspace(
   workspaceId: string,

@@ -1,16 +1,12 @@
-# Worker d'authentification — Cloudflare Worker + D1 (TD-046)
+# Worker d'authentification — Cloudflare Worker + D1
 
 Troisième relais serverless sans état applicatif propre (même pattern que
-`workers/ocr-relay/`, TD-001), adossé à **Cloudflare D1** (SQLite managé,
+`workers/ocr-relay/`), adossé à **Cloudflare D1** (SQLite managé,
 palier gratuit) pour les 3 seules choses qui exigent structurellement un
 point de vérité serveur : comptes utilisateurs, roster `Client` (nécessaire
 pour qu'un admin voie réellement tous les clients de l'organisation), et
 journal d'audit. `Project`/`Section`/gabarits/dossiers vivants restent
-IndexedDB + synchronisation GitHub (TD-005), inchangés par ce lot.
-
-Voir `docs/convergence/TECHNICAL_DECISIONS.md` TD-046 pour la décision
-complète et `docs/convergence/ARCHITECTURE_CONFLICTS.md` CONFLICT-001/
-CONFLICT-004 pour le contexte.
+IndexedDB + synchronisation GitHub, inchangés par ce lot.
 
 ## Ce qui est fait dans ce commit
 
@@ -74,7 +70,7 @@ par l'utilisateur**, avec ou sans ce connecteur :
    ```
 
 6. **Vérifier la joignabilité réseau réelle** depuis le poste professionnel
-   de l'utilisateur — même méthode que AR-R-64 (relais IA) : charger
+   de l'utilisateur — même méthode que pour le relais IA : charger
    `https://<votre-worker>.workers.dev/auth/me` (401 attendu sans jeton,
    ce qui confirme que le Worker répond) depuis ce poste.
 
@@ -83,7 +79,7 @@ par l'utilisateur**, avec ou sans ce connecteur :
    `/configuration-authentification`), accessible avant connexion,
    même principe que `useConnexionRelaisIAStore`.
 
-## Limites assumées (TD-046)
+## Limites assumées
 
 - **Pas de révocation immédiate de session** — le JWT expire après 12h,
   seule protection dans ce lot (backlog si un besoin réel de révocation

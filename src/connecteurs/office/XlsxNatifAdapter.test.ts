@@ -5,7 +5,7 @@ import { extraireGrilleXlsx } from './XlsxNatifAdapter'
 
 const ESPACE_NOMS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
 
-/** Construit un `.xlsx` minimal (mais réel) — uniquement les deux parties lues par ce lecteur volontairement étroit (TD-042), jamais un faux fichier renommé. */
+/** Construit un `.xlsx` minimal (mais réel) — uniquement les deux parties lues par ce lecteur volontairement étroit, jamais un faux fichier renommé. */
 async function construireXlsxMinimal(options: {
   chainesPartagees?: string[]
   lignesXml: string
@@ -22,7 +22,7 @@ async function construireXlsxMinimal(options: {
   return zip.generateAsync({ type: 'arraybuffer' })
 }
 
-describe('extraireGrilleXlsx (Phase 36, TD-042)', () => {
+describe('extraireGrilleXlsx', () => {
   test('lit des valeurs texte via les chaînes partagées', async () => {
     const fichier = await construireXlsxMinimal({
       chainesPartagees: ['Bâtiment', 'Ligne', 'Bât A', 'Ligne 1'],

@@ -3,7 +3,7 @@ import type { DefinitionGabarit } from '../definitionGabarit'
 /**
  * Gabarit "DQ / Revue de conception" (famille B du catalogue de gabarits,
  * "Conception"). Inclut une table d'identification des risques avec
- * colonne IPR calculée (FDS §5) — démontre le mécanisme de colonne
+ * colonne IPR calculée — démontre le mécanisme de colonne
  * calculée, seul gabarit du catalogue actuel à le faire.
  */
 export const definitionDQ: DefinitionGabarit = {

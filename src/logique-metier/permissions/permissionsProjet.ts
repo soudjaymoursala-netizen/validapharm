@@ -1,19 +1,19 @@
 import type { Project } from '../domaine/types'
 
 /**
- * Contrôle d'affichage du partage de projet (Phase 37 — Authentification
- * multi-utilisateur, TD-044) — jamais une frontière de sécurité réelle :
+ * Contrôle d'affichage du partage de projet (Authentification
+ * multi-utilisateur) — jamais une frontière de sécurité réelle :
  * le dépôt Git sous-jacent reste accessible dans son ensemble à qui
  * détient le jeton du client. Cette fonction ne pilote que l'affichage
  * des contrôles d'édition dans l'interface, exactement comme
- * `Section.owner_id`/`shared_with` (Phase 0, jamais câblés jusqu'ici
+ * `Section.owner_id`/`shared_with` (jamais câblés jusqu'ici
  * faute d'identité résolue).
  *
  * Lecture toujours ouverte (vision de l'utilisateur : "lecture pour tous,
  * écriture pour le créateur + les partagés") — cette fonction ne
  * détermine que le droit d'écriture, jamais le droit de lecture.
  *
- * @requirement docs/convergence/CONVERGENCE_PLAN.md Phase 37, TD-044
+ * @requirement Partage de projet multi-utilisateur
  */
 export function peutModifierProjet(
   project: Pick<Project, 'owner_id' | 'shared_with'>,

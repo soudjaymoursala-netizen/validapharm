@@ -10,8 +10,8 @@ export interface SectionMinimale {
  * dans un sens ou dans l'autre, vers une section du projet dont le
  * gabarit est `typeCible`.
  *
- * @requirement FDS §5 ("Détection de liens manquants"), utilisé par les
- * garde-fous de finalisation (FDS §3.3, gardesFinalisation.ts)
+ * @requirement Détection de liens manquants, utilisé par les
+ * garde-fous de finalisation (gardesFinalisation.ts)
  *
  * Un lien (`project.links[]`) est créé par sélection explicite
  * source + cible, sans direction canonique imposée par le

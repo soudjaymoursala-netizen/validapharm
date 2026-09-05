@@ -28,7 +28,7 @@ export interface EntreesBoucleRaisonnement {
   donnees: DonneesOutilsRaisonnement
   /** Plafond d'itérations — voir spec §3 (jamais une boucle sans limite, budget cap explicite). */
   maxIterations?: number
-  /** Narratif du `ContextSnapshot` en vigueur (Phase 27, TD-025) — omis si aucun snapshot n'a été assemblé pour ce raisonnement. */
+  /** Narratif du `ContextSnapshot` en vigueur — omis si aucun snapshot n'a été assemblé pour ce raisonnement. */
   narratifContexte?: NarratifContexteSnapshot
 }
 
@@ -48,8 +48,8 @@ export interface ResultatBoucleRaisonnement {
 }
 
 /**
- * Boucle d'orchestration du moteur de raisonnement (Phase 15, spec §2/§3).
- * Le relais IA reste un simple proxy sans état (TD-007) : la conversation
+ * Boucle d'orchestration du moteur de raisonnement (spec §2/§3).
+ * Le relais IA reste un simple proxy sans état : la conversation
  * est reconstruite à chaque tour via `construirePrompt`, jamais portée par
  * une session côté serveur.
  *
@@ -58,7 +58,7 @@ export interface ResultatBoucleRaisonnement {
  * correspond à aucun id réellement obtenu par un appel d'outil pendant
  * cette session, est automatiquement rétrogradée à `a_verifier` — jamais
  * l'IA seule ne décide qu'elle "sait" (principe fondateur n°1, invariant
- * #8 de `03_DOMAIN_DATA_MODEL.md`). Depuis la Phase 27 (TD-025), les ids
+ * #8 de `03_DOMAIN_DATA_MODEL.md`). Les ids
  * du narratif de contexte assemblé sont considérés obtenus dès le premier
  * tour, avec la même garantie qu'un appel d'outil (données déterministes
  * déjà résolues au moment de l'assemblage du `ContextSnapshot`) — jamais
@@ -128,7 +128,7 @@ export async function executerBoucleRaisonnement(
       }
     }
 
-    // Dégradation gracieuse (TD-007 A3) : le modèle n'a pas respecté le
+    // Dégradation gracieuse : le modèle n'a pas respecté le
     // protocole — le texte brut devient la réponse finale, jamais un
     // crash ni une confiance fabriquée.
     return {

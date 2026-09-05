@@ -1,5 +1,5 @@
 /**
- * Contrat d'erreur typé de l'ingestion Office native (Phase 19, TD-014) —
+ * Contrat d'erreur typé de l'ingestion Office native —
  * même principe que `connecteurs/ocr/erreurs.ts`/`connecteurs/ia/erreurs.ts` :
  * jamais une exception générique pour un cas prévu par la conception.
  * Aucun réseau ici (parsing entièrement local) — pas de `TimeoutError`/
@@ -14,7 +14,7 @@ export class DocumentInvalideError extends Error {
   }
 }
 
-/** Gabarit d'export client (Phase 26, TD-024) illisible, ou dont les balises `docxtemplater` sont incompatibles avec les données à injecter (balise mal fermée, boucle non refermée…). */
+/** Gabarit d'export client illisible, ou dont les balises `docxtemplater` sont incompatibles avec les données à injecter (balise mal fermée, boucle non refermée…). */
 export class GabaritDocxInvalideError extends Error {
   constructor(
     message = "Le gabarit fourni n'est pas un .docx valide ou contient des balises invalides.",

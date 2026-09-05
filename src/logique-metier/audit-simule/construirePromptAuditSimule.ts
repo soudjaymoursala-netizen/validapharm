@@ -1,12 +1,11 @@
 /**
- * Mode audit simulé du chat expert (Phase 32 de convergence architecturale,
- * TD-030 — jamais construit jusqu'ici bien que
+ * Mode audit simulé du chat expert — jamais construit jusqu'ici bien que
  * `ModeUsageIA` porte `'audit_simule'` depuis la conception du relais de
- * production, REV-URS-VALIDAPHARM-2026-010).
+ * production.
  *
  * Construction déterministe du prompt envoyé au fournisseur IA — fonction
  * pure, aucun appel réseau, même discipline que `construirePrompt` du
- * Reasoning Engine (Phase 15). Le fournisseur choisi (`ClientConfig.
+ * Reasoning Engine. Le fournisseur choisi (`ClientConfig.
  * ai_provider`) exécute ensuite ce prompt ; ce module ne fait que le
  * fabriquer.
  *

@@ -17,7 +17,7 @@ const SCHEMA_TEST = {
   ],
 }
 
-describe('preparerImportHierarchie (Phase 36, TD-042)', () => {
+describe('preparerImportHierarchie', () => {
   test('grille vide est rejetée explicitement', () => {
     const resultat = preparerImportHierarchie([], SCHEMA_TEST, [])
     expect(resultat).toEqual({ ok: false, raison: 'grille_vide' })

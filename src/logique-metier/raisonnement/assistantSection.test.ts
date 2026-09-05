@@ -8,7 +8,7 @@ const SECTION_MINIMALE = {
   values: { objectif: 'Réduire le temps de cycle', vide: '', absent: null },
 }
 
-describe('construireObjectifAssistantSection (Phase 38, TD-045)', () => {
+describe('construireObjectifAssistantSection', () => {
   test('inclut l’identité de la section et la question', () => {
     const objectif = construireObjectifAssistantSection(SECTION_MINIMALE, 'Que manque-t-il ?')
     expect(objectif).toContain('section-1')

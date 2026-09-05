@@ -16,18 +16,19 @@ const REGLES_BLOCAGE_EXPORT: readonly RegleConformite<Pick<Section, 'status'>>[]
 ]
 
 /**
- * Garde-fou non négociable (FS §4.3bis, mitige AR-R-13/R-19) :
+ * Garde-fou non négociable (mitige le risque d'export d'un contenu non
+ * validé) :
  * l'export d'une section encore `propose_par_ia_non_valide` est bloqué par
  * défaut — un contenu jamais revu par un humain ne doit pas se retrouver
  * dans un export qui a l'apparence d'un livrable.
  *
- * @requirement FS §4.3bis
+ * @requirement Blocage d'export d'une section non validée
  *
  * Ne bloque QUE ce statut précis — un `brouillon_aide` reste exportable
  * (l'export/import JSON est explicitement permis comme mécanisme de
  * sauvegarde/transfert, y compris pour un brouillon non terminé).
  *
- * Implémenté depuis la Phase 30 (TD-028) via le Compliance Engine
+ * Implémenté via le Compliance Engine
  * généralisé (`evaluerReglesConformite`) — comportement strictement
  * identique à avant ce refactor.
  */

@@ -2,14 +2,14 @@ import type { FournisseurOcr, ResultatExtractionOcr, TableauOcr } from './Fourni
 
 /**
  * Fournisseur Azure AI Document Intelligence — modèle `prebuilt-layout`
- * (Phase 22 de convergence architecturale, TD-020 : point 2 de la
+ * (point 2 de la
  * demande explicite de l'utilisateur, "voir dans tous les catalogues s'il
  * y a des outils pour parser lire et comprendre des tableaux [...] sous
  * tableau"). Contrairement à `AzureVisionProvider` (Read API, lignes de
  * texte plates uniquement), ce modèle reconstruit nativement la structure
  * ligne/colonne/cellule d'un tableau, sur image **et** PDF — pertinent
  * pour une SOP scannée avec des étapes présentées en tableau (même genre
- * que `extraireTableauxDocx`, Phase 22, TD-019, mais pour un document
+ * que `extraireTableauxDocx`, mais pour un document
  * numérisé plutôt qu'un `.docx` natif).
  *
  * Contrat REST documenté d'après connaissance de formation (dernière
@@ -34,7 +34,7 @@ import type { FournisseurOcr, ResultatExtractionOcr, TableauOcr } from './Fourni
  * l'utilisateur, jamais une bascule silencieuse. Ce fichier rend la
  * capacité disponible, prête à être activée sur décision explicite —
  * exactement le rôle pour lequel l'interface `FournisseurOcr` a été
- * conçue (voir son docstring, TD-001).
+ * conçue (voir son docstring).
  *
  * **`ocrHandler.ts` rejette aujourd'hui tout `Content-Type` qui ne
  * commence pas par `image/`** — router un PDF vers ce fournisseur

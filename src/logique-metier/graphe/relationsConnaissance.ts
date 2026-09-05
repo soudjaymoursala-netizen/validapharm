@@ -9,15 +9,15 @@ export interface EtapeRelationsConnaissance {
 
 /**
  * Parcours en largeur des `KnowledgeRelation` *sortantes* depuis un
- * `KnowledgeItem` de départ (Phase 31, TD-029) — second consommateur réel
+ * `KnowledgeItem` de départ — second consommateur réel
  * du parcours générique `parcourirGraphe`, aux côtés de
- * `chaineTechniqueDepuis` (Phase 18). Même forme `{ id, type, source_id,
+ * `chaineTechniqueDepuis`. Même forme `{ id, type, source_id,
  * cible_id }` que `RelationTechnique`, jamais fusionnée en un type unique
  * (les deux graphes portent sur des domaines distincts — actifs techniques
  * vs faits de connaissance — jamais mélangés).
  *
  * Fonction pure — aucun accès base, réutilisable par l'outil
- * `tracer_relations_connaissance` du Reasoning Engine (Phase 15).
+ * `tracer_relations_connaissance` du Reasoning Engine.
  */
 export function relationsConnaissanceDepuis(
   knowledgeItemDepartId: string,

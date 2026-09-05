@@ -1,7 +1,7 @@
 import type { AssetNode } from '../domaine/types'
 
 /**
- * Détection de cycle sur le lien hiérarchique `parent_id` (FS §3) —
+ * Détection de cycle sur le lien hiérarchique `parent_id` —
  * l'arbre du référentiel d'actifs ne doit jamais
  * contenir de cycle, contrairement à `associated_nodes[]` (graphe libre,
  * cycles acceptés, ex. une utilité desservant plusieurs systèmes).

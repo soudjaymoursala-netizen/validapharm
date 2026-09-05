@@ -26,7 +26,7 @@ function ligneVersEntree(ligne: LigneAudit): EntreeAudit {
   }
 }
 
-/** Implémentation D1 du journal d'audit (TD-046) — append-only, jamais de UPDATE/DELETE. */
+/** Implémentation D1 du journal d'audit — append-only, jamais de UPDATE/DELETE. */
 export class D1AuditRepo implements AuditRepo {
   constructor(private readonly db: D1Database) {}
 

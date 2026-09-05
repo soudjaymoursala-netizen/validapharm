@@ -17,7 +17,7 @@ const DELAI_MAX_PAR_DEFAUT_MS = 30_000
  * dépendance réseau externe. Dernier recours de `envoyerAvecBascule`
  * quand aucun fournisseur cloud n'est joignable.
  *
- * @requirement mitige AR-R-12
+ * @requirement Mitigation du risque de bascule de fournisseur non signalée à l'utilisateur
  *
  * N'expose jamais de citation de normes (contrairement à un fournisseur
  * cloud qualifié) — capacité en repli dégradé, pas une garantie de

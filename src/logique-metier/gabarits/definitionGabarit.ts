@@ -1,17 +1,17 @@
 import type { Langue, TemplateType } from '../domaine/types'
 
 /**
- * Types du moteur de gabarits déclaratif (FDS §4).
+ * Types du moteur de gabarits déclaratif.
  *
- * @requirement FDS §4
+ * @requirement Moteur de gabarits déclaratif
  *
- * Miroir strict du schéma JSON documenté en FDS §4 — mêmes noms de champs
- * (`field_key`, `labels`, `required_link_type`…) pour la même raison que le
- * modèle pivot FS §3 (08-conventions-codage.md §4 : un auditeur qui compare
- * une définition de gabarit à la FDS doit retrouver les mêmes noms sans
- * traduction mentale).
+ * Miroir strict du schéma JSON documenté en conception interne — mêmes
+ * noms de champs (`field_key`, `labels`, `required_link_type`…) pour la
+ * même raison que le modèle pivot (08-conventions-codage.md §4 : un
+ * auditeur qui compare une définition de gabarit à la documentation
+ * doit retrouver les mêmes noms sans traduction mentale).
  *
- * **Règle de conception non négociable (FDS §4)** : ce fichier ne connaît
+ * **Règle de conception non négociable** : ce fichier ne connaît
  * QUE ce schéma générique. Ajouter un gabarit (ex. futur "Validation du
  * transport") ne doit jamais nécessiter de modifier ce fichier ni le
  * moteur de rendu — seulement un nouveau fichier dans `catalogue/`.
@@ -22,7 +22,7 @@ export interface OptionListe {
   labels: Record<Langue, string>
 }
 
-/** Formule de calcul réglementaire référencée par une colonne (FDS §5) — jamais saisissable, toujours dérivée. */
+/** Formule de calcul réglementaire référencée par une colonne — jamais saisissable, toujours dérivée. */
 export interface FormuleColonne {
   cle: 'ipr'
   /** Clés des colonnes de la même ligne consommées par la formule, dans l'ordre attendu par celle-ci. */
@@ -68,7 +68,7 @@ export interface ChampNombre {
   required: boolean
   min: number
   max: number
-  /** Présent uniquement pour une colonne de tableau_dynamique — jamais pour un champ scalaire (FDS §5). */
+  /** Présent uniquement pour une colonne de tableau_dynamique — jamais pour un champ scalaire. */
   formule?: FormuleColonne
 }
 
@@ -92,7 +92,7 @@ export interface DefinitionSection {
   fields: DefinitionChamp[]
   /**
    * Purement informationnel dans cet incrément : les garde-fous de
-   * finalisation réels (FDS §3.3, U-01/U-02/U-03) restent portés par
+   * finalisation réels (U-01/U-02/U-03) restent portés par
    * `logique-metier/machine-etats/gardesFinalisation.ts`, pas relus depuis
    * ce champ — ne jamais supposer qu'une valeur ici change le comportement
    * de blocage tant que ce couplage n'est pas fait explicitement.

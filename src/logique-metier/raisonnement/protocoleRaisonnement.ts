@@ -1,11 +1,10 @@
 import type { EtatConfianceIA } from '../domaine/types'
 
 /**
- * Protocole textuel d'appel d'outils (Phase 15, `docs/convergence/
- * PHASE_15_REASONING_ENGINE_SPEC.md` §2) : le relais IA est un simple proxy
- * texte à un seul tour (`ProviderAdapter.envoyerMessage`), sans support
- * natif d'appel d'outils — ce protocole est entièrement défini et
- * interprété côté navigateur, jamais côté relais (TD-007).
+ * Protocole textuel d'appel d'outils (spec §2) : le relais IA est un simple
+ * proxy texte à un seul tour (`ProviderAdapter.envoyerMessage`), sans
+ * support natif d'appel d'outils — ce protocole est entièrement défini et
+ * interprété côté navigateur, jamais côté relais.
  */
 
 export interface DefinitionOutilRaisonnement {
@@ -39,11 +38,11 @@ const ETATS_CONFIANCE_VALIDES: readonly EtatConfianceIA[] = [
 
 /**
  * Construit le texte de question envoyé au fournisseur IA — objectif,
- * narratif de contexte assemblé (Phase 27, TD-025 — optionnel, omis si
+ * narratif de contexte assemblé (optionnel, omis si
  * aucun `ContextSnapshot` n'est en vigueur), catalogue d'outils
  * disponibles, transcript des tours précédents, et instructions strictes
  * de format. Le transcript est reconstruit à chaque appel (le relais reste
- * sans état, TD-007) plutôt que porté par une session côté serveur.
+ * sans état) plutôt que porté par une session côté serveur.
  */
 export function construirePrompt(
   objectif: string,

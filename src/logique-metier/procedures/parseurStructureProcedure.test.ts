@@ -6,7 +6,7 @@ import {
   proposerStructureProcedure,
 } from './parseurStructureProcedure'
 
-describe('detecterSections (Phase 21, TD-017)', () => {
+describe('detecterSections', () => {
   it("reconnaît les en-têtes canoniques d'une SOP gabarit 'Sanofi' (en-têtes en MAJUSCULES, point après le numéro)", () => {
     const texte = [
       '1. OBJECTIF',
@@ -93,7 +93,7 @@ describe('detecterSections (Phase 21, TD-017)', () => {
     expect(detecterSections(texte)).toEqual([])
   })
 
-  it("reconnaît un en-tête par mot-clé (TD-018) quand le titre complet ne correspond à aucune entrée exacte du dictionnaire — cas réel d'une SOP IMA (4915BRP/LA1028BRP, Ferring) sans plan qualité", () => {
+  it("reconnaît un en-tête par mot-clé quand le titre complet ne correspond à aucune entrée exacte du dictionnaire — cas réel d'une SOP IMA (4915BRP/LA1028BRP, Ferring) sans plan qualité", () => {
     const texte = [
       '1. INTRODUCTION',
       'This document contains the Backup / Restore Procedures.',
@@ -109,7 +109,7 @@ describe('detecterSections (Phase 21, TD-017)', () => {
   })
 })
 
-describe('proposerStructureProcedure — étapes candidates (Phase 21, TD-017)', () => {
+describe('proposerStructureProcedure — étapes candidates', () => {
   it('extrait les étapes du corps de la section procédure, dans leur ordre, en préservant condition et responsable détectés', () => {
     const texte = [
       '1 But',
@@ -146,7 +146,7 @@ describe('proposerStructureProcedure — étapes candidates (Phase 21, TD-017)',
     expect(proposition.sections.map((s) => s.canon)).toEqual(['objectif', 'references'])
   })
 
-  it("replie sur une étape par ligne (TD-018) quand la section 'procédure' ne contient aucune puce/numéro explicite — cas réel de la SOP IMA, et rattache le sous-titre traversé comme contexte", () => {
+  it("replie sur une étape par ligne quand la section 'procédure' ne contient aucune puce/numéro explicite — cas réel de la SOP IMA, et rattache le sous-titre traversé comme contexte", () => {
     const texte = [
       '1. INTRODUCTION',
       'This document contains the Backup / Restore Procedures.',
@@ -247,7 +247,7 @@ describe('proposerStructureProcedure — étapes candidates (Phase 21, TD-017)',
   })
 })
 
-describe('proposerEtapesDepuisTableaux (Phase 22, TD-019) — étapes sous tableau, calibré sur le manuel Markem-Imaje C350 réel', () => {
+describe('proposerEtapesDepuisTableaux — étapes sous tableau, calibré sur le manuel Markem-Imaje C350 réel', () => {
   it('extrait les étapes numérotées et combine le titre le plus proche et les préconditions du tableau en contexte', () => {
     const tableaux: TableauDocx[] = [
       {

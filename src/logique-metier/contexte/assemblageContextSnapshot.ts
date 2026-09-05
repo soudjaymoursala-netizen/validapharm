@@ -22,16 +22,17 @@ export interface EntreesAssemblageContextSnapshot {
 }
 
 /**
- * Assemble les éléments de contexte pertinents pour une ancre donnée
- * (Phase 14, `docs/convergence/PHASE_14_CONTEXT_ENGINE_SPEC.md`) — fonction
- * pure, jamais d'accès direct à la base : l'appelant (`useContextEngineStore`)
+ * Assemble les éléments de contexte pertinents pour une ancre donnée —
+ * fonction pure, jamais d'accès direct à la base : l'appelant
+ * (`useContextEngineStore`)
  * fournit les données déjà chargées.
  *
  * Si `assetNodeId` est fourni, résolution exacte sur ce nœud précis (pas
  * ses descendants) — cohérent avec `QualityEvent.asset_node_id`, une
  * référence exacte, jamais hiérarchique. Sinon, si `workspaceId` est
- * fourni, résolution par visibilité de site (`noeudsVisiblesDepuisWorkspace`,
- * Phase 12/14) — une ancre plus large (ex. tous les actifs d'un site).
+ * fourni, résolution par visibilité de site
+ * (`noeudsVisiblesDepuisWorkspace`) — une ancre plus large (ex. tous les
+ * actifs d'un site).
  * Si ni l'un ni l'autre n'est fourni, aucun élément n'est assemblé.
  *
  * Ne résout PAS la "méthode applicable" ni les "documents pertinents"

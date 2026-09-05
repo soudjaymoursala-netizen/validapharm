@@ -67,7 +67,7 @@ function construirePdfMinimal(pages: string[]): Uint8Array {
   return new TextEncoder().encode(corps + xref + trailer)
 }
 
-describe('extraireTextePdf (Phase 23, TD-021)', () => {
+describe('extraireTextePdf', () => {
   test("extrait le texte d'un PDF réellement valide à une page", async () => {
     const pdf = construirePdfMinimal(['Voici la procedure Impact Assessment'])
     const resultat = await extraireTextePdf(pdf.buffer as ArrayBuffer, configTest())

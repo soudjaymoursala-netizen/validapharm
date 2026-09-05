@@ -42,7 +42,7 @@ export type ResultatApi<T> =
 const DELAI_MAX_PAR_DEFAUT_MS = 15_000
 
 /**
- * Client du Worker d'authentification (TD-046) — mêmes principes que
+ * Client du Worker d'authentification — mêmes principes que
  * `RelayProviderAdapter`/`OcrRelayAdapter` : n'expose que l'URL du relais,
  * jamais l'implémentation D1 sous-jacente. Renvoie un `ResultatApi<T>`
  * typé pour tout échec métier attendu (identifiants invalides, rôle
@@ -133,7 +133,7 @@ export class AuthApiClient {
     return this.requete('POST', '/audit/authorize-action', { jeton, body: saisie })
   }
 
-  // --- Clients (D1 = source de vérité, TD-046) ---
+  // --- Clients (D1 = source de vérité) ---
 
   listerClients(jeton: string): Promise<ResultatApi<{ clients: ClientWire[] }>> {
     return this.requete('GET', '/clients', { jeton })

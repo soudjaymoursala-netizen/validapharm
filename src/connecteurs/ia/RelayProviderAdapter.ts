@@ -7,7 +7,7 @@ import {
 import type { ContexteEnvoi, ModeUsageIA, ProviderAdapter, Reponse } from './ProviderAdapter'
 
 export interface ConfigRelayProviderAdapter {
-  /** URL du relais serverless (SDS §10quater, Cloudflare Workers) — jamais l'API du fournisseur directement. */
+  /** URL du relais serverless (Cloudflare Workers) — jamais l'API du fournisseur directement. */
   relayUrl: string
   jeton?: string
   /** Nom du fournisseur configuré côté relais — affichage seul, le relais route déjà en fonction de `client_config.ai_provider`. */
@@ -19,11 +19,11 @@ export interface ConfigRelayProviderAdapter {
 const DELAI_MAX_PAR_DEFAUT_MS = 30_000
 
 /**
- * Adaptateur fournisseur cloud (SDS §6/§10quater) — n'appelle jamais un
+ * Adaptateur fournisseur cloud — n'appelle jamais un
  * fournisseur IA directement, uniquement le relais serverless sans état
- * qui masque la clé API (corrige AR-R-64).
+ * qui masque la clé API (corrige le risque d'exposition de la clé API côté client).
  *
- * @requirement SDS §6, §10quater
+ * @requirement Adaptateur fournisseur cloud via relais serverless
  *
  * Le relais route déjà vers le bon fournisseur/modèle selon `mode`
  * (`chat_normatif` | `audit_simule`) et la configuration

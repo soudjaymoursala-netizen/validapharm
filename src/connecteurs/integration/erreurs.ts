@@ -1,6 +1,6 @@
 /**
  * Contrat d'erreur typé commun aux adaptateurs `ConnecteurDocumentaire`
- * (Phase 10) — jamais une exception générique pour un cas prévu.
+ * — jamais une exception générique pour un cas prévu.
  */
 
 /** Authentification refusée par le système documentaire externe. */

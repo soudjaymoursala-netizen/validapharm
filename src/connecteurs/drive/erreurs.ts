@@ -1,5 +1,5 @@
 /**
- * Contrat d'erreur typé du connecteur Drive (SDS §5bis) — jamais une
+ * Contrat d'erreur typé du connecteur Drive — jamais une
  * exception générique pour un cas prévu par la conception.
  */
 

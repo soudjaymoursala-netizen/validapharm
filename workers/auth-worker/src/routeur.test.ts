@@ -256,7 +256,7 @@ describe('routerRequete — change-password / verify-password', () => {
     expect(relogin.status).toBe(200)
   })
 
-  test('verify-password confirme ou infirme sans changer le mot de passe (re-authentification pour archivage, TD-046)', async () => {
+  test('verify-password confirme ou infirme sans changer le mot de passe (re-authentification pour archivage)', async () => {
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
 
@@ -363,7 +363,7 @@ describe('routerRequete — administration des comptes (admin uniquement)', () =
   })
 })
 
-describe('routerRequete — clients (D1 = source de vérité, TD-046)', () => {
+describe('routerRequete — clients (D1 = source de vérité)', () => {
   async function creerUtilisateurEtLogin(
     ctx: Contexte,
     adminJeton: string,

@@ -5,7 +5,7 @@ import { D1UtilisateursRepo } from './repos/d1/d1UtilisateursRepo'
 import { routerRequete } from './routeur'
 
 /**
- * Point d'entrée réel du Worker (TD-046) — ne fait que câbler
+ * Point d'entrée réel du Worker — ne fait que câbler
  * secrets/D1 → dépôts → routeur ; toute la logique testable vit dans
  * `routeur.ts` (même principe que `workers/ocr-relay/src/index.ts`).
  *

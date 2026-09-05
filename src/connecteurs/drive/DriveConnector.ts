@@ -1,7 +1,7 @@
 import { AuthentificationError, QuotaDepasseError, TimeoutError } from './erreurs'
 
 export interface ConfigDriveConnector {
-  /** Dossier Drive dédié du client (SDS §5bis) — jamais la racine du compte. */
+  /** Dossier Drive dédié du client — jamais la racine du compte. */
   dossierId: string
   jeton: string
   /** Délai d'attente réseau en ms avant `TimeoutError` (défaut 15s). */
@@ -9,7 +9,7 @@ export interface ConfigDriveConnector {
 }
 
 export interface FichierAMirroir {
-  /** Conservé tel quel comme nom de fichier Drive (traçabilité — SDS §5bis ne définit pas de sous-dossiers). */
+  /** Conservé tel quel comme nom de fichier Drive (traçabilité — la conception ne définit pas de sous-dossiers). */
   chemin: string
   contenu: string
 }
@@ -22,14 +22,14 @@ const DELAI_MAX_PAR_DEFAUT_MS = 15_000
 const TYPE_MIME_CONTENU = 'application/json'
 
 /**
- * Connecteur Drive (SDS §5bis) — un seul point d'entrée (`miroir()`), aucune
+ * Connecteur Drive — un seul point d'entrée (`miroir()`), aucune
  * logique métier propre. N'est **jamais une source de vérité, jamais lu par
  * l'application** : `miroir()` écrit un instantané
  * dans le dossier Drive dédié du client, en écrasant systématiquement le
  * contenu existant — jamais de tentative de fusion (cohérent avec "jamais
  * lu comme source").
  *
- * @requirement SDS §5bis
+ * @requirement Connecteur de miroir Drive
  *
  * Aucun accès disque natif, aucune bibliothèque cliente Drive tierce —
  * exclusivement l'API REST Drive v3 via `fetch` (mêmes conventions que

@@ -29,7 +29,7 @@ function fournisseur(nomAffiche: string, estCloud: boolean): FournisseurMock {
 
 const reponseOk: Reponse = { texte: 'Réponse', version_moteur: 'v1', citations: [] }
 
-describe('envoyerAvecBascule (SDS §6)', () => {
+describe('envoyerAvecBascule', () => {
   test('succès du fournisseur principal : aucune bascule', async () => {
     const principal = fournisseur('Claude', true)
     principal.envoyerMessage.mockResolvedValueOnce(reponseOk)

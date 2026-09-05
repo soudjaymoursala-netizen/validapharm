@@ -29,12 +29,12 @@ const STATUTS_CONNUS: readonly StatutSection[] = [
 
 /**
  * Valide et extrait les données réimportables d'un export JSON de section
- * (FS §4.3) — jamais un `JSON.parse` fait confiance aveuglément
+ * — jamais un `JSON.parse` fait confiance aveuglément
  * : un fichier corrompu, tronqué, ou provenant d'une version incompatible
  * de l'outil doit produire une erreur explicite, jamais une section
  * partiellement remplie silencieusement.
  *
- * @requirement FS §4.3
+ * @requirement Import JSON de section
  *
  * `id`/`project_id`/`updated_at` sont délibérément exclus du résultat :
  * l'import crée toujours une section **nouvelle** dans le projet cible

@@ -7,7 +7,7 @@ import {
 
 /**
  * Moteur de décision Impact Assessment / System Classification (F1 du
- * catalogue §10 — Phase 3 de convergence architecturale).
+ * catalogue §10).
  *
  * Règle confirmée sur 2 sources réelles indépendantes (Ferring FSMP Project
  * Master Plan, ISPE Baseline Guide "System Classification", session du

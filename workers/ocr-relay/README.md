@@ -1,7 +1,7 @@
-# Relais OCR — Cloudflare Worker (TD-001)
+# Relais OCR — Cloudflare Worker
 
 Second relais serverless sans état, même pattern que le relais IA existant
-(`connecteurs/ia/RelayProviderAdapter.ts`, SDS §10quater) : le navigateur
+(`connecteurs/ia/RelayProviderAdapter.ts`) : le navigateur
 (PWA) n'appelle jamais un fournisseur de vision/OCR directement — seul ce
 Worker, côté serveur, connaît la clé du fournisseur.
 
@@ -58,7 +58,7 @@ suivantes restent **à faire par l'utilisateur** :
    wrangler deploy
    ```
 3. **Vérifier la joignabilité réseau réelle** depuis le poste professionnel
-   de l'utilisateur — même méthode que AR-R-64 (relais IA) : charger l'URL
+   de l'utilisateur — même méthode que pour le relais IA : charger l'URL
    `*.workers.dev` de ce nouveau Worker depuis ce poste et confirmer
    qu'elle répond. Ce test **ne peut être fait que sur ce poste réel**, pas
    depuis cet environnement.
@@ -68,12 +68,11 @@ suivantes restent **à faire par l'utilisateur** :
    session) — envoyer une vraie image et confirmer que la réponse a
    exactement la forme attendue par `azureVisionProvider.ts`.
 5. Configurer l'URL du Worker déployé dans l'installation ValidaPharm
-   (table Dexie `connexionRelaisOCR` — pas encore d'écran dédié, cohérent
-   avec le reste de la Phase 6 : ce Worker prépare la brique technique dont
-   les Phases 7-8 (Source Intelligence) ont besoin, il n'est pas encore
-   consommé par un écran).
+   (table Dexie `connexionRelaisOCR` — pas encore d'écran dédié : ce Worker
+   prépare la brique technique dont Source Intelligence a besoin, il n'est
+   pas encore consommé par un écran).
 
-## Sans état (TD-001)
+## Sans état
 
 Aucune donnée de la requête (image envoyée, texte extrait) n'est persistée
 par ce Worker au-delà du traitement de la requête en cours — pas de

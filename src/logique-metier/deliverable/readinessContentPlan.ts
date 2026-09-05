@@ -9,17 +9,16 @@ import type {
 } from '../domaine/types'
 
 /**
- * Calcul déterministe de `ContentPlan.readiness` (Phase 28 de convergence
- * architecturale, TD-026) — jusqu'ici toujours fourni à la main par
- * l'appelant à la création (`docs/convergence/PHASE_9_CONTENT_PLAN_SPEC.md`,
- * commentaire du type domaine : "Fourni explicitement par l'appelant à la
+ * Calcul déterministe de `ContentPlan.readiness` — jusqu'ici toujours
+ * fourni à la main par l'appelant à la création (commentaire du type
+ * domaine : "Fourni explicitement par l'appelant à la
  * création, jamais calculé automatiquement... pas de mécanisme
  * d'évaluation de complétude construit ici").
  *
  * Résout la chaîne déjà réelle et testée `Requirement → Couverture → Test
- * → Execution → Evidence` (Phases 7a/7b/7c) ancrée sur `ContentPlan.
+ * → Execution → Evidence` ancrée sur `ContentPlan.
  * asset_node_id` — même patron de résolution que l'outil du Reasoning
- * Engine `lister_requirements_pour_actif` (Phase 15). Ne résout rien de
+ * Engine `lister_requirements_pour_actif`. Ne résout rien de
  * nouveau, ne fabrique aucune donnée : `besoin_information` chaque fois
  * qu'un maillon de la chaîne manque, jamais un état plus favorable deviné.
  *

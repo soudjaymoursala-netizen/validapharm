@@ -1,10 +1,9 @@
 /**
  * Moteur de décision générique "questionnaire Oui/Non/Inconnu/Sans objet,
- * au moins un Oui → verdict positif" (Phase 3 de convergence
- * architecturale, `docs/convergence/CONVERGENCE_PLAN.md`).
+ * au moins un Oui → verdict positif".
  *
- * Extrait du moteur ACFC (`logique-metier/acfc/evaluerVerdictACFC.ts`,
- * Phase 1) une fois confirmé que **le même mécanisme** s'applique aussi à
+ * Extrait du moteur ACFC (`logique-metier/acfc/evaluerVerdictACFC.ts`)
+ * une fois confirmé que **le même mécanisme** s'applique aussi à
  * l'Impact Assessment (F1, URS §10) — confirmé sur les mêmes sources
  * réelles (Ferring FSMP, ISPE Baseline Guide "System Classification") :
  * questions définies par le client, conservées mot pour mot, "au moins un

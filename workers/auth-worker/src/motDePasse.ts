@@ -1,5 +1,5 @@
 /**
- * Hachage de mot de passe (TD-046) — mêmes paramètres que
+ * Hachage de mot de passe — mêmes paramètres que
  * `src/logique-metier/securite/verrouLocal.ts` (PBKDF2-SHA-256,
  * 100 000 itérations, sel aléatoire, Web Crypto native) pour rester
  * cohérent avec le reste du projet, mais dupliqué ici : ce Worker est un

@@ -1,5 +1,5 @@
 /**
- * Erreurs typées du client du Worker d'authentification (TD-046) — jamais
+ * Erreurs typées du client du Worker d'authentification — jamais
  * une exception générique. Réservées aux échecs de **connectivité**
  * (réseau, délai, réponse illisible) : les échecs métier attendus
  * (identifiants invalides, justification manquante, rôle insuffisant...)

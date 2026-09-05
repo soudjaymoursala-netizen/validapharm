@@ -2,7 +2,7 @@ import { traiterRequeteOcr } from './ocrHandler'
 import { AzureVisionProvider } from './fournisseurs/azureVisionProvider'
 
 /**
- * Point d'entrée réel du Worker Cloudflare (TD-001) — ne contient que le
+ * Point d'entrée réel du Worker Cloudflare — ne contient que le
  * câblage secrets → fournisseur → handler ; toute la logique testable vit
  * dans `ocrHandler.ts`/`fournisseurs/*.ts`.
  *

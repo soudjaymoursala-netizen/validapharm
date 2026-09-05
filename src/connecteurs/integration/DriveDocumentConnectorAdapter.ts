@@ -3,7 +3,7 @@ import { OperationNonSupporteeError } from './erreurs'
 import type { ConnecteurDocumentaire, DocumentExterne } from './ConnecteurDocumentaire'
 
 /**
- * ADAPT (TD-005) : enveloppe `DriveConnector` déjà existant et testé.
+ * ADAPT : enveloppe `DriveConnector` déjà existant et testé.
  * `DriveConnector` est un miroir d'écriture seule ("jamais lu
  * comme source") — `listerDocuments`/`lireDocument` lèvent donc
  * délibérément `OperationNonSupporteeError`, ce n'est pas un oubli.

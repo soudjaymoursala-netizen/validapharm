@@ -63,7 +63,7 @@ describe('parserSortieModele — formats valides', () => {
   })
 })
 
-describe('parserSortieModele — dégradation gracieuse (spec §2, TD-007 A3)', () => {
+describe('parserSortieModele — dégradation gracieuse (spec §2)', () => {
   test('un texte libre sans aucun des deux préfixes est non_reconnu', () => {
     const sortie = parserSortieModele("Je pense que l'impact est limité.")
     expect(sortie).toEqual({ type: 'non_reconnu', texteBrut: "Je pense que l'impact est limité." })

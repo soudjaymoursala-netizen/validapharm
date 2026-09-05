@@ -1,4 +1,4 @@
-# Configuration Cloudflare Workers (TD-001, docs/convergence/TECHNICAL_DECISIONS.md)
+# Configuration Cloudflare Workers
 # Ce fichier ne porte aucun secret — voir README.md pour `wrangler secret put`.
 
 name = "validapharm-ocr-relay"

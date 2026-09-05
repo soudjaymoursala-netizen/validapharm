@@ -36,7 +36,7 @@ function risqueTest(overrides: Partial<RiskAssessment> = {}): RiskAssessment {
   }
 }
 
-describe('genererCandidatsDepuisRisques (Phase 35, TD-036)', () => {
+describe('genererCandidatsDepuisRisques', () => {
   test('propose un candidat pour un risque action_requise sur le même nœud', () => {
     const suggestions = genererCandidatsDepuisRisques(
       { asset_node_id: 'noeud-1' },

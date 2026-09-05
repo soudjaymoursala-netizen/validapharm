@@ -34,7 +34,7 @@ function ligneVersClient(ligne: LigneClient): ClientEnregistre {
   }
 }
 
-/** Implémentation D1 du dépôt clients (TD-046) — voir `d1UtilisateursRepo.ts` pour la discipline générale. */
+/** Implémentation D1 du dépôt clients — voir `d1UtilisateursRepo.ts` pour la discipline générale. */
 export class D1ClientsRepo implements ClientsRepo {
   constructor(private readonly db: D1Database) {}
 

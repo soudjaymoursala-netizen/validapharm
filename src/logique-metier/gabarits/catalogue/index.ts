@@ -13,7 +13,7 @@ import { definitionURS } from './urs'
 import { definitionValidationProcede } from './validationProcede'
 
 /**
- * Registre des gabarits réellement définis (FDS §4). Catalogue complet
+ * Registre des gabarits réellement définis. Catalogue complet
  * pour les familles A/C/D/L/M — B (DQ) déjà couvert
  * séparément.
  *

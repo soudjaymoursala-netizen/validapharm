@@ -1,7 +1,7 @@
--- Schéma initial (TD-046) — 3 tables seulement, cohérent avec la portée
--- étroite décidée pour la réouverture de CONFLICT-001 : comptes, roster
+-- Schéma initial — 3 tables seulement, cohérent avec la portée
+-- étroite décidée : comptes, roster
 -- Client, journal d'audit. `Project`/`Section`/gabarits restent IndexedDB
--- + synchronisation GitHub (TD-005), inchangés par ce lot.
+-- + synchronisation GitHub, inchangés par ce lot.
 
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
@@ -28,7 +28,7 @@ CREATE TABLE clients (
   archived_by TEXT,
   created_by_user_id TEXT NOT NULL REFERENCES users(id),
   -- Tableau JSON d'ids utilisateur (même convention que Project.shared_with
-  -- côté frontend, TD-043/TD-044) — désormais réellement appliqué par
+  -- côté frontend) — désormais réellement appliqué par
   -- `listerVisiblesPar`, pas seulement une convention d'affichage.
   shared_with TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL,

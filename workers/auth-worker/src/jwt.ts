@@ -1,11 +1,11 @@
 /**
- * Jeton de session (TD-046) — implémentation minimale JWT HS256, sans
+ * Jeton de session — implémentation minimale JWT HS256, sans
  * dépendance externe (Web Crypto native, même discipline que
  * `motDePasse.ts`/`verrouLocal.ts` — "ne pas installer une librairie
  * généraliste quand le besoin réel est étroit et vérifiable").
  *
  * Portée volontairement minimale : signature/expiration seulement, aucune
- * révocation immédiate (limite assumée, TD-046) — expiration courte
+ * révocation immédiate (limite assumée) — expiration courte
  * (`DUREE_VALIDITE_SECONDES`) comme seule protection dans ce lot.
  */
 

@@ -9,18 +9,17 @@ export interface EtapeChaineTechnique {
 
 /**
  * Parcours en largeur des relations *sortantes* depuis un `AssetNode` de
- * départ (Phase 18, `PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md` §3) —
- * répond à "quel PLC contrôle cet équipement, quel SCADA le supervise,
- * quel serveur l'héberge" en une seule traversée, dans l'ordre de
- * découverte.
+ * départ (spec §3) — répond à "quel PLC contrôle cet équipement, quel
+ * SCADA le supervise, quel serveur l'héberge" en une seule traversée,
+ * dans l'ordre de découverte.
  *
- * Aucune détection de cycle (TD-013) : même tolérance documentée
+ * Aucune détection de cycle : même tolérance documentée
  * qu'`AssetNode.associated_nodes[]` ("graphe libre, cycles acceptés").
  *
  * Fonction pure — aucun accès base, réutilisable par un futur écran et
- * par l'outil `tracer_chaine_technique` du Reasoning Engine (Phase 15).
+ * par l'outil `tracer_chaine_technique` du Reasoning Engine.
  *
- * Implémenté depuis la Phase 31 (TD-029) via le parcours générique
+ * Implémenté via le parcours générique
  * `parcourirGraphe` (Knowledge Graph) — comportement strictement
  * identique à avant ce refactor.
  */
