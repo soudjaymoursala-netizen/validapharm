@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Statut** | Spec de phase (même discipline que /7b/7c/8a). Rédigée **avant** tout code, panel collégial E1-E7 (`00-cadrage-projet.md` §6bis). |
+| **Statut** | Spec de phase (même discipline que les specs de phase précédentes). Rédigée **avant** tout code, panel collégial E1-E7 (`00-cadrage-projet.md` §6bis). |
 | **Sources** | `GAP.md` ligne "Deliverable Engine": *"Pipeline complet Request→Resolve Method/Template/Example→Context Snapshot→Content Plan→Generate→Validate→Review→Render→Approve→Freeze"*, avec la recommandation explicite **KEEP** pour `DefinitionGabarit`/`RenduGabarit.vue` (moteur de rendu déjà solide, ne pas réécrire) et **ADAPT/EXTEND** pour construire `ContentPlan`/`DeliverableVersion` par-dessus. `03-specifications-fonctionnelles.md` §4 (moteur de gabarits existant). |
 
 **Limite déclarée d'emblée (comme en 7b/7c/8a)**: aucune source locale ne détaille les champs de `ContentPlan` au-delà de la liste des étapes du pipeline. Cette spec se limite volontairement à la **première moitié** du pipeline (`Request → Resolve → Context Snapshot → Content Plan`, jusqu'à sa validation/gel) — **`Generate → Validate → Review → Render → Approve → Freeze`** engagerait le moteur de rendu existant (`DefinitionGabarit`/`RenduGabarit.vue`, marqué KEEP par `GAP.md`) et le cycle de vie de `Section` déjà construit et testé (garde-fous de finalisation) — un chantier d'intégration distinct et plus risqué, reporté (même logique que la 8b différée). De même, la notion "Example" (résolution Method/**Template/Example**) n'est nommée nulle part avec un champ ou un mécanisme identifiable dans les sources locales — **exclue de cet incrément plutôt que fabriquée**.

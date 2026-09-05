@@ -1,4 +1,4 @@
-# — Architecture Technique (relations typées)
+# Architecture Technique (relations typées)
 
 *27/08/2026 — première phase du plan de convergence "Vision North Star" (`VISION_NORTH_STAR_CONVERGENCE.md`), priorité P0.*
 
@@ -28,11 +28,11 @@ La vision (§8, checklist D14-D20) demande de répondre à: *quel équipement, c
 - **E2 (Qualité/SMQ)**: aucun impact sur les statuts de qualification existants (`AssetNode.qualification_status` inchangé) — une relation technique ne modifie jamais l'état de qualification d'un nœud.
 - **E3 (QA Réglementaire)**: la traçabilité de la relation (qui l'a créée, quand) est portée par `created_at` — suffisant pour une relation de fait (pas un enregistrement à approbation), cohérent avec `AssociationFonctionAssetNode`.
 - **E4 (CSV)**: aucune modification de schéma destructive — Dexie v24 est un ajout pur de table, aucune table existante modifiée.
-- **E5 (Architecte logiciel)**: validé — réutilise `AssetNode` plutôt que de dupliquer un modèle d'équipement parallèle (voir §2), cohérent avec la discipline "étendre, jamais dupliquer" déjà appliquée /11/14.
+- **E5 (Architecte logiciel)**: validé — réutilise `AssetNode` plutôt que de dupliquer un modèle d'équipement parallèle (voir §2), cohérent avec la discipline "étendre, jamais dupliquer" déjà appliquée ailleurs dans le projet.
 - **E6 (Métrologie)**: sans objet — aucune mesure/instrument concerné par cette phase.
 - **E7 (Maintenance)**: sans objet — aucun plan de maintenance concerné.
 
-**Décision technique associée**:, voir `TECHNICAL_DECISIONS.md`.
+**Décision technique associée**: voir `TECHNICAL_DECISIONS.md`.
 
 ## 5. Explicitement non construit (limite assumée)
 

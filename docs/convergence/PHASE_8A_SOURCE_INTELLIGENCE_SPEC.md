@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Statut** | Spec de phase (même discipline que /7b/7c). Rédigée **avant** tout code, panel collégial E1-E7 (`00-cadrage-projet.md` §6bis). Ne couvre que la sous-phase 8a de — la compréhension de schémas techniques complexes (P&ID, électrique) reste en 8b, non engagée, "seulement après retour d'expérience réel". |
+| **Statut** | Spec de phase (même discipline que les specs de phase précédentes). Rédigée **avant** tout code, panel collégial E1-E7 (`00-cadrage-projet.md` §6bis). Ne couvre que la sous-phase 8a — la compréhension de schémas techniques complexes (P&ID, électrique) reste en 8b, non engagée, "seulement après retour d'expérience réel". |
 | **Sources** | `GAP.md` lignes "Source / Document Intelligence" (*Acquire→Parse/OCR→Structure→Extract→Evidence*) et "Knowledge / Conflict / Evidence" (*SOURCE → EXTRACTION → EVIDENCE → INTERPRETATION → KNOWLEDGE → CONFIRMATION, `Conflict` visible tant que non résolu*); `TECHNICAL_DECISIONS.md` (séquencement 8a/8b); `CONVERGENCE_PLAN.md` Acceptance Criteria (*structuration assistée validée par un humain avant tout `KnowledgeItem`, seuil `NEEDS_REVIEW` strict par défaut*); Worker OCR déjà construit et testé (`workers/ocr-relay/`). |
 
 **Limite déclarée d'emblée**: comme en 7b/7c, aucune source locale ne détaille les champs au-delà des noms de pipeline. Décision de conception assumée et documentée plutôt que devinée en silence: **le mot "Evidence" employé par `GAP.md` pour ce pipeline désigne le contenu brut extrait (`Extraction.contenu_brut`)** — pas un objet séparé — pour éviter toute collision avec l'`Evidence` déjà construite (traçabilité Test/Execution), qui est un concept distinct. Aucun appel IA réel n'est construit dans cet incrément: `valeur_interpretee` est fournie par l'appelant (humain, ou une couche de suggestion IA câblée séparément plus tard) — ce module ne fait que porter la structuration candidate avec son garde-fou `NEEDS_REVIEW`, jamais générer lui-même.
@@ -73,7 +73,7 @@ Conflict {
 
 ## 5. Périmètre exclu (8b, non engagée)
 
-Compréhension de schémas techniques complexes (P&ID, schémas électriques, diagrammes Oui/Non) —: "seulement après retour d'expérience réel" sur la structuration assistée de 8a. Aucune tentative de compréhension d'image structurée n'est faite ici, seulement du texte brut.
+Compréhension de schémas techniques complexes (P&ID, schémas électriques, diagrammes Oui/Non) — "seulement après retour d'expérience réel" sur la structuration assistée de 8a. Aucune tentative de compréhension d'image structurée n'est faite ici, seulement du texte brut.
 
 ## 6. Tests obligatoires
 

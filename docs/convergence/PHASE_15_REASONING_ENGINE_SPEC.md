@@ -1,10 +1,10 @@
-# — Reasoning Engine (domaine AI)
+# Reasoning Engine (domaine AI)
 
-*26/08/2026 — suite de l'étape précédente, décisions d'entrée déjà tranchées par la revue panel (`PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md`): (orchestration côté navigateur, relais reste un simple proxy sans état) et (états de confiance discrets, jamais un score numérique).*
+*26/08/2026 — suite de l'étape précédente, décisions d'entrée déjà tranchées par la revue panel (`PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md`): orchestration côté navigateur (relais reste un simple proxy sans état) et états de confiance discrets (jamais un score numérique).*
 
 ## 1. Ce qui existe déjà (Comprendre)
 
-- `ProviderAdapter.envoyerMessage(mode, contexte, question) → Reponse { texte, version_moteur, citations }` — un appel **à un seul tour**, sans notion d'outil ni d'historique de conversation. Le corps du relais serverless (Cloudflare Worker) **n'est pas dans ce dépôt** — seule son URL est configurée (`EnregistrementConnexionRelaisIA`). Conséquence directe et vérifiée: **impossible d'étendre le protocole du relais** pour un appel d'outils natif (function calling côté fournisseur) sans toucher un système hors de ce dépôt — ce qui confirme et renforce plutôt que de le remettre en cause.
+- `ProviderAdapter.envoyerMessage(mode, contexte, question) → Reponse { texte, version_moteur, citations }` — un appel **à un seul tour**, sans notion d'outil ni d'historique de conversation. Le corps du relais serverless (Cloudflare Worker) **n'est pas dans ce dépôt** — seule son URL est configurée (`EnregistrementConnexionRelaisIA`). Conséquence directe et vérifiée: **impossible d'étendre le protocole du relais** pour un appel d'outils natif (function calling côté fournisseur) sans toucher un système hors de ce dépôt — ce qui confirme et renforce ce choix plutôt que de le remettre en cause.
 - `envoyerAvecBascule` (routeur IA, Phase Chat expert): bascule cloud→local sur `TimeoutError`/`IndisponibleError`, réutilisable tel quel par le moteur de raisonnement (aucune modification).
 - `ContextSnapshot`/`ContextSnapshotItem`: assemblage de contexte réutilisable par une `Mission`.
 - `Mission`/`Activity`.
@@ -14,8 +14,8 @@
 
 Le plan initial (`CONVERGENCE_PLAN.md`) prévoyait une "boucle d'orchestration lisant les stores existants... comme des outils". Un appel d'outils fiable suppose normalement un support natif côté fournisseur (function calling Claude/OpenAI). Or:
 
-- Le relais est un **simple proxy texte** (`{texte, version_moteur, citations}`), son code serveur n'est pas modifiable ici (l'a déjà acté).
-- Construire un nouveau canal d'appel d'outils natif reviendrait soit à modifier un système hors dépôt, soit à fabriquer un nouveau backend — **interdit par /**.
+- Le relais est un **simple proxy texte** (`{texte, version_moteur, citations}`), son code serveur n'est pas modifiable ici (déjà acté).
+- Construire un nouveau canal d'appel d'outils natif reviendrait soit à modifier un système hors dépôt, soit à fabriquer un nouveau backend — **interdit par les principes déjà actés**.
 
 **Décision de conception (dans le périmètre déjà tranché précédemment, pas une nouvelle décision de panel)**: le protocole d'appel d'outils est **entièrement textuel, défini et interprété côté navigateur** — le modèle est instruit (dans le texte de la question) de répondre soit par un appel d'outil (`APPEL_OUTIL: {...}`), soit par une réponse finale structurée (`REPONSE_FINALE: {...}`); l'orchestrateur reconstruit la conversation en concaténant le transcript à chaque tour (le relais reste sans état). Si le modèle ne respecte pas le format (réponse libre), **dégradation gracieuse**: le texte brut devient la réponse finale, état de confiance forcé à `a_verifier`, jamais un crash ni une réponse fabriquée (cohérent avec la dégradation A3 déjà actée précédemment).
 
@@ -37,7 +37,7 @@ Le plan initial (`CONVERGENCE_PLAN.md`) prévoyait une "boucle d'orchestration l
 
 ## 4. Justification de la vérification de citation déterministe
 
-Cette garde n'était pas explicitement actée par le panel, mais découle directement des principes déjà établis: le principe fondateur n°1 (`00-cadrage-projet.md`, "l'IA générative n'est jamais seule source de vérité") et l'invariant #8 de `03_DOMAIN_DATA_MODEL.md` ("AI output is not canonical by confidence alone"). Sans cette vérification, `etat_confiance: 'connu'` ne serait qu'une auto-déclaration du modèle — fixe la taxonomie mais ne dit pas qui la vérifie; cette lecture s'inspire aussi du principe générateur/évaluateur documenté dans *Software Engineering: Standing on the Shoulders of Giants* (ch. 13.7.2, inspiré des GAN et de l'ingénierie Anthropic): un vérificateur distinct du générateur, ici **déterministe** (pas une seconde IA) — le plus simple mécanisme qui referme la boucle sans fabriquer de nouvelle dépendance.
+Cette garde n'était pas explicitement actée par le panel, mais découle directement des principes déjà établis: le principe fondateur n°1 (`00-cadrage-projet.md`, "l'IA générative n'est jamais seule source de vérité") et l'invariant #8 de `03_DOMAIN_DATA_MODEL.md` ("AI output is not canonical by confidence alone"). Sans cette vérification, `etat_confiance: 'connu'` ne serait qu'une auto-déclaration du modèle — la taxonomie déjà retenue fixe les états mais ne dit pas qui vérifie; cette lecture s'inspire aussi du principe générateur/évaluateur documenté dans *Software Engineering: Standing on the Shoulders of Giants* (ch. 13.7.2, inspiré des GAN et de l'ingénierie Anthropic): un vérificateur distinct du générateur, ici **déterministe** (pas une seconde IA) — le plus simple mécanisme qui referme la boucle sans fabriquer de nouvelle dépendance.
 
 ## 5. Scénario réel de vérification
 

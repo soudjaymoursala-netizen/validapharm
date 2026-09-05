@@ -1,10 +1,10 @@
-# — Ingestion PDF native
+# Ingestion PDF native
 
 *27/08/2026 — en réponse à la demande explicite de l'utilisateur: "Fais les deux [ingestion PDF + repli IA]. Tu trouves pas des sop en pdf dans Google drive ?"*
 
 ## 1. Preuve de terrain (avant conception)
 
-Recherche élargie dans Google Drive (`mimeType = 'application/pdf'`): le corpus contient de vraies SOP/manuels PDF au-delà de ceux déjà lus — notamment un **quatrième genre** distinct, jamais rencontré jusqu'ici: "PB1D_Operation.pdf" (manuel opérateur Nordson ProBlue, fondeur de colle thermofusible). Structure réelle: en-têtes en **gras, sans aucune numérotation** ("**To fill the tank**", "**Starting the Melter**"), étapes numérotées en dessous ("1\. Open the tank lid."). Ni le dictionnaire de sections, ni le repli mot-clé ne peuvent s'y accrocher — `RE_TITRE_NUMEROTE` exige un chiffre en tête de ligne, absent ici par construction. Confirme, sur un quatrième document réel indépendant, que la limite de fond documentée en / tient: la couverture déterministe de "tous les types" de SOP est hors de portée d'un système de règles.
+Recherche élargie dans Google Drive (`mimeType = 'application/pdf'`): le corpus contient de vraies SOP/manuels PDF au-delà de ceux déjà lus — notamment un **quatrième genre** distinct, jamais rencontré jusqu'ici: "PB1D_Operation.pdf" (manuel opérateur Nordson ProBlue, fondeur de colle thermofusible). Structure réelle: en-têtes en **gras, sans aucune numérotation** ("**To fill the tank**", "**Starting the Melter**"), étapes numérotées en dessous ("1\. Open the tank lid."). Ni le dictionnaire de sections, ni le repli mot-clé ne peuvent s'y accrocher — `RE_TITRE_NUMEROTE` exige un chiffre en tête de ligne, absent ici par construction. Confirme, sur un quatrième document réel indépendant, que la limite de fond déjà documentée tient: la couverture déterministe de "tous les types" de SOP est hors de portée d'un système de règles.
 
 ## 2. Recherche de librairie PDF (avant conception)
 

@@ -1,6 +1,6 @@
-# — Context Engine enrichi: narratif + grounding réel
+# Context Engine enrichi: narratif + grounding réel
 
-*27/08/2026 — premier chantier P1 ("critique") engagé du plan `VISION_NORTH_STAR_CONVERGENCE.md` §4, sur demande explicite de l'utilisateur d'entamer le prochain chantier après la.*
+*27/08/2026 — premier chantier P1 ("critique") engagé du plan `VISION_NORTH_STAR_CONVERGENCE.md` §4, sur demande explicite de l'utilisateur d'entamer le prochain chantier après le lot précédent.*
 
 ## 1. Pourquoi maintenant (Comprendre)
 
@@ -33,7 +33,7 @@ L'utilisateur a choisi l'option 1, acceptant explicitement le changement de comp
 
 ### Gap corrigé au passage
 
-`MissionWorkspace.vue`'s `assemblerContexte` codait en dur `manufacturingContexts: []` — `useProcessContextStore` n'était jamais importé sur cet écran. Corrigé: la facette QUOI est désormais réellement peuplée quand des `ManufacturingContext` existent pour le nœud d'ancrage.
+`MissionWorkspace.vue`'s `assemblerContexte()` codait en dur `manufacturingContexts: []` — `useProcessContextStore` n'était jamais importé sur cet écran. Corrigé: la facette QUOI est désormais réellement peuplée quand des `ManufacturingContext` existent pour le nœud d'ancrage.
 
 ## 5. Explicitement non construit (limite assumée)
 

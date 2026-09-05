@@ -1,18 +1,18 @@
-# — Context Engine généralisé (`ContextSnapshot`)
+# Context Engine généralisé (`ContextSnapshot`)
 
-*26/08/2026 — suite, plan révisé issu de la clarification de vision produit (`docs/convergence/PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md`).*
+*26/08/2026 — suite du lot précédent, plan révisé issu de la clarification de vision produit (`docs/convergence/PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md`).*
 
 ## 1. Ce qui existe déjà (Comprendre)
 
 - `resoudreRegleEffective<T>` (`logique-metier/organisation/resolutionEffective.ts`): déjà générique — résout n'importe quelle règle `T` par remontée d'arbre `Workspace`. Exposé via `useOrganizationStore.resoudreRegle`, mais **non consommé par aucune fonctionnalité réelle** à ce jour (seulement son propre test).
 - `ancetresWorkspace`: remontée pure de l'arbre `Workspace`.
-- `noeudsVisiblesDepuisWorkspace` (câblage étape 1): jusqu'ici une fonction **interne à `useStructureSystemeStore`**, pas réutilisable ailleurs — c'est le "câblé sur un seul store" que `CONVERGENCE_PLAN.md` § identifie.
+- `noeudsVisiblesDepuisWorkspace` (câblage étape 1): jusqu'ici une fonction **interne à `useStructureSystemeStore`**, pas réutilisable ailleurs — c'est le "câblé sur un seul store" que `CONVERGENCE_PLAN.md` identifie.
 - `ContentPlan.context_snapshot`: un simple **`string`** figé à la création — une simplification assumée à l'époque ("ne couvre que la première moitié du pipeline"), jamais une entité structurée.
-- Sources de vérité cible (`03_DOMAIN_DATA_MODEL.md`, domaine "Context": `ContextView, ContextSnapshot, Applicability, Effectivity, Override`; `02_DECISION_LEDGER_FROM_CONVERSATION.md`,: *"Context = faits du cas"* → `ContextSnapshot`; invariants #4 "Effective configuration is deterministic and traceable" et #12 "ContextSnapshot is immutable"; `04_RELATIONSHIP_MATRIX_FINAL.md`: `ContextSnapshot includes Versioned Objects N:M`).
+- Sources de vérité cible (`03_DOMAIN_DATA_MODEL.md`, domaine "Context": `ContextView, ContextSnapshot, Applicability, Effectivity, Override`; `02_DECISION_LEDGER_FROM_CONVERSATION.md`: *"Context = faits du cas"* → `ContextSnapshot`; invariants #4 "Effective configuration is deterministic and traceable" et #12 "ContextSnapshot is immutable"; `04_RELATIONSHIP_MATRIX_FINAL.md`: `ContextSnapshot includes Versioned Objects N:M`).
 
 ## 2. Comparer — ce qui est réellement résoluble aujourd'hui
 
-`CONVERGENCE_PLAN.md` § énonçait: *"assemble automatiquement site/process/méthode applicable/documents/historique pertinents pour un objet donné."* Vérification champ par champ avant de construire:
+`CONVERGENCE_PLAN.md` énonçait: *"assemble automatiquement site/process/méthode applicable/documents/historique pertinents pour un objet donné."* Vérification champ par champ avant de construire:
 
 | Élément visé | Résoluble aujourd'hui ? | Pourquoi |
 |---|---|---|
@@ -36,7 +36,7 @@
 - Résolution de "méthode applicable" par site (nécessiterait d'étendre `MethodProfileACFC`/`MethodProfileImpactAssessment` avec un rattachement `Workspace` — non fait).
 - Résolution de "documents pertinents" (nécessiterait d'étendre `Source`/`SourceVersion` avec un rattachement `AssetNode` — non fait).
 - Aucun écran, comme pour les domaines déjà construits sans UI: ce lot est domaine + persistance + store, sans UI — Reasoning Engine et Mission workspace consommeront `ContextSnapshot`.
-- `ContentPlan.context_snapshot` (`string`) n'est **pas migré** vers le nouveau `ContextSnapshot` structuré dans ce lot — un changement de type sur une entité déjà en production dans ce projet serait une extension de périmètre non demandée; à faire quand un consommateur réel du nouveau format existera (ex. /17).
+- `ContentPlan.context_snapshot` (`string`) n'est **pas migré** vers le nouveau `ContextSnapshot` structuré dans ce lot — un changement de type sur une entité déjà en production dans ce projet serait une extension de périmètre non demandée; à faire quand un consommateur réel du nouveau format existera.
 
 ## 4. Vérification
 

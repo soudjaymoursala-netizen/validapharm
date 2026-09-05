@@ -1,6 +1,6 @@
-# — Risk Assessment (AMDEC) autonome: méthodologie client généralisée
+# Risk Assessment (AMDEC) autonome: méthodologie client généralisée
 
-**Statut**: Terminée (28/08/2026). ****. Premier des 3 chantiers P1 restants du plan `VISION_NORTH_STAR_CONVERGENCE.md`, engagé après une `AskUserQuestion` où l'utilisateur a choisi explicitement l'ordre: "commence par 1 [Risk Assessment] puis 2 [Compliance Engine] et 3 [Knowledge Graph] sans t'arrêter sauf besoin d'une décision".
+**Statut**: Terminée (28/08/2026). Premier des 3 chantiers P1 restants du plan `VISION_NORTH_STAR_CONVERGENCE.md`, engagé après une `AskUserQuestion` où l'utilisateur a choisi explicitement l'ordre: "commence par 1 [Risk Assessment] puis 2 [Compliance Engine] et 3 [Knowledge Graph] sans t'arrêter sauf besoin d'une décision".
 
 ## 1. Contexte et découverte
 
@@ -65,7 +65,7 @@ Suite complète (645 tests, 91 fichiers), typecheck et lint: tous verts.
 
 ## 5. Vérification navigateur
 
-**Impossible dans ce lot** — aucun écran construit, même discipline que les (Quality Events), 8a (Source Intelligence), 9 (ContentPlan), 13 (Mission/Activity) et 28 (Deliverable readiness): domaine + persistance + store seulement, un consommateur visuel réel viendrait sur besoin démontré plutôt que spéculativement.
+**Impossible dans ce lot** — aucun écran construit, même discipline que pour les autres domaines construits sans écran (Quality Events, Source Intelligence, ContentPlan, Mission/Activity, Deliverable readiness): domaine + persistance + store seulement, un consommateur visuel réel viendrait sur besoin démontré plutôt que spéculativement.
 
 ## 6. Limites assumées
 
@@ -77,6 +77,6 @@ Suite complète (645 tests, 91 fichiers), typecheck et lint: tous verts.
 ## 7. Documentation alignée
 
 - `03-specifications-fonctionnelles.md` v48 — §4.6quinquies.
-- `docs/convergence/TECHNICAL_DECISIONS.md` —.
-- `docs/convergence/CONVERGENCE_PLAN.md` — terminée, (Template Intelligence) renumérotée.
+- `docs/convergence/TECHNICAL_DECISIONS.md` — décision technique associée consignée.
+- `docs/convergence/CONVERGENCE_PLAN.md` — ce chantier marqué terminé, le chantier suivant (Template Intelligence) renuméroté en conséquence.
 - `docs/convergence/VISION_NORTH_STAR_CONVERGENCE.md` — item Risk Assessment (AMDEC) de la liste P1 marqué terminé.

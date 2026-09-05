@@ -1,4 +1,4 @@
-# — Parseur déterministe de structure procédurale
+# Parseur déterministe de structure procédurale
 
 *27/08/2026 — en réponse directe à la demande utilisateur ("Objectif de la SOP, scope, responsabilité, process...") et à la décision de trancher le point ouvert en commençant par le chemin sans IA.*
 
@@ -24,24 +24,24 @@ Avant d'écrire une seule règle, deux SOP réelles de deux clients pharma diff�
 - `SectionCanoniqueProcedure`: rôle sémantique (`objectif|perimetre|responsabilites|definitions|procedure|references|gestion_ecarts|documentation|annexes|autre`), indépendant du libellé client exact.
 - `detecterSections(texte)`: repère les en-têtes numérotés de premier niveau ("N. Titre" ou "N Titre", jamais confondu avec une sous-section "N.M Titre"), les résout contre un dictionnaire de variantes lexicales connues (français/anglais, les deux styles de numérotation observés), et route tout en-tête de forme reconnue mais non répertorié vers `'autre'` — **jamais silencieusement perdu**. Aucun en-tête reconnu du tout → tableau vide (jamais une erreur, jamais une section inventée).
 - `proposerStructureProcedure(texte)`: en plus des sections, extrait du corps de la section canonique `'procedure'` des étapes candidates (lignes à puce ou numérotées), avec détection par motif (jamais devinée) d'une clause conditionnelle ("si/sauf/dans le cas où...") et d'un responsable en tête de ligne ("Rôle:...").
-- **Garde-fou non négociable, inchangé depuis **: le résultat est une `PropositionStructureProcedure`, jamais persisté. Aucune fonction de ce lot n'écrit dans `Procedure`/`ProcedureStep` — la confirmation humaine explicite via `useProcedureStore.creerProcedure`/`ajouterEtape` reste l'unique chemin d'écriture.
+- **Garde-fou non négociable, inchangé depuis le lot précédent**: le résultat est une `PropositionStructureProcedure`, jamais persisté. Aucune fonction de ce lot n'écrit dans `Procedure`/`ProcedureStep` — la confirmation humaine explicite via `useProcedureStore.creerProcedure`/`ajouterEtape` reste l'unique chemin d'écriture.
 
 ## 4. Revue (condensée)
 
 - **E1 (IA/GAMP5-Part11)**: zéro appel IA dans ce lot — 100% règles déterministes, testées sur du texte réel. Réduit d'autant la surface où l'IA serait nécessaire, conformément à la demande explicite de l'utilisateur.
-- **E2 (Qualité/SMQ)**: ne contourne pas — la structuration proposée reste soumise à confirmation humaine avant tout enregistrement, même discipline que `KnowledgeItem.valeur_interpretee`.
+- **E2 (Qualité/SMQ)**: ne contourne pas le garde-fou déjà établi — la structuration proposée reste soumise à confirmation humaine avant tout enregistrement, même discipline que `KnowledgeItem.valeur_interpretee`.
 - **E3 (QA Réglementaire)**: le dictionnaire de sections est directement dérivé de deux SOP réelles de deux clients différents, pas d'une liste théorique — traçable à l'évidence (§2).
 - **E4 (CSV)**: aucun changement de schéma Dexie — `PropositionStructureProcedure` est une structure en mémoire, jamais persistée.
 - **E5 (Architecte logiciel)**: fonctions pures, sans accès base, réutilisables par un futur écran de revue — même patron que `chaineTechniqueDepuis`.
 
-**Décision technique associée**:, voir `TECHNICAL_DECISIONS.md`.
+**Décision technique associée**: voir `TECHNICAL_DECISIONS.md`.
 
 ## 5. Explicitement non construit (limite assumée)
 
 - **Décomposition fine multi-niveaux**: la numérotation à deux niveaux ("6.1", "6.2.1"...) observée dans les deux SOP réelles est traitée comme du texte de sous-topic à l'intérieur de sa section parente, jamais éclatée automatiquement en étapes distinctes — une vraie décomposition étape-par-étape à ce niveau de détail resterait, à ce stade, une supposition non vérifiée sur une structure trop hétérogène d'un client à l'autre (Sanofi: sous-sections thématiques longues; Ferring: sous-sections mêlant exigences et procédure). Un humain lit la section et confirme les étapes réelles.
 - **Genre "instruction technique illustrée"** (Markem-Imaje et assimilés): non couvert correctement — le détecteur peut sur-segmenter en sections `'autre'` à partir des lignes de tableau numérotées. Choix assumé de favoriser le rappel (rien n'est perdu silencieusement) sur la précision, puisque le résultat est une proposition soumise à revue humaine, jamais une vérité auto-validée.
 - **Aucun écran de revue** — la fonction est prête à être appelée par un futur écran de confirmation humaine (quand le cas d'usage le réclame), même discipline que les autres domaines construits sans écran.
-- **Aucun repli IA** — / laissent la porte ouverte à un repli IA-assisté pour les documents que ce parseur ne structure pas (tableau `frontieres.length === 0` ou une majorité de sections `'autre'`), mais son déclenchement (prompt, garde-fou de confirmation) reste un chantier séparé, à engager seulement si l'usage réel montre que la couverture déterministe est insuffisante.
+- **Aucun repli IA** — les décisions déjà actées laissent la porte ouverte à un repli IA-assisté pour les documents que ce parseur ne structure pas (tableau `frontieres.length === 0` ou une majorité de sections `'autre'`), mais son déclenchement (prompt, garde-fou de confirmation) reste un chantier séparé, à engager seulement si l'usage réel montre que la couverture déterministe est insuffisante.
 
 ## 6. Vérification
 
@@ -53,16 +53,16 @@ Le repli IA-assisté (documents non couverts par ce parseur) reste un point ouve
 
 ## 8. Extension du même jour — maximiser la couverture avant tout repli IA
 
-L'utilisateur pose directement la question: "et tu n'as pas de parseur capable de couvrir tous les types de SOP document ?". Réponse vérifiée, pas supposée: un **troisième** document réel du corpus Drive, jamais lu jusqu'ici — IMA "4915BRP"/"LA1028BRP" (procédures Back-up/Restore PLC/PC, pour Ferring) — testé tel quel contre le parseur initiale, produit **0 section reconnue, 0 étape proposée**. Le document a un vrai plan ("1. INTRODUCTION / 2. PLC Procedures / 2.1 Pre-requisites /...") mais aucun libellé n'égale exactement une clé du dictionnaire, et ses instructions sont une phrase par ligne sans puce ni numéro.
+L'utilisateur pose directement la question: "et tu n'as pas de parseur capable de couvrir tous les types de SOP document ?". Réponse vérifiée, pas supposée: un **troisième** document réel du corpus Drive, jamais lu jusqu'ici — IMA "4915BRP"/"LA1028BRP" (procédures Back-up/Restore PLC/PC, pour Ferring) — testé tel quel contre le parseur initial, produit **0 section reconnue, 0 étape proposée**. Le document a un vrai plan ("1. INTRODUCTION / 2. PLC Procedures / 2.1 Pre-requisites /...") mais aucun libellé n'égale exactement une clé du dictionnaire, et ses instructions sont une phrase par ligne sans puce ni numéro.
 
 L'utilisateur demande alors explicitement: "Concevoir ou étendre tous les champs passible de parseur sans l'IA avant de passer au repli IA" — pousser le chemin déterministe à son maximum réel, evidence-based, avant d'envisager la couche IA. Trois extensions ajoutées, chacune directement motivée par ce document, aucune spéculative:
 
 1. **Repli par mot-clé** (`MOTS_CLES_SECTIONS`): un mot fort à l'intérieur du titre suffit quand la phrase complète ne correspond à aucune clé exacte — "PLC Procedures" et "PC Procedures (for HMI ima xface)" contiennent "Procedures" → `procedure`; "INTRODUCTION" seul → `objectif`. Essayé seulement après la correspondance exacte (priorité à la plus haute confiance).
 2. **Sous-titre comme contexte** (`RE_SOUS_TITRE` + `EtapeProposee.contexteDetecte`, nouveau champ): "2.1 Pre-requisites" ou "2.2 Back-Up - Uploading the Old Program from the PLC" ne deviennent ni une section ni une étape, mais leur texte est retenu et attaché comme contexte aux étapes qui suivent — sans quoi deux procédures distinctes dans la même section ("Back-Up" vs "Restore") produiraient une liste plate indifférenciée.
-3. **Repli ligne-par-ligne** (`collecterLignesSection`, deux niveaux): les lignes à puce/numéro explicites restent utilisées en priorité (haute confiance, comportement initiale inchangé); une section `'procedure'` qui n'en contient **aucune** utilise désormais chaque ligne non vide comme étape candidate, plutôt que de renvoyer une liste vide sur un document dont la structure est réelle mais moins formatée.
+3. **Repli ligne-par-ligne** (`collecterLignesSection`, deux niveaux): les lignes à puce/numéro explicites restent utilisées en priorité (haute confiance, comportement initial inchangé); une section `'procedure'` qui n'en contient **aucune** utilise désormais chaque ligne non vide comme étape candidate, plutôt que de renvoyer une liste vide sur un document dont la structure est réelle mais moins formatée.
 
 **Résultat vérifié**: le document IMA teste maintenant 3 sections reconnues (`objectif`/`procedure`/`procedure`) et des étapes extraites avec leur contexte de sous-titre. Les deux SOP déjà couvertes (Sanofi/Ferring) sont retestées sans régression.
 
-**Ce qui reste, honnêtement, hors de portée d'un système de règles**: le genre "instruction technique illustrée par tableaux d'étapes" (Markem-Imaje, §5) n'est toujours pas couvert par ces extensions — elles répondent au genre "procédure numérotée sans plan qualité", pas à celui-là. Une couverture déterministe de "tous les types" de SOP reste, par construction, hors de portée: les frontières sémantiques d'un document en langage naturel ne sont pas un ensemble fini de motifs syntaxiques. C'est la limite de fond déjà actée en, confirmée et non contredite par cette extension — le repli IA-assisté reste la seule façon de la fermer réellement, et reste un point ouvert distinct, non engagé.
+**Ce qui reste, honnêtement, hors de portée d'un système de règles**: le genre "instruction technique illustrée par tableaux d'étapes" (Markem-Imaje, §5) n'est toujours pas couvert par ces extensions — elles répondent au genre "procédure numérotée sans plan qualité", pas à celui-là. Une couverture déterministe de "tous les types" de SOP reste, par construction, hors de portée: les frontières sémantiques d'un document en langage naturel ne sont pas un ensemble fini de motifs syntaxiques. C'est la limite de fond déjà actée précédemment, confirmée et non contredite par cette extension — le repli IA-assisté reste la seule façon de la fermer réellement, et reste un point ouvert distinct, non engagé.
 
 Vérification: 10 tests sur `parseurStructureProcedure.test.ts` (dont 3 nouveaux: mot-clé, repli ligne-par-ligne avec contexte, priorité puces/numéros sur le repli). Suite complète (81 fichiers/557 tests), typecheck et lint verts avant commit.

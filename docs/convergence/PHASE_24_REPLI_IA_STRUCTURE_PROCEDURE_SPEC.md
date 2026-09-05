@@ -1,10 +1,10 @@
-# — Repli IA-assisté de structuration procédurale
+# Repli IA-assisté de structuration procédurale
 
 *27/08/2026 — second volet de "Fais les deux" (ingestion PDF; repli IA). Point resté ouvert depuis un lot précédent, formellement engagé après que la couverture déterministe a été testée sur 4 genres réels distincts (5 documents: Sanofi, Ferring×2, IMA, Markem-Imaje, Nordson).*
 
 ## 1. Pourquoi maintenant (Comprendre)
 
- laissait explicitement ce point ouvert: "l'extraction automatique de structure par IA... représente un saut d'ambition réel... à trancher explicitement avec l'utilisateur avant de l'engager". L'utilisateur a tranché en deux temps: d'abord "tout faire d'abord sans l'IA", puis, une fois la couverture déterministe démontrée insuffisante sur un 4ᵉ genre réel indépendant (Nordson), "Fais les deux [PDF + repli IA]" — le repli est maintenant explicitement autorisé, pas décidé unilatéralement.
+Ce point restait explicitement ouvert: "l'extraction automatique de structure par IA... représente un saut d'ambition réel... à trancher explicitement avec l'utilisateur avant de l'engager". L'utilisateur a tranché en deux temps: d'abord "tout faire d'abord sans l'IA", puis, une fois la couverture déterministe démontrée insuffisante sur un 4ᵉ genre réel indépendant (Nordson), "Fais les deux [PDF + repli IA]" — le repli est maintenant explicitement autorisé, pas décidé unilatéralement.
 
 ## 2. Ce qui existe déjà, réutilisé plutôt que réinventé
 

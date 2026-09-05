@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Statut** | Spec de phase (même discipline que `PHASE_5_QUALITY_EVENTS_SPEC.md` et `PHASE_7B_EXECUTION_SPEC.md`). Rédigée **avant** tout code, panel collégial E1-E7 (`00-cadrage-projet.md` §6bis). Dernière sous-étape — l'Acceptance Criteria elle-même (`CONVERGENCE_PLAN.md`) est démontré à l'issue de cette sous-étape. |
-| **Sources** | `GAP.md` ligne "Test / Execution / Evidence": *"`Evidence` traçable et éventuellement native (sans document source)"* — seule phrase source locale, aucun détail de champs. (`Requirement`/`Test`) et 7b (`Execution`/`ExecutionStep`) déjà livrées, fondation directe. Pattern déjà établi deux fois dans ce projet pour la déclaration explicite non déduite: `Couverture` (7a) et `ReferenceQualityEvent`. |
+| **Sources** | `GAP.md` ligne "Test / Execution / Evidence": *"`Evidence` traçable et éventuellement native (sans document source)"* — seule phrase source locale, aucun détail de champs. `Requirement`/`Test` (7a) et `Execution`/`ExecutionStep` (7b) déjà livrées, fondation directe. Pattern déjà établi deux fois dans ce projet pour la déclaration explicite non déduite: `Couverture` (7a) et `ReferenceQualityEvent`. |
 
 **Limite déclarée d'emblée (comme en 7b)**: aucune source disponible ici ne détaille les champs d'`Evidence`/`EvidenceLocation`/`ProvenanceLink` au-delà des noms. Cette spec ne fabrique donc pas de mécanisme non justifié: elle s'appuie sur (a) la seule phrase source (`GAP.md`), (b) l'architecture réelle déjà actée du projet (dépôt Git dédié = source de vérité exclusive, miroir Drive, aucun stockage de fichier binaire natif dans ce dépôt de conception), et (c) le pattern de déclaration explicite déjà retenu deux fois (`Couverture`, `ReferenceQualityEvent`). Une limitation assumée est documentée explicitement en §5 plutôt que comblée par une invention.
 
@@ -11,7 +11,7 @@
 
 ## 1. Constat déclencheur
 
- s'arrête à un `ExecutionStep` constaté (conforme/non conforme) et une `Execution` clôturée avec verdict. Rien ne trace *la preuve* qui substantie ce constat — un simple champ `observation` en texte libre ne suffit pas pour un dossier de validation opposable. `GAP.md` nomme `Evidence` comme la brique manquante, avec une nuance explicite: une preuve peut être **native** (l'observation directe de l'exécutant fait foi, sans fichier source — ex. une lecture d'instrument retranscrite) ou renvoyer à un **document** externe (ex. un export capteur, une capture d'écran).
+Le lot précédent (7b) s'arrête à un `ExecutionStep` constaté (conforme/non conforme) et une `Execution` clôturée avec verdict. Rien ne trace *la preuve* qui substantie ce constat — un simple champ `observation` en texte libre ne suffit pas pour un dossier de validation opposable. `GAP.md` nomme `Evidence` comme la brique manquante, avec une nuance explicite: une preuve peut être **native** (l'observation directe de l'exécutant fait foi, sans fichier source — ex. une lecture d'instrument retranscrite) ou renvoyer à un **document** externe (ex. un export capteur, une capture d'écran).
 
 ## 2. Revue panel (E1-E7)
 
@@ -63,7 +63,7 @@ Aucune capacité d'upload/stockage de fichier binaire réel n'est construite dan
 
 ## 6. Tests obligatoires — démonstration de l'Acceptance Criteria
 
-Scénario complet et unique couvrant `Requirement → TestObjective → TestCandidate → Test → Couverture → Execution → ExecutionStep → Evidence → ProvenanceLink`, avec une fonction d'interrogation (`preuvesPourRequirement`) démontrant la traçabilité complète Requirement→Test→Execution→Evidence exigée par `CONVERGENCE_PLAN.md` pour clore la. Plus chaque garde-fou listé en §3, testé individuellement, et l'isolation stricte par client (même pattern que toutes les phases précédentes).
+Scénario complet et unique couvrant `Requirement → TestObjective → TestCandidate → Test → Couverture → Execution → ExecutionStep → Evidence → ProvenanceLink`, avec une fonction d'interrogation (`preuvesPourRequirement`) démontrant la traçabilité complète Requirement→Test→Execution→Evidence exigée par `CONVERGENCE_PLAN.md` pour clore cette étape. Plus chaque garde-fou listé en §3, testé individuellement, et l'isolation stricte par client (même pattern que toutes les phases précédentes).
 
 ---
 
