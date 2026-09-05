@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Écran Paramètres (§9 du prompt maître du 03/09/2026, Phase 40) — thème
+// Écran Paramètres (§9 du prompt maître du 03/09/2026) — thème
 // et police, les deux seules préférences réellement câblées de bout en
 // bout (voir le commentaire de `usePreferencesAffichageStore` pour la
 // raison de ne pas proposer la langue d'interface ni une densité

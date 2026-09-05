@@ -57,7 +57,7 @@ afterEach(() => {
   demonter()
 })
 
-describe('Process — écran Process/Fonction (§6 du prompt maître, Phase 40)', () => {
+describe('Process — écran Process/Fonction (§6 du prompt maître)', () => {
   test('crée un process, une fonction, puis les rattache l’un à l’autre', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })

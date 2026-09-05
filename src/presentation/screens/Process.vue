@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Écran Process/Fonction (§6 du prompt maître du 03/09/2026, Phase 40 —
+// Écran Process/Fonction (§6 du prompt maître du 03/09/2026 —
 // refonte du parcours) — comble un gap déjà documenté dans
 // `docs/convergence/CONVERGENCE_PLAN.md` : `useProcessContextStore`
-// (Phase 4) expose déjà `Process`/`FonctionActif`/association Fonction↔Actif,
+// expose déjà `Process`/`FonctionActif`/association Fonction↔Actif,
 // mais n'avait jamais eu d'écran de création, malgré son usage réel côté
 // Content Plan/Context Engine.
 import { onMounted, ref } from 'vue'

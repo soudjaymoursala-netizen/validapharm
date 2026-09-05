@@ -50,7 +50,7 @@ describe('JournalAnomalies', () => {
     expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
   })
 
-  test('crée une déviation, la liste immédiatement, jamais un verrou sur un autre module (DEC-002/DEC-055)', async () => {
+  test('crée une déviation, la liste immédiatement, jamais un verrou sur un autre module', async () => {
     const wrapper = mount(JournalAnomalies, {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },

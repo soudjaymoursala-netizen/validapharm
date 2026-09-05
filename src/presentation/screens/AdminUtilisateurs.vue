@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Gestion des comptes (TD-046, §9 du prompt maître) — réservé au rôle
+// Gestion des comptes (§9 du prompt maître) — réservé au rôle
 // admin (garde de routeur, `router/index.ts`) : créer un compte (aucune
 // inscription libre), changer un rôle, désactiver un compte. Le premier
 // admin est créé hors de cette UI (`/auth/bootstrap-admin`, voir
@@ -101,7 +101,7 @@ async function basculerStatut(u: UtilisateurWire): Promise<void> {
     </header>
     <p class="rappel">
       Aucune inscription libre — seul un admin crée un compte. La désactivation empêche
-      immédiatement toute nouvelle connexion (TD-046).
+      immédiatement toute nouvelle connexion.
     </p>
 
     <form v-if="formulaireOuvert" class="formulaire-compte" @submit.prevent="creerUtilisateur">
@@ -173,7 +173,7 @@ header {
   justify-content: space-between;
 }
 
-/* `.bouton-principal` seulement (Phase 41, même bug que GestionClients.vue) :
+/* `.bouton-principal` seulement (même bug que GestionClients.vue) :
    un `button` nu (Annuler, Promouvoir/Rétrograder) doit rester une action
    neutre — la base globale de `tokens.css` s'en charge. */
 .bouton-principal {

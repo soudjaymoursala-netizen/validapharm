@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Écran de connexion (TD-046) — remplace le verrou local (TD-033) comme
+// Écran de connexion — remplace le verrou local comme
 // porte d'entrée de l'application entière : toute route, sauf celle-ci et
 // « Configuration client » (Worker d'authentification à indiquer avant de
 // pouvoir se connecter), exige une session valide — voir la garde

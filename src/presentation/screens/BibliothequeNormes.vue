@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// Bibliothèque de normes (FS §4.5) — agrégation déterministe des
-// normes/référentiels déjà portés par chaque gabarit du catalogue (FDS §4).
+// Bibliothèque de normes — agrégation déterministe des
+// normes/référentiels déjà portés par chaque gabarit du catalogue.
 // L'association de documents normatifs propres à l'utilisateur
 // (Could) reste backlog : nécessiterait un écran générique de bibliothèque de
-// documents non construit à ce stade — voir TD-032.
+// documents non construit à ce stade.
 import { computed, ref } from 'vue'
 import { rechercherNormes } from '../../logique-metier/bibliotheque-normes/rechercherNormes'
 
@@ -17,7 +17,7 @@ const resultats = computed(() => rechercherNormes(motCle.value))
     <RouterLink :to="{ name: 'tableau-de-bord' }" class="lien-retour">Tableau de bord</RouterLink>
     <h1>Bibliothèque de normes</h1>
     <p class="rappel">
-      Normes et référentiels cités par les gabarits du catalogue (FDS §4) — recherche par mot-clé.
+      Normes et référentiels cités par les gabarits du catalogue — recherche par mot-clé.
     </p>
 
     <label class="champ-recherche">

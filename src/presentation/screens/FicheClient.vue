@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Fiche Client / Site (§13-15 du prompt maître du 03/09/2026, Phase 40) —
+// Fiche Client / Site (§13-15 du prompt maître du 03/09/2026) —
 // remplace la navigation à plat (barre latérale listant ~15 outils) par
 // la page d'entrée unique décrite dans le parcours demandé : cliquer sur
 // un client depuis « Mes clients » ouvre cette page, avec les 5 branches

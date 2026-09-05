@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// Liste des Mission d'un client + création (Phase 17, `docs/convergence/
-// PHASE_17_MISSION_WORKSPACE_SPEC.md`).
+// Liste des Mission d'un client + création.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMissionStore, type NouvelleMissionInput } from '../stores/useMissionStore'

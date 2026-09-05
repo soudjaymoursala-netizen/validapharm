@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Panneau Chat expert (FDS §3.4, FS §4.4) — panneau séparé de l'espace de
-// rédaction. Mode "audit simulé" (Phase 32, TD-030) : bascule explicite entre `chat_normatif` et
+// Panneau Chat expert — panneau séparé de l'espace de
+// rédaction. Mode "audit simulé" : bascule explicite entre `chat_normatif` et
 // `audit_simule`, sélection de persona(s) d'auditeur simulé, bandeau de
 // rappel non négociable affiché à chaque activation.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -94,7 +94,7 @@ function demanderEnvoi(): void {
 }
 
 /**
- * Mode audit_simule (Phase 32) : la question réellement
+ * Mode audit_simule : la question réellement
  * envoyée au fournisseur porte le prompt engineered (débat contradictoire +
  * personas), jamais la question brute — celle-ci reste ce qui s'affiche
  * dans l'historique via `questionAffichee`.
@@ -406,7 +406,7 @@ button {
   cursor: pointer;
 }
 
-/* `.bouton-neutre` (Phase 41) : dans la modale de confirmation d'envoi,
+/* `.bouton-neutre` : dans la modale de confirmation d'envoi,
    « Annuler » avait le même poids visuel qu'« Continuer » (bouton nu
    hérité de la règle `button` ci-dessus, jamais différencié). */
 .bouton-neutre {

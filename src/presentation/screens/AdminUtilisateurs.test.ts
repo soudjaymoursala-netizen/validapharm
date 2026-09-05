@@ -32,7 +32,7 @@ afterEach(() => {
   demonter()
 })
 
-describe('AdminUtilisateurs — gestion des comptes (TD-046)', () => {
+describe('AdminUtilisateurs — gestion des comptes', () => {
   test('liste le compte admin déjà connecté', async () => {
     const wrapper = mount(AdminUtilisateurs, { global: { stubs: { RouterLink: true } } })
     await attendreQue(() => wrapper.text().includes('admin@pharmatech.example'))

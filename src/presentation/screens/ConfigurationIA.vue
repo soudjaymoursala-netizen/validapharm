@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Configuration IA par client (FS §4.4, `client_config`) — choix du
+// Configuration IA par client (`client_config`) — choix du
 // fournisseur, accusé des conditions de traitement des données
 // et qualification de fiabilité.
 // Isolé par client_id, comme la config Drive ; le relais lui-même
@@ -37,7 +37,7 @@ const FOURNISSEURS_CLOUD = [
 const FOURNISSEUR_LOCAL = { id: 'local', nom: 'Modèle local (Ollama)' } as const
 
 /**
- * Qualification de fiabilité séparée par mode d'usage (Phase 32) —
+ * Qualification de fiabilité séparée par mode d'usage —
  * chat normatif et audit simulé n'ont pas le même profil de
  * risque, jamais une qualification unique réputée valable pour les deux.
  */

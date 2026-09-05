@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Configuration du miroir Drive par client (SDS §5bis) — dossier Drive
+// Configuration du miroir Drive par client — dossier Drive
 // dédié + jeton, isolés par client_id. Déclenchement manuel uniquement
 // dans cet incrément ("Sauvegarder maintenant") ; le
 // déclenchement automatique par heuristique de fin de session reste

@@ -38,7 +38,7 @@ beforeEach(async () => {
 })
 
 describe('ParametresCritiques', () => {
-  test('crée un paramètre, le classifie, déclare un CPP et un CQA séparément (Phase 2)', async () => {
+  test('crée un paramètre, le classifie, déclare un CPP et un CQA séparément', async () => {
     const wrapper = mount(ParametresCritiques, {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },
@@ -115,7 +115,7 @@ describe('ParametresCritiques', () => {
     expect(cppDesactive?.audit_log.at(-1)?.action).toContain('Changement de recette')
   })
 
-  test('une classification "important" ne crée jamais de CPP (garde-fou DEC-019)', async () => {
+  test('une classification "important" ne crée jamais de CPP (garde-fou)', async () => {
     await db.parameters.put({
       id: 'param-1',
       client_id: 'client-1',

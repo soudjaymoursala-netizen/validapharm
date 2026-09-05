@@ -1,16 +1,14 @@
 <script setup lang="ts">
-// Assistant de stratégie de qualification (FS §4.6) —
+// Assistant de stratégie de qualification —
 // module par client ; l'accès depuis une section Change
 // Control en cours de rédaction reste hors périmètre de
 // cet incrément — `change_control` n'existe pas encore comme
 // `TemplateType` dans ce projet. Aucune génération IA ici :
 // différée avec le reste du routage par mode (tâches #28/#29).
 //
-// Section 1 (ACFC) réécrite le 25/08/2026 (Phase 1 de convergence
-// architecturale, `docs/convergence/CONVERGENCE_PLAN.md`) : remplace la
+// Section 1 (ACFC) réécrite le 25/08/2026 : remplace la
 // grille de criticité codée en dur par une méthode ACFC configurable par
-// client (`useMethodProfileACFCStore`) — voir
-// `docs/convergence/TECHNICAL_DECISIONS.md` TD-002. Aucune question n'est
+// client (`useMethodProfileACFCStore`). Aucune question n'est
 // fabriquée par défaut : tant qu'un client n'a rien configuré, l'écran le
 // dit explicitement plutôt que de proposer une grille inventée.
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -101,7 +99,7 @@ async function enregistrerNouvelleVersion(): Promise<void> {
 const nomElement = ref('')
 // Nœud Structure Système évalué (optionnel) — trouvé manquant en simulant un
 // vrai parcours de qualification (`assetNodeId` existait dans le store
-// depuis l'origine de l'écran, Phase 1, sans jamais être exposé).
+// depuis l'origine de l'écran, sans jamais être exposé).
 const assetNodeIdSelectionne = ref('')
 const reponses = reactive<Record<string, ReponseQuestionACFC>>({})
 const evaluationEnregistree = ref(false)
@@ -131,7 +129,7 @@ async function enregistrerEvaluation(): Promise<void> {
   evaluationEnregistree.value = true
 }
 
-// --- Complexité + conclusion (FS §4.6, inchangé dans son principe) ---
+// --- Complexité + conclusion (inchangé dans son principe) ---
 const complexite = ref<NiveauComplexite | null>(null)
 
 const conclusion = computed(() =>

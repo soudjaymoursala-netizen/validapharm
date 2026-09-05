@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // Écran Source → SourceVersion → Extraction → ExtractionItem → KnowledgeItem
-// (+ Confirmation/KnowledgeRelation/Conflict) — Phase 8a de convergence
-// architecturale. Gap trouvé en poursuivant l'inventaire de §5.31
+// (+ Confirmation/KnowledgeRelation/Conflict). Gap trouvé en poursuivant l'inventaire de §5.31
 // CONTEXTE-REPRISE-SESSION.md : le domaine, la persistance et le store
 // existaient sans aucun écran, aucun point d'entrée UI pour le pipeline
 // d'ingestion documentaire.

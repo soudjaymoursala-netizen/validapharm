@@ -66,7 +66,7 @@ beforeEach(async () => {
 })
 
 describe('ExecutionTests', () => {
-  test('démarre une exécution, enregistre un résultat + une mesure, consigne une preuve, clôture avec verdict explicite (Phases 7b/7c)', async () => {
+  test('démarre une exécution, enregistre un résultat + une mesure, consigne une preuve, clôture avec verdict explicite', async () => {
     const testId = await creerTestApprouve()
     const wrapper = mount(ExecutionTests, {
       props: { clientId: 'client-1' },

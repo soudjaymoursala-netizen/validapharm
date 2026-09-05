@@ -36,7 +36,7 @@ beforeEach(async () => {
 })
 
 describe('RiskAssessmentAmdec', () => {
-  test('configure un profil, crée une ligne AMDEC avec IPR calculé, enregistre une action résiduelle (Phase 29)', async () => {
+  test('configure un profil, crée une ligne AMDEC avec IPR calculé, enregistre une action résiduelle', async () => {
     const wrapper = mount(RiskAssessmentAmdec, {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },

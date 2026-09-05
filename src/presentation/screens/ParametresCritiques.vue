@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Écran Parameter → ClassificationCriticiteParametre / CPP / CQA (Phase 2 de
-// convergence architecturale) — gap trouvé en poursuivant l'inventaire de
+// Écran Parameter → ClassificationCriticiteParametre / CPP / CQA —
+// gap trouvé en poursuivant l'inventaire de
 // §5.31 CONTEXTE-REPRISE-SESSION.md : le domaine, la persistance et le store
 // existaient sans aucun écran, rendant impossible de classer un paramètre
 // critique et de déclarer un CPP/CQA pour un vrai projet.

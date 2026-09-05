@@ -77,7 +77,7 @@ afterEach(() => {
   demonter()
 })
 
-describe('FicheClient — page d’entrée d’un client (§13-15 du prompt maître, Phase 40)', () => {
+describe('FicheClient — page d’entrée d’un client (§13-15 du prompt maître)', () => {
   test('affiche le nom du client, ses informations, et les 5 branches du parcours', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({

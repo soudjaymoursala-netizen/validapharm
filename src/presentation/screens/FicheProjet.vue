@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Fiche Projet (FDS §2) — contexte/portée, sections liées, ajout de
+// Fiche Projet — contexte/portée, sections liées, ajout de
 // section depuis le catalogue. Version minimale
 // de cet incrément : la vue de traçabilité (graphe des liens) reste
 // backlog (tâche #12). Section "Documents" (§4.9)
@@ -37,7 +37,7 @@ const nouvelUtilisateurPartage = ref('')
 const nouveauNiveauPartage = ref<'lecture' | 'édition'>('lecture')
 
 /**
- * Garde d'affichage du partage de projet (Phase 37, TD-044) — convention
+ * Garde d'affichage du partage de projet — convention
  * UX, jamais une frontière de sécurité réelle (voir `permissionsProjet.ts`).
  * `true` tant que le projet n'est pas encore chargé, pour ne jamais
  * masquer les contrôles pendant le chargement initial.
@@ -89,7 +89,7 @@ const CATALOGUE_DISPONIBLE: readonly TemplateType[] = [
 const sections = computed(() => sectionsStore.sectionsParProjet[props.projectId] ?? [])
 
 /**
- * Analyse structurelle du dossier (§4.8, Phase 34) —
+ * Analyse structurelle du dossier —
  * déterministe, jamais un appel IA. Recalculée à chaque changement de
  * sections/liens plutôt que mise en cache, le volume de sections d'un
  * projet restant modeste (cohérent avec le reste de l'écran).
@@ -172,7 +172,7 @@ async function ajouterSection(depuisDocument = false): Promise<void> {
 }
 
 /**
- * Import JSON (FS §4.3 : "réutilisable pour sauvegarde
+ * Import JSON ("réutilisable pour sauvegarde
  * manuelle ou transfert entre postes") — crée toujours une section
  * nouvelle dans ce projet, jamais un écrasement.
  */
@@ -236,7 +236,7 @@ async function importerFichier(evenement: Event): Promise<void> {
     </section>
 
     <section class="carte partage">
-      <h2 class="carte__titre-discret">Partage (Phase 37)</h2>
+      <h2 class="carte__titre-discret">Partage</h2>
       <p class="rappel">
         Lecture toujours ouverte à tous. Seuls le créateur et les personnes partagées en édition
         peuvent modifier ce projet — une convention d'affichage, pas une frontière de sécurité

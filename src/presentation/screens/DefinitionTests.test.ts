@@ -39,7 +39,7 @@ beforeEach(async () => {
 })
 
 describe('DefinitionTests', () => {
-  test('chaîne complète Requirement → Objectif → Candidat → Test approuvé → Couverture (Phase 7a)', async () => {
+  test('chaîne complète Requirement → Objectif → Candidat → Test approuvé → Couverture', async () => {
     const wrapper = mount(DefinitionTests, {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },
