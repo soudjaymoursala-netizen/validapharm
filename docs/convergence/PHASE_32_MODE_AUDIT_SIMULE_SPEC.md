@@ -1,6 +1,6 @@
-# — Mode audit simulé du chat expert
+# Mode audit simulé du chat expert
 
-**Statut**: Terminée (28/08/2026). ****. Répond à un besoin spécifié de longue date (§4.4bis, jamais construit), avec une limite assumée en plus (voir §7).
+**Statut**: Terminée (28/08/2026). Répond à un besoin spécifié de longue date (§4.4bis, jamais construit), avec une limite assumée en plus (voir §7).
 
 ## 1. Contexte et découverte
 
@@ -14,7 +14,7 @@ Investigation du code réel avant conception: `ModeUsageIA` (`src/connecteurs/ia
 
 `AskUserQuestion` soumise explicitement à l'utilisateur, 3 options:
 
-1. **Construction du prompt côté frontend (recommandé)** — le relais reste un passe-plat sans état identique aux deux modes (cohérent avec, architecture PWA-only sans backend), le débat contradictoire et la simulation de persona sont assemblés côté client avant l'envoi.
+1. **Construction du prompt côté frontend (recommandé)** — le relais reste un passe-plat sans état identique aux deux modes (cohérent avec les principes déjà actés, architecture PWA-only sans backend), le débat contradictoire et la simulation de persona sont assemblés côté client avant l'envoi.
 2. Construire un vrai relais Worker Cloudflare avec routage serveur par mode, conforme au commentaire de `RelayProviderAdapter.ts`.
 3. Reporter ce chantier.
 
@@ -79,11 +79,11 @@ Vérifié avec un navigateur Chromium réel (Playwright) contre le serveur de d�
 
 ## 7. Limites assumées
 
-- Aucune migration Dexie écrite pour le changement de forme de `ai_provider_reliability_qualification` (objet unique → `Record` par mode) — cohérent avec le statut /alpha (aucune donnée de production existante) et le précédent déjà établi pour d'autres changements de forme additifs de ce projet.
+- Aucune migration Dexie écrite pour le changement de forme de `ai_provider_reliability_qualification` (objet unique → `Record` par mode) — cohérent avec le statut alpha du projet (aucune donnée de production existante) et le précédent déjà établi pour d'autres changements de forme additifs de ce projet.
 - Le relais IA reste un passe-plat sans état, strictement identique pour les deux modes — aucun routage serveur par mode n'est construit, malgré le commentaire de `RelayProviderAdapter.ts` qui l'affirmait à tort déjà en place. Un futur besoin réel de routage serveur par mode (ex. modèles fournisseur distincts par mode) resterait un nouveau chantier.
 
 ## 8. Documentation alignée
 
 - `03-specifications-fonctionnelles.md` v50 — nouveau §4.4bis, mise à jour du modèle `client_config.ai_provider_reliability_qualification`.
-- `docs/convergence/TECHNICAL_DECISIONS.md` —.
-- `docs/convergence/CONVERGENCE_PLAN.md` — terminée.
+- `docs/convergence/TECHNICAL_DECISIONS.md` — décision technique associée consignée.
+- `docs/convergence/CONVERGENCE_PLAN.md` — ce chantier marqué terminé.

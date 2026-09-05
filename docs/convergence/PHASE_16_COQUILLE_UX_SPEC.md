@@ -1,6 +1,6 @@
-# — Coquille UX (sidebar + Accueil + mode dual)
+# Coquille UX (sidebar + Accueil + mode dual)
 
-*26/08/2026 — suite des -15. Répond à la critique UX explicite de l'utilisateur ("c'est bof et pas intuitif ni pro") et à la vision d'un accueil "Que voulez-vous faire ?" plutôt qu'une liste de modules.*
+*26/08/2026 — répond à la critique UX explicite de l'utilisateur ("c'est bof et pas intuitif ni pro") et à la vision d'un accueil "Que voulez-vous faire ?" plutôt qu'une liste de modules.*
 
 ## 1. Ce qui existe déjà (Comprendre)
 
@@ -12,7 +12,7 @@
 ## 2. Comparer — la contrainte réelle qui façonne la coquille
 
 Un sidebar "par intention" présuppose de pouvoir pointer directement vers un outil (Structure Système, Qualité, Assistant IA). Mais ces outils exigent un `clientId` que la coquille, par nature transverse à tous les écrans, ne connaît pas nativement. Deux options:
-- **Fabriquer un concept global de "client actif" côté backend/domaine** — prématuré, aucun cas réel ne le demande encore, contraire à la discipline déjà appliquée -15.
+- **Fabriquer un concept global de "client actif" côté backend/domaine** — prématuré, aucun cas réel ne le demande encore, contraire à la discipline déjà appliquée jusqu'ici.
 - **Mémoriser côté navigateur** (préférence UI, pas une entité métier) le dernier client visité, pour que la sidebar propose un accès direct — réversible, non intrusif, jamais persisté en base.
 
 **Décision retenue**: la seconde option — `useClientActifStore` (Pinia, persistance `localStorage`, jamais Dexie) mémorise le dernier `clientId` visité sur un écran scindé par client; la sidebar l'utilise pour proposer un accès direct aux outils, ou invite à choisir un client si aucun n'a encore été visité. C'est une commodité de navigation, pas une nouvelle donnée métier.
@@ -28,10 +28,10 @@ Un sidebar "par intention" présuppose de pouvoir pointer directement vers un ou
 - Route `tableau-de-bord` déplacée de `/` vers `/tableau-de-bord` (le nom de route ne change pas — toutes les références existantes par nom restent valides, changement non cassant vérifié).
 
 **Explicitement non construit ici (limite assumée)**:
-- Aucune différenciation comportementale réelle entre Mode Expert et Mode Assistant sur les écrans existants — la vision (Context → Analyze → Generate → Review → Export en mode Assistant) suppose la (Mission workspace), qui n'existe pas encore. Fabriquer une différence cosmétique sans substance serait mentir sur l'état d'avancement.
+- Aucune différenciation comportementale réelle entre Mode Expert et Mode Assistant sur les écrans existants — la vision (Context → Analyze → Generate → Review → Export en mode Assistant) suppose un futur Mission workspace, qui n'existe pas encore. Fabriquer une différence cosmétique sans substance serait mentir sur l'état d'avancement.
 - Aucun concept de "client actif" persisté côté domaine/serveur — uniquement une mémoire de navigation côté navigateur (voir §2).
 - Aucun écran existant supprimé ni son bandeau de navigation ad hoc retiré — la coquille s'ajoute, elle ne remplace pas encore les liens internes de chaque écran (nettoyage cosmétique différé, non requis pour l'acceptation de cette phase).
-- Aucun écran de gestion `Organization`/`Workspace` — toujours hors périmètre (déjà notée ainsi).
+- Aucun écran de gestion `Organization`/`Workspace` — toujours hors périmètre (déjà relevé ainsi).
 
 ## 4. Vérification
 

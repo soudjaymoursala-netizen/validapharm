@@ -1,6 +1,6 @@
-# — Knowledge Graph générique: parcours factorisé après un deuxième cas réel
+# Knowledge Graph générique: parcours factorisé après un deuxième cas réel
 
-**Statut**: Terminée (28/08/2026). ****. Troisième et dernier des 3 chantiers P1 restants du plan `VISION_NORTH_STAR_CONVERGENCE.md`.
+**Statut**: Terminée (28/08/2026). Troisième et dernier des 3 chantiers P1 restants du plan `VISION_NORTH_STAR_CONVERGENCE.md`.
 
 ## 1. Contexte et découverte
 
@@ -75,6 +75,6 @@ Non construite dans ce lot — même discipline que `tracer_chaine_technique`: d
 ## 7. Documentation alignée
 
 - `03-specifications-fonctionnelles.md` v49 — §4.15.
-- `docs/convergence/TECHNICAL_DECISIONS.md` —.
-- `docs/convergence/CONVERGENCE_PLAN.md` — terminée, (Template Intelligence) renumérotée.
+- `docs/convergence/TECHNICAL_DECISIONS.md` — décision technique associée consignée.
+- `docs/convergence/CONVERGENCE_PLAN.md` — ce chantier marqué terminé, le chantier suivant (Template Intelligence) renuméroté en conséquence.
 - `docs/convergence/VISION_NORTH_STAR_CONVERGENCE.md` — item Knowledge Graph de la liste P1 et §3 (couche 5) marqués terminés; **les 3 chantiers P1 du plan Vision North Star sont désormais clos**.

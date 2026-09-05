@@ -1,12 +1,12 @@
-# — Génération de brouillon par adaptation d'un document de référence (§4.1bis)
+# Génération de brouillon par adaptation d'un document de référence (§4.1bis)
 
-**Statut**: Terminée (28/08/2026). ****. Répond au besoin spécifié en §4.1bis (documenté depuis la conception initiale, jamais construit), ajoute une limite assumée (voir §6).
+**Statut**: Terminée (28/08/2026). Répond au besoin spécifié en §4.1bis (documenté depuis la conception initiale, jamais construit), ajoute une limite assumée (voir §6).
 
 ## 1. Contexte et découverte
 
-Reprise "dans l'ordre" du backlog après la (mode audit simulé). §4.1bis décrit la génération de brouillon par adaptation d'un document de référence — jamais construite jusqu'ici.
+Reprise "dans l'ordre" du backlog après le lot précédent (mode audit simulé). §4.1bis décrit la génération de brouillon par adaptation d'un document de référence — jamais construite jusqu'ici.
 
-Investigation avant conception: la spécification (§4.1bis) suppose un "document de référence fourni par l'utilisateur, joint via le mécanisme existant de jonction de documents" — le mécanisme d'upload de documents de projet (entité `ProjectDocument`) est modélisé dans le domaine depuis la (v12) mais n'est consommé **nulle part** dans le code: aucun écran d'upload, aucun stockage de contenu ou de texte extrait.
+Investigation avant conception: la spécification (§4.1bis) suppose un "document de référence fourni par l'utilisateur, joint via le mécanisme existant de jonction de documents" — le mécanisme d'upload de documents de projet (entité `ProjectDocument`) est modélisé dans le domaine depuis un lot précédent (v12) mais n'est consommé **nulle part** dans le code: aucun écran d'upload, aucun stockage de contenu ou de texte extrait.
 
 ## 2. Décision de portée
 
@@ -22,7 +22,7 @@ L'utilisateur répond vouloir **les deux**: "L'utilisateur doit avoir le choix e
 
 ### 3.1 `ProjectDocument` enfin consommé, minimalement
 
-`extracted_text: string` ajouté au type (`domaine/types.ts`) — le texte collé directement ou extrait d'un fichier `.docx`/`.pdf` (réutilisation de `extraireTexteDocx`/`extraireTextePdf`, /23, aucune nouvelle dépendance). Un enregistrement réel est créé à chaque génération, lié au projet (`project.documents[]`, `project.audit_log`) — usage honnête et limité du type déjà modélisé: pas l'écran générique de bibliothèque de documents (listing, prévisualisation, suppression, tous types), qui reste backlog.
+`extracted_text: string` ajouté au type (`domaine/types.ts`) — le texte collé directement ou extrait d'un fichier `.docx`/`.pdf` (réutilisation de `extraireTexteDocx`/`extraireTextePdf`, aucune nouvelle dépendance). Un enregistrement réel est créé à chaque génération, lié au projet (`project.documents[]`, `project.audit_log`) — usage honnête et limité du type déjà modélisé: pas l'écran générique de bibliothèque de documents (listing, prévisualisation, suppression, tous types), qui reste backlog.
 
 ### 3.2 `genererBrouillonSection` (`logique-metier/generation-brouillon/genererBrouillonSection.ts`)
 
@@ -34,7 +34,7 @@ CHAMP|<section_key>.<field_key>|<valeur proposée>
 
 Limité aux champs scalaires du gabarit (`texte_court`/`texte_long`/`liste`/`date`/`nombre`) — jamais les lignes d'un `tableau_dynamique` (risque d'hallucination non maîtrisé sur un nombre de lignes/valeurs croisées non contraint, limite assumée §6).
 
-**Garde-fou non négociable**: chaque valeur proposée est revalidée via `validerChamp` (§4.1/, la même fonction que la saisie manuelle) avant d'être acceptée — une option de liste inconnue, un nombre hors plage, une date invalide sont silencieusement rejetés, jamais un état que l'écran de saisie manuelle refuserait lui-même. Un champ inconnu/halluciné (`section_key.field_key` ne correspondant à rien dans le gabarit) est également ignoré.
+**Garde-fou non négociable**: chaque valeur proposée est revalidée via `validerChamp` (§4.1, la même fonction que la saisie manuelle) avant d'être acceptée — une option de liste inconnue, un nombre hors plage, une date invalide sont silencieusement rejetés, jamais un état que l'écran de saisie manuelle refuserait lui-même. Un champ inconnu/halluciné (`section_key.field_key` ne correspondant à rien dans le gabarit) est également ignoré.
 
 `origineTechnique: boolean` par champ proposé — `true` si le champ est de type `nombre`: critère déterministe retenu pour "donnée technique/numérique", puisque dans ce moteur de gabarits un champ numérique EST par construction une valeur/tolérance/critère d'acceptation, jamais du texte libre.
 
@@ -92,5 +92,5 @@ Vérifié avec un navigateur Chromium réel (Playwright) contre le serveur de d�
 ## 7. Documentation alignée
 
 - `03-specifications-fonctionnelles.md` v51 — §4.1bis complétée, modèle `project_document.extracted_text`.
-- `docs/convergence/TECHNICAL_DECISIONS.md` —.
-- `docs/convergence/CONVERGENCE_PLAN.md` — terminée.
+- `docs/convergence/TECHNICAL_DECISIONS.md` — décision technique associée consignée.
+- `docs/convergence/CONVERGENCE_PLAN.md` — ce chantier marqué terminé.

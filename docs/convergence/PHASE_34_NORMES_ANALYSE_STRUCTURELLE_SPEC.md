@@ -1,10 +1,10 @@
-# — Bibliothèque de normes + analyse structurelle de dossier (§4.5/§4.8)
+# Bibliothèque de normes + analyse structurelle de dossier (§4.5/§4.8)
 
-**Statut**: Terminée (28/08/2026). ****. Répond au besoin spécifié en §4.5 et à la moitié déterministe de celui spécifié en §4.8, avec des limites assumées en plus (voir §6).
+**Statut**: Terminée (28/08/2026). Répond au besoin spécifié en §4.5 et à la moitié déterministe de celui spécifié en §4.8, avec des limites assumées en plus (voir §6).
 
 ## 1. Contexte et découverte
 
-Reprise "dans l'ordre" du backlog après la. §4.5 (bibliothèque de normes) et §4.8 (analyse de documents et challenge de dossier) sont regroupées dans une seule tâche de backlog.
+Reprise "dans l'ordre" du backlog après le lot précédent. §4.5 (bibliothèque de normes) et §4.8 (analyse de documents et challenge de dossier) sont regroupées dans une seule tâche de backlog.
 
 Investigation avant conception: §4.8 bundle en réalité **3 capacités distinctes de taille très inégale**:
 1. Extraction structurée d'un document d'ingénierie (PID/schéma) — priorité Could.
@@ -13,14 +13,14 @@ Investigation avant conception: §4.8 bundle en réalité **3 capacités distinc
 
 ## 2. Décision de portée (jugement autonome, non soumise à `AskUserQuestion`)
 
-Contrairement aux découpages P1 (-31, ordre soumis à l'utilisateur) ou au choix de portée (arbitrage produit réel sur la source du document de référence), ce découpage applique un principe déjà établi et jamais contesté dans cette session, plutôt que d'ouvrir un nouvel arbitrage produit:
+Contrairement aux découpages P1 (ordre soumis à l'utilisateur) ou au choix de portée d'un lot précédent (arbitrage produit réel sur la source du document de référence), ce découpage applique un principe déjà établi et jamais contesté dans cette session, plutôt que d'ouvrir un nouvel arbitrage produit:
 
 - **Jamais une règle métier inventée sans grounding réel.** La moitié "document attendu absent de la section Documents" de ce besoin nécessiterait une règle du type "le gabarit IQ attend un certificat d'étalonnage" — aucune source réelle (Google Drive, procédure client) ne confirme un tel mapping à ce jour. Coder une règle en dur ici reproduirait exactement l'erreur que ce projet a corrigée plusieurs fois (`MethodProfileACFC`/`MethodProfileImpactAssessment`/`MethodProfileRiskAssessment` — toujours configurables par client, jamais une grille universelle).
 - **Scinder une capacité en sous-phases quand leurs tailles sont très inégales** (précédent: Source Intelligence 8a/8b). Les capacités d'extraction PID/certificat nécessitent un nouveau pipeline d'extraction (upload + OCR/extraction texte) et une conception de prompt dédiée pour deux types de documents très différents (schémas techniques, certificats multilingues) — une capacité de taille comparable à une phase entière à elle seule.
 
 **Portée retenue pour ce lot**:
 - §4.5, volet Must — implémenté en entier: déterministe, agrège des données déjà présentes dans le catalogue de gabarits, aucun risque de fabrication.
-- §4.8 — implémenté **uniquement pour sa moitié déterministe** ("exigence URS sans section/preuve liée"): s'appuie sur `project.links[]`, mécanisme déjà construit -3 pour les garde-fous de finalisation.
+- §4.8 — implémenté **uniquement pour sa moitié déterministe** ("exigence URS sans section/preuve liée"): s'appuie sur `project.links[]`, mécanisme déjà construit précédemment pour les garde-fous de finalisation.
 - §4.8, garde-fou — implémenté et vérifié par test.
 - Différés: le volet Could de §4.5, la moitié "document attendu" de §4.8, l'extraction PID/certificat de §4.8.
 
@@ -69,5 +69,5 @@ Vérifié avec un navigateur Chromium réel (Playwright) contre le serveur de d�
 ## 7. Documentation alignée
 
 - `03-specifications-fonctionnelles.md` v52 — §4.5/§4.8 mises à jour.
-- `docs/convergence/TECHNICAL_DECISIONS.md` —.
-- `docs/convergence/CONVERGENCE_PLAN.md` — terminée.
+- `docs/convergence/TECHNICAL_DECISIONS.md` — décision technique associée consignée.
+- `docs/convergence/CONVERGENCE_PLAN.md` — ce chantier marqué terminé.

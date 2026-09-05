@@ -1,6 +1,6 @@
-# — Compliance Engine généralisé: factorisation du patron règle→blocage
+# Compliance Engine généralisé: factorisation du patron règle→blocage
 
-**Statut**: Terminée (28/08/2026). ****. Deuxième des 3 chantiers P1 restants du plan `VISION_NORTH_STAR_CONVERGENCE.md`.
+**Statut**: Terminée (28/08/2026). Deuxième des 3 chantiers P1 restants du plan `VISION_NORTH_STAR_CONVERGENCE.md`.
 
 ## 1. Contexte et découverte
 
@@ -74,6 +74,6 @@ Non applicable — refactor interne pur, aucun changement de comportement observ
 ## 7. Documentation alignée
 
 - **URS et spécification fonctionnelle non modifiées** — ni l'une ni l'autre ne référence l'implémentation interne (`verifierBlocageExport.ts`/`gardesFinalisation.ts` par leur nom), seul le comportement observable compte, strictement inchangé.
-- `docs/convergence/TECHNICAL_DECISIONS.md` —.
-- `docs/convergence/CONVERGENCE_PLAN.md` — terminée, (Template Intelligence) renumérotée.
+- `docs/convergence/TECHNICAL_DECISIONS.md` — décision technique associée consignée.
+- `docs/convergence/CONVERGENCE_PLAN.md` — ce chantier marqué terminé, le chantier suivant (Template Intelligence) renuméroté en conséquence.
 - `docs/convergence/VISION_NORTH_STAR_CONVERGENCE.md` — item Compliance Engine de la liste P1 et §3 (couche 14) marqués terminés.

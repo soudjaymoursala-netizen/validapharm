@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Statut** | Spec de phase (étape "Agentic Planning", même discipline que `PHASE_5_QUALITY_EVENTS_SPEC.md`). Rédigée **avant** tout code, panel collégial E1-E7 (`00-cadrage-projet.md` §6bis). |
-| **Sources** | `GAP.md` ligne "Test / Execution / Evidence" (seule source locale nommant précisément `Execution → ExecutionStep → Measurement → ExecutionEvent`); `CONVERGENCE_PLAN.md` (risque élevé, séquencement obligatoire); déjà livrée (`Test`/`EtapeTest`) comme fondation directe; principes ALCOA+/intégrité des données déjà actés dans le projet (lecture MHRA GXP Data Integrity, tâche #36); principe fondateur n°1 (aucun verdict de conformité automatique attribué par l'outil). |
+| **Sources** | `GAP.md` ligne "Test / Execution / Evidence" (seule source locale nommant précisément `Execution → ExecutionStep → Measurement → ExecutionEvent`); `CONVERGENCE_PLAN.md` (risque élevé, séquencement obligatoire); `Test`/`EtapeTest` déjà livrés comme fondation directe; principes ALCOA+/intégrité des données déjà actés dans le projet (lecture MHRA GXP Data Integrity, tâche #36); principe fondateur n°1 (aucun verdict de conformité automatique attribué par l'outil). |
 
 **Limite déclarée d'emblée**: contrairement à une étape précédente, aucun document du package Target lu jusqu'ici ne détaille les champs de `Execution`/`ExecutionStep`/`Measurement`/`ExecutionEvent` au-delà de leurs noms (`GAP.md` les cite mais ne les définit pas). Cette spec ne fabrique donc pas de détails absents des sources: elle s'appuie sur (a) les 4 noms d'entités confirmés par `GAP.md`, (b) la structure déjà actée de `Test`/`EtapeTest` que l'Execution doit exécuter, et (c) des principes déjà écrits ailleurs dans ce projet (ALCOA+, principe fondateur n°1, garde-fous non négociables déjà appliqués aux phases précédentes) plutôt que sur une source neuve non vérifiée.
 
@@ -73,7 +73,7 @@ ExecutionEvent {
 
 ## 5. Périmètre exclu (reporté à 7c ou au-delà)
 
-`Evidence`/`EvidenceLocation`/`ProvenanceLink` (preuve documentaire/fichier attachée à une `Execution` ou un `ExecutionStep`) : non engagée ici. Cette sous-étape 7b ne couvre que la traçabilité structurée du résultat, pas le fichier de preuve associé.
+`Evidence`/`EvidenceLocation`/`ProvenanceLink` (preuve documentaire/fichier attachée à une `Execution` ou un `ExecutionStep`) : hors périmètre de ce lot. Cette sous-étape 7b ne couvre que la traçabilité structurée du résultat, pas le fichier de preuve associé.
 
 ## 6. Tests obligatoires
 

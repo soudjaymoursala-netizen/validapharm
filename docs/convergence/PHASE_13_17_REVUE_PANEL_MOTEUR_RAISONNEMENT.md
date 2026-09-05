@@ -1,6 +1,6 @@
-# Revue panel E1-E7 — Moteur de raisonnement (Mission/Context/AI), -17
+# Revue panel E1-E7 — Moteur de raisonnement (Mission/Context/AI)
 
-*26/08/2026 — convoquée sur demande explicite de l'utilisateur ("pour les points bloquants fais appel à tes experts et utilise des méthodes comme BMAD pour prendre la décision") avant d'aligner les documents vivants sur la vision complète décrite dans les deux notes de synthèse précédentes (`docs/convergence/CONVERGENCE_PLAN.md` §, artefact "Cible Mission-Centrée").*
+*26/08/2026 — convoquée sur demande explicite de l'utilisateur ("pour les points bloquants fais appel à tes experts et utilise des méthodes comme BMAD pour prendre la décision") avant d'aligner les documents vivants sur la vision complète décrite dans les deux notes de synthèse précédentes (`docs/convergence/CONVERGENCE_PLAN.md`, artefact "Cible Mission-Centrée").*
 
 Panel repris tel que défini en `00-cadrage-projet.md` §6bis: **E1** Fournisseur/IA-GAMP5-Part11, **E2** Qualité/SMQ, **E3** QA Réglementaire, **E4** CSV, **E5** Architecte logiciel, **E6** Métrologie, **E7** Maintenance. Méthode: débat contradictoire par question, décision explicite avec dissidence tracée si non-consensus (jamais un simple vote).
 
@@ -14,7 +14,7 @@ Panel repris tel que défini en `00-cadrage-projet.md` §6bis: **E1** Fournisseu
 - **A3.** Un seul appel LLM par cas, avec tout le contexte pré-assemblé côté client dans un prompt unique (pas de boucle itérative).
 
 **Débat**
-- **E5 (Architecte)**: A2 viole directement (extension serverless plutôt que backend complet, décision déjà actée le 25/08/2026) sans qu'aucun fait nouveau ne justifie de la rouvrir — écarté. A1 est réalisable avec les briques déjà en place: le relais IA reste un simple proxy masquant la clé, la boucle d'appels et la lecture des stores restent 100 % client-side, cohérent avec l'architecture PWA sans backend. A3 est plus simple mais s'effondre dès qu'un cas réel dépasse la fenêtre de contexte ou nécessite une clarification humaine en cours de route (exactement le scénario §16/§38 de l'utilisateur: "il me manque une information, je la demande, j'attends la réponse, je continue") — A3 ne peut physiquement pas faire ça en un seul appel.
+- **E5 (Architecte)**: A2 viole directement un principe déjà acté (extension serverless plutôt que backend complet, décision déjà actée le 25/08/2026) sans qu'aucun fait nouveau ne justifie de la rouvrir — écarté. A1 est réalisable avec les briques déjà en place: le relais IA reste un simple proxy masquant la clé, la boucle d'appels et la lecture des stores restent 100 % client-side, cohérent avec l'architecture PWA sans backend. A3 est plus simple mais s'effondre dès qu'un cas réel dépasse la fenêtre de contexte ou nécessite une clarification humaine en cours de route (exactement le scénario §16/§38 de l'utilisateur: "il me manque une information, je la demande, j'attends la réponse, je continue") — A3 ne peut physiquement pas faire ça en un seul appel.
 - **E1 (IA-GAMP5-Part11)**: peu importe où vit la boucle, ce qui compte est que chaque appel et chaque outil invoqué soit journalisé (quel outil, quels paramètres, quelle réponse) — sinon aucune reconstruction a posteriori n'est possible. Condition posée: le futur type `AIRequest` doit inclure la trace des appels d'outils, pas seulement le prompt et la réponse finale.
 - **E4 (CSV)**: le moteur de raisonnement est lui-même un système informatisé à impact qualité (il influence des décisions de qualification) — sa configuration (prompts, outils, version de modèle) doit être versionnée (`AIConfiguration`, `AIModelVersion`, déjà nommés dans `03_DOMAIN_DATA_MODEL.md`) pour qu'une décision passée reste reconstructible même après une évolution du moteur.
 - **E7 (Maintenance)**: A1 réutilise des stores et un relais déjà testés — surface de code nouvelle minimale (un seul module d'orchestration + définitions d'outils). Accord.
@@ -49,8 +49,8 @@ Panel repris tel que défini en `00-cadrage-projet.md` §6bis: **E1** Fournisseu
 
 **Débat**
 - **E3 (QA Réglementaire)**: un workflow d'approbation générique mal spécifié maintenant (sans cas réel pour le calibrer) risque de fabriquer une mécanique d'approbation qui ne correspond à aucun processus qualité réel documenté — contraire à la règle "ne jamais fabriquer de contenu réglementaire". Il existe déjà un mécanisme d'approbation implicite ailleurs (ex. `QualityEvent`, `Confirmation`) qui peut suffire tant qu'un vrai besoin de workflow *générique* transverse n'est pas démontré.
-- **E5 (Architecte)**, **E7 (Maintenance)**: C2 reproduirait exactement l'erreur que ce chantier corrige — construire une capacité non éprouvée avant d'avoir un cas d'usage réel qui la valide (le lot précédent, "Mission+Context d'abord, UX ensuite", suit déjà cette logique). Cohérent avec (séquencement Source Intelligence: structuration d'abord, compréhension de schémas complexes ensuite, "seulement après retour d'expérience réel").
-- **E1 (IA-GAMP5-Part11)**: `Mission`/`Activity` suffisent pour que le moteur de raisonnement (Question A) ait un objet à référencer — `WorkflowDefinition`/`Instance`/`Approval` ne sont pas des prérequis techniques pour la.
+- **E5 (Architecte)**, **E7 (Maintenance)**: C2 reproduirait exactement l'erreur que ce chantier corrige — construire une capacité non éprouvée avant d'avoir un cas d'usage réel qui la valide (le lot précédent, "Mission+Context d'abord, UX ensuite", suit déjà cette logique). Cohérent avec une décision déjà actée (séquencement Source Intelligence: structuration d'abord, compréhension de schémas complexes ensuite, "seulement après retour d'expérience réel").
+- **E1 (IA-GAMP5-Part11)**: `Mission`/`Activity` suffisent pour que le moteur de raisonnement (Question A) ait un objet à référencer — `WorkflowDefinition`/`Instance`/`Approval` ne sont pas des prérequis techniques pour ce chantier.
 
 **Décision**: **C1 retenue**. `Mission`/`Activity` construits. `WorkflowDefinition`/`WorkflowInstance`/`Approval` restent nommés dans le modèle cible mais **non engagés**, documentés comme tel dans `CONVERGENCE_PLAN.md` au même titre que `8b`/`9-Generate-Render` déjà différés.
 
@@ -60,8 +60,8 @@ Panel repris tel que défini en `00-cadrage-projet.md` §6bis: **E1** Fournisseu
 
 | # | Décision | Statut |
 |---|---|---|
-| A | Orchestration du raisonnement côté navigateur (relais reste un simple proxy sans état) | **ACTÉE** — |
-| B | Taxonomie de confiance à 5 états discrets, jamais un score numérique | **ACTÉE** — |
-| C | Mission + Activity seulement pour ce lot; Workflow/Approval différés sur besoin réel | **ACTÉE** — |
+| A | Orchestration du raisonnement côté navigateur (relais reste un simple proxy sans état) | **ACTÉE** |
+| B | Taxonomie de confiance à 5 états discrets, jamais un score numérique | **ACTÉE** |
+| C | Mission + Activity seulement pour ce lot; Workflow/Approval différés sur besoin réel | **ACTÉE** |
 
 Ces trois décisions sont reportées dans `TECHNICAL_DECISIONS.md` et dans le plan révisé de `CONVERGENCE_PLAN.md`.

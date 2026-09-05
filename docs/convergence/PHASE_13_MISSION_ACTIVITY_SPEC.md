@@ -1,4 +1,4 @@
-# — Domaine Work: `Mission` / `Activity`
+# Domaine Work: `Mission` / `Activity`
 
 *26/08/2026 — première implémentation de code de la vision Mission/Context/Reasoning Engine, après la revue panel `PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md`. Décision d'entrée : `Mission`/`Activity` seulement, `WorkflowDefinition`/`WorkflowInstance`/`Approval` différés sur besoin réel démontré.*
 
@@ -15,7 +15,7 @@ Activity | produces    | Evidence     | N:M | execution
 
 et `01_ARCHITECTURE_MASTER_FINAL.md` §8: une `Mission` est le conteneur qui regroupe des *workstreams* (ex. CQV/CSV) partageant Context/Sources/Evidence/Risk/Traceability sans être elle-même un moteur de raisonnement.
 
-Le texte de `CONVERGENCE_PLAN.md` §, rédigé avant cette conception détaillée, évoquait une Mission référençant directement Organization/Workspace/AssetNode/Requirement/Assessment/Test/Evidence/Deliverable. La conception ci-dessous **précise et resserre** ce périmètre (voir §3 — NEEDS ADAPTATION): seule la relation la mieux étayée par la matrice et la moins spéculative est construite maintenant; le reste est différé au même titre que Workflow/Approval, plutôt que fabriqué sans cas réel pour le calibrer.
+Le texte de `CONVERGENCE_PLAN.md`, rédigé avant cette conception détaillée, évoquait une Mission référençant directement Organization/Workspace/AssetNode/Requirement/Assessment/Test/Evidence/Deliverable. La conception ci-dessous **précise et resserre** ce périmètre (voir §3 — NEEDS ADAPTATION): seule la relation la mieux étayée par la matrice et la moins spéculative est construite maintenant; le reste est différé au même titre que Workflow/Approval, plutôt que fabriqué sans cas réel pour le calibrer.
 
 ## 2. Modèle retenu
 
@@ -39,7 +39,7 @@ La matrice cible modélise `Activity produces Evidence` (N:M). Mais `Evidence` (
 ## 4. Ce qui reste volontairement non construit
 
 - `WorkflowDefinition`/`WorkflowInstance`/`Approval` (inchangé).
-- Toute référence directe `Mission → Requirement/Assessment/Test/Evidence/Deliverable` (voir NEEDS ADAPTATION ci-dessus) — sera ajoutée de façon additive (champ nullable, comme `workspace_id` sur `AssetNode`) quand `Strategy` ou la (Mission workspace) en démontrera le besoin réel.
+- Toute référence directe `Mission → Requirement/Assessment/Test/Evidence/Deliverable` (voir NEEDS ADAPTATION ci-dessus) — sera ajoutée de façon additive (champ nullable, comme `workspace_id` sur `AssetNode`) quand `Strategy` ou le futur Mission workspace en démontrera le besoin réel.
 - `Activity produces Evidence` (voir CONFLICT ci-dessus) — sa résolution (ex. assouplir le garde-fou `Evidence.execution_id` pour accepter une Activity comme second producteur possible) est différée à un incrément qui la traitera explicitement, jamais en silence.
 - Aucun écran, comme pour les domaines suivants déjà construits sans UI (QualityEvent/Source Intelligence/ContentPlan/Integration Gateway): ce lot est domaine + persistance + store, sans UI — Mission workspace exposera ces objets visuellement.
 

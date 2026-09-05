@@ -1,4 +1,4 @@
-# — Ingestion Office native (lecture.docx)
+# Ingestion Office native (lecture .docx)
 
 *27/08/2026 — deuxième phase du plan `docs/convergence/VISION_NORTH_STAR_CONVERGENCE.md`, priorité P0. Complétée le même jour (§6/§7) suite à une observation explicite de l'utilisateur: une SOP réelle n'est pas toujours du texte seul (schémas/photos incorporés) ni toujours un `.docx` propre (scan avec ou sans filigrane) — l'ingestion doit être robuste à ces deux réalités.*
 

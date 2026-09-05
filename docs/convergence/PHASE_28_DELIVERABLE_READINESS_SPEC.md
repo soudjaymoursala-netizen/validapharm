@@ -1,12 +1,12 @@
-# — Deliverable Intelligence: calcul de readiness `ContentPlan`
+# Deliverable Intelligence: calcul de readiness `ContentPlan`
 
-**Statut**: Terminée (28/08/2026). ****. Deuxième chantier P1 du plan `VISION_NORTH_STAR_CONVERGENCE.md`, engagé sur demande explicite de l'utilisateur de continuer après la.
+**Statut**: Terminée (28/08/2026). Deuxième chantier P1 du plan `VISION_NORTH_STAR_CONVERGENCE.md`, engagé sur demande explicite de l'utilisateur de continuer après le lot précédent.
 
 ## 1. Contexte et découverte
 
 Investigation de `09_DELIVERABLE_ENGINE.md` (Google Drive) — décrivant la vision cible du "Deliverable Engine" (Content Planner, hiérarchie d'autorité, 5 cas de configuration A-E, `DeliverableVersion`, états `readiness`, formats de sortie, liste des livrables prioritaires) — puis du code existant.
 
-Le type domaine `ReadinessContentPlan` (`logique-metier/domaine/types.ts`), posé (v26, réalignement sur `01_ARCHITECTURE_MASTER_FINAL.md` §26), porte un commentaire explicite:
+Le type domaine `ReadinessContentPlan` (`logique-metier/domaine/types.ts`), posé précédemment (v26, réalignement sur `01_ARCHITECTURE_MASTER_FINAL.md` §26), porte un commentaire explicite:
 
 > Fourni explicitement par l'appelant à la création, jamais calculé automatiquement par ce module (pas de mécanisme d'évaluation de complétude construit ici).
 
@@ -93,7 +93,7 @@ Suite complète, typecheck, lint: tous verts (voir commit).
 
 ## 6. Limites assumées
 
-- Aucun écran `ContentPlan` — hérité, non close par ce lot.
+- Aucun écran `ContentPlan` — hérité d'un lot précédent, non close par ce lot.
 - La détermination de "quels types de livrables sont requis" pour un contexte donné (option 2 non retenue) reste hors périmètre.
 - Le domaine "Deliverable" complet (`DeliverableRequest`/`ContentElement`/`DeliverableVersion`, `Generate → Validate → Review → Render → Approve → Freeze`) reste hors périmètre — limite déjà documentée, inchangée.
 - La résolution "Example" (troisième niveau de la hiérarchie d'autorité de `09_DELIVERABLE_ENGINE.md`, après Method/Template) n'est pas construite.
@@ -101,6 +101,6 @@ Suite complète, typecheck, lint: tous verts (voir commit).
 ## 7. Documentation alignée
 
 - `03-specifications-fonctionnelles.md` v47 — §4.16.
-- `docs/convergence/TECHNICAL_DECISIONS.md` —.
-- `docs/convergence/CONVERGENCE_PLAN.md` — terminée, (Template Intelligence) renumérotée, nouvel item ouvert "Écran `ContentPlan`".
+- `docs/convergence/TECHNICAL_DECISIONS.md` — décision technique associée consignée.
+- `docs/convergence/CONVERGENCE_PLAN.md` — ce chantier marqué terminé, le chantier suivant (Template Intelligence) renuméroté en conséquence, nouvel item ouvert "Écran `ContentPlan`".
 - `docs/convergence/VISION_NORTH_STAR_CONVERGENCE.md` — item Deliverable Intelligence de la liste P1 marqué terminé.

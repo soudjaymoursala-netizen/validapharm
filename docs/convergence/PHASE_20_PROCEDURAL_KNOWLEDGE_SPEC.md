@@ -1,4 +1,4 @@
-# — Cerveau procédural (Procedure/ProcedureStep)
+# Cerveau procédural (Procedure/ProcedureStep)
 
 *27/08/2026 — troisième phase du plan `docs/convergence/VISION_NORTH_STAR_CONVERGENCE.md`, priorité P0.*
 
@@ -16,11 +16,11 @@ La vision décrit une chaîne ambitieuse: lire une SOP → identifier automatiqu
 
 **Ce qui est construit dans ce lot**: la structuration elle-même — un humain qui a lu une SOP (assistée par `extraireTexteDocx`) saisit ses étapes dans un modèle structuré, versionné, immuable, exactement le rôle déjà tenu par `MethodProfileACFC` pour l'ACFC. C'est un prérequis nécessaire, pas un remplacement, à toute extraction assistée future: sans structure de destination, aucune suggestion IA n'aurait où se poser.
 
-**Explicitement différé**: le suivi d'exécution (quelles étapes ont été réellement suivies pour une `Mission`/`Activity` donnée, vérification de conformité post-exécution) — même discipline que (Workflow différé): construire la structure d'abord, le suivi d'exécution quand un cas réel le réclame.
+**Explicitement différé**: le suivi d'exécution (quelles étapes ont été réellement suivies pour une `Mission`/`Activity` donnée, vérification de conformité post-exécution) — même discipline que pour le Workflow différé: construire la structure d'abord, le suivi d'exécution quand un cas réel le réclame.
 
 ## 3. Identifier / Proposer
 
-- `Procedure`: `reference` (identifiant stable, ex. "SOP-QA-012") + `numero_version` (auto-incrémenté par référence, même patron que `SourceVersion`) + `titre` + `effective_date` + `source_id` (optionnel, lien vers la `Source` d'origine si la procédure a été ingérée via) — immuable une fois créée, jamais mutée (une nouvelle révision crée une nouvelle `Procedure`).
+- `Procedure`: `reference` (identifiant stable, ex. "SOP-QA-012") + `numero_version` (auto-incrémenté par référence, même patron que `SourceVersion`) + `titre` + `effective_date` + `source_id` (optionnel, lien vers la `Source` d'origine si la procédure a été ingérée précédemment) — immuable une fois créée, jamais mutée (une nouvelle révision crée une nouvelle `Procedure`).
 - `ProcedureStep`: `procedure_id` + `ordre` + `description` + `obligatoire` (booléen) + `condition` (texte libre optionnel) + `responsable` (texte libre optionnel) — immuable, rattaché à une version précise de `Procedure` (jamais partagé entre versions, pour ne jamais laisser une étape "flotter" entre deux révisions).
 - `useProcedureStore`: `charger`, `creerProcedure` (résout `numero_version` en cherchant le maximum existant pour cette `reference`, même logique que `creerSourceVersion`), `ajouterEtape`, `etapesDeProcedure`, `derniereVersion(reference)`.
 - Nouvel outil du Reasoning Engine: `lister_etapes_procedure` (paramètre `reference`) — résout automatiquement la version la **plus récente** de cette référence (jamais une version arbitraire), retourne ses étapes dans l'ordre. Étend `DonneesOutilsRaisonnement` avec `procedures`/`procedureSteps`, et `TypeObjetCitable` avec `'procedure_step'`.
@@ -34,12 +34,12 @@ La vision décrit une chaîne ambitieuse: lire une SOP → identifier automatiqu
 - **E5 (Architecte logiciel)**: réutilise le patron `SourceVersion` (numérotation séquentielle) plutôt que d'inventer un mécanisme de version distinct — cohérent avec la discipline "étendre, jamais dupliquer".
 - **E6 (Métrologie)** / **E7 (Maintenance)**: sans objet pour cette phase.
 
-**Décision technique associée**:, voir `TECHNICAL_DECISIONS.md`.
+**Décision technique associée**: voir `TECHNICAL_DECISIONS.md`.
 
 ## 5. Explicitement non construit (limite assumée)
 
 - Aucune extraction automatique de structure depuis un texte libre (SOP brute) — la structuration reste un acte humain, même discipline que `KnowledgeItem.valeur_interpretee`. Point explicitement laissé ouvert pour une décision produit ultérieure (voir §7).
-- Aucun suivi d'exécution/conformité (`ProcedureExecution`) — différé, même discipline que.
+- Aucun suivi d'exécution/conformité (`ProcedureExecution`) — différé, même discipline qu'ailleurs dans le projet.
 - Aucun écran dédié — domaine + persistance + store + outil de raisonnement seulement, même discipline que les autres domaines construits sans écran.
 - Aucun lien direct `Procedure` ↔ `Mission`/`Activity` dans ce lot — un rattachement viendra naturellement avec le suivi d'exécution différé.
 

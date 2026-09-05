@@ -1,4 +1,4 @@
-# — Gabarits d'export personnalisés client (Template Intelligence, 1ʳᵉ brique réelle)
+# Gabarits d'export personnalisés client (Template Intelligence, 1ʳᵉ brique réelle)
 
 *27/08/2026 — implémente §4.3bis (gabarits d'export personnalisés client), déjà spécifié depuis longtemps mais jamais construit; premier chantier P0 réellement livré du plan `VISION_NORTH_STAR_CONVERGENCE.md` (item "Template Intelligence Engine", couche 10/15).*
 
@@ -8,10 +8,10 @@
 
 ## 2. Ce qui existe déjà, réutilisé plutôt que réinventé
 
-- `docxtemplater`+`pizzip`: pré-choisis **par anticipation** en sans être installés — recherche re-vérifiée ici (registre npm réel, `npm audit` réel) plutôt que présumée toujours valable: 0 vulnérabilité, licences MIT confirmées, dépendances uniques (`@xmldom/xmldom` pour `docxtemplater`, `pako` pour `pizzip`).
+- `docxtemplater`+`pizzip`: pré-choisis **par anticipation**, sans être installés — recherche re-vérifiée ici (registre npm réel, `npm audit` réel) plutôt que présumée toujours valable: 0 vulnérabilité, licences MIT confirmées, dépendances uniques (`@xmldom/xmldom` pour `docxtemplater`, `pako` pour `pizzip`).
 - `genererExportWord.ts` (HTML `.doc`): refactoré pour consommer une nouvelle fonction de construction de données partagée, jamais réécrit dans sa logique de rendu.
 - `EditeurSection.vue`: écran d'export existant (§4.3), étendu plutôt que dupliqué.
-- Patron d'isolation stricte par `client_id` déjà établi (`AssetNode`, `Procedure`, /16): reproduit à l'identique pour `GabaritExportClient`.
+- Patron d'isolation stricte par `client_id` déjà établi (`AssetNode`, `Procedure`): reproduit à l'identique pour `GabaritExportClient`.
 
 ## 3. Conception — équivalence de contenu par construction, pas par vérification a posteriori
 
@@ -24,13 +24,13 @@ La spécification (§4.3bis) exige que le gabarit personnalisé produise un cont
 - **`donneesExportGabarit.ts`** (nouveau): `DonneesExportGabarit` (titre/référence/version/statut/responsabilité transférée/rédacteurs/approbateur final/sections+champs+tableaux ou contenu générique/historique des révisions), `construireDonneesExportGabarit`.
 - **`genererExportWord.ts`** (refactoré, sortie HTML inchangée — vérifié par la suite de tests existante, aucune régression): consomme désormais `DonneesExportGabarit`.
 - **`GenerationDocxAdapter.ts`** (nouveau, `connecteurs/office/`): `genererDocxPersonnalise(gabaritDocx, donnees)` (ouvre le `.docx` client avec `pizzip`, remplace les balises avec `docxtemplater`, régénère un `.docx` réel réouvrable); `verifierGabaritExportClient(gabaritDocx)` (liste les balises présentes via `Docxtemplater.getTags` — API réelle non déclarée dans les types publiés de la librairie, castée explicitement avec commentaire justificatif, jamais masquée).
-- **Bug réel trouvé et corrigé pendant la construction du test**: le comportement par défaut de `docxtemplater` pour une balise absente des données au moment du rendu est d'écrire littéralement le texte `"undefined"` dans le document généré — jamais une erreur, jamais une chaîne vide. `nullGetter: => ''` neutralise ce défaut (une balise sans valeur produit une cellule vide).
+- **Bug réel trouvé et corrigé pendant la construction du test**: le comportement par défaut de `docxtemplater` pour une balise absente des données au moment du rendu est d'écrire littéralement le texte `"undefined"` dans le document généré — jamais une erreur, jamais une chaîne vide. `nullGetter: () => ''` neutralise ce défaut (une balise sans valeur produit une cellule vide).
 - **`GabaritExportClient`** (nouveau type domaine) + table Dexie `gabaritsExportClient` (version 26 du schéma) + `useGabaritExportStore` (`importerGabarit` — refuse le gabarit si les balises obligatoires `redacteurs`/`approbateur_final`/`historique_revisions` sont absentes; `charger`/`supprimerGabarit`, isolation stricte par `client_id`).
 - **`EditeurSection.vue`** étendu: import d'un gabarit `.docx` (nom + fichier), sélection du gabarit à utiliser (par défaut ou personnalisé), bouton "Exporter en Word (gabarit client.docx)" produisant un vrai fichier `.docx` téléchargeable.
 
 ## 5. Explicitement non construit (limite assumée)
 
-- PDF/Excel personnalisés (la spécification mentionne les trois formats): aucune librairie de génération saine identifiée à ce jour pour ces deux formats — même discipline que (Excel bloqué faute de librairie saine). Non fabriqué sans preuve.
+- PDF/Excel personnalisés (la spécification mentionne les trois formats): aucune librairie de génération saine identifiée à ce jour pour ces deux formats — même discipline que pour Excel (bloqué faute de librairie saine). Non fabriqué sans preuve.
 - Aucune fidélité structurelle complète pour un tableau dynamique dans le gabarit client (une ligne = une chaîne de cellules jointes par `" | "`) — l'export CSV dédié existant reste le chemin de fidélité complète pour un tableau.
 - Aucune détection de balise **superflue** (un gabarit qui référence un champ hors `DonneesExportGabarit`, ex. une faute de frappe) — seule l'absence des balises **obligatoires** est vérifiée (le besoin ne demande que cela); une balise inconnue produit une cellule vide grâce à `nullGetter`, jamais un plantage.
 - Aucun écran de gestion dédié (lister/renommer/supprimer les gabarits d'un client en dehors de l'écran d'édition d'une section) — l'import se fait directement depuis `EditeurSection.vue`, cohérent avec la taille du besoin actuel.
