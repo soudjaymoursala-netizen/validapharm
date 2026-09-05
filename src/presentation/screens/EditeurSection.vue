@@ -36,6 +36,7 @@ import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/constr
 import { useClientConfigStore } from '../stores/useClientConfigStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 import { useGabaritExportStore } from '../stores/useGabaritExportStore'
+import { useNormativeDocumentsStore } from '../stores/useNormativeDocumentsStore'
 import { NOMS_FOURNISSEURS } from '../stores/usePanneauChatStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
@@ -50,6 +51,7 @@ const gabaritExportStore = useGabaritExportStore()
 const configStore = useClientConfigStore()
 const relaisStore = useConnexionRelaisIAStore()
 const reasoningStore = useReasoningEngineStore()
+const normativeDocumentsStore = useNormativeDocumentsStore()
 const section = ref<Section | undefined>(undefined)
 const projet = ref<Project | undefined>(undefined)
 const gabaritSelectionneId = ref<string>('')
@@ -213,6 +215,7 @@ onMounted(async () => {
     await configStore.charger(projet.value.client_id)
     await relaisStore.charger()
     await reasoningStore.charger(projet.value.client_id)
+    await normativeDocumentsStore.charger()
   }
   // Arrivée depuis "À partir d'un document" (Fiche Projet) — porte
   // directement l'attention sur le panneau §4.1bis déjà construit,
@@ -553,7 +556,11 @@ async function poserQuestionAssistant(): Promise<void> {
       jetonRelais: relaisStore.connexion?.jeton,
     })
     const { response } = await reasoningStore.executerRaisonnement(projet.value.client_id, {
-      objectif: construireObjectifAssistantSection(section.value, question),
+      objectif: construireObjectifAssistantSection(
+        section.value,
+        question,
+        normativeDocumentsStore.documents,
+      ),
       missionId: null,
       contextSnapshotId: null,
       fournisseur: adaptateurAvecBascule(principal, local),

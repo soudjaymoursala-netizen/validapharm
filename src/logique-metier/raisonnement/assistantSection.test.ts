@@ -31,4 +31,28 @@ describe('construireObjectifAssistantSection', () => {
     )
     expect(objectif).toContain('aucune valeur saisie')
   })
+
+  test('sans document normatif : aucun bloc "Documents normatifs disponibles"', () => {
+    const objectif = construireObjectifAssistantSection(SECTION_MINIMALE, 'Question')
+    expect(objectif).not.toContain('Documents normatifs disponibles')
+  })
+
+  test('injecte les documents normatifs fournis, tels quels', () => {
+    const objectif = construireObjectifAssistantSection(SECTION_MINIMALE, 'Question', [
+      { titre: 'ICH Q9', category: 'norme', extracted_text: 'Gestion du risque qualité.' },
+    ])
+    expect(objectif).toContain('Documents normatifs disponibles')
+    expect(objectif).toContain('--- ICH Q9 (norme) ---')
+    expect(objectif).toContain('Gestion du risque qualité.')
+  })
+
+  test('tronque un extrait trop long avec un marqueur explicite, jamais silencieusement', () => {
+    const texteLong = 'x'.repeat(5000)
+    const objectif = construireObjectifAssistantSection(SECTION_MINIMALE, 'Question', [
+      { titre: 'Guide long', category: 'guideline', extracted_text: texteLong },
+    ])
+    expect(objectif).toContain('[...texte tronqué...]')
+    expect(objectif).not.toContain('x'.repeat(5000))
+    expect(objectif).toContain('x'.repeat(4000))
+  })
 })

@@ -58,6 +58,7 @@ import type {
   Requirement,
   RiskAssessment,
   MethodProfileRiskAssessment,
+  NormativeDocument,
   Section,
   Source,
   SourceLocation,
@@ -142,6 +143,18 @@ export interface EnregistrementEtatMiroirDrive {
 }
 
 /**
+ * Configuration de connexion en lecture à un dossier Google Drive pour la
+ * bibliothèque de normes — enregistrement unique, pas par client
+ * (contrairement à `EnregistrementConnexionDrive`, miroir d'écriture par
+ * client) : la bibliothèque de normes est globale à l'installation.
+ */
+export interface EnregistrementConnexionDriveLectureNormes {
+  id: 'unique'
+  dossierId: string
+  jeton: string
+}
+
+/**
  * Configuration de connexion au relais IA — enregistrement
  * unique, pas par client : un seul relais serverless pour toute
  * l'installation (même raisonnement que GitHub) ; c'est
@@ -215,12 +228,14 @@ export class ValidaPharmDatabase extends Dexie {
   projects!: EntityTable<Project, 'id'>
   sections!: EntityTable<Section, 'id'>
   projectDocuments!: EntityTable<ProjectDocument, 'id'>
+  normativeDocuments!: EntityTable<NormativeDocument, 'id'>
   clientConfigs!: EntityTable<ClientConfig, 'client_id'>
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
   connexionGitHub!: EntityTable<EnregistrementConnexionGitHub, 'id'>
   etatSynchronisation!: EntityTable<EnregistrementEtatSynchronisation, 'id'>
   connexionDrive!: EntityTable<EnregistrementConnexionDrive, 'client_id'>
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
+  connexionDriveLectureNormes!: EntityTable<EnregistrementConnexionDriveLectureNormes, 'id'>
   connexionRelaisIA!: EntityTable<EnregistrementConnexionRelaisIA, 'id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
@@ -503,6 +518,22 @@ export class ValidaPharmDatabase extends Dexie {
     this.version(29).stores({
       connexionAuthentification: 'id',
       sessionAuthentification: 'id',
+    })
+    /**
+     * Bibliothèque de normes — documents importés (téléversement direct,
+     * GitHub, Google Drive), globaux à l'installation (jamais scopés par
+     * client, contrairement à `projectDocuments`). Indexé par `category`
+     * pour le filtrage à l'écran et par `source` pour distinguer l'origine.
+     *
+     * `connexionDriveLectureNormes` : enregistrement unique, distinct de
+     * `connexionDrive` (miroir d'écriture par client) — la bibliothèque de
+     * normes est globale à l'installation, pas scopée par client, et lit un
+     * dossier Drive au lieu d'y écrire (`DriveReaderConnector`, jamais
+     * `DriveConnector`).
+     */
+    this.version(30).stores({
+      normativeDocuments: 'id, category, source',
+      connexionDriveLectureNormes: 'id',
     })
   }
 }

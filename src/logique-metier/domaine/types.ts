@@ -170,6 +170,40 @@ export interface ProjectDocument {
   mime_type: string
 }
 
+/** Catégorie d'un document dans la bibliothèque de normes — jamais extensible sans besoin réel démontré. */
+export type CategorieDocumentNormatif = 'norme' | 'guideline' | 'methode' | 'autre'
+
+/** Origine d'un document importé dans la bibliothèque de normes. */
+export type SourceDocumentNormatif = 'televersement' | 'github' | 'drive'
+
+/**
+ * Document normatif importé dans la bibliothèque de normes (§4.5bis) —
+ * global à l'installation, jamais scopé par client : une norme/guideline
+ * s'applique indépendamment du client (contrairement à `ProjectDocument`,
+ * propre à un projet). Consultable par l'assistant contextuel d'une
+ * section (`construireObjectifAssistantSection`) via `extracted_text`,
+ * jamais un appel IA distinct pour "lire" le document — le texte déjà
+ * extrait est simplement injecté dans le prompt, même discipline que le
+ * reste du Reasoning Engine (aucune fabrication, uniquement ce qui a été
+ * réellement extrait).
+ */
+export interface NormativeDocument {
+  id: string
+  category: CategorieDocumentNormatif
+  /** Titre affiché — reste éditable indépendamment du nom de fichier d'origine. */
+  titre: string
+  filename: string
+  source: SourceDocumentNormatif
+  /** Chemin GitHub ou identifiant de fichier Drive à l'origine de l'import — `null` pour un téléversement direct. */
+  source_ref: string | null
+  /** Texte extrait (docx/pdf natif, ou lu tel quel pour du texte brut) — chaîne vide si l'extraction a échoué ou n'a pas été tentée. */
+  extracted_text: string
+  content: Blob | null
+  mime_type: string
+  uploaded_at: string
+  uploaded_by: string
+}
+
 /**
  * Secteur d'activité d'un client (§4.0ter, refonte du parcours
  * « Mes clients » demandée le 04/09/2026) — trois valeurs seulement,
