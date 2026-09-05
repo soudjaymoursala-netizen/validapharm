@@ -4,18 +4,18 @@
 |---|---|
 | **Référence** | IQ-VALIDAPHARM-2026-001 |
 | **Version** | 01 (protocole — résultats non renseignés, développement non démarré) |
-| **Document de référence** | VMP-VALIDAPHARM-2026-001, FS-VALIDAPHARM-2026-001 |
+| **Document de référence** | VMP-VALIDAPHARM-2026-001 |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
 
 ---
 
-> ⚠️ **DOCUMENT À REVOIR (audit de cohérence du 21/08/2026)** : protocole rédigé contre URS v01 ("13 gabarits" à IQ-03) — l'URS est en v20, catalogue élargi (15 familles), **et la FS/FDS/SDS sont réécrites (v08/v10/v06)** (voir `03-specifications-fonctionnelles.md`). À réviser avant exécution réelle — la condition qui bloquait cette révision (attente de la FS) est levée.
+> ⚠️ **DOCUMENT À REVOIR (audit de cohérence du 21/08/2026)**: protocole rédigé contre URS v01 ("13 gabarits" à IQ-03) — l'URS est en v20, catalogue élargi (15 familles), **et les documents de spécification et de conception de l'outil ont depuis été réécrits** (voir `03-specifications-fonctionnelles.md`). À réviser avant exécution réelle — la condition qui bloquait cette révision est levée.
 
 ## 1. Objectif
 
-Vérifier que l'outil ValidaPharm (Phase 1) est correctement installé/déployé sur un poste de travail, conformément à la spécification fonctionnelle, avant tout test opérationnel.
+Vérifier que l'outil ValidaPharm est correctement installé/déployé sur un poste de travail, conformément à la spécification fonctionnelle, avant tout test opérationnel.
 
 ## 2. Portée
 
@@ -28,7 +28,7 @@ Poste de travail cible de l'utilisateur (Windows/Mac), dépôt Git dédié, conn
 | Dépôt Git dédié créé et accessible | Conforme / Non conforme / N/A | |
 | Navigateur compatible installé sur le poste | Conforme / Non conforme / N/A | |
 | Accès au compte Google Drive de sauvegarde configuré | Conforme / Non conforme / N/A | |
-| Documentation FS disponible | Conforme / Non conforme / N/A | |
+| Documentation de spécification fonctionnelle disponible | Conforme / Non conforme / N/A | |
 
 ## 4. Tests d'installation
 
@@ -50,9 +50,9 @@ Poste de travail cible de l'utilisateur (Windows/Mac), dépôt Git dédié, conn
 
 ## 6. Conclusion
 
-Conclusion générale : ___________________________________________
+Conclusion générale: ___________________________________________
 
-Décision : ☐ Approuvé sans réserve ☐ Approuvé avec réserves (actions listées) ☐ Non approuvé
+Décision: ☐ Approuvé sans réserve ☐ Approuvé avec réserves (actions listées) ☐ Non approuvé
 
 ---
-*Protocole version 01 — à exécuter après développement de la Phase 1 et approbation du Plan de validation.*
+*Protocole version 01 — à exécuter après développement et approbation du Plan de validation.*

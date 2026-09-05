@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Statut** | Produit le 03/09/2026 (TD-041, `docs/convergence/TECHNICAL_DECISIONS.md`). |
+| **Statut** | Produit le 03/09/2026 (`docs/convergence/TECHNICAL_DECISIONS.md`). |
 | **Source** | `Questionnaire Couche IA.docx` (Google Drive, dossier `10- Architecture détaillée`), lu intégralement le 03/09/2026 — 362 240 caractères, 31 parties. |
 | **Ce que ce document est** | Une distillation structurée et actionnable du questionnaire, organisée pour être directement exploitable lors de la conception de composants cibles (Context Engine, Source Intelligence, Reviewer, Test Design Engine, Question Engine du Reasoning Engine). |
 | **Ce que ce document n'est pas** | Une transcription complète — le questionnaire brut, bien plus long, reste dans Google Drive. La copie locale `QUESTIONNAIRE_CONCEPTION_CERVEAU.md` (27/08/2026) est plus courte et plus datée ; voir sa note de tête. |
@@ -179,4 +179,4 @@ Ce que le document contient néanmoins : des exemples illustratifs concrets int�
 
 ---
 
-*Ce document alimente TD-036 (Test Design Engine), TD-037 (`ExampleProfile`), TD-038 (mémoire/apprentissage gouverné) et TD-040 (pipeline multilingue) de `docs/convergence/TECHNICAL_DECISIONS.md`. Une session de suivi avec l'utilisateur pour compléter les Parties 15-31 du questionnaire source — en particulier la Partie 29 (cas réels), explicitement demandée mais jamais fournie — reste un point ouvert explicite, non comblé ici.*
+*Ce document alimente les décisions relatives au Test Design Engine, à `ExampleProfile`, à la mémoire/apprentissage gouverné et au pipeline multilingue, consignées dans `docs/convergence/TECHNICAL_DECISIONS.md`. Une session de suivi avec l'utilisateur pour compléter les Parties 15-31 du questionnaire source — en particulier la Partie 29 (cas réels), explicitement demandée mais jamais fournie — reste un point ouvert explicite, non comblé ici.*

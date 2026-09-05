@@ -11,7 +11,7 @@
 
 ---
 
-> ⚠️ **DOCUMENT À REVOIR (audit de cohérence du 21/08/2026)** : protocole rédigé contre URS v01/AR v01 — l'URS est en v20, **et la FS/FDS/SDS sont réécrites (v08/v10/v06)** (voir `03-specifications-fonctionnelles.md`). À réviser avant exécution réelle — la condition qui bloquait cette révision (attente de la FS) est levée.
+> ⚠️ **DOCUMENT À REVOIR (audit de cohérence du 21/08/2026)** : protocole rédigé contre URS v01/AR v01 — l'URS est en v20, **et les documents de spécification et de conception de l'outil ont depuis été réécrits** (voir `03-specifications-fonctionnelles.md`). À réviser avant exécution réelle — la condition qui bloquait cette révision est levée.
 
 ## 1. Objectif
 

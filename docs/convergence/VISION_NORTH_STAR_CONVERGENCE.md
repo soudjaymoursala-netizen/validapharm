@@ -4,15 +4,15 @@
 
 ## 0. Ce que ce document est, et n'est pas
 
-Le document de vision (§53) demande 30 livrables d'architecture avant tout code. Produire 30 documents séparés et exhaustifs pour un plan qui va s'exécuter sur des dizaines de phases serait plus coûteux que le pilotage qu'ils sont censés servir — et c'est exactement le piège que la Règle 39 ("ne jamais construire un MVP incompatible avec le North Star") prévient sans l'imposer. Ce document consolide donc, en un seul endroit, la substance des points 1 à 27 (interprétation, état actuel, architecture cible, gap, priorités, roadmap), au même niveau de rigueur que `GAP.md`/`TECHNICAL_DECISIONS.md`/`CONVERGENCE_PLAN.md` produits en Phase 0 — et renvoie vers l'audit détaillé déjà livré (compte-rendu + artefact publié le 27/08/2026) pour le détail catégorie par catégorie de la checklist.
+Le document de vision (§53) demande 30 livrables d'architecture avant tout code. Produire 30 documents séparés et exhaustifs pour un plan qui va s'exécuter sur des dizaines de phases serait plus coûteux que le pilotage qu'ils sont censés servir — et c'est exactement le piège que la Règle 39 ("ne jamais construire un MVP incompatible avec le North Star") prévient sans l'imposer. Ce document consolide donc, en un seul endroit, la substance des points 1 à 27 (interprétation, état actuel, architecture cible, gap, priorités, roadmap), au même niveau de rigueur que `GAP.md`/`TECHNICAL_DECISIONS.md`/`CONVERGENCE_PLAN.md` produits — et renvoie vers l'audit détaillé déjà livré (compte-rendu + artefact publié le 27/08/2026) pour le détail catégorie par catégorie de la checklist.
 
-**Ce que ce document N'EST PAS** : un audit ligne par ligne des ~500 items de la checklist avec preuve fichier individuelle (§AJ du document 2). Cet audit exhaustif reste un chantier dédié, engageable domaine par domaine sur demande — voir §7.
+**Ce que ce document N'EST PAS**: un audit ligne par ligne des ~500 items de la checklist avec preuve fichier individuelle (§AJ du document 2). Cet audit exhaustif reste un chantier dédié, engageable domaine par domaine sur demande — voir §7.
 
 ## 1. Interprétation — la vision en une phrase
 
 > Construire un système capable de connaître la réalité technique d'une entreprise pharmaceutique, comprendre ses processus et son architecture, comprendre le contexte d'un projet, lire et suivre les procédures du client (fournies ou découvertes), raisonner sur les impacts/risques/requirements/stratégies, puis produire le livrable dans le format exact attendu par le client, puis vérifier le résultat.
 
-Trois "cerveaux" distincts, réunis par un seul raisonnement :
+Trois "cerveaux" distincts, réunis par un seul raisonnement:
 
 | Cerveau | Contenu | État actuel |
 |---|---|---|
@@ -20,70 +20,70 @@ Trois "cerveaux" distincts, réunis par un seul raisonnement :
 | **Procédural** | SOP, WI, règle, condition, étape obligatoire, exception, responsabilité | Quasi absent |
 | **Documentaire/client** | Word, Excel, PDF, template, questions, tableaux, numbering, signatures | Catalogue fermé propre à ValidaPharm, jamais au format exact d'un client |
 
-Le principe central (vision §19/§45) : le moteur de raisonnement produit un **résultat sémantique**, indépendant du format ; un moteur documentaire séparé traduit ce résultat dans la structure exacte voulue par chaque client. Ce principe existe déjà, testé, à petite échelle (`MethodProfileACFC`/`EvaluationACFC`, Phase 1) — voir §4.
+Le principe central (vision §19/§45): le moteur de raisonnement produit un **résultat sémantique**, indépendant du format; un moteur documentaire séparé traduit ce résultat dans la structure exacte voulue par chaque client. Ce principe existe déjà, testé, à petite échelle (`MethodProfileACFC`/`EvaluationACFC`) — voir §4.
 
-**Distinction imposée par la vision, appliquée strictement dans tout ce document** : NORTH STAR (les 15 couches de §38, sans compromis) ≠ CURRENT STATE (vérifié sur le code réel) ≠ MVP (le plus petit sous-ensemble qui prouve la boucle complète) ≠ INTERMEDIATE STATE (une étape entre les deux, jamais présentée comme l'un ou l'autre).
+**Distinction imposée par la vision, appliquée strictement dans tout ce document**: NORTH STAR (les 15 couches de §38, sans compromis) ≠ CURRENT STATE (vérifié sur le code réel) ≠ MVP (le plus petit sous-ensemble qui prouve la boucle complète) ≠ INTERMEDIATE STATE (une étape entre les deux, jamais présentée comme l'un ou l'autre).
 
-## 2. État actuel — synthèse (détail complet : audit publié le 27/08/2026)
+## 2. État actuel — synthèse (détail complet: audit publié le 27/08/2026)
 
-Catégories de la checklist déjà vérifiées sur le code réel (types, moteurs, `package.json`) :
+Catégories de la checklist déjà vérifiées sur le code réel (types, moteurs, `package.json`):
 
-- **Solide et réutilisable** : Process/Parameter/CPP/CQA (Phase 2/4, jamais de promotion automatique), traçabilité Requirement→Test→Execution→Evidence (Phase 7a-7c, testée de bout en bout), garde-fous Human-in-the-loop (aucune `AIResponse` n'écrit directement dans le domaine métier), discipline provenance/confiance (`EtatConfianceIA`, Phase 15 — déjà exactement FACT/INFERENCE/ASSUMPTION/UNKNOWN), orchestrateur IA textuel avec trace et vérification de citation déterministe (Phase 15).
-- **Précédent validé à généraliser, pas à réinventer** : `MethodProfileACFC`/`EvaluationACFC` (Phase 1, TD-002) sépare déjà résultat sémantique et rendu, avec un nombre de questions configurable par client, jamais figé dans le code.
-- **Quasi absent** : Procedure Ingestion/Execution générique (aucune SOP n'est structurée en règles), Template Intelligence généralisée (le catalogue de gabarits est fermé, écrit en TypeScript par ValidaPharm), génération dans le format natif exact d'un client (l'export "Word" actuel est un HTML encapsulé en `.doc`, jamais un vrai OOXML ; aucun Excel, aucun PDF réel ; `package.json` ne contient aucune librairie de parsing/génération Office).
-- **Correction par rapport à l'audit initial** : en creusant le modèle de données réel, la couche "Technical Architecture" (PLC/SCADA/Server) n'exige pas de nouvelles entités de nœud — `AssetNode`/`AssetHierarchySchema` (Phase 4/16) acceptent déjà des niveaux de hiérarchie nommés librement par le client (`level_key: string`, non contraint à une énumération) : un client peut d'ores et déjà créer des nœuds de type "PLC"/"SCADA"/"Serveur". Le vrai manquant, plus étroit qu'estimé initialement, est la **relation typée et dirigée** entre ces nœuds (contrôlé-par / connecté-à / hébergé-sur) — voir Phase 18 ci-dessous.
+- **Solide et réutilisable**: Process/Parameter/CPP/CQA (jamais de promotion automatique), traçabilité Requirement→Test→Execution→Evidence (testée de bout en bout), garde-fous Human-in-the-loop (aucune `AIResponse` n'écrit directement dans le domaine métier), discipline provenance/confiance (`EtatConfianceIA` — déjà exactement FACT/INFERENCE/ASSUMPTION/UNKNOWN), orchestrateur IA textuel avec trace et vérification de citation déterministe.
+- **Précédent validé à généraliser, pas à réinventer**: `MethodProfileACFC`/`EvaluationACFC` sépare déjà résultat sémantique et rendu, avec un nombre de questions configurable par client, jamais figé dans le code.
+- **Quasi absent**: Procedure Ingestion/Execution générique (aucune SOP n'est structurée en règles), Template Intelligence généralisée (le catalogue de gabarits est fermé, écrit en TypeScript par ValidaPharm), génération dans le format natif exact d'un client (l'export "Word" actuel est un HTML encapsulé en `.doc`, jamais un vrai OOXML; aucun Excel, aucun PDF réel; `package.json` ne contient aucune librairie de parsing/génération Office).
+- **Correction par rapport à l'audit initial**: en creusant le modèle de données réel, la couche "Technical Architecture" (PLC/SCADA/Server) n'exige pas de nouvelles entités de nœud — `AssetNode`/`AssetHierarchySchema` acceptent déjà des niveaux de hiérarchie nommés librement par le client (`level_key: string`, non contraint à une énumération): un client peut d'ores et déjà créer des nœuds de type "PLC"/"SCADA"/"Serveur". Le vrai manquant, plus étroit qu'estimé initialement, est la **relation typée et dirigée** entre ces nœuds (contrôlé-par / connecté-à / hébergé-sur) — voir plus bas.
 
 ## 3. Architecture cible — mapping sur les 15 couches (§38)
 
 | Couche vision | Équivalent / manquant dans ce dépôt |
 |---|---|
-| 1-2 Data sources / Ingestion | OCR image (Azure AI Vision, Phase 6) — manque parsing Office natif |
-| 3-4 Document Intelligence / Knowledge extraction | `Source→SourceVersion→Extraction→ExtractionItem→KnowledgeItem` (Phase 8a) — faits plats, pas de structuration règle/condition |
-| 5 Knowledge Graph | `parcourirGraphe` (Phase 31, générique) consommé par `chaineTechniqueDepuis`/`relationsConnaissanceDepuis` — 2 cas réels démontrés (Architecture Technique, Knowledge). Les autres jointures (`Couverture`, `ProvenanceLink`…) restent des jointures typées ad hoc — aucun 3ᵉ cas réel ne les justifie de généraliser à ce jour |
-| 6 Context Engine | `ContextSnapshot` (Phase 14) enrichi d'un narratif OÙ/QUOI/COMMENT/POURQUOI-IMPACT (Phase 27) réellement injecté dans le prompt du Reasoning Engine — facette COMMENT toujours vide (`Procedure` sans rattachement `AssetNode`) |
-| 7 Process Engine | `Process`/`Parameter`/`CPP`/`CQA` (Phase 2/4) — solide |
-| 8 Technical Architecture Engine | `AssetNode` + (à ajouter) relations typées — Phase 18 |
-| 9 Procedural Knowledge Engine | `Procedure`/`ProcedureStep` (Phase 20, saisie humaine) + `detecterSections`/`proposerStructureProcedure` (Phase 21, détection déterministe, proposition soumise à confirmation) |
+| 1-2 Data sources / Ingestion | OCR image (Azure AI Vision) — manque parsing Office natif |
+| 3-4 Document Intelligence / Knowledge extraction | `Source→SourceVersion→Extraction→ExtractionItem→KnowledgeItem` — faits plats, pas de structuration règle/condition |
+| 5 Knowledge Graph | `parcourirGraphe` (générique) consommé par `chaineTechniqueDepuis`/`relationsConnaissanceDepuis` — 2 cas réels démontrés (Architecture Technique, Knowledge). Les autres jointures (`Couverture`, `ProvenanceLink`…) restent des jointures typées ad hoc — aucun 3ᵉ cas réel ne les justifie de généraliser à ce jour |
+| 6 Context Engine | `ContextSnapshot` enrichi d'un narratif OÙ/QUOI/COMMENT/POURQUOI-IMPACT réellement injecté dans le prompt du Reasoning Engine — facette COMMENT toujours vide (`Procedure` sans rattachement `AssetNode`) |
+| 7 Process Engine | `Process`/`Parameter`/`CPP`/`CQA` — solide |
+| 8 Technical Architecture Engine | `AssetNode` + (à ajouter) relations typées |
+| 9 Procedural Knowledge Engine | `Procedure`/`ProcedureStep` (saisie humaine) + `detecterSections`/`proposerStructureProcedure` (détection déterministe, proposition soumise à confirmation) |
 | 10 Template Intelligence Engine | `MethodProfileACFC` (précédent étroit) — à généraliser |
-| 11 Reasoning Engine | Boucle textuelle à appel d'outils (Phase 15) — 4 outils, à étendre |
+| 11 Reasoning Engine | Boucle textuelle à appel d'outils — 4 outils, à étendre |
 | 12 Deliverable Engine | Absent (`ContentPlan` planifie un livrable déjà décidé, ne détermine pas lesquels sont nécessaires) |
 | 13 Document Generation Engine | Word (HTML-trick)/CSV/JSON — pas de sortie au format client |
-| 14 Compliance Engine | `evaluerReglesConformite` (Phase 30, générique) consommé par `verifierBlocageExport.ts`/`gardesFinalisation.ts`/`gelerContentPlan` — mécanisme partagé, mais toujours les 3 mêmes jeux de règles qu'avant (aucune nouvelle règle métier construite, faute de source) |
+| 14 Compliance Engine | `evaluerReglesConformite` (générique) consommé par `verifierBlocageExport.ts`/`gardesFinalisation.ts`/`gelerContentPlan` — mécanisme partagé, mais toujours les 3 mêmes jeux de règles qu'avant (aucune nouvelle règle métier construite, faute de source) |
 | 15 Review/Approval | Statuts de section + `Confirmation` — solide |
 
 ## 4. Roadmap de convergence (priorités P0-P3, cf. audit du 27/08/2026)
 
-**P0 — bloquants architecturaux** (sans eux aucun scénario complet de la vision n'est démontrable) :
-1. **Phase 18 — Architecture Technique** (relations typées AssetNode↔AssetNode) — **Terminée**, voir `PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md`.
-2. **Phase 19 — Ingestion Office native** (lecture `.docx` + images incorporées) — **Terminée**, voir `PHASE_19_INGESTION_OFFICE_SPEC.md`/TD-014/TD-015. Complétée le même jour suite à une observation de l'utilisateur (schémas/photos incorporés, SOP scannées avec/sans filigrane) : `extraireImagesDocx` combiné à l'OCR existant ; aucune détection/correction de filigrane construite (limite assumée). Excel reste bloqué faute de librairie saine (limite assumée, pas un oubli).
-3. **Phase 20 — Cerveau procédural** (structuration humaine versionnée d'une SOP) — **Terminée**, voir `PHASE_20_PROCEDURAL_KNOWLEDGE_SPEC.md`/TD-016.
-4. **Phase 21 — Parseur déterministe de structure procédurale** — **Terminée**, voir `PHASE_21_PARSEUR_STRUCTURE_PROCEDURE_SPEC.md`/TD-017. En réponse directe à la demande utilisateur de trancher le point ouvert de la Phase 20 en commençant par le chemin sans IA : deux SOP réelles de clients différents (Sanofi, Ferring), lues intégralement dans Google Drive, confirment un même enchaînement sémantique (objectif/périmètre/responsabilités/procédure/références) sous un vocabulaire différent — détection 100% déterministe, aucun appel IA. Reste une proposition, jamais écrite sans confirmation humaine. Un repli IA-assisté pour les documents hors couverture reste un **point ouvert explicite**, à engager seulement si un cas réel le réclame.
-5. **Template Intelligence généralisée + génération au format client réel — Terminée pour le volet `.docx` (Phase 26, TD-024, 27/08/2026)**, voir `PHASE_26_GABARITS_EXPORT_CLIENT_SPEC.md`. `docxtemplater`+`pizzip` (pré-choisis TD-014) réellement installés et testés. Restant non engagé (Phase 27) : ingestion Excel (bloquée faute de librairie saine, TD-014), génération PDF/Excel personnalisée.
+**P0 — bloquants architecturaux** (sans eux aucun scénario complet de la vision n'est démontrable):
+1. **Architecture Technique** (relations typées AssetNode↔AssetNode) — **Terminée**, voir `PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md`.
+2. **Ingestion Office native** (lecture `.docx` + images incorporées) — **Terminée**, voir `PHASE_19_INGESTION_OFFICE_SPEC.md`. Complétée le même jour suite à une observation de l'utilisateur (schémas/photos incorporés, SOP scannées avec/sans filigrane): `extraireImagesDocx` combiné à l'OCR existant; aucune détection/correction de filigrane construite (limite assumée). Excel reste bloqué faute de librairie saine (limite assumée, pas un oubli).
+3. **Cerveau procédural** (structuration humaine versionnée d'une SOP) — **Terminée**, voir `PHASE_20_PROCEDURAL_KNOWLEDGE_SPEC.md`.
+4. **Parseur déterministe de structure procédurale** — **Terminée**, voir `PHASE_21_PARSEUR_STRUCTURE_PROCEDURE_SPEC.md`. En réponse directe à la demande utilisateur de trancher le point ouvert de l'étape précédente en commençant par le chemin sans IA: deux SOP réelles de clients différents (Sanofi, Ferring), lues intégralement dans Google Drive, confirment un même enchaînement sémantique (objectif/périmètre/responsabilités/procédure/références) sous un vocabulaire différent — détection 100% déterministe, aucun appel IA. Reste une proposition, jamais écrite sans confirmation humaine. Un repli IA-assisté pour les documents hors couverture reste un **point ouvert explicite**, à engager seulement si un cas réel le réclame.
+5. **Template Intelligence généralisée + génération au format client réel — Terminée pour le volet `.docx` (27/08/2026)**, voir `PHASE_26_GABARITS_EXPORT_CLIENT_SPEC.md`. `docxtemplater`+`pizzip` (pré-choisis) réellement installés et testés. Restant non engagé: ingestion Excel (bloquée faute de librairie saine), génération PDF/Excel personnalisée.
 
-**P1 — critique** : **Context Engine enrichi — Terminée (Phase 27, 27/08/2026, TD-025)**, voir `PHASE_27_CONTEXT_ENGINE_ENRICHI_SPEC.md`. **Deliverable Intelligence (calcul de readiness `ContentPlan`) — Terminée (Phase 28, 28/08/2026, TD-026)**, voir `PHASE_28_DELIVERABLE_READINESS_SPEC.md` ; la détermination des livrables requis (quels types de livrables un contexte donné exige) reste hors périmètre de cet incrément. **Risk Assessment (AMDEC) autonome — Terminée (Phase 29, 28/08/2026, TD-027)**, voir `PHASE_29_RISK_ASSESSMENT_AMDEC_SPEC.md` ; méthodologie S/O/D+seuil configurable par client, calquée sur un modèle AMDEC réel trouvé dans Google Drive. **Compliance Engine généralisé — Terminée (Phase 30, 28/08/2026, TD-028)**, voir `PHASE_30_COMPLIANCE_ENGINE_SPEC.md` ; factorisation pure du patron règle→blocage déjà répété 3 fois dans le code, comportement identique, aucune nouvelle règle métier inventée. **Knowledge Graph générique — Terminée (Phase 31, 28/08/2026, TD-029)**, voir `PHASE_31_KNOWLEDGE_GRAPH_SPEC.md` ; deuxième cas réel démontré (`KnowledgeRelation`, outil `tracer_relations_connaissance`) avant de factoriser le parcours de graphe déjà construit pour l'Architecture Technique. **Les 3 chantiers P1 du plan sont désormais terminés.**
+**P1 — critique**: **Context Engine enrichi — Terminée (27/08/2026)**, voir `PHASE_27_CONTEXT_ENGINE_ENRICHI_SPEC.md`. **Deliverable Intelligence (calcul de readiness `ContentPlan`) — Terminée (28/08/2026)**, voir `PHASE_28_DELIVERABLE_READINESS_SPEC.md`; la détermination des livrables requis (quels types de livrables un contexte donné exige) reste hors périmètre de cet incrément. **Risk Assessment (AMDEC) autonome — Terminée (28/08/2026)**, voir `PHASE_29_RISK_ASSESSMENT_AMDEC_SPEC.md`; méthodologie S/O/D+seuil configurable par client, calquée sur un modèle AMDEC réel trouvé dans Google Drive. **Compliance Engine généralisé — Terminée (28/08/2026)**, voir `PHASE_30_COMPLIANCE_ENGINE_SPEC.md`; factorisation pure du patron règle→blocage déjà répété 3 fois dans le code, comportement identique, aucune nouvelle règle métier inventée. **Knowledge Graph générique — Terminée (28/08/2026)**, voir `PHASE_31_KNOWLEDGE_GRAPH_SPEC.md`; deuxième cas réel démontré (`KnowledgeRelation`, outil `tracer_relations_connaissance`) avant de factoriser le parcours de graphe déjà construit pour l'Architecture Technique. **Les 3 chantiers P1 du plan sont désormais terminés.**
 
-**P2 — important** : extension des outils du Reasoning Engine (Process/Architecture/Procédure/Template comme outils appelables), proactivité, génération de tests contextualisée.
+**P2 — important**: extension des outils du Reasoning Engine (Process/Architecture/Procédure/Template comme outils appelables), proactivité, génération de tests contextualisée.
 
-**P3 — amélioration continue** : Procedure Discovery (optionnelle selon la vision elle-même), extension systématique de la discipline provenance/confiance aux futurs moteurs.
+**P3 — amélioration continue**: Procedure Discovery (optionnelle selon la vision elle-même), extension systématique de la discipline provenance/confiance aux futurs moteurs.
 
-Chaque item ci-dessus, quand il est engagé, suit la discipline déjà en place depuis la Phase 1 : Spec → (revue panel E1-E7 si nouveau domaine) → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → Alignement documentaire (URS/FS) → Commit/Push → mise à jour de la table de suivi de `CONVERGENCE_PLAN.md`.
+Chaque item ci-dessus, quand il est engagé, suit la discipline déjà en place : Spec → (revue panel E1-E7 si nouveau domaine) → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → Alignement documentaire (URS, spécification fonctionnelle) → Commit/Push → mise à jour de la table de suivi de `CONVERGENCE_PLAN.md`.
 
-## 5. Pourquoi commencer par la Phase 18
+## 5. Pourquoi commencer par la
 
-Parmi les 4 chantiers P0, l'Architecture Technique est la seule à ne nécessiter **aucune nouvelle dépendance externe** ni recherche préalable (contrairement à l'ingestion Office, qui exige un choix de librairie documenté) — c'est un ajout de domaine pur (types + Dexie + store + fonction pure), suivant exactement le patron déjà validé et testé des jointures typées existantes (`Couverture`, `ContextSnapshotItem`). Elle débloque directement :
-- le scénario TEST 6 de la checklist (tracer Equipment→PLC→SCADA→Server) ;
-- une partie de la catégorie V (CSV/CSA Intelligence, qui suppose de savoir *quoi* évaluer avant de savoir *comment*) ;
+Parmi les 4 chantiers P0, l'Architecture Technique est la seule à ne nécessiter **aucune nouvelle dépendance externe** ni recherche préalable (contrairement à l'ingestion Office, qui exige un choix de librairie documenté) — c'est un ajout de domaine pur (types + Dexie + store + fonction pure), suivant exactement le patron déjà validé et testé des jointures typées existantes (`Couverture`, `ContextSnapshotItem`). Elle débloque directement:
+- le scénario TEST 6 de la checklist (tracer Equipment→PLC→SCADA→Server);
+- une partie de la catégorie V (CSV/CSA Intelligence, qui suppose de savoir *quoi* évaluer avant de savoir *comment*);
 - un nouvel outil concret pour le Reasoning Engine, renforçant l'AF/AG déjà le mieux positionné du dépôt.
 
 ## 6. Ce qui reste délibérément hors de cette phase
 
-- Aucune notion de "Software"/"Application"/"Database"/"Network" comme entités séparées : ce sont, comme PLC/SCADA/Server, des `AssetNode` avec un `level_key` approprié — aucune nouvelle entité n'est nécessaire pour elles non plus.
-- Aucune détection de cycle sur les relations techniques : `associated_nodes[]` (graphe libre) tolère déjà les cycles par conception documentée ; les relations typées suivent la même tolérance, pour ne pas imposer une contrainte que la vision ne demande pas.
-- Aucun écran dédié dans ce lot (même discipline que les Phases 5/8a/9/10/13 : domaine + persistance + store + outil de raisonnement d'abord, écran quand un cas d'usage réel le réclame).
+- Aucune notion de "Software"/"Application"/"Database"/"Network" comme entités séparées: ce sont, comme PLC/SCADA/Server, des `AssetNode` avec un `level_key` approprié — aucune nouvelle entité n'est nécessaire pour elles non plus.
+- Aucune détection de cycle sur les relations techniques: `associated_nodes[]` (graphe libre) tolère déjà les cycles par conception documentée; les relations typées suivent la même tolérance, pour ne pas imposer une contrainte que la vision ne demande pas.
+- Aucun écran dédié dans ce lot (même discipline que les autres domaines construits sans écran: domaine + persistance + store + outil de raisonnement d'abord, écran quand un cas d'usage réel le réclame).
 
-## 7. Prochaine étape après la Phase 21
+## 7. Prochaine étape après la
 
-Le point ouvert de la Phase 20 a été tranché par l'utilisateur : chemin déterministe (sans IA) d'abord, IA en repli seulement si la couverture réelle le réclame (TD-017). La Phase 21 livre ce chemin déterministe, calibré sur 2 SOP réelles de clients différents. Reste, non planifié ici :
+Le point ouvert a été tranché par l'utilisateur: chemin déterministe (sans IA) d'abord, IA en repli seulement si la couverture réelle le réclame. La livre ce chemin déterministe, calibré sur 2 SOP réelles de clients différents. Reste, non planifié ici:
 
-- **Repli IA-assisté pour la structuration procédurale** — à engager seulement si un usage réel démontre que `detecterSections`/`proposerStructureProcedure` ne couvre pas suffisamment (ex. genre "instruction technique illustrée", voir §5 de la spec Phase 21) — jamais par anticipation.
-- **Continuer sur le plan documenté** : Template Intelligence généralisée (item 5 du §4) — génération de documents au format client réel, `docxtemplater`+`pizzip` déjà pré-choisis (TD-014).
+- **Repli IA-assisté pour la structuration procédurale** — à engager seulement si un usage réel démontre que `detecterSections`/`proposerStructureProcedure` ne couvre pas suffisamment (ex. genre "instruction technique illustrée", voir §5 de la spec) — jamais par anticipation.
+- **Continuer sur le plan documenté**: Template Intelligence généralisée (item 5 du §4) — génération de documents au format client réel, `docxtemplater`+`pizzip` déjà pré-choisis.
