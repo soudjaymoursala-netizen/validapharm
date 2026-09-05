@@ -8,7 +8,7 @@ Après les -24, deux briques existent mais restent isolées: le parseur détermi
 
 ## 2. Ce qui existe déjà, réutilisé plutôt que réinventé
 
-- `proposerStructureProcedure` (-22) et `proposerStructureProcedureParIA`: les deux fonctions pures restent inchangées, appelées telles quelles.
+- `proposerStructureProcedure` et `proposerStructureProcedureParIA`: les deux fonctions pures restent inchangées, appelées telles quelles.
 - `extraireTexteDocx`/`extraireTableauxDocx` et `extraireTextePdf`: réutilisés tels quels pour l'import de fichier dans l'écran.
 - `construireAdaptateursIA`/`adaptateurAvecBascule` (`useProcedureStore` n'a pas besoin de connaître la bascule cloud/local — le même patron que `MissionWorkspace.vue` §raisonner est reproduit à l'identique).
 - Style `.badge-confiance`/`LIBELLES_CONFIANCE` (établi par `MissionWorkspace.vue`): dupliqué à l'identique dans `RevueStructureProcedure.vue` (les styles Vue `scoped` ne se partagent pas entre composants sans feuille de style commune — dupliquer un court bloc CSS reste plus simple et plus sûr qu'introduire une dépendance de style inter-composants pour ce seul usage).

@@ -342,13 +342,13 @@ Second volet de "Fais les deux". Point explicitement laissé ouvert par — l'ut
 
  (v43). Vérifié: 84 fichiers/583 tests (6 nouveaux: transmission du contenu joint, ancrage réussi, hallucination détectée, insensibilité casse/espaces sans faux positif, canon inconnu replié sur `'autre'`, ligne malformée ignorée + réponse brute conservée), typecheck et lint propres.
 
-**Chantier P0 suivant** (voir `VISION_NORTH_STAR_CONVERGENCE.md` §4/§7): Template Intelligence généralisée + génération au format client réel (devenue après renumérotation par la ci-dessous).
+**Chantier P0 suivant** (voir `VISION_NORTH_STAR_CONVERGENCE.md` §4/§7): Template Intelligence généralisée + génération au format client réel.
 
 **Limite explicite de cet audit**: catégorie par catégorie (33 lettres A→AG de la checklist), pas ligne par ligne sur les ~500 items numérotés avec preuve fichier individuelle ni les 10 scénarios de bout en bout (§AH) — travail d'audit dédié restant, engageable domaine par domaine sur demande.
 
 ### 5.21 — Écran de revue de structure procédurale + déclenchement du repli (27/08/2026)
 
-Dernier point ouvert de: le parseur déterministe (-22) et le repli IA existaient comme fonctions isolées, sans orchestration ni point d'entrée humain. L'utilisateur a confirmé explicitement ("D'accord continue") vouloir clore ce point.
+Dernier point ouvert : le parseur déterministe et le repli IA existaient comme fonctions isolées, sans orchestration ni point d'entrée humain. L'utilisateur a confirmé explicitement ("D'accord continue") vouloir clore ce point.
 
 `proposerStructureProcedureAvecRepli(texte, tableaux, provider)` (`src/logique-metier/procedures/proposerStructureProcedureAvecRepli.ts`) essaie toujours le parseur déterministe en premier, et n'invoque le repli IA que si celui-ci ne retourne **strictement rien** (zéro section ET zéro étape) — jamais un mélange de provenance dans un même résultat (`PropositionAvecSource`, type discriminé par `source: 'deterministe' | 'ia'`).
 

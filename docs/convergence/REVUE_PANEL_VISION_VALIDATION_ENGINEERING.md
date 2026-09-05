@@ -6,10 +6,10 @@ Panel repris tel que défini en `00-cadrage-projet.md` §6bis: **E1** Fournisseu
 
 ## Comprendre — ce que ce document confirme (déjà correct, aucune décision à reprendre)
 
-Le document valide, presque mot pour mot, l'architecture déjà construite is-16:
-- Le "Digital Validation Model" (Requirement → Risk → Control → Test → Evidence → Deviation) est déjà `03_DOMAIN_DATA_MODEL.md`/`04_RELATIONSHIP_MATRIX_FINAL.md`, déjà la matière du graphe construit (Requirement/Couverture/Test/Execution/Evidence, -7c).
-- Le rejet explicite de "document generator + chatbot + QMS clone" confirme le pivot Mission/Context/Reasoning Engine (-16) plutôt qu'une remise en cause.
-- Human-in-the-loop obligatoire, IA jamais autorité seule, explicabilité: déjà le principe fondateur n°1 et (états de confiance discrets).
+Le document valide, presque mot pour mot, l'architecture déjà construite :
+- Le "Digital Validation Model" (Requirement → Risk → Control → Test → Evidence → Deviation) est déjà `03_DOMAIN_DATA_MODEL.md`/`04_RELATIONSHIP_MATRIX_FINAL.md`, déjà la matière du graphe construit (Requirement/Couverture/Test/Execution/Evidence).
+- Le rejet explicite de "document generator + chatbot + QMS clone" confirme le pivot Mission/Context/Reasoning Engine plutôt qu'une remise en cause.
+- Human-in-the-loop obligatoire, IA jamais autorité seule, explicabilité: déjà le principe fondateur n°1 et le mécanisme des états de confiance discrets.
 - GxP-by-design (audit trail, versioning, traçabilité): déjà appliqué (`audit_log` systématique, schéma versionné Dexie, `Confirmation`/`TestCandidate` jamais auto-promus).
 
 **Aucune remise en cause de l'architecture existante — cette vision renforce la direction, elle ne la change pas.**
