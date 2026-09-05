@@ -4,14 +4,14 @@
 |---|---|
 | **Référence** | OQ-VALIDAPHARM-2026-001 |
 | **Version** | 01 (protocole — résultats non renseignés, développement non démarré) |
-| **Document de référence** | VMP-VALIDAPHARM-2026-001, FS-VALIDAPHARM-2026-001, AR-VALIDAPHARM-2026-001 |
+| **Document de référence** | VMP-VALIDAPHARM-2026-001, AR-VALIDAPHARM-2026-001 |
 | **Rédigé par** | — |
 | **Vérifié par** | — |
 | **Approuvé par** | — |
 
 ---
 
-> ⚠️ **DOCUMENT À REVOIR (audit de cohérence du 21/08/2026)** : protocole rédigé contre URS v01 ("13 gabarits" à OQ-01, registre de risques limité à R-01–R-13) — l'URS est en v20, le registre de risques compte 58 entrées, **et la FS/FDS/SDS sont réécrites (v08/v10/v06)** (voir `03-specifications-fonctionnelles.md`). À réviser avant exécution réelle — la condition qui bloquait cette révision (attente de la FS) est levée.
+> ⚠️ **DOCUMENT À REVOIR (audit de cohérence du 21/08/2026)** : protocole rédigé contre URS v01 ("13 gabarits" à OQ-01, registre de risques limité à R-01–R-13) — l'URS est en v20, le registre de risques compte 58 entrées, **et les documents de spécification et de conception de l'outil ont depuis été réécrits** (voir `03-specifications-fonctionnelles.md`). À réviser avant exécution réelle — la condition qui bloquait cette révision est levée.
 
 ## 1. Objectif
 
