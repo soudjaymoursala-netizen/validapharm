@@ -17,8 +17,8 @@ import { usePreferencesAffichageStore } from './stores/usePreferencesAffichageSt
 // qu'après une visite de l'écran Paramètres dans la session en cours — un
 // rechargement complet (F5, réouverture de la PWA) retombait silencieusement
 // sur le thème clair par défaut malgré une préférence sombre enregistrée.
-// Bug trouvé pendant la vérification navigateur de la Phase 41 (le thème
-// sombre ne survivait pas à une navigation complète vers un autre écran).
+// Bug trouvé pendant une vérification navigateur (le thème sombre ne
+// survivait pas à une navigation complète vers un autre écran).
 usePreferencesAffichageStore()
 
 type EtatDemarrage = 'verification' | 'bloque' | 'pret'

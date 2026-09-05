@@ -1,10 +1,8 @@
 import type { Langue } from '../../logique-metier/domaine/types'
 
 /**
- * Dictionnaire de messages système (FDS §7, "garde-fous non négociables"),
- * multilingue dès Phase 1 — jamais codé en dur dans une seule langue.
- *
- * @requirement FDS §7
+ * Dictionnaire de messages système ("garde-fous non négociables"),
+ * multilingue dès l'origine — jamais codé en dur dans une seule langue.
  *
  * Seuls les codes déjà mobilisés par un écran construit à ce stade sont
  * transcrits (U-01/U-02/U-03/U-05/U-06/U-07/U-08/U-12) — les autres (U-04,
@@ -113,7 +111,7 @@ export function messageSysteme(
 // Libellés de statut de section : déplacés dans
 // logique-metier/i18n/libellesStatut.ts — genererExportWord.ts (pur, sans
 // dépendance Vue) en a besoin lui aussi pour respecter le garde-fou "à
-// l'écran ET sur les exports" (FS §4.2/§4.3), et logique-metier ne peut
+// l'écran ET sur les exports", et logique-metier ne peut
 // jamais importer depuis presentation (règle ESLint de couches). Réexporté
 // ici pour ne rien casser côté écrans.
 export { libelleStatut, libellesStatut } from '../../logique-metier/i18n/libellesStatut'

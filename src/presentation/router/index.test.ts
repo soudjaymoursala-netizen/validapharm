@@ -22,7 +22,7 @@ afterEach(() => {
   demonter()
 })
 
-describe('garde de routeur globale (TD-046)', () => {
+describe('garde de routeur globale', () => {
   test('non connecté : une route protégée redirige vers /connexion avec ?redirect=', async () => {
     await router.push('/clients')
     expect(router.currentRoute.value.name).toBe('connexion')

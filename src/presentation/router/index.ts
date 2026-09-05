@@ -3,9 +3,8 @@ import { useAuthStore } from '../stores/useAuthStore'
 import { useClientActifStore } from '../stores/useClientActifStore'
 
 /**
- * Routeur applicatif — un composant par écran (FDS §2), chargement
- * différé (`import()` dynamique) pour réduire le poids initial du bundle
- * (09-architecture-detaillee.md §6).
+ * Routeur applicatif — un composant par écran, chargement différé
+ * (`import()` dynamique) pour réduire le poids initial du bundle.
  */
 export const router = createRouter({
   // `import.meta.env.BASE_URL` DOIT être passé explicitement : Vue Router
@@ -22,8 +21,8 @@ export const router = createRouter({
       component: () => import('../screens/AccueilQueVoulezVousFaire.vue'),
     },
     {
-      // Écran de connexion (TD-046) — exclu de la garde ci-dessous (§
-      // `router.beforeEach`), sans quoi personne ne pourrait jamais
+      // Écran de connexion — exclu de la garde ci-dessous
+      // (`router.beforeEach`), sans quoi personne ne pourrait jamais
       // l'atteindre pour se connecter.
       path: '/connexion',
       name: 'connexion',
@@ -35,7 +34,7 @@ export const router = createRouter({
       component: () => import('../screens/AdminUtilisateurs.vue'),
     },
     {
-      // Déplacée de `/` vers `/tableau-de-bord` (Phase 16) — le nom de
+      // Déplacée de `/` vers `/tableau-de-bord` — le nom de
       // route est inchangé, toutes les références existantes par nom
       // (`RouterLink :to="{ name: 'tableau-de-bord' }"`) restent valides.
       path: '/tableau-de-bord',
@@ -75,7 +74,7 @@ export const router = createRouter({
       component: () => import('../screens/GestionClients.vue'),
     },
     {
-      // Fiche Client / Site (Phase 40) — page d'entrée d'un client, 5
+      // Fiche Client / Site — page d'entrée d'un client, 5
       // branches (Architecture/Process/Procédures/Templates/Projets).
       path: '/clients/:clientId',
       name: 'fiche-client',
@@ -222,7 +221,7 @@ export const router = createRouter({
 })
 
 /**
- * Mémorise le dernier client visité (Phase 16, spec §2) — une commodité de
+ * Mémorise le dernier client visité — une commodité de
  * navigation, jamais une donnée métier. Toute route portant un paramètre
  * `clientId` met à jour `useClientActifStore`, pour que la `Sidebar`
  * propose un accès direct aux outils de ce client sans qu'aucun concept
@@ -236,8 +235,8 @@ router.afterEach((to) => {
 })
 
 /**
- * Garde d'authentification globale (TD-046) — remplace le verrou local
- * (TD-033) : toute route exige désormais une session réelle, sauf « Se
+ * Garde d'authentification globale — remplace l'ancien verrou local :
+ * toute route exige désormais une session réelle, sauf « Se
  * connecter » elle-même et « Configuration client » (doit rester
  * atteignable pour indiquer où se connecter, cf. `ConfigurationClient.vue`
  * — chicken-and-egg documenté dans le README de `workers/auth-worker`).

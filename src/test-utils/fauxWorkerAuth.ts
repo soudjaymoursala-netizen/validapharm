@@ -1,4 +1,4 @@
-// Utilitaire de test (TD-046, Phase 39) — jamais importé par le code de
+// Utilitaire de test — jamais importé par le code de
 // production (seulement par des `*.test.ts`, jamais tree-shaké dans le
 // bundle réel puisque `main.ts` ne le référence jamais). Réutilise
 // directement `routerRequete`/les dépôts en mémoire de
