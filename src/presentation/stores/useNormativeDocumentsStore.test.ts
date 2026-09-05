@@ -136,7 +136,10 @@ describe('useNormativeDocumentsStore — GitHub', () => {
   test('importerDepuisGitHub : .md accepté, source_ref = chemin', async () => {
     await configurerConnexionGitHub()
     fetchMock.mockResolvedValueOnce(
-      reponseMock({ content: encoderBase64Utf8('Texte de la norme importée depuis GitHub.'), sha: 'sha-1' }),
+      reponseMock({
+        content: encoderBase64Utf8('Texte de la norme importée depuis GitHub.'),
+        sha: 'sha-1',
+      }),
     )
     const store = useNormativeDocumentsStore()
 
@@ -196,7 +199,12 @@ describe('useNormativeDocumentsStore — Drive', () => {
     } as Response)
 
     const document = await store.importerDepuisDrive(
-      { id: 'doc-1', nom: 'Norme interne', mimeType: 'application/vnd.google-apps.document', modifiedTime: '' },
+      {
+        id: 'doc-1',
+        nom: 'Norme interne',
+        mimeType: 'application/vnd.google-apps.document',
+        modifiedTime: '',
+      },
       'norme',
       'qa-1',
     )

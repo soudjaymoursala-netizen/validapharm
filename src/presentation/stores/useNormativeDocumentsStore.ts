@@ -2,7 +2,10 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
 import { extraireTextePdf } from '../../connecteurs/pdf/PdfNatifAdapter'
-import { DriveReaderConnector, type FichierDrive } from '../../connecteurs/drive/DriveReaderConnector'
+import {
+  DriveReaderConnector,
+  type FichierDrive,
+} from '../../connecteurs/drive/DriveReaderConnector'
 import { GitHubConnector, type EntreeArborescence } from '../../connecteurs/github/GitHubConnector'
 import type {
   CategorieDocumentNormatif,
@@ -16,10 +19,12 @@ const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
 const EXTENSIONS_TEXTE_BRUT = ['.txt', '.md']
 
 export type ResultatConnexionDriveNormes =
-  | { ok: true; nbFichiers: number }
-  | { ok: false; message: string }
+  { ok: true; nbFichiers: number } | { ok: false; message: string }
 
-async function extraireTexteSelonExtension(nomFichier: string, contenu: ArrayBuffer): Promise<string> {
+async function extraireTexteSelonExtension(
+  nomFichier: string,
+  contenu: ArrayBuffer,
+): Promise<string> {
   const nom = nomFichier.toLowerCase()
   if (nom.endsWith('.pdf')) return (await extraireTextePdf(contenu)).texte
   if (nom.endsWith('.docx')) return (await extraireTexteDocx(contenu)).texte
@@ -101,7 +106,7 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     const nomFichier = chemin.split('/').pop() ?? chemin
     if (!EXTENSIONS_TEXTE_BRUT.some((extension) => nomFichier.toLowerCase().endsWith(extension))) {
       throw new Error(
-        "Import GitHub limité aux fichiers texte (.md, .txt) dans ce chantier — utiliser le téléversement direct ou Google Drive pour un .docx/.pdf.",
+        'Import GitHub limité aux fichiers texte (.md, .txt) dans ce chantier — utiliser le téléversement direct ou Google Drive pour un .docx/.pdf.',
       )
     }
     const connexion = await db.connexionGitHub.get(IDENTIFIANT_ENREGISTREMENT_UNIQUE)
@@ -143,7 +148,10 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
   async function testerConnexionDriveLectureNormes(): Promise<ResultatConnexionDriveNormes> {
     const connexion = await db.connexionDriveLectureNormes.get(IDENTIFIANT_ENREGISTREMENT_UNIQUE)
     if (connexion === undefined) {
-      return { ok: false, message: 'Aucune configuration Drive enregistrée pour la bibliothèque de normes.' }
+      return {
+        ok: false,
+        message: 'Aucune configuration Drive enregistrée pour la bibliothèque de normes.',
+      }
     }
     try {
       const connecteur = new DriveReaderConnector(connexion)
@@ -176,7 +184,10 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
 
     const texte = connecteur.estDocumentGoogleNatif(fichier.mimeType)
       ? await connecteur.lireTexteExporte(fichier.id)
-      : await extraireTexteSelonExtension(fichier.nom, await connecteur.telechargerContenu(fichier.id))
+      : await extraireTexteSelonExtension(
+          fichier.nom,
+          await connecteur.telechargerContenu(fichier.id),
+        )
 
     const document: NormativeDocument = {
       id: crypto.randomUUID(),

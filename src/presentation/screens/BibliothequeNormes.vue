@@ -51,9 +51,14 @@ async function importerFichier(evenement: Event): Promise<void> {
   erreurTeleversement.value = null
   enImportTeleversement.value = true
   try {
-    await documentsStore.importerDepuisFichier(fichier, categorieTeleversement.value, actorCourant())
+    await documentsStore.importerDepuisFichier(
+      fichier,
+      categorieTeleversement.value,
+      actorCourant(),
+    )
   } catch (e) {
-    erreurTeleversement.value = e instanceof Error ? e.message : 'Erreur inconnue lors du téléversement.'
+    erreurTeleversement.value =
+      e instanceof Error ? e.message : 'Erreur inconnue lors du téléversement.'
   } finally {
     enImportTeleversement.value = false
     ;(evenement.target as HTMLInputElement).value = ''
@@ -99,7 +104,10 @@ const enListeDrive = ref(false)
 const erreurDrive = ref<string | null>(null)
 
 async function enregistrerConnexionDrive(): Promise<void> {
-  await documentsStore.configurerConnexionDriveLectureNormes(brouillonDrive.dossierId, brouillonDrive.jeton)
+  await documentsStore.configurerConnexionDriveLectureNormes(
+    brouillonDrive.dossierId,
+    brouillonDrive.jeton,
+  )
   resultatTestDrive.value = undefined
 }
 
@@ -191,8 +199,8 @@ onMounted(async () => {
       <h3>Depuis le dépôt GitHub dédié</h3>
       <p class="rappel">
         Utilise la connexion GitHub déjà configurée (Configuration client) — seuls les fichiers
-        <code>.md</code>/<code>.txt</code> sont importables ici, un fichier binaire lu par cette voie
-        serait corrompu.
+        <code>.md</code>/<code>.txt</code> sont importables ici, un fichier binaire lu par cette
+        voie serait corrompu.
       </p>
       <div class="formulaire-import">
         <label>

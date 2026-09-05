@@ -34,7 +34,12 @@ function connecteur(): DriveReaderConnector {
 describe('DriveReaderConnector — listerFichiers', () => {
   test('liste les fichiers du dossier configuré', async () => {
     const fichiers = [
-      { id: 'f1', nom: 'ICH-Q7.pdf', mimeType: 'application/pdf', modifiedTime: '2026-01-01T00:00:00Z' },
+      {
+        id: 'f1',
+        nom: 'ICH-Q7.pdf',
+        mimeType: 'application/pdf',
+        modifiedTime: '2026-01-01T00:00:00Z',
+      },
     ]
     fetchMock.mockResolvedValueOnce(reponseMock({ files: fichiers }))
 
@@ -135,10 +140,10 @@ describe('DriveReaderConnector — estDocumentGoogleNatif', () => {
     expect(connecteur().estDocumentGoogleNatif(mimeType)).toBe(true)
   })
 
-  test.each(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])(
-    "%s n'est pas un document Google natif",
-    (mimeType) => {
-      expect(connecteur().estDocumentGoogleNatif(mimeType)).toBe(false)
-    },
-  )
+  test.each([
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ])("%s n'est pas un document Google natif", (mimeType) => {
+    expect(connecteur().estDocumentGoogleNatif(mimeType)).toBe(false)
+  })
 })
