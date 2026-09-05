@@ -846,7 +846,7 @@ Chaque connecteur listé porte un badge « actif »/« inactif » et deux bouton
 
 > Avertissement permanent : « Change Control, Déviation, CAPA, Investigation,
 > Constat d'audit, Revue périodique. Un événement externe référencé n'est
-> jamais un verrou sur un autre module (DEC-002/DEC-055). »
+> jamais un verrou sur un autre module. »
 
 Formulaire de création :
 
