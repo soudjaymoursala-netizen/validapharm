@@ -26,7 +26,7 @@ beforeEach(async () => {
   await db.procedureSteps.clear()
 })
 
-describe('useProcedureStore — creerProcedure (versionnée, TD-016)', () => {
+describe('useProcedureStore — creerProcedure (versionnée)', () => {
   test('première création : numero_version = 1', async () => {
     const store = useProcedureStore()
     await store.charger('client-1')
@@ -162,7 +162,7 @@ describe('useProcedureStore — derniereVersion', () => {
   })
 })
 
-describe('useProcedureStore — genererProposition/annulerProposition/confirmerProposition (Phase 25, TD-023)', () => {
+describe('useProcedureStore — genererProposition/annulerProposition/confirmerProposition', () => {
   test('genererProposition stocke la proposition déterministe dans derniereProposition, sans jamais persister', async () => {
     const store = useProcedureStore()
     await store.charger('client-1')

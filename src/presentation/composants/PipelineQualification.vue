@@ -10,7 +10,7 @@
 // (aucune section = étape "non démarrée"), jamais une progression
 // simulée ou estimée. Les plans de métrologie/maintenance sont
 // affichés à part (piste de support, pas une étape séquentielle du
-// cycle DQ→PQ — répond aux garde-fous U-01/U-02/U-03, FDS §3.3).
+// cycle DQ→PQ — répond aux garde-fous U-01/U-02/U-03).
 import { computed } from 'vue'
 import type { Langue, Section, TemplateType } from '../../logique-metier/domaine/types'
 import { libelleStatut } from '../../logique-metier/i18n/libellesStatut'
@@ -167,7 +167,7 @@ function libelleCourtStatut(etape: EtapeCalculee): string {
     </ol>
 
     <div v-if="plansSupport.some((p) => p.sections.length > 0)" class="plans-support">
-      <p class="plans-support__titre">Plans de support (liés, pas séquentiels — FDS §3.3)</p>
+      <p class="plans-support__titre">Plans de support (liés, pas séquentiels)</p>
       <ul>
         <li v-for="plan in plansSupport" v-show="plan.sections.length > 0" :key="plan.type">
           <RouterLink

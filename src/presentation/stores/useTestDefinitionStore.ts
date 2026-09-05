@@ -50,9 +50,9 @@ export interface NouveauTestInput {
 
 /**
  * Store de la chaîne de définition Requirement → TestObjective →
- * TestCandidate → Test (Phase 7a de convergence architecturale — spec
+ * TestCandidate → Test (convergence architecturale — spec
  * dans `docs/convergence/CONVERGENCE_PLAN.md`). N'inclut ni l'exécution
- * (Phase 7b) ni l'Evidence (Phase 7c), ni aucune génération IA.
+ * ni l'Evidence, ni aucune génération IA.
  *
  * @requirement Target Architecture, domaine "Test"
  */
@@ -154,7 +154,7 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
 
   /**
    * Propose des candidats de test depuis les risques réels du référentiel
-   * (Phase 35 — Test Design Engine, TD-036) — délègue entièrement à la
+   * (Test Design Engine) — délègue entièrement à la
    * fonction pure `genererCandidatsDepuisRisques` (aucune règle métier ici,
    * même discipline que `creerNoeud`/`ajouterNiveau`). Les candidats sont
    * créés au statut `propose`, comme n'importe quel candidat manuel —

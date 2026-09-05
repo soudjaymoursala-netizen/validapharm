@@ -8,7 +8,7 @@ export type ResultatImportGabarit =
   { ok: true; gabarit: GabaritExportClient } | { ok: false; tagsManquants: string[] }
 
 /**
- * Store des gabarits d'export `.docx` personnalisés (Phase 26, TD-024)
+ * Store des gabarits d'export `.docx` personnalisés
  * — isolation stricte par `client_id`, même principe que
  * `useProcedureStore`/`AssetNode` (jamais de mélange entre deux clients).
  *

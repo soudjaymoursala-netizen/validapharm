@@ -10,12 +10,10 @@ export interface SaisieConnexionRelaisIA {
 const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
 
 /**
- * Store de configuration du relais IA (SDS §10quater) — enregistrement
+ * Store de configuration du relais IA — enregistrement
  * unique, pas par client (même raisonnement que
  * `useConnexionGitHubStore` : un seul relais serverless pour toute
  * l'installation).
- *
- * @requirement SDS §10quater
  */
 export const useConnexionRelaisIAStore = defineStore('connexionRelaisIA', () => {
   const connexion = ref<EnregistrementConnexionRelaisIA | null>(null)

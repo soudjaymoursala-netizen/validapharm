@@ -126,7 +126,7 @@ describe('useReasoningEngineStore — scénario réel : changement de recette (s
   })
 })
 
-describe('useReasoningEngineStore — scénario réel : traversée Architecture Technique (Phase 18, TD-013)', () => {
+describe('useReasoningEngineStore — scénario réel : traversée Architecture Technique', () => {
   test('exécute tracer_chaine_technique et résout une citation de type asset_node', async () => {
     const maintenant = '2026-01-01T00:00:00.000Z'
     function noeud(id: string): AssetNode {
@@ -188,7 +188,7 @@ describe('useReasoningEngineStore — scénario réel : traversée Architecture 
   })
 })
 
-describe('useReasoningEngineStore — scénario réel : lecture de procédure (Phase 20, TD-016)', () => {
+describe('useReasoningEngineStore — scénario réel : lecture de procédure', () => {
   test('exécute lister_etapes_procedure et résout une citation de type procedure_step', async () => {
     const maintenant = '2026-01-01T00:00:00.000Z'
     await db.procedures.put({
@@ -279,7 +279,7 @@ describe('useReasoningEngineStore — garde-fous non négociables', () => {
   })
 })
 
-describe('useReasoningEngineStore — narratif de contexte assemblé (Phase 27, TD-025)', () => {
+describe('useReasoningEngineStore — narratif de contexte assemblé', () => {
   test('un contextSnapshotId résout le narratif et le rend citable comme "connu" sans appel d’outil', async () => {
     const noeud: AssetNode = {
       id: 'n1',

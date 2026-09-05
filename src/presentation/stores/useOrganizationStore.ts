@@ -17,14 +17,14 @@ export type ErreurMigrationClient = { erreur: 'client_introuvable' }
 export type ErreurCreationWorkspace = { erreur: 'organization_introuvable' | 'parent_introuvable' }
 
 /**
- * Store de la migration `Client` → `Organization`/`Workspace` (Phase 11 —
- * spec `docs/convergence/PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`).
+ * Store de la migration `Client` → `Organization`/`Workspace` (spec
+ * `docs/convergence/PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`).
  * `Organization.id` reprend exactement l'`id` du `Client` migré : aucune
  * des ~25 tables existantes indexées par `client_id` n'est modifiée par ce
  * module, leur `client_id` référence désormais `Organization.id` (même
- * valeur) — décision structurante qui évite tout Big Bang (TD-006).
+ * valeur) — décision structurante qui évite tout Big Bang.
  *
- * @requirement Target Architecture §3, DEC-003/061
+ * @requirement Target Architecture §3
  */
 export const useOrganizationStore = defineStore('organization', () => {
   const organizations = ref<Organization[]>([])

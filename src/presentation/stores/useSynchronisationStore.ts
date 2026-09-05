@@ -28,18 +28,18 @@ export interface ConflitEnregistrement {
 
 // Champs qui divergent par construction entre deux copies indépendantes
 // sans constituer un conflit de contenu à faire trancher par l'utilisateur
-// (FDS §3.6 : seuls les champs de contenu métier sont présentés).
+// (seuls les champs de contenu métier sont présentés).
 const CHAMPS_IGNORES_DIFF = ['updated_at', 'audit_log', 'revisions', 'created_at']
 
 const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
 
 /**
- * Orchestrateur de synchronisation (SDS §3/§5) — relie le connecteur
+ * Orchestrateur de synchronisation — relie le connecteur
  * GitHub (pur, sans état) aux stores métier. Aucune règle de décision
  * ici au-delà de l'orchestration : la détection de conflit et
  * l'atomicité restent entièrement dans `GitHubConnector`.
  *
- * @requirement SDS §3, §5, cadrage principe n°3 ("zéro perte
+ * @requirement Cadrage principe n°3 ("zéro perte
  * de données au changement de machine")
  *
  * Portée délibérément limitée à cet incrément : `synchroniser()` pousse
@@ -47,7 +47,7 @@ const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
  * incrémentale champ par champ), et `recupererDepuisGitHub()` écrase le
  * cache local avec l'état distant sans tentative de fusion — chemin de
  * récupération honnête après conflit, pas l'écran de résolution
- * field-par-field de FDS §3.6 (backlog séparé).
+ * field-par-field (backlog séparé).
  */
 export const useSynchronisationStore = defineStore('synchronisation', () => {
   const synchronisationEnCours = ref(false)
@@ -172,7 +172,7 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
   /**
    * Compare chaque projet/section local à sa contrepartie distante et
    * retourne les enregistrements dont au moins un champ diverge
-   * réellement (FDS §3.6). Un enregistrement absent côté distant (jamais
+   * réellement. Un enregistrement absent côté distant (jamais
    * encore poussé) n'est jamais un conflit.
    *
    * Portée assumée (voir en-tête du fichier) : diff au niveau champ
@@ -229,7 +229,7 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
   /**
    * Applique les décisions de résolution prises pour chaque conflit
    * signalé par `analyserConflit()`, journalise le motif structuré
-   * (FDS §3.6 : "capture, pour chaque champ en conflit, la décision
+   * ("capture, pour chaque champ en conflit, la décision
    * retenue"), puis relance `synchroniser()` pour pousser l'état fusionné.
    */
   async function confirmerResolutionConflits(

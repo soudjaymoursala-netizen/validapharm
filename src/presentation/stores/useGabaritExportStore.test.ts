@@ -42,7 +42,7 @@ beforeEach(async () => {
   await db.gabaritsExportClient.clear()
 })
 
-describe('useGabaritExportStore — importerGabarit (Phase 26, TD-024)', () => {
+describe('useGabaritExportStore — importerGabarit', () => {
   test('un gabarit avec toutes les balises obligatoires est accepté et persisté', async () => {
     const store = useGabaritExportStore()
     await store.charger('client-1')

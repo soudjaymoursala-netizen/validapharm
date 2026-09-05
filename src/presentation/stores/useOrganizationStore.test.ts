@@ -26,7 +26,7 @@ afterEach(() => {
   demonter()
 })
 
-// Le Client (Phase 39, TD-046) vit désormais côté Worker/D1 — ce helper
+// Le Client vit désormais côté Worker/D1 — ce helper
 // passe par le vrai store plutôt que par un insert Dexie direct, cohérent
 // avec le nouveau contrat de `useOrganizationStore.migrerClient`.
 async function creerClient(nom: string): Promise<Client> {
@@ -80,7 +80,7 @@ describe('useOrganizationStore — migration Client -> Organization (décision s
   })
 })
 
-describe('useOrganizationStore — scénario obligatoire "Global + N sites" (CONVERGENCE_PLAN.md, Phase 11)', () => {
+describe('useOrganizationStore — scénario obligatoire "Global + N sites" (CONVERGENCE_PLAN.md)', () => {
   test('un site sans règle propre hérite du global ; un site avec sa propre règle la voit prévaloir', async () => {
     const client = await creerClient('Groupe Pharma')
     const store = useOrganizationStore()

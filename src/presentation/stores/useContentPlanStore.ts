@@ -28,8 +28,8 @@ export type ErreurEcritureContentPlan = {
 
 /**
  * Garde-fou non négociable — un `ContentPlan` dont
- * `readiness` n'est pas `pret` ne peut jamais être gelé. Implémenté depuis
- * la Phase 30 (TD-028) via le Compliance Engine généralisé
+ * `readiness` n'est pas `pret` ne peut jamais être gelé. Implémenté
+ * via le Compliance Engine généralisé
  * (`evaluerReglesConformite`) — comportement strictement identique à avant
  * ce refactor.
  */
@@ -42,7 +42,7 @@ const REGLES_GEL_CONTENT_PLAN: readonly RegleConformite<Pick<ContentPlan, 'readi
 ]
 
 /**
- * Store du `ContentPlan` (Phase 9 de convergence architecturale — spec
+ * Store du `ContentPlan` (convergence architecturale — spec
  * dans `docs/convergence/PHASE_9_CONTENT_PLAN_SPEC.md`). Ne couvre que la
  * planification (`Request → Resolve → Context Snapshot → Content Plan`) —
  * ni génération, ni rendu, ni approbation finale du livrable, qui restent
@@ -50,7 +50,7 @@ const REGLES_GEL_CONTENT_PLAN: readonly RegleConformite<Pick<ContentPlan, 'readi
  * `RenduGabarit.vue`, KEEP) et le cycle de vie de `Section`, hors périmètre
  * ici. Aucune génération/validation/gel automatique par IA.
  *
- * **Étendu Phase 28** (TD-026) : `readiness` n'est plus fourni par
+ * **Étendu** : `readiness` n'est plus fourni par
  * l'appelant — calculé automatiquement à la création et recalculable à la
  * demande via `construireReadinessContentPlan`
  * (`logique-metier/deliverable/readinessContentPlan.ts`).
@@ -73,7 +73,7 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
   /**
    * Recharge la chaîne réelle `Requirement → Couverture → Test → Execution
    * → Evidence` + `QualityEvent` pour ce client et calcule `readiness` via
-   * `construireReadinessContentPlan` (Phase 28, TD-026) — jamais une valeur
+   * `construireReadinessContentPlan` — jamais une valeur
    * fournie par l'appelant.
    */
   async function calculerReadiness(clientId: string, assetNodeId: string | null) {

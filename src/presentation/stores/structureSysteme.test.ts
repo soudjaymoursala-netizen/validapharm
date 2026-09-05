@@ -296,7 +296,7 @@ describe('useStructureSystemeStore — câblage Workspace, étape 1 (CABLAGE_ETA
   })
 })
 
-describe('useStructureSystemeStore — Architecture Technique (Phase 18, TD-013)', () => {
+describe('useStructureSystemeStore — Architecture Technique', () => {
   test('crée une relation techniquement typée entre deux AssetNode existants', async () => {
     const store = useStructureSystemeStore()
     await store.charger('client-1')

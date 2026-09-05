@@ -54,7 +54,7 @@ export interface NouveauConflictInput {
 }
 
 /**
- * Store de la structuration assistée de documents (Phase 8a de convergence
+ * Store de la structuration assistée de documents (convergence
  * architecturale — spec dans
  * `docs/convergence/PHASE_8A_SOURCE_INTELLIGENCE_SPEC.md`).
  *
@@ -65,9 +65,9 @@ export interface NouveauConflictInput {
  * avec `SourceLocation` (pointeur déclaratif séparé), `Confirmation`
  * (enregistrement auditable distinct de la validation/rejet) et
  * `KnowledgeRelation` (lien explicite non conflictuel entre deux
- * `KnowledgeItem`). Ne couvre que la sous-phase 8a (TD-004) — la
+ * `KnowledgeItem`). Ne couvre que cette sous-étape — la
  * compréhension de schémas techniques complexes (`Diagram`/`DiagramNode`/
- * `DiagramEdge`, 8b) n'est pas engagée. Aucun appel IA réel dans ce
+ * `DiagramEdge`) n'est pas engagée. Aucun appel IA réel dans ce
  * module — `valeur_interpretee` est toujours fournie par l'appelant.
  *
  * @requirement Target Architecture, domaine "Source Intelligence"

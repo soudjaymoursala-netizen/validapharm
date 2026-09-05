@@ -31,17 +31,16 @@ export interface ResultatRaisonnement {
 }
 
 /**
- * Store du moteur de raisonnement (Phase 15 de convergence architecturale
- * — spec détaillée dans `docs/convergence/PHASE_15_REASONING_ENGINE_SPEC.md`,
- * TD-007/TD-008).
+ * Store du moteur de raisonnement (convergence architecturale
+ * — spec détaillée dans `docs/convergence/PHASE_15_REASONING_ENGINE_SPEC.md`).
  *
  * **Garde-fou non négociable** : aucune fonction de ce store n'écrit le
  * contenu d'une `AIResponse` dans `Requirement`/`Test`/`KnowledgeItem` —
- * même principe que `Confirmation` (Phase 8a), cohérent avec le principe
+ * même principe que `Confirmation`, cohérent avec le principe
  * fondateur n°1. `AIRequest`/`AIResponse` sont immuables une fois créés
  * (aucune fonction de mise à jour exposée).
  *
- * @requirement docs/convergence/CONVERGENCE_PLAN.md, Phase 15
+ * @requirement docs/convergence/CONVERGENCE_PLAN.md
  */
 export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
   const configurations = ref<AIConfiguration[]>([])
@@ -134,7 +133,7 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
         : Promise.resolve([]),
     ])
 
-    // Narratif du ContextSnapshot en vigueur (Phase 27, TD-025) — réutilise
+    // Narratif du ContextSnapshot en vigueur — réutilise
     // les mêmes objets déjà chargés pour les outils, jamais une seconde
     // résolution divergente.
     const narratifContexte = entrees.contextSnapshotId

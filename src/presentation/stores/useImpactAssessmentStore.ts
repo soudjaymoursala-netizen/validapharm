@@ -29,9 +29,9 @@ export interface NouvelleEvaluationImpactInput {
 }
 
 /**
- * Store Impact Assessment / System Classification (F1, Phase 3 de
+ * Store Impact Assessment / System Classification (F1 de
  * convergence architecturale). Même principe d'immuabilité que
- * `useMethodProfileACFCStore` (Phase 1) : une nouvelle version de méthode
+ * `useMethodProfileACFCStore` : une nouvelle version de méthode
  * ne mute jamais la précédente.
  *
  * @requirement Impact Assessment / System Classification

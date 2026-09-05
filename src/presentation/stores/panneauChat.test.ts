@@ -74,7 +74,7 @@ describe('usePanneauChatStore — envoyerQuestion (fournisseur cloud)', () => {
     expect(store.erreur).toBeNull()
   })
 
-  test('quota dépassé -> erreur affichée, jamais de bascule silencieuse (SDS §6)', async () => {
+  test('quota dépassé -> erreur affichée, jamais de bascule silencieuse', async () => {
     fetchMock.mockResolvedValueOnce(reponseMock({}, { status: 429 }))
     const store = usePanneauChatStore()
     await store.demarrerSession('client-1')

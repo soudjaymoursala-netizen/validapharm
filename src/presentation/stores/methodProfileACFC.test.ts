@@ -25,7 +25,7 @@ describe('useMethodProfileACFCStore — aucun profil configuré', () => {
   })
 })
 
-describe('useMethodProfileACFCStore — creerNouvelleVersion (TD-002)', () => {
+describe('useMethodProfileACFCStore — creerNouvelleVersion', () => {
   test("crée un profil avec les questions du client, mot pour mot, aucune valeur d'origine dans le code", async () => {
     const store = useMethodProfileACFCStore()
     await store.charger('client-1')

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Suppression DÉFINITIVE (TD-046, Phase 39) — jamais pour un rôle
+// Suppression DÉFINITIVE — jamais pour un rôle
 // non-admin (vérifié côté serveur, `DELETE /clients/:id`), jamais sans
 // justification, jamais sans re-saisie du vrai mot de passe. Contrairement
 // à `ModaleConfirmationArchivage.vue` (réversible), cette action est

@@ -18,7 +18,7 @@ beforeEach(async () => {
 /**
  * Sème la chaîne complète `Requirement → Couverture → Test → Execution →
  * Evidence` pour un client/nœud donné, de sorte que `construireReadinessContentPlan`
- * (Phase 28, TD-026) calcule `pret` — les tests du store n'injectent plus
+ * calcule `pret` — les tests du store n'injectent plus
  * `readiness` à la main, elle est désormais toujours calculée.
  */
 async function semerChaineComplete(
@@ -116,7 +116,7 @@ describe('useContentPlanStore — cycle nominal', () => {
   })
 })
 
-describe('useContentPlanStore — readiness calculée automatiquement (Phase 28, TD-026)', () => {
+describe('useContentPlanStore — readiness calculée automatiquement', () => {
   test('aucun asset_node_id -> readiness besoin_information dès la création', async () => {
     const store = useContentPlanStore()
     const plan = await store.creerContentPlan('client-1', {

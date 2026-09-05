@@ -72,7 +72,7 @@ async function creerExecutionEnCours(clientId: string) {
   return { requirement, test, execution: instance, executionStep: resultatEtape }
 }
 
-describe('useEvidenceStore — traçabilité complète (Acceptance Criteria Phase 7)', () => {
+describe('useEvidenceStore — traçabilité complète (Acceptance Criteria)', () => {
   test('Requirement -> Test -> Execution -> Evidence, démontrée par preuvesPourRequirement', async () => {
     const { requirement, execution, executionStep } = await creerExecutionEnCours('client-1')
     const store = useEvidenceStore()

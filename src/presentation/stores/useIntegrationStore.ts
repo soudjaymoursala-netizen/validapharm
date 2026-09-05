@@ -16,7 +16,7 @@ export interface NouvelleReferenceInput {
 }
 
 /**
- * Store de l'Integration Gateway générique (Phase 10 de convergence
+ * Store de l'Integration Gateway générique (convergence
  * architecturale — spec dans
  * `docs/convergence/PHASE_10_INTEGRATION_GATEWAY_SPEC.md`). Ne fait
  * aucun appel réseau lui-même — orchestre `Connector`/`SyncJob`/
@@ -103,7 +103,7 @@ export const useIntegrationStore = defineStore('integration', () => {
    * Garde-fou non négociable : un `SyncJob` indisponible/en échec ne bloque
    * jamais une activité indépendante — aucun code de ce module ne
    * conditionne `declarerReference` ou toute autre opération métier au
-   * statut d'un `SyncJob` (DEC-002/055, cohérent avec `QualityEvent`).
+   * statut d'un `SyncJob` (cohérent avec `QualityEvent`).
    */
   async function marquerIndisponible(clientId: string, syncJobId: string): Promise<SyncJob | null> {
     return changerStatutSyncJob(clientId, syncJobId, 'indisponible', null)

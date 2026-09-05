@@ -140,7 +140,7 @@ describe('useSectionsStore — mettreAJourValeurs', () => {
     expect(sectionEnBase?.values.contenu).toBe('v1')
   })
 
-  test("journalise une entrée 'modification' dans audit_log (FS §3, traçabilité)", async () => {
+  test("journalise une entrée 'modification' dans audit_log (traçabilité)", async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     expect(section.audit_log).toHaveLength(1) // création uniquement, à ce stade
 
@@ -159,7 +159,7 @@ describe('useSectionsStore — mettreAJourValeurs', () => {
   })
 })
 
-describe('useSectionsStore — mettreAJourTable (FDS §4, tableau_dynamique)', () => {
+describe('useSectionsStore — mettreAJourTable (tableau_dynamique)', () => {
   test('persiste les lignes sous la clé de table donnée, sans toucher aux autres tables', async () => {
     const { sections, section } = await creerProjetEtSection('dq')
     await db.sections.put({ ...section, tables: { autre_table: [{ x: 1 }] } })
@@ -296,7 +296,7 @@ describe('useSectionsStore — engagerVerification (garde-fou U-01)', () => {
 describe("useSectionsStore — cycle complet jusqu'à valide_en_interne", () => {
   test('rôles manquants bloquent engager_verification même sans souci de lien', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    // Un gabarit contexte_procede n'a pas de garde de lien (FDS §3.3) — mais
+    // Un gabarit contexte_procede n'a pas de garde de lien — mais
     // le workflow n'a pas d'approbateur final renseigné : la machine à
     // états doit bloquer indépendamment des garde-fous de finalisation.
     const resultat = await sections.engagerVerification(section.id)
@@ -345,7 +345,7 @@ describe("useSectionsStore — cycle complet jusqu'à valide_en_interne", () => 
   })
 })
 
-describe('useSectionsStore — journaliserExport (FS §4.3)', () => {
+describe('useSectionsStore — journaliserExport', () => {
   test('journalise "export" par défaut', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await sections.journaliserExport(section.id, false)
@@ -369,7 +369,7 @@ describe('useSectionsStore — journaliserExport (FS §4.3)', () => {
   })
 })
 
-describe('useSectionsStore — importerSection (FS §4.3)', () => {
+describe('useSectionsStore — importerSection', () => {
   test('crée une section nouvelle (id distinct), rattachée au projet cible, avec entrée "import"', async () => {
     const { sections, projet } = await creerProjetEtSection('contexte_procede')
     const donnees = {
@@ -408,7 +408,7 @@ describe('useSectionsStore — importerSection (FS §4.3)', () => {
   })
 })
 
-describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33)', () => {
+describe('useSectionsStore — genererBrouillonIA (§4.1bis)', () => {
   test('refuse sans confirmation explicite du droit d’usage', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     const resultat = await sections.genererBrouillonIA(
@@ -489,7 +489,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33)', () => {
     expect(actions).toContain('confirmation_droit_usage_document_reference')
     expect(actions.some((a) => a.startsWith('generation_brouillon_ia'))).toBe(true)
 
-    // ALCOA+ (FS §3, v04) : entrée "génération assistée" distincte, jamais
+    // ALCOA+ : entrée "génération assistée" distincte, jamais
     // fusionnée avec une future validation utilisateur.
     expect(sectionEnBase?.revisions.at(-1)).toMatchObject({
       motif: 'génération assistée',
@@ -500,7 +500,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33)', () => {
     expect(projetEnBase?.documents).toContain(sectionEnBase?.generation_source.source_document_id)
   })
 
-  test('propose des lignes de tableau dynamique pour un tableau vide (Phase 38, Option 2, TD-045)', async () => {
+  test('propose des lignes de tableau dynamique pour un tableau vide (Option 2)', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     const resultat = await sections.genererBrouillonIA(
       section.id,
@@ -527,7 +527,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33)', () => {
     ])
   })
 
-  test('ne recouvre jamais un tableau déjà rempli (Phase 38, Option 2, TD-045)', async () => {
+  test('ne recouvre jamais un tableau déjà rempli (Option 2)', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await sections.mettreAJourTable(section.id, 'cpp', [{ parametre: 'Déjà saisi' }])
 
@@ -588,7 +588,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis, Phase 33)', () => {
   })
 })
 
-describe('useSectionsStore — validerSectionIA (clarification ALCOA+ FS §3 v04)', () => {
+describe('useSectionsStore — validerSectionIA (clarification ALCOA+)', () => {
   test('transition propose_par_ia_non_valide -> brouillon_aide avec une entrée revisions distincte motif "validation utilisateur"', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await db.sections.put({

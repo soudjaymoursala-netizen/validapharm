@@ -29,9 +29,9 @@ export interface NouvelleEvaluationInput {
 }
 
 /**
- * Store de la méthode ACFC configurable par client (FS §4.6bis, remplace
- * la grille de criticité codée en dur — `docs/convergence/
- * TECHNICAL_DECISIONS.md` TD-002). Un `MethodProfileACFC` est immuable une
+ * Store de la méthode ACFC configurable par client (remplace
+ * la grille de criticité codée en dur — voir `docs/convergence/
+ * TECHNICAL_DECISIONS.md`). Un `MethodProfileACFC` est immuable une
  * fois créé : toute modification des questions crée une **nouvelle
  * version**, jamais une mutation du profil existant, pour que les
  * évaluations passées restent reproductibles telles qu'elles ont été
@@ -49,8 +49,8 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
    * Aucun défaut fabriqué : `null` tant que le client n'a rien configuré.
    * Tri sur le numéro de version (`vN`), jamais sur `created_at` : deux
    * versions créées dans la même milliseconde produisent le même
-   * timestamp ISO, ce qui rendait le tri par date instable (bug trouvé en
-   * Phase 3, 25/08/2026, en écrivant le test équivalent pour
+   * timestamp ISO, ce qui rendait le tri par date instable (bug trouvé
+   * le 25/08/2026 en écrivant le test équivalent pour
    * `useImpactAssessmentStore`).
    */
   const profilActif = computed<MethodProfileACFC | null>(() => {

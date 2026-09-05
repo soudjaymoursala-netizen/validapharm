@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Jeu d'icônes minimal en SVG inline (ajouté v20, refonte UX guidée) —
 // aucune dépendance externe (cohérent avec le principe local-first déjà
-// acté pour la police, FDS §2bis) : chaque tracé est vendorisé ici,
+// acté pour la police) : chaque tracé est vendorisé ici,
 // tiré de Lucide (licence ISC, tracés recopiés à la main, pas de paquet
 // npm ajouté pour une dizaine de pictogrammes). `stroke="currentColor"`
 // systématique — la couleur suit toujours le texte parent, jamais fixée

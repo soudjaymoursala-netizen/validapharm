@@ -15,7 +15,7 @@ export interface NouvelleEvaluationCSVInput {
 }
 
 /**
- * Store Computer System Assessment (F3, Phase 3 de convergence
+ * Store Computer System Assessment (F3 de convergence
  * architecturale). Contrairement à `useMethodProfileACFCStore` et
  * `useImpactAssessmentStore`, il n'y a pas de `MethodProfile` : la
  * catégorisation GAMP5 est une grille normative fixe (PIC/S PI 011-3), pas

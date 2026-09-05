@@ -4,8 +4,8 @@
 // le nom exact du client/projet (pattern GitHub "type the repo name to
 // confirm"), (2) re-saisir le **vrai** mot de passe de connexion.
 //
-// TD-046 (Phase 39, décision explicite de l'utilisateur — « Remplacer par
-// la vraie session ») : le verrou local (TD-033, mot de passe vérifié
+// Décision explicite de l'utilisateur (« Remplacer par
+// la vraie session ») : le verrou local (mot de passe vérifié
 // uniquement côté navigateur) est retiré, remplacé par une
 // ré-authentification serveur (`useAuthStore.verifierMotDePasse`,
 // `POST /auth/verify-password`) — un seul système d'identité désormais,

@@ -9,7 +9,7 @@ export interface SaisieConnexionAuthentification {
 const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
 
 /**
- * Configuration de connexion au Worker d'authentification (TD-046) —
+ * Configuration de connexion au Worker d'authentification —
  * même principe que `useConnexionRelaisIAStore`/`useConnexionRelaisOCR` :
  * enregistrement unique, pas par client, un seul Worker serverless pour
  * toute l'installation. Doit être configuré **avant** toute connexion

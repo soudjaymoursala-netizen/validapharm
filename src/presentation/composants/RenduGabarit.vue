@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Moteur de rendu générique de gabarit (FDS §4) — ce composant ne connaît
+// Moteur de rendu générique de gabarit — ce composant ne connaît
 // QUE le schéma déclaratif (`DefinitionGabarit`) : ajouter un gabarit ne
 // nécessite jamais de le modifier, seulement un nouveau fichier dans
-// logique-metier/gabarits/catalogue/ (règle de conception FDS §4).
+// logique-metier/gabarits/catalogue/ (règle de conception).
 import { reactive, toRaw } from 'vue'
 import { evaluerColonneCalculee } from '../../logique-metier/gabarits/evaluerColonneCalculee'
 import type {
@@ -27,7 +27,7 @@ const props = withDefaults(
     /**
      * Champs (`field_key`) à signaler visuellement comme donnée
      * technique/numérique reprise ou adaptée depuis un document de
-     * référence (§4.1bis, Phase 33) — surlignage distinct,
+     * référence (§4.1bis) — surlignage distinct,
      * jamais fusionné avec l'affichage normal d'un champ.
      */
     champsSignales?: readonly string[]
@@ -125,7 +125,7 @@ function supprimerLigne(champ: DefinitionChamp, index: number): void {
   const lignes = lignesTable(champ.field_key)
   const ligne = lignes[index]
   if (ligne !== undefined && !ligneEstVide(ligne)) {
-    // FDS §6 : confirmation de suppression exigée uniquement si la ligne n'est pas vide.
+    // Confirmation de suppression exigée uniquement si la ligne n'est pas vide.
     if (!window.confirm('Confirmer la suppression de cette ligne ?')) return
   }
   const lignesRestantes = lignes.filter((_, i) => i !== index)
@@ -395,7 +395,7 @@ button {
   font-weight: 600;
 }
 
-/* Export PDF (FS §4.3 : "sans coupure de tableau en milieu de ligne") —
+/* Export PDF ("sans coupure de tableau en milieu de ligne") —
    une ligne de tableau dynamique ne doit jamais être scindée entre deux
    pages imprimées. */
 @media print {

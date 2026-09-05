@@ -21,27 +21,27 @@ export interface NouvelleEtapeProcedureInput {
 }
 
 /**
- * Store du domaine "Procedure" (Phase 20 de convergence architecturale —
+ * Store du domaine "Procedure" (convergence architecturale —
  * spec détaillée dans `docs/convergence/PHASE_20_PROCEDURAL_KNOWLEDGE_
- * SPEC.md`, TD-016).
+ * SPEC.md`).
  *
  * **Garde-fou non négociable** : aucune fonction de ce store ne
  * structure automatiquement une `Procedure` depuis un texte libre — les
  * étapes sont toujours saisies par l'appelant (un humain ayant lu la
- * SOP), même discipline que `KnowledgeItem.valeur_interpretee` (Phase 8a).
+ * SOP), même discipline que `KnowledgeItem.valeur_interpretee`.
  *
  * `Procedure` est immuable une fois créée — une nouvelle révision de la
  * même `reference` crée une nouvelle `Procedure` avec un `numero_version`
  * incrémenté, jamais une mutation (répond à R-21,
  * `02-analyse-de-risque-outil.md`).
  *
- * @requirement docs/convergence/CONVERGENCE_PLAN.md, Phase 20
+ * @requirement docs/convergence/CONVERGENCE_PLAN.md
  */
 export const useProcedureStore = defineStore('procedure', () => {
   const procedures = ref<Procedure[]>([])
   const procedureSteps = ref<ProcedureStep[]>([])
   const enChargement = ref(false)
-  /** Dernière proposition générée (Phase 25, TD-023) — jamais persistée telle quelle, simple état d'écran en attente de confirmation humaine. */
+  /** Dernière proposition générée — jamais persistée telle quelle, simple état d'écran en attente de confirmation humaine. */
   const derniereProposition = ref<PropositionAvecSource | null>(null)
 
   async function charger(clientId: string): Promise<void> {
@@ -123,8 +123,8 @@ export const useProcedureStore = defineStore('procedure', () => {
   }
 
   /**
-   * Génère une proposition de structure (Phase 25, TD-023) — parseur
-   * déterministe d'abord (Phases 21-22), repli IA (Phase 24) seulement si
+   * Génère une proposition de structure — parseur
+   * déterministe d'abord, repli IA seulement si
    * celui-ci ne trouve strictement rien. Stockée dans `derniereProposition`
    * pour affichage, **jamais persistée** sans confirmation humaine
    * explicite via `confirmerProposition`.
