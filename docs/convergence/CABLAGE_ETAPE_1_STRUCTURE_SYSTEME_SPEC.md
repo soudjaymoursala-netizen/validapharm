@@ -4,7 +4,7 @@
 
 ## Contexte
 
- (`PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`) a construit `Organization`/`Workspace` et la fonction pure `resoudreRegleEffective`, mais **aucun store métier existant ne les consomme**. Ce document couvre le premier store réellement câblé: `useStructureSystemeStore` (`AssetNode`/`AssetHierarchySchema`, référentiel d'actifs).
+Un chantier antérieur (`PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`) a construit `Organization`/`Workspace` et la fonction pure `resoudreRegleEffective`, mais **aucun store métier existant ne les consomme**. Ce document couvre le premier store réellement câblé: `useStructureSystemeStore` (`AssetNode`/`AssetHierarchySchema`, référentiel d'actifs).
 
 **Pourquoi ce store en premier**: un actif physique (équipement, ligne, salle) appartient naturellement à un site précis, pas à l'organisation entière — c'est le candidat le plus évident pour porter un `workspace_id` réel. Les autres ~41 entités `client_id` seront câblées dans des incréments ultérieurs séparés, un par un (jamais en bloc).
 

@@ -47,7 +47,7 @@ Ces choix sont ajoutés comme dépendances validées dans `08-conventions-codage
 - **Détection de connectivité**: `navigator.onLine` + tentative réelle d'appel (le premier est peu fiable seul) avant de proposer une synchronisation — bascule visible cohérente avec le principe déjà appliqué au routeur IA.
 - **Manifeste PWA**: nom, icônes, couleur de thème alignés sur la charte graphique (palette indigo).
 
-## 5. Connecteur GitHub — stratégie d'appels API et limite de débit (complète)
+## 5. Connecteur GitHub — stratégie d'appels API et limite de débit
 
 **Point non couvert jusqu'ici, trouvé en détaillant l'architecture**: l'API GitHub impose une limite de **5000 requêtes/heure par jeton authentifié**. Un appel par fichier (`project`, chaque `section`, chaque `asset_node`...) exploserait ce quota dès qu'un client a quelques centaines d'enregistrements — pas un cas extrême, c'est le volume de référence déjà fixé (500 projets/5000 sections).
 
@@ -56,7 +56,7 @@ Ces choix sont ajoutés comme dépendances validées dans `08-conventions-codage
 - **Écritures**: toujours via l'API Git Data (création de blob + arbre + commit + mise à jour de référence) pour permettre des écritures atomiques multi-fichiers en un nombre d'appels constant, indépendant du nombre de fichiers modifiés dans le même commit (répond à l'atomicité déjà exigée pour Structure Système).
 - **Compteur de quota exposé**: l'API GitHub retourne l'en-tête `X-RateLimit-Remaining` sur chaque réponse — le connecteur l'expose à la Couche Présentation (même principe que le quota IA): avertissement avant épuisement, jamais un échec silencieux en cours de session.
 
-## 6. Modèle de composants (Couche Présentation, complète)
+## 6. Modèle de composants (Couche Présentation)
 
 - Un composant Vue par écran de l'inventaire, routé via Vue Router.
 - Composants transverses réutilisables (badge de statut avec icône; modale de confirmation, U-xx) centralisés, jamais dupliqués écran par écran — cohérent avec le principe DRY et la charte graphique.
@@ -68,7 +68,7 @@ Ces choix sont ajoutés comme dépendances validées dans `08-conventions-codage
 - **Pipeline**: le portail de qualité (`quality-gate.yml`) valide chaque changement; un job de déploiement distinct (à ajouter) publie le build (`npm run build`) vers GitHub Pages uniquement depuis la branche principale, après succès du portail de qualité — jamais un déploiement direct sans passer par les vérifications.
 - **Configuration par environnement**: aucun secret dans le bundle buildé (le jeton utilisateur est saisi à l'exécution, jamais injecté au build).
 
-## 8. Sécurité complémentaire (précise)
+## 8. Sécurité complémentaire
 
 - **Content-Security-Policy**: restreint les origines autorisées à `api.github.com`, `www.googleapis.com` (Drive), **le domaine du relais IA** (§10 ci-dessous — pas celui du/des fournisseur(s) IA eux-mêmes, jamais appelés directement depuis le navigateur, cf. §10), et l'origine du bundle lui-même — bloque toute exfiltration vers un domaine tiers non listé, y compris en cas de faille XSS (défense en profondeur, complète les mitigations déjà en place). *(corrigé v02 — la version v01 listait par erreur "les domaines des fournisseurs IA configurés", incohérent avec l'architecture à relais posée en §10; incohérence trouvée lors de la revue v02.)*
 - **Aucun `eval`/`Function` dynamique** dans le code applicatif — imposé par la CSP et vérifiable par ESLint.
