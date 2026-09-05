@@ -11,7 +11,7 @@ beforeEach(() => {
   document.documentElement.style.removeProperty('--vp-police')
 })
 
-describe('Parametres — thème et police (§9 du prompt maître, Phase 40)', () => {
+describe('Parametres — thème et police (§9 du prompt maître)', () => {
   test('coche les options système par défaut', () => {
     const wrapper = mount(Parametres)
 
@@ -47,7 +47,7 @@ describe('Parametres — thème et police (§9 du prompt maître, Phase 40)', ()
     expect(document.documentElement.style.getPropertyValue('--vp-police')).toContain('serif')
   })
 
-  test('ne propose ni langue ni densité — jamais une capacité de façade (TD-011)', () => {
+  test('ne propose ni langue ni densité — jamais une capacité de façade', () => {
     const wrapper = mount(Parametres)
     expect(wrapper.text()).not.toContain('Langue')
     expect(wrapper.text()).not.toContain('Densité')

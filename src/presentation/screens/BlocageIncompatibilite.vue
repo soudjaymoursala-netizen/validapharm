@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Écran de blocage au démarrage — FDS §7 (U-12). Affiché
+// Écran de blocage au démarrage (U-12). Affiché
 // à la place de toute l'application (jamais une simple modale) quand les
 // données ont un schema_version postérieur à ce que cette version sait
 // lire. Aucune écriture n'a lieu avant confirmation de compatibilité.

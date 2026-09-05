@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Écran Risk Assessment / AMDEC autonome (Phase 29 de convergence
-// architecturale, TD-027) — gap trouvé en poursuivant l'inventaire de
+// Écran Risk Assessment / AMDEC autonome —
+// gap trouvé en poursuivant l'inventaire de
 // §5.31 CONTEXTE-REPRISE-SESSION.md : le domaine, la persistance et le
 // store existaient sans aucun écran ; seul le petit tableau S×O×D intégré
 // au gabarit DQ était utilisable, pas la vraie méthodologie AMDEC

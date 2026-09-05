@@ -1,9 +1,8 @@
 <script setup lang="ts">
-// Écran « Templates & Formulaires » (§8 du prompt maître du 03/09/2026,
-// Phase 40) — bibliothèque autonome et consultable des gabarits `.docx`
+// Écran « Templates & Formulaires » (§8 du prompt maître du 03/09/2026)
+// — bibliothèque autonome et consultable des gabarits `.docx`
 // client, jusqu'ici seulement accessibles depuis le panneau d'export d'une
-// section (`EditeurSection.vue`). `useGabaritExportStore` (Phase 26,
-// TD-024) porte déjà tout le mécanisme (import vérifié par balises
+// section (`EditeurSection.vue`). `useGabaritExportStore` porte déjà tout le mécanisme (import vérifié par balises
 // obligatoires, suppression) — cet écran n'ajoute aucune logique nouvelle,
 // seulement un point d'entrée dédié cohérent avec le parcours demandé
 // (« le système stocke le template que je lui donne »).

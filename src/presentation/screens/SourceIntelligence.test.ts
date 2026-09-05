@@ -56,7 +56,7 @@ beforeEach(async () => {
 })
 
 describe('SourceIntelligence', () => {
-  test('chaîne complète Source → Version → Extraction → ExtractionItem → KnowledgeItem validé (Phase 8a)', async () => {
+  test('chaîne complète Source → Version → Extraction → ExtractionItem → KnowledgeItem validé', async () => {
     const wrapper = mount(SourceIntelligence, {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },

@@ -2,11 +2,11 @@
 // Impact Assessment / System Classification (F1 du catalogue §10) —
 // écran manquant trouvé le 29/08/2026 en comparant
 // l'inventaire d'écrans réel (`src/presentation/screens/`) à celui
-// documenté depuis la FDS v15 (Phase 3, 25/08/2026) : le store
-// `useImpactAssessmentStore` et le moteur de décision existaient depuis
-// la Phase 3 sans jamais avoir de composant, contrairement à ce que la
-// FDS affirmait. Même patron que `AssistantStrategieQualification.vue`
-// (ACFC, Phase 1) : méthode configurable par client, aucune question
+// documenté (25/08/2026) : le store
+// `useImpactAssessmentStore` et le moteur de décision existaient
+// sans jamais avoir de composant, contrairement à ce que la
+// documentation de conception affirmait. Même patron que `AssistantStrategieQualification.vue`
+// (ACFC) : méthode configurable par client, aucune question
 // fabriquée par défaut, verdict strictement binaire
 // (Direct Impact / Not Direct Impact — pas de niveau "impact indirect").
 import { computed, onMounted, reactive, ref } from 'vue'

@@ -8,7 +8,7 @@ import { db } from '../../persistance/db'
 import MissionWorkspace from './MissionWorkspace.vue'
 
 // Le composant construit lui-même ses adaptateurs IA via
-// `construireAdaptateursIA`/`adaptateurAvecBascule` (Phase 17) — ceux-ci
+// `construireAdaptateursIA`/`adaptateurAvecBascule` — ceux-ci
 // parleraient à un vrai relais/Ollama en réseau. On les remplace par un
 // double de test entièrement contrôlable, même principe que le mock de
 // `ProviderAdapter` dans `useReasoningEngineStore.test.ts`.

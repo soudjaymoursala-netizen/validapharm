@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// Écran ContentPlan (Phase 9 de convergence architecturale, étendue Phase
-// 28 — calcul de readiness) — gap trouvé en poursuivant l'inventaire de
+// Écran ContentPlan (calcul de readiness) — gap trouvé en poursuivant l'inventaire de
 // §5.31 CONTEXTE-REPRISE-SESSION.md : le domaine, la persistance et le
 // store existaient sans aucun écran, aucun moyen visible de savoir si le
 // dossier de livrables d'un actif est prêt à être gelé.

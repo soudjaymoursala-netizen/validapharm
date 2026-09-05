@@ -1,20 +1,20 @@
 <script setup lang="ts">
-// Profil utilisateur local (§4.31, TD-033 ; §8.1 du prompt
-// maître du 03/09/2026, Phase 40 — nom/prénom ajoutés). Porte le verrou
+// Profil utilisateur local (§4.31 ; §8.1 du prompt
+// maître du 03/09/2026 — nom/prénom ajoutés). Porte le verrou
 // de confirmation (mot de passe haché localement) requis pour archiver un
 // client/projet. Ce n'est PAS un compte, PAS une authentification de
 // session, PAS une signature électronique : dérogation explicite et
-// documentée au principe "jamais de mot de passe" du cadrage §5 (TD-011
-// interdit tout RBAC/e-signature de façade — ce verrou n'est jamais
-// présenté comme tel, ici ni ailleurs dans l'app).
+// documentée au principe "jamais de mot de passe" du cadrage §5 —
+// interdiction de tout RBAC/e-signature de façade — ce verrou n'est jamais
+// présenté comme tel, ici ni ailleurs dans l'app.
 //
 // Volontairement SANS champ « rôle » : le §8.1 du prompt maître le
 // mentionne, mais aucun rôle n'est appliqué nulle part dans l'app (aucune
 // permission réellement vérifiée par rôle) — l'ajouter ici créerait
-// exactement la fausse capacité que TD-011 interdit (un sélecteur qui ne
+// exactement la fausse capacité interdite par ce cadrage (un sélecteur qui ne
 // protège rien). Le rôle réel dépend d'une authentification serveur
-// (Phase 39, en attente de confirmation) — voir `docs/convergence/
-// ARCHITECTURE_CONFLICTS.md` CONFLICT-004.
+// (en attente de confirmation) — voir `docs/convergence/
+// ARCHITECTURE_CONFLICTS.md`.
 import { onMounted, ref } from 'vue'
 import { useProfilLocalStore } from '../stores/useProfilLocalStore'
 

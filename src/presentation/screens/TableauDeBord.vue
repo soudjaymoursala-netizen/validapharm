@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Tableau de bord / Vue portefeuille (FDS §2) — version minimale de cet
+// Tableau de bord / Vue portefeuille — version minimale de cet
 // incrément : liste des projets + création (version complète avec
 // statuts agrégés/alertes, backlog).
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -23,7 +23,7 @@ const formulaireOuvert = ref(false)
 const afficherArchives = ref(false)
 
 /**
- * Filtrage optionnel par client (Phase 40, accès depuis la Fiche Client —
+ * Filtrage optionnel par client (accès depuis la Fiche Client —
  * branche « Projets ») — `query.clientId`, jamais un paramètre de route
  * dédié : ce tableau de bord reste aussi la vue portefeuille globale
  * (accès direct depuis « Mon travail »), le filtre est une lentille

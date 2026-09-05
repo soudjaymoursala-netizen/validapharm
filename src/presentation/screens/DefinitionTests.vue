@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Chaîne de définition Requirement → TestObjective → TestCandidate → Test
-// + Couverture (Phase 7a de convergence architecturale) — écran manquant
+// + Couverture — écran manquant
 // trouvé en simulant un vrai parcours de qualification de bout en bout
 // (§5.31 CONTEXTE-REPRISE-SESSION.md) : le domaine, la persistance et le
 // store existaient depuis le 25/08/2026 sans jamais avoir d'écran, rendant
@@ -62,7 +62,7 @@ function libelleRequirement(requirementId: string): string {
   return r ? `${r.reference} — ${r.titre}` : requirementId
 }
 
-// --- Couverture des risques (Phase 35 — Test Design Engine, TD-036) ---
+// --- Couverture des risques (Test Design Engine) ---
 // Rapport recalculé à l'affichage, jamais persisté (même discipline que
 // `testsCouvrantRequirement`) — un risque `action_requise` sans candidat
 // de test actif est signalé explicitement, jamais silencieux.
@@ -91,7 +91,7 @@ function libelleObjectif(testObjectiveId: string): string {
   return o ? o.titre : testObjectiveId
 }
 
-// --- Génération de candidats depuis les risques (Phase 35, TD-036) ---
+// --- Génération de candidats depuis les risques ---
 const messageGenerationParObjectif = ref<Record<string, string>>({})
 
 async function genererDepuisRisques(testObjectiveId: string): Promise<void> {

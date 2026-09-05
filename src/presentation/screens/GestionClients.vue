@@ -1,17 +1,16 @@
 <script setup lang="ts">
-// Mes clients (§4/§13 du prompt maître du 03/09/2026, Phase 40) — chaque
+// Mes clients (§4/§13 du prompt maître du 03/09/2026) — chaque
 // client représente un site industriel pour lequel l'utilisateur travaille
 // (nom, adresse, secteur, détails). Cliquer sur un client ouvre sa Fiche
 // (`FicheClient.vue`), qui expose les 5 branches (Architecture, Process,
 // Procédures, Templates & Formulaires, Projets) — cet écran ne liste donc
-// plus directement les outils (avant Phase 40 : 8 liens par ligne), il ne
+// plus directement les outils (auparavant : 8 liens par ligne), il ne
 // fait que créer/archiver/désarchiver l'identité du client.
 //
 // Archivage (§4.31) : jamais une suppression physique (ALCOA+)
 // — voir `ModaleConfirmationArchivage.vue` pour la double garde (nom
-// retapé + vraie session, TD-046). Suppression **définitive** (admin
-// uniquement, justification obligatoire) : voir `ModaleSuppressionDefinitive.vue`,
-// nouvelle capacité Phase 39 (TD-046) — jamais pour un rôle non-admin.
+// retapé + vraie session). Suppression **définitive** (admin
+// uniquement, justification obligatoire) : voir `ModaleSuppressionDefinitive.vue` — jamais pour un rôle non-admin.
 import { onMounted, ref } from 'vue'
 import ModaleConfirmationArchivage from '../composants/ModaleConfirmationArchivage.vue'
 import ModaleSuppressionDefinitive from '../composants/ModaleSuppressionDefinitive.vue'
@@ -182,8 +181,8 @@ header {
 /* `.bouton-principal` seulement (jamais un `button` nu) : un `button`
    sans classe (Annuler, Désarchiver) doit rester une action neutre/
    secondaire — la base globale de `tokens.css` s'en charge — et non
-   hériter par erreur de l'apparence d'une action primaire (Phase 41,
-   bug trouvé pendant la vérification navigateur : « Annuler » avait
+   hériter par erreur de l'apparence d'une action primaire (bug trouvé
+   pendant la vérification navigateur : « Annuler » avait
    exactement la même couleur que « Créer le client »). */
 .bouton-principal {
   background-color: var(--vp-marque);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Écran de résolution de conflit (FDS §3.6) — présente, pour chaque
+// Écran de résolution de conflit — présente, pour chaque
 // enregistrement en conflit détecté par `analyserConflit()`, les champs
 // dont la valeur diverge réellement entre la copie locale et la copie
 // distante, et impose un choix explicite par champ (garder local / garder

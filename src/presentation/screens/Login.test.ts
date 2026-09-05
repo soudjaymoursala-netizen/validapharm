@@ -63,7 +63,7 @@ afterEach(() => {
   demonter()
 })
 
-describe('Login — écran de connexion (TD-046)', () => {
+describe('Login — écran de connexion', () => {
   test('sans relais configuré, invite à le configurer plutôt que de laisser saisir en silence', async () => {
     const router = routeurDeTest()
     await router.push('/connexion')

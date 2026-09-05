@@ -91,7 +91,7 @@ afterEach(() => {
   demonter()
 })
 
-describe('GestionClients — archivage (§4.31, TD-046 — vraie session)', () => {
+describe('GestionClients — archivage (§4.31 — vraie session)', () => {
   test('archive un client après double confirmation (nom retapé + vrai mot de passe), le client bascule dans les archives', async () => {
     const clientsStore = useClientsStore()
     const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })

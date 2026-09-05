@@ -95,7 +95,7 @@ afterEach(() => {
   demonter()
 })
 
-describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maître, Phase 40)', () => {
+describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maître)', () => {
   test('un gabarit valide (balises obligatoires) est importé et listé', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })

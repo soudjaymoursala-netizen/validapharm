@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// Éditeur de section (FDS §2). Rédaction guidée par le moteur de gabarits
-// déclaratif (FDS §4, tâche #12) quand une définition existe pour le
+// Éditeur de section. Rédaction guidée par le moteur de gabarits
+// déclaratif (tâche #12) quand une définition existe pour le
 // template_type de la section ; repli sur un champ de contenu générique
 // sinon (gabarits pas encore définis dans le catalogue — voir
 // logique-metier/gabarits/catalogue/index.ts). Transitions de statut avec
-// garde-fous fidèles (FDS §3.2/§3.3), sauvegarde automatique.
+// garde-fous fidèles, sauvegarde automatique.
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
@@ -65,7 +65,7 @@ const sectionCibleLienId = ref('')
 const dernierResultat = ref<ResultatActionSection | undefined>(undefined)
 let minuteurSauvegarde: ReturnType<typeof setTimeout> | undefined
 
-// Génération de brouillon par adaptation (§4.1bis, Phase 33, TD-031).
+// Génération de brouillon par adaptation (§4.1bis).
 const modeReference = ref<'coller' | 'uploader'>('coller')
 const texteDocumentReference = ref('')
 const nomDocumentReference = ref('')
@@ -86,8 +86,8 @@ const documentReferenceUtilise = ref<ProjectDocument | undefined>(undefined)
  */
 const sousSectionsRevues = ref<Set<string>>(new Set())
 
-// Assistant contextuel par section (Phase 38, Option 1, TD-045) —
-// délègue au Reasoning Engine déjà construit (Phase 15), jamais un second
+// Assistant contextuel par section (Option 1) —
+// délègue au Reasoning Engine déjà construit, jamais un second
 // moteur : seul l'objectif envoyé change (contenu de la section injecté
 // comme contexte, voir `construireObjectifAssistantSection`). Historique
 // volontairement local à cet écran (non rechargé depuis le store) — même
@@ -161,7 +161,7 @@ async function recharger(): Promise<void> {
 
 /**
  * Autres sections du projet, hors la section courante — c'est le vivier
- * dans lequel piocher une cible de lien (FDS §3.3/§3.6).
+ * dans lequel piocher une cible de lien.
  */
 const autresSectionsDuProjet = computed(() =>
   (sectionsStore.sectionsParProjet[props.projectId] ?? []).filter((s) => s.id !== props.sectionId),
@@ -254,7 +254,7 @@ async function majTableGabarit(
   await recharger()
 }
 
-// Export (FS §4.3).
+// Export.
 const blocageExport = computed(() =>
   section.value ? verifierBlocageExport(section.value) : { bloque: false as const },
 )
@@ -305,7 +305,7 @@ async function exporterWord(): Promise<void> {
 }
 
 /**
- * Import d'un gabarit `.docx` client (Phase 26, TD-024) —
+ * Import d'un gabarit `.docx` client —
  * refusé par le store lui-même (`importerGabarit`) si les éléments
  * obligatoires (bloc de signatures, historique des révisions) ne sont pas
  * mappés, jamais enregistré "à corriger plus tard".
@@ -471,7 +471,7 @@ async function validerSectionIA(): Promise<void> {
   await recharger()
 }
 
-/** Extraction du texte d'un fichier de référence (.docx/.pdf) — même patron que RevueStructureProcedure.vue (Phase 25). */
+/** Extraction du texte d'un fichier de référence (.docx/.pdf) — même patron que RevueStructureProcedure.vue. */
 async function importerFichierReference(evenement: Event): Promise<void> {
   erreurExtractionReference.value = null
   const fichier = (evenement.target as HTMLInputElement).files?.[0]
@@ -725,7 +725,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
     </section>
 
     <section v-if="projet?.client_id" class="assistant-section no-print">
-      <h2>Assistant contextuel (Phase 38)</h2>
+      <h2>Assistant contextuel</h2>
       <p class="rappel">
         Pose une question sur cette section précise — l'assistant voit son contenu actuel et dispose
         des mêmes outils de traçabilité que le Reasoning Engine (§4.21). Fournisseur actuel :
@@ -783,7 +783,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
     </section>
 
     <section class="liens-sections no-print">
-      <h2>Liens vers d'autres sections (FDS §3.3/§3.6)</h2>
+      <h2>Liens vers d'autres sections</h2>
       <p class="rappel">
         Un lien vers la section requise (ex. Contexte procédé pour l'OQ/PQ, Plan de métrologie pour
         l'IQ) est la façon normale de satisfaire un garde-fou de finalisation — « Forcer » reste
@@ -914,7 +914,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
     </div>
 
     <section class="export no-print">
-      <h2>Export (FS §4.3)</h2>
+      <h2>Export</h2>
 
       <div v-if="blocageExport.bloque && !exportForce" class="blocage" role="alert">
         <p>{{ blocageExport.motif }}</p>
@@ -1034,7 +1034,7 @@ input {
   font-family: inherit;
 }
 
-/* `.bouton-danger` (Phase 41) : « Rejeter » ne doit jamais avoir le même
+/* `.bouton-danger` : « Rejeter » ne doit jamais avoir le même
    poids visuel qu'« Approuver »/« Transmettre à l'approbation » — un
    bouton plein indigo identique aux deux ne distinguait pas l'action
    destructrice de l'action positive dans un flux d'approbation GxP.
@@ -1200,7 +1200,7 @@ button {
   color: var(--vp-statut-requalification-en-retard);
 }
 
-/* Impression / export PDF (FS §4.3) : uniquement le contenu du livrable,
+/* Impression / export PDF : uniquement le contenu du livrable,
    jamais le chrome applicatif (navigation, actions de workflow, export). */
 @media print {
   .no-print {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Configuration client (FDS §2) — connexion au dépôt GitHub dédié
-// + relais IA (SDS §10quater), tous deux globaux à
+// Configuration client — connexion au dépôt GitHub dédié
+// + relais IA, tous deux globaux à
 // l'installation (un seul dépôt/relais, pas un par client — contrairement
 // au fournisseur IA/qualification de fiabilité, qui sont par client et se
 // configurent sur l'écran Configuration IA d'un client, GestionClients.vue).
@@ -22,7 +22,7 @@ const relaisStore = useConnexionRelaisIAStore()
 const brouillonRelais = reactive({ relayUrl: '', jeton: '' })
 const vientDEnregistrerRelais = ref(false)
 
-// Worker d'authentification (TD-046) — volontairement séparé du relais IA
+// Worker d'authentification — volontairement séparé du relais IA
 // ci-dessous : sans jeton fixe (le jeton de session s'obtient dynamiquement
 // via /auth/login), et accessible AVANT toute connexion (cet écran entier
 // est exclu de la garde de routeur globale, `router/index.ts`) puisque
@@ -159,7 +159,7 @@ async function enregistrerAuthentification(): Promise<void> {
       <p class="rappel">
         Le navigateur ne contacte jamais un fournisseur d'IA directement : toutes les requêtes
         passent par ce relais serverless unique, qui détient la clé du fournisseur configuré côté
-        serveur (SDS §10quater).
+        serveur.
       </p>
 
       <form class="formulaire" @submit.prevent="enregistrerRelais">
@@ -189,9 +189,9 @@ async function enregistrerAuthentification(): Promise<void> {
     <section class="bloc-authentification">
       <h2>Authentification (comptes réels)</h2>
       <p class="rappel">
-        Worker Cloudflare + base D1 dédiés aux comptes/rôles/clients de l'organisation (TD-046) —
-        remplace le verrou local par une vraie session. Aucun jeton fixe à saisir ici : la session
-        s'obtient en se connectant sur l'écran « Se connecter ».
+        Worker Cloudflare + base D1 dédiés aux comptes/rôles/clients de l'organisation — remplace le
+        verrou local par une vraie session. Aucun jeton fixe à saisir ici : la session s'obtient en
+        se connectant sur l'écran « Se connecter ».
       </p>
 
       <form class="formulaire" @submit.prevent="enregistrerAuthentification">

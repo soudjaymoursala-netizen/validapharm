@@ -1,14 +1,13 @@
 <script setup lang="ts">
-// Journal d'anomalies (FDS §3.7) — écran manquant trouvé le
+// Journal d'anomalies — écran manquant trouvé le
 // 31/08/2026 : le type de domaine `QualityEvent` (famille Change
 // Control/Deviation/CAPA/Investigation/Audit finding/Revue périodique),
-// sa table Dexie et son store (`useQualityEventStore.ts`, Phase 5 de
-// convergence) existaient déjà en entier, cross-référencement compris
+// sa table Dexie et son store (`useQualityEventStore.ts`) existaient déjà en entier, cross-référencement compris
 // (Deviation → Investigation → CAPA) — seul un écran autonome manquait,
 // `MissionWorkspace.vue` n'exposant ces événements que dans le contexte
-// d'une Mission précise. La FDS §12 affirmait à tort qu'« aucun type de
+// d'une Mission précise. La documentation de conception affirmait à tort qu'« aucun type de
 // domaine n'existe » — écart documentaire de traçabilité, pas un écart
-// fonctionnel réel ; corrigé ici dans la FDS en même temps que l'écran.
+// fonctionnel réel ; corrigé ici dans la documentation de conception en même temps que l'écran.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useQualityEventStore } from '../stores/useQualityEventStore'
@@ -127,7 +126,7 @@ function titreEvenement(id: string): string {
     <h1>Journal d'anomalies — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">
       Change Control, Déviation, CAPA, Investigation, Constat d'audit, Revue périodique. Un
-      événement externe référencé n'est jamais un verrou sur un autre module (DEC-002/DEC-055).
+      événement externe référencé n'est jamais un verrou sur un autre module.
     </p>
 
     <form class="formulaire" @submit.prevent="creerEvenement">

@@ -1,10 +1,9 @@
 <script setup lang="ts">
-// Écran de revue de structure procédurale (Phase 25, `docs/convergence/
-// PHASE_25_ECRAN_REVUE_STRUCTURE_PROCEDURE_SPEC.md`, TD-023) — point
+// Écran de revue de structure procédurale — point
 // d'entrée humain pour `proposerStructureProcedureAvecRepli` (parseur
-// déterministe Phases 21-22, repli IA Phase 24 seulement si strictement
+// déterministe, repli IA seulement si strictement
 // rien trouvé). Aucune proposition n'est jamais écrite dans
-// `Procedure`/`ProcedureStep` sans confirmation explicite ici (TD-016) —
+// `Procedure`/`ProcedureStep` sans confirmation explicite ici —
 // l'humain retient/exclut chaque étape avant `confirmerProposition`.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { extraireTableauxDocx, extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
@@ -433,8 +432,8 @@ textarea {
   color: #1e40af;
 }
 
-/* Badge de confiance : même style que MissionWorkspace.vue (TD-010 —
-   jamais les jetons --vp-statut-* de qualification_status). */
+/* Badge de confiance : même style que MissionWorkspace.vue —
+   jamais les jetons --vp-statut-* de qualification_status. */
 .badge-confiance {
   display: inline-block;
   padding: 0.2rem 0.6rem;

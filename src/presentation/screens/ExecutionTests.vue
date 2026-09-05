@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Exécution d'un Test approuvé + preuves associées (Phases 7b/7c de
-// convergence architecturale) — écran manquant trouvé en simulant un vrai
+// Exécution d'un Test approuvé + preuves associées —
+// écran manquant trouvé en simulant un vrai
 // parcours de qualification de bout en bout (§5.31 CONTEXTE-REPRISE-SESSION.
 // md) : jusqu'ici, rédiger un protocole OQ était possible mais l'exécuter
 // formellement (résultat par étape, mesures, preuves, clôture avec

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Dossier vivant d'un actif (FS §3.9) — écran
+// Dossier vivant d'un actif — écran
 // manquant trouvé le 31/08/2026 en simulant une requalification
 // périodique réelle : le commentaire d'en-tête de `StructureSysteme.vue`
 // listait lui-même cette absence. **Périmètre de ce premier incrément** :
@@ -8,7 +8,7 @@
 // Assessment, Risk Assessment/AMDEC, Missions ancrées, Journal
 // d'anomalies, relations techniques) — jamais de section de gabarit liée
 // directement à un nœud (aucun champ ne porte ce lien dans le modèle
-// actuel, contrairement à ce que décrivait la FS §3.9 d'origine ; corrigé
+// actuel, contrairement à ce que décrivait la conception d'origine ; corrigé
 // honnêtement ici plutôt que simulé).
 //
 // Journal d'anomalies ajouté le 31/08/2026 (scénario 3, inspection

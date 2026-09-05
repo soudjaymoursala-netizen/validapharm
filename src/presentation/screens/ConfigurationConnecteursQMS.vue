@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Configuration des connecteurs QMS/documentaires tiers —
-// écran manquant trouvé le 31/08/2026 (FDS §12) : le type de
-// domaine `Connector` et sa table Dexie existent depuis la Phase 10, sans
+// écran manquant trouvé le 31/08/2026 : le type de
+// domaine `Connector` et sa table Dexie existent déjà, sans
 // jamais avoir eu de store ni d'écran. CRUD de configuration uniquement,
 // cf. `useConnecteursQMSStore.ts` pour le détail du périmètre.
 import { computed, onMounted, reactive, ref } from 'vue'

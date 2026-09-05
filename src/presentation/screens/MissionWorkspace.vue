@@ -1,12 +1,11 @@
 <script setup lang="ts">
-// Mission workspace (Phase 17, `docs/convergence/PHASE_17_MISSION_
-// WORKSPACE_SPEC.md`) — expose visuellement Mission/Activity (Phase 13),
-// ContextSnapshot (Phase 14) et le Reasoning Engine (Phase 15). Aucune
+// Mission workspace — expose visuellement Mission/Activity,
+// ContextSnapshot et le Reasoning Engine. Aucune
 // section Assessment/Requirement/Test/Evidence directement rattachée à la
 // Mission (voir spec §2 — appartient à `Strategy`, non construite).
 // L'état de confiance est volontairement affiché avec un style dédié,
-// jamais les jetons `--vp-statut-*` de `qualification_status` (TD-010 :
-// ne jamais confondre les deux concepts, y compris visuellement).
+// jamais les jetons `--vp-statut-*` de `qualification_status` —
+// ne jamais confondre les deux concepts, y compris visuellement.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { construireNarratifContexte } from '../../logique-metier/contexte/narratifContexteSnapshot'
 import type { EtatConfianceIA, Mission } from '../../logique-metier/domaine/types'
@@ -60,7 +59,7 @@ const dernierSnapshot = computed(() => {
 const elementsSnapshot = computed(() =>
   dernierSnapshot.value ? contextStore.elementsDuSnapshot(dernierSnapshot.value.id) : [],
 )
-/** Narratif OÙ/QUOI/COMMENT/POURQUOI-IMPACT (Phase 27, TD-025) — même fonction que celle consommée par le Reasoning Engine, jamais une seconde lecture divergente des mêmes éléments. */
+/** Narratif OÙ/QUOI/COMMENT/POURQUOI-IMPACT — même fonction que celle consommée par le Reasoning Engine, jamais une seconde lecture divergente des mêmes éléments. */
 const narratifContexte = computed(() =>
   construireNarratifContexte({
     items: elementsSnapshot.value,
@@ -415,7 +414,7 @@ section li {
 }
 
 /* Badge de confiance : style dédié, jamais les jetons --vp-statut-*
-   de qualification_status (TD-010). */
+   de qualification_status. */
 .badge-confiance {
   display: inline-block;
   padding: 0.2rem 0.6rem;

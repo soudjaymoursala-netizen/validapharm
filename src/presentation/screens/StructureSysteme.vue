@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Structure Système — référentiel d'actifs (FS §4.10). Hiérarchie
+// Structure Système — référentiel d'actifs. Hiérarchie
 // configurable + CRUD de nœuds avec absence de
 // cycle et unicité du code, relations techniques et statut
 // de qualification. Hors périmètre : graphe
@@ -29,8 +29,8 @@ const brouillonNoeud = reactive({ level_key: '', name: '', code: '', parent_id: 
 const resultatCreation = ref<ResultatActionNoeud | undefined>(undefined)
 const reparentageEnErreur = reactive<Record<string, string>>({})
 
-// --- Relations techniques (Phase 18) — logique déjà présente
-// dans le store depuis la Phase 18, jamais exposée à l'écran jusqu'ici
+// --- Relations techniques — logique déjà présente
+// dans le store, jamais exposée à l'écran jusqu'ici
 // (trouvé en simulant un vrai parcours de requalification, 31/08/2026).
 const LIBELLES_TYPE_RELATION: Record<TypeRelationTechnique, string> = {
   controle_par: 'est contrôlé par',
@@ -150,7 +150,7 @@ async function ajouterNiveau(): Promise<void> {
   brouillonNiveau.numbering_pattern = ''
 }
 
-// --- Import XLSX de la hiérarchie (Phase 36, TD-042) — lecteur natif
+// --- Import XLSX de la hiérarchie — lecteur natif
 // minimal (`jszip`+`DOMParser`, jamais une librairie Excel généraliste),
 // convention colonne=niveau documentée à l'utilisateur avant l'import.
 const resultatImport = ref<ResultatImportHierarchie | undefined>(undefined)

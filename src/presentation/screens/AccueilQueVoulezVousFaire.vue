@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// Écran d'accueil "Que voulez-vous faire ?" (Phase 16, `docs/convergence/
-// PHASE_16_COQUILLE_UX_SPEC.md` §3) — remplace la racine `/` occupée
+// Écran d'accueil "Que voulez-vous faire ?" — remplace la racine `/` occupée
 // jusqu'ici par le Tableau de bord (déplacé vers `/tableau-de-bord`,
 // même nom de route, aucune régression des liens existants). Cartes
 // d'action vers des capacités réellement construites — jamais une
