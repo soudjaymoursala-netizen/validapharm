@@ -7,14 +7,14 @@ import type {
 } from '../domaine/types'
 
 /**
- * Repli IA-assisté de structuration procédurale (Phase 24, TD-022) — pour
- * un document dont le parseur déterministe (Phases 21-22) ne trouve
+ * Repli IA-assisté de structuration procédurale — pour
+ * un document dont le parseur déterministe ne trouve
  * aucune structure exploitable (aucun en-tête numéroté, aucun tableau).
  * Confirmé nécessaire par 5 documents réels distincts déjà testés
  * (Sanofi, Ferring×2, IMA, Markem-Imaje couverts ; Nordson — en-têtes en
- * gras sans numérotation — non couvert, TD-021).
+ * gras sans numérotation — non couvert).
  *
- * **Garde-fou non négociable, inchangé (TD-016)** : le résultat n'est
+ * **Garde-fou non négociable, inchangé** : le résultat n'est
  * jamais écrit dans `Procedure`/`ProcedureStep` sans confirmation humaine
  * explicite via `useProcedureStore`.
  *
@@ -26,12 +26,12 @@ import type {
  * ancré dans la source est `'infere'` (le regroupement/étiquetage reste
  * une déduction du modèle, jamais vérifié point par point) — jamais
  * `'connu'`, réservé à une citation résolvant vers un objet du domaine
- * déjà persisté (Phase 15), absent ici puisque rien n'est encore
+ * déjà persisté, absent ici puisque rien n'est encore
  * confirmé.
  *
  * Protocole de sortie volontairement contraint (un marqueur par ligne,
- * jamais du JSON libre) — même discipline que `boucleRaisonnement.ts`
- * (Phase 15) : une sortie de forme libre serait plus difficile à parser
+ * jamais du JSON libre) — même discipline que `boucleRaisonnement.ts` :
+ * une sortie de forme libre serait plus difficile à parser
  * de façon déterministe et plus sujette à erreur silencieuse.
  */
 

@@ -5,15 +5,15 @@ export type ResultatValidationChamp = { valide: true } | { valide: false; messag
 const FORMAT_DATE_ISO = /^\d{4}-\d{2}-\d{2}$/
 
 /**
- * Valide une valeur saisie contre la définition de son champ (FDS §6) —
- * messages d'erreur exactement ceux de la table FDS §6, jamais un message
+ * Valide une valeur saisie contre la définition de son champ —
+ * messages d'erreur exactement ceux documentés, jamais un message
  * générique.
  *
- * @requirement FDS §6
+ * @requirement Validation de champ de gabarit
  *
  * Une valeur vide (`null`/`''`) est toujours valide ici, y compris pour un
  * champ `required` : le caractère obligatoire est une décision de
- * finalisation (FDS §3.3), pas une règle de saisie caractère par
+ * finalisation, pas une règle de saisie caractère par
  * caractère — cohérent avec le principe déjà appliqué à `calculerIPR`
  * ("valeurs vides → non calculé, jamais une erreur").
  */

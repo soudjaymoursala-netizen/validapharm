@@ -1,8 +1,8 @@
 /**
  * Contrat commun à tout fournisseur OCR/vision relayé par ce Worker
- * (TD-001, `docs/convergence/TECHNICAL_DECISIONS.md` : "un second Worker
- * sans état pour l'OCR/Document Intelligence, relais vers une API cloud
- * de vision, même pattern exact que le relais IA existant").
+ * ("un second Worker sans état pour l'OCR/Document Intelligence, relais
+ * vers une API cloud de vision, même pattern exact que le relais IA
+ * existant").
  *
  * Décision explicite de l'utilisateur (25/08/2026) : fournisseur initial
  * Azure AI Vision (Read API) — meilleur niveau gratuit (5000
@@ -14,7 +14,7 @@
  * seul un nouveau fichier `fournisseurs/*.ts` implémentant ce contrat est
  * nécessaire.
  */
-/** Un tableau reconstruit par un fournisseur capable de structure (Document Intelligence) — grille de cellules brutes, aucune interprétation ici (Phase 22, TD-020). */
+/** Un tableau reconstruit par un fournisseur capable de structure (Document Intelligence) — grille de cellules brutes, aucune interprétation ici. */
 export interface TableauOcr {
   lignes: string[][]
 }

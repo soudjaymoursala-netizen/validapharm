@@ -3,20 +3,20 @@ import type { DefinitionGabarit } from '../gabarits/definitionGabarit'
 import { construireDonneesExportGabarit, type DonneesExportGabarit } from './donneesExportGabarit'
 
 /**
- * Export Word (FS §4.3) — "document HTML structuré encapsulé
+ * Export Word — "document HTML structuré encapsulé
  * `.doc` (compatible Microsoft Word)". Technique volontaire et documentée
  * par la spec elle-même : pas un vrai binaire OOXML, un fichier HTML avec
  * les espaces de noms Word ouvert nativement par le filtre d'import HTML
  * de Word quand l'extension est `.doc` — aucune dépendance tierce.
  *
- * @requirement FS §4.3
+ * @requirement Export Word
  *
  * En-tête/statut en toutes lettres/historique de révisions/bloc de rôles
- * (exigés par FS §4.3) + rappel de transfert de responsabilité
+ * (exigés par la spec) + rappel de transfert de responsabilité
  * quand `valide_en_interne` — présent sur l'export au même
- * titre qu'à l'écran, jamais seulement l'un des deux (FS §4.2).
+ * titre qu'à l'écran, jamais seulement l'un des deux.
  *
- * Consomme `construireDonneesExportGabarit` (Phase 26, TD-024) — la même
+ * Consomme `construireDonneesExportGabarit` — la même
  * fonction que le générateur `.docx` réel au format gabarit client
  * (`connecteurs/office/GenerationDocxAdapter.ts`) : les deux renderers
  * reçoivent exactement les mêmes valeurs, ce qui garantit par construction

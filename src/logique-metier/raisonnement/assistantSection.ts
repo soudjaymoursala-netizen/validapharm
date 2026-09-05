@@ -1,16 +1,16 @@
 import type { Section } from '../domaine/types'
 
 /**
- * Construit l'objectif du Reasoning Engine (Phase 15) pour l'assistant
- * contextuel par section (Phase 38, Option 1 — TD-045).
+ * Construit l'objectif du Reasoning Engine pour l'assistant
+ * contextuel par section.
  *
- * @requirement docs/convergence/CONVERGENCE_PLAN.md Phase 38, TD-045
+ * @requirement Assistant contextuel par section
  *
  * La section n'est pas un objet interrogeable par le catalogue d'outils
  * existant (`Requirement`/`Test`/`AssetNode`/...) — plutôt que d'étendre ce
  * catalogue et les données chargées par `useReasoningEngineStore` pour un
  * seul objet, son contenu actuel est injecté directement dans le texte de
- * l'objectif, même idiome que le narratif de contexte (Phase 27) déjà
+ * l'objectif, même idiome que le narratif de contexte déjà
  * concaténé au prompt. `executerBoucleRaisonnement`/ses outils existants
  * (traçabilité, procédures, connaissance) restent pleinement disponibles
  * pour répondre à la question.

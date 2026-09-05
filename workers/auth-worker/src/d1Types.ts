@@ -1,5 +1,5 @@
 /**
- * Typage minimal du binding D1 (TD-046) — écrit à la main plutôt que
+ * Typage minimal du binding D1 — écrit à la main plutôt que
  * d'ajouter `@cloudflare/workers-types` comme dépendance : seule une
  * poignée de méthodes est réellement utilisée (`prepare`/`bind`/`first`/
  * `all`/`run`), même discipline que le reste de ce Worker (aucune

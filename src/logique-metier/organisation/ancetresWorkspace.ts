@@ -7,7 +7,7 @@ import type { Workspace } from '../domaine/types'
  * général). Garde anti-cycle : un id déjà visité arrête la remontée
  * plutôt que de boucler indéfiniment.
  *
- * Extrait de `resoudreRegleEffective` (Phase 11) pour être réutilisé par
+ * Extrait de `resoudreRegleEffective` pour être réutilisé par
  * tout consommateur ayant besoin de la même remontée d'arbre sans
  * dupliquer la logique — voir `CABLAGE_ETAPE_1_STRUCTURE_SYSTEME_SPEC.md`.
  */

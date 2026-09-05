@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { resoudreRegleEffective } from './resolutionEffective'
 
-/** Global -> Site A, Site B (scénario obligatoire "Global + N sites", CONVERGENCE_PLAN.md Phase 11). */
+/** Global -> Site A, Site B (scénario obligatoire "Global + N sites"). */
 function arbreGlobalPlusDeuxSites() {
   return new Map([
     ['global', { id: 'global', parent_workspace_id: null }],

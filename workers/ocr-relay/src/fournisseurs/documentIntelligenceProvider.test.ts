@@ -67,7 +67,7 @@ describe('DocumentIntelligenceProvider — soumission (202 + Operation-Location)
   })
 })
 
-describe('DocumentIntelligenceProvider — reconstruction de tableau (Phase 22, TD-020)', () => {
+describe('DocumentIntelligenceProvider — reconstruction de tableau', () => {
   test('reconstruit une grille dense à partir de la liste plate de cellules Azure', async () => {
     fetchMock
       .mockResolvedValueOnce({

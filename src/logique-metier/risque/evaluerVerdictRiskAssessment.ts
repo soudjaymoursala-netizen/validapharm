@@ -2,9 +2,8 @@ import type { ResultatIPR } from '../moteur-calcul/calculerIPR'
 import type { VerdictRiskAssessment } from '../domaine/types'
 
 /**
- * Moteur de décision Risk Assessment / AMDEC (Phase 29 de convergence
- * architecturale, TD-027) — compare un IPR déjà calculé (`calculerIPR`,
- * Phase 1, KEEP) au seuil d'action configuré par client
+ * Moteur de décision Risk Assessment / AMDEC — compare un IPR déjà
+ * calculé (`calculerIPR`, KEEP) au seuil d'action configuré par client
  * (`MethodProfileRiskAssessment.seuil_action`).
  *
  * Fonction pure déterministe — jamais déléguée à l'IA générative, même

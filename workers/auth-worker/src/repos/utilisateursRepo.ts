@@ -1,7 +1,7 @@
 import type { UtilisateurEnregistre } from '../types'
 
 /**
- * Dépôt utilisateurs — interface indépendante de D1 (TD-046), pour
+ * Dépôt utilisateurs — interface indépendante de D1, pour
  * pouvoir tester `routeur.ts` contre une implémentation en mémoire sans
  * dépendre du runtime Workers réel (même discipline que `ocrHandler.ts`
  * testé indépendamment du binding `env`).

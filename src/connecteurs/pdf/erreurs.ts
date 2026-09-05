@@ -1,5 +1,5 @@
 /**
- * Contrat d'erreur typé de l'ingestion PDF native (Phase 23, TD-021) —
+ * Contrat d'erreur typé de l'ingestion PDF native —
  * même principe que `connecteurs/office/erreurs.ts`/`connecteurs/ocr/
  * erreurs.ts` : jamais une exception générique pour un cas prévu par la
  * conception. Aucun réseau ici (parsing entièrement local via `pdfjs-dist`)

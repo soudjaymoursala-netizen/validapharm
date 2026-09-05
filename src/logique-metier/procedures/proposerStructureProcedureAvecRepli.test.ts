@@ -17,7 +17,7 @@ function providerMock(texteReponse: string): ProviderAdapter {
   }
 }
 
-describe('proposerStructureProcedureAvecRepli (Phase 25, TD-023)', () => {
+describe('proposerStructureProcedureAvecRepli', () => {
   it("n'appelle jamais le fournisseur IA quand le parseur déterministe trouve une structure", async () => {
     const texte = ['1 But', 'Décrire la procédure.', '2 Procédure', '- Étape unique.'].join('\n')
     const provider = providerMock('ETAPE|jamais utilisé')

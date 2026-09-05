@@ -1,13 +1,13 @@
 /**
- * Contrat d'erreur typé du routeur IA (SDS §6) — jamais une exception
+ * Contrat d'erreur typé du routeur IA — jamais une exception
  * générique pour un cas prévu par la conception.
  *
- * @requirement SDS §6 ("ajouté v02 — revue SDS, E5")
+ * @requirement Contrat d'erreur du routeur IA ("ajouté v02 — revue de conception, E5")
  *
- * Noms repris tels quels du texte de la SDS (mélange français/anglais
+ * Noms repris tels quels du texte de la conception interne (mélange français/anglais
  * assumé par la spec elle-même) — ne pas les franciser par cohérence
  * cosmétique avec les autres connecteurs, un auditeur qui compare le code
- * à la SDS doit retrouver exactement ces noms.
+ * à la documentation interne doit retrouver exactement ces noms.
  */
 
 /** Délai d'attente réseau dépassé — déclenche la bascule automatique vers le modèle local. */

@@ -1,7 +1,7 @@
 import type { QualificationFiabiliteIA } from '../domaine/types'
 
 /**
- * Depuis la Phase 32 (TD-030), `ClientConfig.ai_provider_reliability_
+ * `ClientConfig.ai_provider_reliability_
  * qualification` est indexé par mode d'usage — ce module
  * continue d'opérer sur **une** qualification à la fois, l'appelant
  * sélectionnant déjà l'entrée du bon mode avant d'appeler ces fonctions.
@@ -11,9 +11,9 @@ export type QualificationFiabilite = QualificationFiabiliteIA
 /**
  * Garde-fou non négociable : l'activation d'un fournisseur pour un usage
  * réel est bloquée tant qu'aucune qualification de fiabilité n'a été
- * consignée (FS §4.4, message U-05).
+ * consignée (§4.4, message U-05).
  *
- * @requirement mitige AR-R-33
+ * @requirement Mitigation du risque d'activation d'un fournisseur IA non qualifié
  */
 export function peutActiverFournisseur(qualification: QualificationFiabilite | null): boolean {
   return qualification !== null
@@ -25,10 +25,10 @@ export function peutActiverFournisseur(qualification: QualificationFiabilite | n
  * une qualification initiale ne se présume jamais valide indéfiniment
  * (dérive silencieuse possible côté fournisseur).
  *
- * @requirement mitige AR-R-37 (IPR=48)
+ * @requirement Mitigation du risque de dérive de version de fournisseur non détectée
  *
  * Compare `moteur_version_qualifiee` (version du **moteur** au moment de
- * la qualification, FS §3 v14) — jamais `qualification_test_set_version`
+ * la qualification, v14) — jamais `qualification_test_set_version`
  * (version du jeu de test, une notion distincte confondue par erreur dans
  * une version antérieure du schéma). Absence de version des deux côtés
  * (fournisseur n'exposant aucun identifiant) → pas de dérive détectable,
@@ -38,9 +38,9 @@ export function peutActiverFournisseur(qualification: QualificationFiabilite | n
  * Vérifie que les conditions de traitement des données du fournisseur
  * **actuellement configuré** ont bien été acquittées — jamais un accusé
  * générique valable pour n'importe quel fournisseur : changer de
- * fournisseur exige un nouvel accusé (FS §3 v15).
+ * fournisseur exige un nouvel accusé (v15).
  *
- * @requirement mitige AR-R-22
+ * @requirement Mitigation du risque d'accusé de traitement des données non spécifique au fournisseur
  */
 export function conditionsTraitementAcquittees(
   acquittement: { fournisseur: string; date: string } | null,

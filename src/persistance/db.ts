@@ -76,18 +76,18 @@ export interface EnregistrementVersionSchema {
 }
 
 /**
- * Profil utilisateur local (§4.31, TD-033) — enregistrement
+ * Profil utilisateur local (§4.31) — enregistrement
  * unique, pas par client (un seul poste, un seul utilisateur local, même
  * raisonnement que `EnregistrementConnexionGitHub`). Porte le verrou de
  * confirmation (mot de passe haché, jamais en clair — voir
  * `logique-metier/securite/verrouLocal.ts`) requis pour archiver un
  * client/projet, et l'identité déclarative (email/visa) écrite dans
  * `archived_by` — **pas** un compte, **pas** une authentification de
- * session, **pas** une signature électronique (TD-011/TD-033).
+ * session, **pas** une signature électronique.
  */
 export interface EnregistrementProfilLocal {
   id: 'unique'
-  /** Ajoutés en Phase 40 (§8.1 du prompt maître, écran Profil) — `null` pour un profil créé avant cette version. */
+  /** Ajoutés (§8.1 du prompt maître, écran Profil) — `null` pour un profil créé avant cette version. */
   nom: string | null
   prenom: string | null
   email: string
@@ -100,7 +100,7 @@ export interface EnregistrementProfilLocal {
 
 /**
  * Configuration de connexion au dépôt GitHub dédié —
- * enregistrement unique, pas par client : SDS §3 décrit un seul dépôt de
+ * enregistrement unique, pas par client : un seul dépôt de
  * données pour l'ensemble de l'installation locale (`/data/projects/...`),
  * pas un dépôt par client.
  */
@@ -114,7 +114,7 @@ export interface EnregistrementConnexionGitHub {
 
 /**
  * SHA de branche connu après la dernière synchronisation réussie —
- * nécessaire à la détection de conflit optimiste (SDS §5) : chaque
+ * nécessaire à la détection de conflit optimiste : chaque
  * `ecrireGroupe` doit connaître le SHA sur lequel il se base.
  */
 export interface EnregistrementEtatSynchronisation {
@@ -124,10 +124,10 @@ export interface EnregistrementEtatSynchronisation {
 }
 
 /**
- * Configuration de connexion au miroir Google Drive (SDS §5bis) — une par
+ * Configuration de connexion au miroir Google Drive — une par
  * client (`client_id`), jamais globale : contrairement à GitHub (un seul
  * dépôt pour toute l'installation), Drive est explicitement "le dossier
- * dédié du client" et les secrets sont isolés par `client_id` (SDS §7).
+ * dédié du client" et les secrets sont isolés par `client_id`.
  */
 export interface EnregistrementConnexionDrive {
   client_id: string
@@ -142,9 +142,9 @@ export interface EnregistrementEtatMiroirDrive {
 }
 
 /**
- * Configuration de connexion au relais IA (SDS §10quater) — enregistrement
+ * Configuration de connexion au relais IA — enregistrement
  * unique, pas par client : un seul relais serverless pour toute
- * l'installation (même raisonnement que GitHub, SDS §3) ; c'est
+ * l'installation (même raisonnement que GitHub) ; c'est
  * `client_config.ai_provider` (par client) qui détermine quel fournisseur
  * le relais sélectionne pour une requête donnée, pas l'URL du relais
  * elle-même.
@@ -156,10 +156,9 @@ export interface EnregistrementConnexionRelaisIA {
 }
 
 /**
- * Configuration de connexion au relais OCR (TD-001, `docs/convergence/
- * TECHNICAL_DECISIONS.md`) — même principe que le relais IA :
- * enregistrement unique, pas par client, un seul Worker serverless pour
- * toute l'installation.
+ * Configuration de connexion au relais OCR — même principe que le relais
+ * IA : enregistrement unique, pas par client, un seul Worker serverless
+ * pour toute l'installation.
  */
 export interface EnregistrementConnexionRelaisOCR {
   id: 'unique'
@@ -168,10 +167,10 @@ export interface EnregistrementConnexionRelaisOCR {
 }
 
 /**
- * Configuration de connexion au Worker d'authentification (TD-046,
- * `docs/convergence/TECHNICAL_DECISIONS.md`) — même principe que le relais
- * IA/OCR : enregistrement unique, pas par client, un seul Worker
- * serverless pour toute l'installation. Contrairement aux autres relais,
+ * Configuration de connexion au Worker d'authentification — même principe
+ * que le relais IA/OCR : enregistrement unique, pas par client, un seul
+ * Worker serverless pour toute l'installation. Contrairement aux autres
+ * relais,
  * ne porte jamais de jeton d'accès permanent : le jeton de session
  * (`useAuthStore`) est obtenu dynamiquement via `/auth/login`, jamais
  * stocké ici.
@@ -182,7 +181,7 @@ export interface EnregistrementConnexionAuthentification {
 }
 
 /**
- * Session d'authentification persistée (TD-046) — jeton JWT + copie du
+ * Session d'authentification persistée — jeton JWT + copie du
  * profil public de l'utilisateur connecté, pour survivre à un rechargement
  * de page sans devoir se reconnecter à chaque fois. Le jeton expire côté
  * serveur (12h, `workers/auth-worker/src/jwt.ts`) — une copie expirée ici
@@ -204,12 +203,12 @@ export interface EnregistrementSessionAuthentification {
 }
 
 /**
- * Cache local IndexedDB (SDS §3) — miroir de performance/hors-ligne,
+ * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
- * type d'enregistrement, alignée sur l'arborescence `/data` documentée en
- * SDS §3.
+ * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
+ * la conception interne.
  *
- * @requirement SDS §3
+ * @requirement Cache local IndexedDB
  */
 export class ValidaPharmDatabase extends Dexie {
   clients!: EntityTable<Client, 'id'>
@@ -373,7 +372,7 @@ export class ValidaPharmDatabase extends Dexie {
       contentPlans: 'id, client_id, template_id, asset_node_id, process_id, statut',
     })
     /**
-     * Réalignement Phase 8a (25/08/2026) sur le vrai modèle cible après
+     * Réalignement (25/08/2026) sur le vrai modèle cible après
      * lecture directe du package source : Source → SourceVersion →
      * Extraction → ExtractionItem → KnowledgeItem, pas Source → Extraction
      * → KnowledgeItem. `extractions`/`knowledgeItems` redéclarés avec leurs
@@ -395,7 +394,6 @@ export class ValidaPharmDatabase extends Dexie {
       externalReferences: 'id, client_id, connector_id',
     })
     /**
-     * Phase 11 (`docs/convergence/PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`) —
      * `organizations.id` reprend l'`id` du `Client` migré : aucune des
      * tables `client_id` existantes n'est renommée ni migrée ici.
      */
@@ -414,8 +412,7 @@ export class ValidaPharmDatabase extends Dexie {
       assetNodes: 'id, client_id, parent_id, code, workspace_id',
     })
     /**
-     * Phase 13 (`docs/convergence/PHASE_13_MISSION_ACTIVITY_SPEC.md`) —
-     * domaine "Work" : `Mission`/`Activity` seulement (TD-009).
+     * Domaine "Work" : `Mission`/`Activity` seulement.
      */
     this.version(21).stores({
       missions: 'id, client_id, workspace_id, asset_node_id, statut',
@@ -424,8 +421,7 @@ export class ValidaPharmDatabase extends Dexie {
       dependencies: 'id, client_id, activity_source_id, activity_cible_id',
     })
     /**
-     * Phase 14 (`docs/convergence/PHASE_14_CONTEXT_ENGINE_SPEC.md`) —
-     * domaine "Context" : `ContextSnapshot` généralisé, réutilisable par
+     * Domaine "Context" : `ContextSnapshot` généralisé, réutilisable par
      * toute `Mission` (jusqu'ici câblé sur le seul store Structure Système).
      */
     this.version(22).stores({
@@ -433,9 +429,8 @@ export class ValidaPharmDatabase extends Dexie {
       contextSnapshotItems: 'id, client_id, context_snapshot_id, type_objet, objet_id',
     })
     /**
-     * Phase 15 (`docs/convergence/PHASE_15_REASONING_ENGINE_SPEC.md`) —
-     * domaine "AI" : `AIConfiguration`/`AIRequest`/`AIResponse` +
-     * `CitationAIResponse` (jointure polymorphe). TD-007/TD-008.
+     * Domaine "AI" : `AIConfiguration`/`AIRequest`/`AIResponse` +
+     * `CitationAIResponse` (jointure polymorphe).
      */
     this.version(23).stores({
       aiConfigurations: 'id, client_id, version',
@@ -444,17 +439,15 @@ export class ValidaPharmDatabase extends Dexie {
       citationsAIResponse: 'id, client_id, ai_response_id, type_objet_cite, objet_id',
     })
     /**
-     * Phase 18 (`docs/convergence/PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md`,
-     * TD-013) — domaine "Architecture Technique" : relation typée et
+     * Domaine "Architecture Technique" : relation typée et
      * dirigée entre deux `AssetNode` existants (aucune nouvelle entité
-     * d'équipement, voir TD-013).
+     * d'équipement).
      */
     this.version(24).stores({
       relationsTechniques: 'id, client_id, type_relation, noeud_source_id, noeud_cible_id',
     })
     /**
-     * Phase 20 (`docs/convergence/PHASE_20_PROCEDURAL_KNOWLEDGE_SPEC.md`,
-     * TD-016) — domaine "Procedure" : structuration humaine versionnée
+     * Domaine "Procedure" : structuration humaine versionnée
      * d'une SOP (`reference`+`numero_version`, même patron que
      * `SourceVersion`), aucune extraction automatique de structure.
      */
@@ -463,16 +456,14 @@ export class ValidaPharmDatabase extends Dexie {
       procedureSteps: 'id, client_id, procedure_id, ordre',
     })
     /**
-     * Phase 26 (`docs/convergence/PHASE_26_GABARITS_EXPORT_CLIENT_SPEC.md`,
-     * TD-024) — gabarits d'export `.docx` personnalisés par client,
+     * Gabarits d'export `.docx` personnalisés par client,
      * isolés par `client_id`.
      */
     this.version(26).stores({
       gabaritsExportClient: 'id, client_id, nom',
     })
     /**
-     * Phase 29 (`docs/convergence/PHASE_29_RISK_ASSESSMENT_AMDEC_SPEC.md`,
-     * TD-027) — Risk Assessment (AMDEC) autonome, méthodologie versionnée
+     * Risk Assessment (AMDEC) autonome, méthodologie versionnée
      * par client, corrigeant la dette "AMDEC non autonome" documentée
      * depuis `CURRENT_ARCHITECTURE.md`/`LEGACY_MAPPING.md`.
      */
@@ -481,7 +472,7 @@ export class ValidaPharmDatabase extends Dexie {
       risksAssessment: 'id, client_id, method_profile_id, asset_node_id, parameter_id, created_at',
     })
     /**
-     * §4.31 (TD-033) — profil utilisateur local (verrou de
+     * §4.31 — profil utilisateur local (verrou de
      * confirmation pour l'archivage de client/projet) + champs additifs
      * `statut`/`archived_at`/`archived_by` sur `clients`/`projects` (non
      * indexés : le volume par installation reste modeste, filtrage
@@ -496,8 +487,7 @@ export class ValidaPharmDatabase extends Dexie {
       profilLocal: 'id',
     })
     /**
-     * Phase 39 (TD-046, `docs/convergence/TECHNICAL_DECISIONS.md`) —
-     * authentification réelle multi-utilisateur (Cloudflare Worker + D1) :
+     * Authentification réelle multi-utilisateur (Cloudflare Worker + D1) :
      * enregistrement de l'URL du Worker, même patron que
      * `connexionRelaisIA`/`connexionRelaisOCR`. `clients` reste déclarée
      * ci-dessus pour compatibilité descendante (anciens enregistrements

@@ -1,14 +1,14 @@
 import type { Langue, StatutSection } from '../domaine/types'
 
 /**
- * Libellés de statut de section (FS §4.2) — jamais le nom technique brut
+ * Libellés de statut de section (§4.2) — jamais le nom technique brut
  * de l'enum affiché tel quel à l'utilisateur.
  *
- * @requirement mitige AR-R-14
+ * @requirement Mitigation du risque d'un libellé de statut ambigu pour l'utilisateur
  *
  * **Garde-fou non négociable** : `valide_en_interne` DOIT toujours
  * afficher le rappel "pas une signature électronique opposable", **à
- * l'écran ET sur les exports, jamais raccourci** (FS §4.2/§4.3) — jamais
+ * l'écran ET sur les exports, jamais raccourci** (§4.2/§4.3) — jamais
  * seulement "Validé en interne" seul, qui laisserait croire à tort à une
  * validation réglementaire opposable.
  *

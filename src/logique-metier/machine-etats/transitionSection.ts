@@ -34,11 +34,11 @@ export type ResultatTransition =
  *
  * @param contexte État courant de la section et disponibilité des garde-fous.
  * @param action Action demandée par l'utilisateur.
- * @requirement FDS §3.2
+ * @requirement Transitions du cycle de vie de section
  *
- * Interprétation retenue pour la garde "rôles renseignés" (FDS §3.2) —
+ * Interprétation retenue pour la garde "rôles renseignés" —
  * décision d'implémentation à confirmer en revue : le
- * diagramme FDS §3.2 place cette garde sur la toute première transition
+ * diagramme de conception interne place cette garde sur la toute première transition
  * (`brouillon_aide` → `en_verification`, action "Engager le cycle"), pas
  * sur le seul passage à `en_approbation` comme le texte de l'exigence pourrait
  * le laisser croire isolément — retenu ici que rédacteur(s) et approbateur
@@ -82,7 +82,7 @@ function transitionDepuisProposeParIA(
   _contexte: ContexteTransition,
   action: ActionSection,
 ): ResultatTransition {
-  // Règle de conception non négociable (FDS §3.2) : ce statut ne peut
+  // Règle de conception non négociable : ce statut ne peut
   // jamais transiter directement vers en_verification/en_approbation/
   // valide_en_interne — uniquement retour à brouillon_aide, une fois la
   // section explicitement validée/éditée par l'utilisateur.

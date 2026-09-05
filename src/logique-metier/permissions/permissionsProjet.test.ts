@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { peutModifierProjet } from './permissionsProjet'
 
-describe('peutModifierProjet (Phase 37, TD-044)', () => {
+describe('peutModifierProjet', () => {
   test('le propriétaire peut toujours modifier', () => {
     expect(peutModifierProjet({ owner_id: 'alice@ex.com', shared_with: [] }, 'alice@ex.com')).toBe(
       true,

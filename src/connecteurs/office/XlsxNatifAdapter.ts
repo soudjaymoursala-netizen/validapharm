@@ -4,9 +4,8 @@ import { DocumentInvalideError } from './erreurs'
 const ESPACE_NOMS_SPREADSHEET = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
 
 /**
- * Ingestion native d'un classeur `.xlsx` (Phase 36 de convergence
- * architecturale — résolution partielle de TD-014, `TECHNICAL_DECISIONS.md`
- * TD-042) : bloquée jusqu'ici faute de librairie saine (`xlsx`/SheetJS
+ * Ingestion native d'un classeur `.xlsx` : bloquée jusqu'ici faute de
+ * librairie saine (`xlsx`/SheetJS
  * porte une vulnérabilité haute sans correctif sur le registre npm ;
  * `exceljs` introduit une dépendance transitive vulnérable — voir le
  * commentaire de `MethodeExtraction` dans `domaine/types.ts`).
@@ -29,7 +28,7 @@ const ESPACE_NOMS_SPREADSHEET = 'http://schemas.openxmlformats.org/spreadsheetml
  * - aucune macro VBA (`vbaProject.bin`), aucun objet OLE, aucun lien
  *   externe n'est jamais ouvert ou suivi.
  *
- * @requirement docs/convergence/TECHNICAL_DECISIONS.md TD-042
+ * @requirement Ingestion Office native (.xlsx)
  */
 export interface GrilleXlsx {
   lignes: string[][]

@@ -46,7 +46,7 @@ function candidatTest(
   }
 }
 
-describe('evaluerCouvertureRisques (Phase 35, TD-036)', () => {
+describe('evaluerCouvertureRisques', () => {
   test('un risque action_requise sans candidat est non_couvert', () => {
     const resultat = evaluerCouvertureRisques({ asset_node_id: 'noeud-1' }, [risqueTest()], [])
     expect(resultat).toEqual([

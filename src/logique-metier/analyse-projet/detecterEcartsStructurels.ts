@@ -1,7 +1,7 @@
 import type { LienProjet, TemplateType } from '../domaine/types'
 
 /**
- * Analyse de documents et challenge de dossier (§4.8, Phase 34, TD-032) —
+ * Analyse de documents et challenge de dossier (§4.8) —
  * détection **déterministe** des écarts structurels d'un projet, jamais un
  * appel IA. Répond à la partie de l'exigence réellement grounded dans le
  * modèle de données existant : une section "exigence URS" (gabarit `urs`)

@@ -6,7 +6,7 @@ import {
 } from './erreurs'
 
 export interface ConfigOcrRelayAdapter {
-  /** URL du relais serverless OCR (TD-001, Cloudflare Workers) — jamais une API de vision directement. */
+  /** URL du relais serverless OCR (Cloudflare Workers) — jamais une API de vision directement. */
   relayUrl: string
   jeton?: string
   /** Délai d'attente réseau en ms avant `TimeoutError` (défaut 45s — une extraction OCR asynchrone côté fournisseur peut prendre du temps, cf. `workers/ocr-relay`). */
@@ -22,13 +22,12 @@ export interface ResultatExtractionOcr {
 const DELAI_MAX_PAR_DEFAUT_MS = 45_000
 
 /**
- * Adaptateur client du relais OCR (TD-001, `docs/convergence/
- * TECHNICAL_DECISIONS.md`) — même principe que `RelayProviderAdapter`
+ * Adaptateur client du relais OCR — même principe que `RelayProviderAdapter`
  * (connecteurs/ia) : n'appelle jamais un fournisseur de vision cloud
  * directement, uniquement le relais serverless sans état qui masque la
  * clé API et l'identité du fournisseur relayé.
  *
- * @requirement TD-001
+ * @requirement Adaptateur client du relais OCR
  */
 export class OcrRelayAdapter {
   private readonly delaiMaxMs: number

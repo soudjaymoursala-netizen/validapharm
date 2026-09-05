@@ -10,9 +10,9 @@ import { proposerStructureProcedureParIA } from './proposerStructureProcedureIA'
 import { proposerStructureProcedure } from './parseurStructureProcedure'
 
 /**
- * Orchestration du repli (Phase 25, TD-023) : essaie d'abord le parseur
- * déterministe (Phases 21-22, aucun appel IA), et n'invoque le repli
- * IA-assisté (Phase 24, TD-022) que si celui-ci ne trouve **strictement
+ * Orchestration du repli : essaie d'abord le parseur
+ * déterministe (aucun appel IA), et n'invoque le repli
+ * IA-assisté que si celui-ci ne trouve **strictement
  * rien d'exploitable** — aucune section, aucune étape. Un résultat
  * partiel du parseur déterministe (ex. sections trouvées mais aucune
  * étape) reste tel quel : mélanger silencieusement les deux sources sur

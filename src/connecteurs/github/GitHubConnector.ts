@@ -10,7 +10,7 @@ import {
 export interface ConfigGitHubConnector {
   owner: string
   repo: string
-  /** Branche protégée servant de source de vérité (SDS §5). */
+  /** Branche protégée servant de source de vérité. */
   branche?: string
   jeton: string
   /** Délai d'attente réseau en ms avant `TimeoutError` (défaut 15s). */
@@ -42,13 +42,13 @@ const DELAI_MAX_PAR_DEFAUT_MS = 15_000
 const VERSION_API = '2022-11-28'
 
 /**
- * Connecteur GitHub (SDS §5) — seul point d'accès à la source de vérité.
+ * Connecteur GitHub — seul point d'accès à la source de vérité.
  * Aucun binaire `git`, aucun accès disque : exclusivement l'API REST
  * GitHub via `fetch` (conventions §2).
  *
- * @requirement SDS §5, AR-R-34, AR-R-63
+ * @requirement Mitigation des risques de conflit d'écriture et de quota API dépassé
  *
- * Stratégie d'appels délibérément alignée sur SDS §5/09-architecture-
+ * Stratégie d'appels délibérément alignée sur 09-architecture-
  * detaillee.md §5 : lecture en masse via l'API Git Trees (un seul appel
  * pour l'arborescence complète) plutôt qu'un appel par fichier, écriture
  * groupée via l'API Git Data (blob+arbre+commit, nombre d'appels constant
@@ -86,7 +86,7 @@ export class GitHubConnector {
   /**
    * Arborescence complète du dépôt en un seul appel (API Git Trees,
    * `recursive=1`) — à comparer au cache local par SHA pour ne récupérer
-   * que les fichiers réellement changés (SDS §5).
+   * que les fichiers réellement changés.
    */
   async chargerArborescence(): Promise<EntreeArborescence[]> {
     const reponse = await this.appel(
@@ -112,11 +112,11 @@ export class GitHubConnector {
   /**
    * Écriture groupée atomique (API Git Data : blob par fichier changé,
    * un arbre, un commit, une mise à jour de référence) — nombre d'appels
-   * constant indépendant du nombre de fichiers (SDS §5, AR-R-63).
+   * constant indépendant du nombre de fichiers.
    *
    * @param fichiers Fichiers à écrire (chemin + contenu complet).
    * @param shaBrancheAttendu SHA de la branche au moment de la dernière lecture (concurrence optimiste).
-   * @param message Message de commit — encodage `{type} {ref} {action}` à la charge de l'appelant (SDS §3).
+   * @param message Message de commit — encodage `{type} {ref} {action}` à la charge de l'appelant.
    * @throws ConflitShaError si la branche a changé depuis `shaBrancheAttendu` (avant ou pendant l'écriture).
    */
   async ecrireGroupe(

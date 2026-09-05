@@ -3,7 +3,7 @@ import { signerJwt, verifierJwt } from './jwt'
 
 const SECRET = 'secret-de-test-jamais-en-production'
 
-describe('jwt — HS256 minimal (TD-046)', () => {
+describe('jwt — HS256 minimal', () => {
   test('un jeton signé se vérifie avec le même secret et porte le bon payload', async () => {
     const jeton = await signerJwt({ sub: 'user-1', email: 'q@example.com', role: 'admin' }, SECRET)
     const payload = await verifierJwt(jeton, SECRET)

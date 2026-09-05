@@ -19,7 +19,7 @@ import type { FournisseurOcr, ResultatExtractionOcr } from './FournisseurOcr'
  *
  * Aucune donnée n'est conservée par ce fournisseur au-delà du traitement
  * de la requête en cours (principe d'absence d'état appliqué par
- * analogie au relais OCR, TD-001) — le sondage interroge Azure lui-même,
+ * analogie au relais OCR) — le sondage interroge Azure lui-même,
  * ce Worker ne persiste rien de son côté.
  */
 export interface ConfigAzureVisionProvider {

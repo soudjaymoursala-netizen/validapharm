@@ -7,8 +7,7 @@ import type {
 } from '../domaine/types'
 
 /**
- * Parseur déterministe de structure de SOP — Phase 21,
- * `PHASE_21_PARSEUR_STRUCTURE_PROCEDURE_SPEC.md` (TD-017, étendu TD-018).
+ * Parseur déterministe de structure de SOP.
  *
  * Aucun appel IA. Calibré et testé sur trois SOP pharma réelles de clients
  * différents, lues intégralement dans Google Drive :
@@ -18,8 +17,8 @@ import type {
  * - IMA "4915BRP"/"LA1028BRP" (procédures Back-up/Restore PLC/PC, pour
  *   Ferring) — genre différent, sans plan qualité ("1. INTRODUCTION",
  *   "2. PLC Procedures", "2.1. Pre-requisites", étapes en texte simple
- *   sans puce ni numéro) : a motivé l'extension TD-018 (reconnaissance
- *   par mot-clé, repli ligne-par-ligne, contexte de sous-titre).
+ *   sans puce ni numéro) : a motivé l'ajout d'une reconnaissance
+ *   par mot-clé, d'un repli ligne-par-ligne et d'un contexte de sous-titre.
  *
  * **Limite assumée et documentée (pas un échec silencieux)** : sur un
  * genre encore différent (ex. instruction technique illustrée par
@@ -28,7 +27,7 @@ import type {
  * en sections `'autre'` à partir de lignes de tableau numérotées — choix
  * assumé de favoriser le rappel (rien n'est perdu silencieusement) sur la
  * précision, puisque le résultat reste une proposition soumise à
- * confirmation humaine, jamais une vérité auto-validée (garde-fou TD-016).
+ * confirmation humaine, jamais une vérité auto-validée.
  */
 
 function normaliser(texte: string): string {
@@ -79,7 +78,7 @@ const DICTIONNAIRE_SECTIONS: Record<string, SectionCanoniqueProcedure> = {
 }
 
 /**
- * Repli par mot-clé (Phase 21 extension, TD-018) : quand le titre complet
+ * Repli par mot-clé : quand le titre complet
  * ne correspond à aucune entrée exacte du dictionnaire, un mot fort à
  * l'intérieur du titre suffit — ex. "PLC Procedures"/"PC Procedures (for
  * HMI ima xface)" (SOP IMA réelle) contiennent "Procedures" sans jamais
@@ -112,7 +111,7 @@ function resoudreCanon(titreCandidat: string): SectionCanoniqueProcedure | null 
 /** En-tête top-level "N. Titre" / "N Titre" — exclut "5.1. Titre" (sous-section) car aucun espace ne suit immédiatement le premier nombre dans ce cas. */
 const RE_TITRE_NUMEROTE = /^(\d{1,2})\.?\s+(.{1,78})$/
 
-/** Sous-titre à deux ou trois niveaux ("2.1 Pre-requisites", "6.2.1 Approche C&Q") — jamais une nouvelle section, sert seulement de contexte pour les étapes qui suivent (Phase 21 extension, TD-018). */
+/** Sous-titre à deux ou trois niveaux ("2.1 Pre-requisites", "6.2.1 Approche C&Q") — jamais une nouvelle section, sert seulement de contexte pour les étapes qui suivent. */
 const RE_SOUS_TITRE = /^\d{1,2}\.\d{1,2}(?:\.\d{1,2})?\.?\s+(.{1,78})$/
 
 /** Ligne d'énumération candidate à devenir une étape ("- ", "• ", "* " ou "N. "). */
@@ -125,7 +124,7 @@ const RE_RESPONSABLE = /^([A-ZÀ-Ü][A-Za-zÀ-ÿ ]{1,30})\s*:\s*/
 
 /**
  * Segmente un texte brut de SOP (déjà extrait via `extraireTexteDocx` ou
- * l'OCR, Phases 19/6) en sections à rôle sémantique connu. Retourne un
+ * l'OCR) en sections à rôle sémantique connu. Retourne un
  * tableau vide si aucun en-tête reconnu n'est trouvé — jamais une erreur,
  * jamais une section inventée.
  */
@@ -255,11 +254,12 @@ const LIBELLES_PRECONDITION_TABLEAU: Record<string, string> = {
 
 /**
  * Propose des étapes candidates à partir de tableaux extraits d'un
- * `.docx` (`extraireTableauxDocx`, Phase 22, TD-019) — genre "étapes sous
+ * `.docx` (`extraireTableauxDocx`) — genre "étapes sous
  * tableau" (manuel équipement Markem-Imaje réel : "Previous achievement"/
  * "Required time" en préconditions, puis une ligne par étape numérotée
  * en première colonne, instruction en deuxième), laissé hors couverture
- * par TD-017/TD-018 (texte à en-têtes numérotés uniquement).
+ * par le parseur de texte à en-têtes numérotés (`proposerStructureProcedure`,
+ * qui ne couvre que le texte à en-têtes numérotés).
  *
  * Une ligne est une étape candidate seulement si sa première cellule est
  * *exactement* un nombre — jamais un texte partiellement numérique deviné
@@ -306,9 +306,9 @@ export function proposerEtapesDepuisTableaux(tableaux: readonly TableauDocx[]): 
  * Propose une structure (sections + étapes candidates) à partir du texte
  * brut d'une SOP — jamais écrite en base : une simple proposition que
  * l'humain édite/confirme via `useProcedureStore.creerProcedure`/
- * `ajouterEtape` (TD-016, TD-017).
+ * `ajouterEtape`.
  *
- * Extraction d'étapes à deux niveaux (Phase 21 extension, TD-018) :
+ * Extraction d'étapes à deux niveaux :
  * les lignes à puce/numéro explicites (`- `, `• `, `N. `) sont utilisées
  * en priorité (haute confiance). Si une section "procédure" n'en contient
  * *aucune* — cas réel observé sur une SOP IMA où chaque instruction est
@@ -318,7 +318,7 @@ export function proposerEtapesDepuisTableaux(tableaux: readonly TableauDocx[]): 
  * est réelle mais moins formatée. Toujours une proposition, jamais une
  * vérité auto-validée.
  *
- * `tableaux` (Phase 22, TD-019, optionnel) : étapes candidates
+ * `tableaux` (optionnel) : étapes candidates
  * supplémentaires extraites de tableaux `.docx` (`extraireTableauxDocx`)
  * — un canal structurellement distinct du texte, jamais fusionné avec
  * la numérotation des étapes textuelles (chaque tableau réel garde sa

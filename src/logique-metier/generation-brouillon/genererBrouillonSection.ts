@@ -9,12 +9,11 @@ import type { Langue, Section } from '../domaine/types'
 
 /**
  * Génération de brouillon par adaptation d'un document de référence
- * (§4.1bis, Phase 33, TD-031 ; étendue Phase 38 Option 2,
- * TD-045, aux lignes de tableau dynamique).
+ * (§4.1bis ; étendue aux lignes de tableau dynamique).
  *
  * Fonction pure côté client (aucune logique métier dans le prompt lui-même
  * n'est déléguée à l'IA au-delà de la proposition de valeurs) — même
- * discipline que `proposerStructureProcedureParIA` (Phase 24) : protocole
+ * discipline que `proposerStructureProcedureParIA` : protocole
  * de sortie contraint (un marqueur par ligne, jamais du JSON libre) et
  * **aucune valeur proposée n'est acceptée sans revalider contre la
  * définition du champ** (`validerChamp`, déjà utilisé par l'écran de
@@ -22,16 +21,16 @@ import type { Langue, Section } from '../domaine/types'
  * hors format, un nombre hors plage sont silencieusement rejetés plutôt que
  * d'écrire un état que l'écran de saisie manuelle refuserait lui-même.
  *
- * **Lignes de tableau dynamique (Phase 38, TD-045)** : proposées
+ * **Lignes de tableau dynamique** : proposées
  * uniquement pour un tableau **actuellement vide** (`tablesExistantes`) —
  * jamais un ajout à des lignes déjà saisies, même discipline que les
  * champs scalaires ("déjà saisi → jamais écrasé"). Nombre de lignes
  * plafonné (`NOMBRE_MAX_LIGNES_PAR_TABLEAU`) — limite le risque
  * d'hallucination sur un nombre de lignes non contraint identifié comme
- * limite assumée de la Phase 33. Une ligne dont une seule cellule échoue
+ * limite assumée. Une ligne dont une seule cellule échoue
  * `validerChamp` est rejetée entièrement — jamais une ligne partielle.
  *
- * @requirement FS §4.1bis, FS §4.1bis (Phase 38)
+ * @requirement §4.1bis
  */
 
 const NOMBRE_MAX_LIGNES_PAR_TABLEAU = 20
@@ -41,7 +40,7 @@ export interface EntreesGenerationBrouillon {
   texteDocumentReference: string
   contexteNouveauCas: string
   langue: Langue
-  /** Tables déjà présentes sur la section — détermine quels tableaux sont adressables (Phase 38). */
+  /** Tables déjà présentes sur la section — détermine quels tableaux sont adressables. */
   tablesExistantes: Section['tables']
 }
 
@@ -92,7 +91,7 @@ function champsAdressables(gabarit: DefinitionGabarit): ChampAdressable[] {
   )
 }
 
-/** Un tableau n'est adressable que s'il ne porte encore aucune ligne (Phase 38) — jamais un ajout. */
+/** Un tableau n'est adressable que s'il ne porte encore aucune ligne — jamais un ajout. */
 function tableauxAdressables(
   gabarit: DefinitionGabarit,
   tablesExistantes: Section['tables'],

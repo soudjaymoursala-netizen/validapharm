@@ -1,5 +1,5 @@
 /**
- * Types du Worker d'authentification (TD-046) — délibérément séparés des
+ * Types du Worker d'authentification — délibérément séparés des
  * types domaine du frontend (`src/logique-metier/domaine/types.ts`) : ce
  * Worker est un déploiement indépendant (comme `workers/ocr-relay/`),
  * jamais couplé au bundle de la PWA.

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { genererSel, hacherMotDePasse, verifierMotDePasse } from './motDePasse'
 
-describe('motDePasse — PBKDF2-SHA-256 (TD-046)', () => {
+describe('motDePasse — PBKDF2-SHA-256', () => {
   test('genererSel produit un sel hexadécimal de 32 caractères (16 octets), jamais identique deux fois', () => {
     const sel1 = genererSel()
     const sel2 = genererSel()

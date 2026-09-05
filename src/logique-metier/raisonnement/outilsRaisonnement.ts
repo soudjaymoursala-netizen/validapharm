@@ -16,21 +16,21 @@ import type {
 import type { DefinitionOutilRaisonnement } from './protocoleRaisonnement'
 
 /**
- * Outils de lecture du moteur de raisonnement (Phase 15, spec §3) —
+ * Outils de lecture du moteur de raisonnement (spec §3) —
  * fonctions pures opérant sur des données déjà chargées par l'appelant
  * (`useReasoningEngineStore`), jamais d'accès direct à la base, même
- * discipline que `assemblerElementsContextSnapshot` (Phase 14).
+ * discipline que `assemblerElementsContextSnapshot`.
  *
  * `Risk`/`Hazard`/`Control` (domaine Quality cible) volontairement
  * absents : non construits dans ce projet à ce jour.
  *
- * `assetNodes`/`relationsTechniques` (Phase 18, TD-013) : outillent la
+ * `assetNodes`/`relationsTechniques` : outillent la
  * traversée de l'Architecture Technique (Equipment→PLC→SCADA→Server).
  *
- * `procedures`/`procedureSteps` (Phase 20, TD-016) : outillent la
+ * `procedures`/`procedureSteps` : outillent la
  * lecture d'une procédure structurée par un humain (cerveau procédural).
  *
- * `knowledgeRelations` (Phase 31, TD-029) : second consommateur réel du
+ * `knowledgeRelations` : second consommateur réel du
  * parcours générique `parcourirGraphe` (Knowledge Graph), aux côtés de
  * `relationsTechniques`.
  */
@@ -127,8 +127,7 @@ export function tracerChaineTechnique(
 /**
  * Résout la version la plus récente d'une `reference` (numéro le plus
  * élevé) puis retourne ses étapes dans l'ordre — jamais une version
- * arbitraire, même discipline que `useProcedureStore.derniereVersion`
- * (Phase 20).
+ * arbitraire, même discipline que `useProcedureStore.derniereVersion`.
  */
 export function listerEtapesProcedure(
   reference: string,

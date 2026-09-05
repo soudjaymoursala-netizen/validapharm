@@ -1,11 +1,11 @@
 /**
- * Contrat commun à tous les fournisseurs IA (SDS §6) — Claude, OpenAI,
+ * Contrat commun à tous les fournisseurs IA — Claude, OpenAI,
  * Copilot, DeepSeek, modèle local (Ollama) implémentent tous cette même
  * interface. Aucune logique de routage ne doit dépendre du fournisseur
  * spécifique au-delà du choix de l'adaptateur actif
  * (`client_config.ai_provider`).
  *
- * @requirement SDS §6
+ * @requirement Contrat commun des fournisseurs IA
  */
 
 export type ModeUsageIA = 'chat_normatif' | 'audit_simule'
@@ -13,9 +13,9 @@ export type ModeUsageIA = 'chat_normatif' | 'audit_simule'
 /**
  * `contenu_joint` distingue explicitement le cas "aucun contenu" (false,
  * `contenu` absent) du cas "contenu joint après confirmation utilisateur"
- * (true) — jamais un simple champ optionnel : le routeur (§6 SDS) refuse
+ * (true) — jamais un simple champ optionnel : le routeur refuse
  * de transmettre un contenu si ce indicateur n'est pas `true`, quelle que
- * soit la présence de `contenu` (mitige AR-R-06).
+ * soit la présence de `contenu` (mitige le risque de transmission d'un contenu non acquitté).
  */
 export type ContexteEnvoi =
   { contenu_joint: false } | { contenu_joint: true; contenu: string; titre_document: string }

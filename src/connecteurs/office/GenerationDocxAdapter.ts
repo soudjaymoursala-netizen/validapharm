@@ -5,13 +5,12 @@ import { GabaritDocxInvalideError } from './erreurs'
 
 /**
  * Génération réelle d'un document `.docx` (OOXML natif) à partir d'un
- * gabarit Word fourni par un client (Phase 26 de convergence
- * architecturale, TD-024) — remplace, pour ce cas précis,
+ * gabarit Word fourni par un client — remplace, pour ce cas précis,
  * l'astuce "HTML encapsulé en `.doc`" (`genererExportWord.ts`, inchangée
  * pour le gabarit par défaut de l'outil).
  *
  * **Choix technique** : `docxtemplater`+`pizzip` (MIT, pré-choisis par
- * anticipation en TD-014, installés et testés réellement ici — jamais
+ * anticipation, installés et testés réellement ici — jamais
  * présumés fonctionnels) plutôt que réinventer un moteur de templating
  * OOXML : `pizzip` (fork navigateur-sûr de `jszip`, dépendance unique
  * `pako`) dézippe le `.docx` client, `docxtemplater` remplace les balises
@@ -23,7 +22,7 @@ import { GabaritDocxInvalideError } from './erreurs'
  * forme du gabarit client diffère.
  *
  * Aucune dépendance réseau — tout s'exécute localement, cohérent avec
- * l'architecture PWA-only (TD-001).
+ * l'architecture PWA-only.
  */
 export async function genererDocxPersonnalise(
   gabaritDocx: ArrayBuffer,
@@ -74,7 +73,7 @@ export function verifierGabaritExportClient(
  * de la librairie et par test, présent "depuis 3.62.0" selon son propre
  * commentaire interne) mais n'est **pas déclaré** dans les types
  * TypeScript publiés de `docxtemplater` — un écart entre l'API réelle et
- * ses types publiés, jamais fabriqué ici (même discipline que TD-021 :
+ * ses types publiés, jamais fabriqué ici (même discipline qu'ailleurs :
  * corriger honnêtement plutôt que masquer un écart de type).
  */
 interface DocxtemplaterAvecGetTags {
@@ -83,7 +82,7 @@ interface DocxtemplaterAvecGetTags {
 
 /**
  * **Bug réel trouvé et corrigé pendant la construction du test** (même
- * discipline que TD-021, `MediaBox` trop étroite) : le comportement par
+ * discipline qu'ailleurs, `MediaBox` trop étroite) : le comportement par
  * défaut de `docxtemplater` pour une balise absente des données au moment
  * du rendu (typo dans le gabarit client, champ non fourni) est d'écrire
  * littéralement le texte `"undefined"` dans le document généré — jamais

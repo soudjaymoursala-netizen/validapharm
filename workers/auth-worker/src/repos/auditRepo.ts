@@ -1,7 +1,7 @@
 import type { EntreeAudit } from '../types'
 
 /**
- * Journal d'audit (TD-046) — append-only, jamais modifié ni supprimé
+ * Journal d'audit — append-only, jamais modifié ni supprimé
  * (ALCOA+, même discipline que `Client.audit_log`/`EntreeJournalAudit`
  * côté frontend) : trace chaque action sensible (connexion, gestion de
  * compte, suppression définitive) avec acteur/horodatage/justification.

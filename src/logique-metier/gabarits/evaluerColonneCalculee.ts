@@ -2,11 +2,11 @@ import { calculerIPR } from '../moteur-calcul/calculerIPR'
 import type { ColonneTableau, ChampNombre } from './definitionGabarit'
 
 /**
- * Évalue la valeur d'une colonne calculée d'un tableau dynamique (FDS §5) —
+ * Évalue la valeur d'une colonne calculée d'un tableau dynamique —
  * jamais saisissable directement, toujours dérivée des autres colonnes de
  * la même ligne.
  *
- * @requirement FDS §5
+ * @requirement Colonne calculée de tableau dynamique
  *
  * Une seule formule implémentée à ce stade (`ipr`) — c'est la seule
  * référencée par un gabarit réel du catalogue actuel (`dq`, tâche #12).
@@ -15,11 +15,11 @@ import type { ColonneTableau, ChampNombre } from './definitionGabarit'
  * réécriture des gabarits existants.
  *
  * `null` (jamais une erreur) si les entrées sont incomplètes ou hors
- * plage — reflète fidèlement `calculerIPR` (FDS §5 : "valeurs vides → IPR
+ * plage — reflète fidèlement `calculerIPR` ("valeurs vides → IPR
  * non calculé, aucune erreur").
  *
  * Reçoit les définitions des **colonnes d'entrée** (`colonnesTable`), pas
- * seulement leurs clés : l'échelle S/O/D (FDS §5, ex. [1,5] ou [1,10])
+ * seulement leurs clés : l'échelle S/O/D (ex. [1,5] ou [1,10])
  * appartient à *ces* colonnes, jamais à la colonne calculée elle-même —
  * confondre les deux était une erreur de conception détectée par test
  * avant tout câblage à l'écran (la colonne IPR a sa propre plage de

@@ -59,7 +59,7 @@ describe('appliquerTransition — propose_par_ia_non_valide', () => {
   })
 
   test.each(['engager_verification', 'transmettre_approbation', 'approuver', 'rejeter'] as const)(
-    'ne peut JAMAIS transiter directement via %s (règle non négociable FDS §3.2)',
+    'ne peut JAMAIS transiter directement via %s (règle non négociable)',
     (action) => {
       const resultat = appliquerTransition(
         contexte({ statutActuel: 'propose_par_ia_non_valide' }),

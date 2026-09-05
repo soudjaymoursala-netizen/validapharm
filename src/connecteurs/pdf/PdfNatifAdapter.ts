@@ -1,9 +1,8 @@
 import { DocumentPdfInvalideError } from './erreurs'
 
 /**
- * Ingestion native d'un document `.pdf` (Phase 23 de convergence
- * architecturale, TD-021) — complète l'ingestion Office native (Phase 19,
- * `.docx`) pour le format resté non couvert jusqu'ici : une SOP réelle du
+ * Ingestion native d'un document `.pdf` — complète l'ingestion Office
+ * native (`.docx`) pour le format resté non couvert jusqu'ici : une SOP réelle du
  * corpus consulté (ex. "SOP Qualif Balance.pdf", "LYON-QUAL-PGN-000198.pdf")
  * est parfois livrée en PDF plutôt qu'en `.docx` éditable.
  *
@@ -16,10 +15,10 @@ import { DocumentPdfInvalideError } from './erreurs'
  * legacy/build/pdf.mjs`, explicitement documenté par Mozilla pour les
  * environnements sans Canvas complet) importe et exécute sans erreur dans
  * les deux environnements — retenu ici pour que le code testé soit
- * *exactement* celui exécuté par la PWA (même discipline que TD-014 :
+ * *exactement* celui exécuté par la PWA (même discipline qu'ailleurs :
  * ne jamais tester un chemin de code différent de celui de production).
  *
- * **Différence assumée avec l'échec de `mammoth` (TD-014)** : `mammoth`
+ * **Différence assumée avec l'échec de `mammoth`** : `mammoth`
  * avait deux implémentations *comportementalement différentes* selon
  * Node/navigateur (celle de test n'acceptait même pas un `ArrayBuffer`).
  * Ici, `getDocument`/`getTextContent` sont le même code, octet pour octet,

@@ -2,7 +2,7 @@ import type { Requirement, RiskAssessment, TestCandidate } from '../domaine/type
 
 /**
  * Génération déterministe de candidats de test à partir des risques réels
- * du référentiel (Phase 35 — Test Design Engine, TD-036) — jamais un appel
+ * du référentiel (Test Design Engine) — jamais un appel
  * IA, jamais un contenu fabriqué : chaque suggestion ne fait que
  * reformuler dans le vocabulaire "candidat de test" des champs déjà saisis
  * par l'utilisateur sur un `RiskAssessment` réel (même discipline que
@@ -26,7 +26,7 @@ import type { Requirement, RiskAssessment, TestCandidate } from '../domaine/type
  * rapproché d'aucun risque — retourne une liste vide, jamais une
  * supposition.
  *
- * @requirement docs/convergence/CONVERGENCE_PLAN.md Phase 35, TD-036
+ * @requirement Test Design Engine — génération de candidats depuis les risques
  */
 export interface CandidatSuggereDepuisRisque {
   risk_assessment_id: string

@@ -1,9 +1,9 @@
 /**
- * Compliance Engine généralisé (Phase 30 de convergence architecturale,
- * TD-028) — extrait le patron commun déjà utilisé indépendamment à 3
- * endroits du dépôt (règle de trois) : `verifierBlocageExport.ts` (Phase 1,
- * export de section), `gardesFinalisation.ts` (garde-fous U-01/U-02/U-03),
- * et `gelerContentPlan` (Phase 28, garde `readiness`). Les trois évaluaient
+ * Compliance Engine généralisé — extrait le patron commun déjà utilisé
+ * indépendamment à 3 endroits du dépôt (règle de trois) :
+ * `verifierBlocageExport.ts` (export de section), `gardesFinalisation.ts`
+ * (garde-fous U-01/U-02/U-03), et `gelerContentPlan` (garde `readiness`).
+ * Les trois évaluaient
  * chacun, à leur façon, "un ensemble de règles contre un contexte, retourne
  * les règles bloquantes" — jamais factorisé jusqu'ici (`VISION_NORTH_STAR_
  * CONVERGENCE.md` §3, couche 14 : "un seul statut vérifié — à généraliser").

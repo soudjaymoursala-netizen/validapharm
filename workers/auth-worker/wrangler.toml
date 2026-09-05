@@ -1,4 +1,4 @@
-# Configuration Cloudflare Workers (TD-046). Base D1 réelle créée et
+# Configuration Cloudflare Workers. Base D1 réelle créée et
 # migrée le 04/09/2026 via le connecteur MCP Cloudflare Developer Platform
 # (`d1_database_create` + migration 0001 appliquée statement par statement,
 # `d1_database_query`) — plus un identifiant fictif à générer soi-même.

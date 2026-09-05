@@ -236,7 +236,7 @@ describe('listerKnowledgeItemsValides', () => {
   })
 })
 
-describe('tracerChaineTechnique (Phase 18, TD-013)', () => {
+describe('tracerChaineTechnique', () => {
   test('trace la relation sortante et son type', () => {
     const chaine = tracerChaineTechnique('granulateur-01', donnees)
     expect(chaine).toEqual([{ noeud: assetNode('plc-01'), typeRelation: 'controle_par' }])
@@ -247,7 +247,7 @@ describe('tracerChaineTechnique (Phase 18, TD-013)', () => {
   })
 })
 
-describe('tracerRelationsConnaissance (Phase 31, TD-029)', () => {
+describe('tracerRelationsConnaissance', () => {
   test('trace la relation sortante et son type', () => {
     const chaine = tracerRelationsConnaissance('ki-1', donnees)
     expect(chaine).toEqual([{ item: knowledgeItem('ki-2', 'a_valider'), typeRelation: 'precise' }])
@@ -258,7 +258,7 @@ describe('tracerRelationsConnaissance (Phase 31, TD-029)', () => {
   })
 })
 
-describe('listerEtapesProcedure (Phase 20, TD-016)', () => {
+describe('listerEtapesProcedure', () => {
   test('résout toujours la version la plus récente de la référence, jamais une version arbitraire', () => {
     const etapes = listerEtapesProcedure('SOP-QA-012', donnees)
     expect(etapes.map((e) => e.description)).toEqual([

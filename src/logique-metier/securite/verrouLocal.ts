@@ -1,5 +1,5 @@
 /**
- * Verrou local par mot de passe (§4.31, TD-033) — **pas** un
+ * Verrou local par mot de passe (§4.31) — **pas** un
  * mécanisme d'authentification ni une signature électronique. Le mot de
  * passe est haché (PBKDF2-SHA-256, 100 000 itérations, sel aléatoire) et
  * stocké/vérifié uniquement côté client (aucun backend, Web Crypto API) :
@@ -9,12 +9,12 @@
  * toute donnée locale).
  *
  * Dérogation explicite et documentée au principe "jamais de mot de passe"
- * du cadrage §5 — voir TD-033 (`docs/convergence/TECHNICAL_DECISIONS.md`)
- * et TD-011 (RBAC/signature électronique de façade interdite) : ce verrou
- * n'est jamais présenté dans l'UI ou l'export comme une authentification,
- * une session, ou une preuve de conformité 21 CFR Part 11/Annexe 11.
+ * du cadrage §5 (RBAC/signature électronique de façade interdite) : ce
+ * verrou n'est jamais présenté dans l'UI ou l'export comme une
+ * authentification, une session, ou une preuve de conformité 21 CFR Part
+ * 11/Annexe 11.
  *
- * @requirement TD-033
+ * @requirement Verrou local par mot de passe
  */
 
 const ITERATIONS_PBKDF2 = 100_000

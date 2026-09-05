@@ -1,13 +1,13 @@
 /**
- * Types du modèle de données pivot (FS §3, SDS §3).
+ * Types du modèle de données pivot.
  *
  * Les clés des objets ci-dessous sont volontairement en snake_case, alignées
- * lettre pour lettre sur le modèle pivot documenté en FS §3 et sur les
- * fichiers JSON réellement stockés dans le dépôt GitHub (SDS §3,
- * `/data/projects/{id}.json`, etc.) — un auditeur qui compare un fichier
- * JSON réel à la FS doit retrouver les mêmes noms de champs sans traduction
- * mentale, cohérent avec l'objectif d'auditabilité (08-conventions-codage.md
- * §4).
+ * lettre pour lettre sur le modèle pivot documenté et sur les
+ * fichiers JSON réellement stockés dans le dépôt GitHub
+ * (`/data/projects/{id}.json`, etc.) — un auditeur qui compare un fichier
+ * JSON réel à la documentation doit retrouver les mêmes noms de champs sans
+ * traduction mentale, cohérent avec l'objectif d'auditabilité
+ * (08-conventions-codage.md §4).
  */
 import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
 import type { ReponseQuestionOuiNon } from '../assessment/moteurQuestionsOuiNon'
@@ -64,7 +64,7 @@ export interface SignatureRole {
  * `actif`/`archive` — un projet archivé n'est jamais supprimé physiquement
  * (ALCOA+, jamais de perte de donnée) : il disparaît de la liste
  * principale mais reste intégralement lisible, restaurable et présent
- * dans le dépôt GitHub. Voir §4.31 (TD-033).
+ * dans le dépôt GitHub. Voir §4.31.
  */
 export type StatutArchivage = 'actif' | 'archive'
 
@@ -82,16 +82,16 @@ export interface Project {
   links: LienProjet[]
   statut: StatutArchivage
   /**
-   * Partage de projet (Phase 37, TD-044) — identité résolue depuis le
+   * Partage de projet — identité résolue depuis le
    * profil local (email, §4.31), **jamais** une identité
-   * GitHub individuelle (TD-043 amendée : un compte GitHub par employé
+   * GitHub individuelle (un compte GitHub par employé
    * exclurait les clients sans compte GitHub individuel — le jeton
    * GitHub reste au niveau de l'organisation/du client, inchangé).
    * `owner_id` : identité résolue au moment de la création, `null`
    * jamais utilisé (retombe sur `IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1`
    * si aucun profil local n'est encore défini — additif, non bloquant).
    * `shared_with` : même convention UX que `Section.owner_id`/`shared_with`
-   * (Phase 0) — un contrôle d'affichage, jamais une frontière de sécurité
+   * — un contrôle d'affichage, jamais une frontière de sécurité
    * réelle (l'accès Git sous-jacent reste au niveau du dépôt entier).
    */
   owner_id: string
@@ -101,7 +101,7 @@ export interface Project {
    * Identité déclarée par l'utilisateur au moment de l'archivage (visa
    * saisi dans le profil local, §4.31) — jamais vérifiée
    * cryptographiquement, jamais une signature électronique opposable
-   * (même limite qu'`EntreeJournalAudit.actor`, TD-011).
+   * (même limite qu'`EntreeJournalAudit.actor`).
    */
   archived_by: string | null
   audit_log: EntreeJournalAudit[]
@@ -147,7 +147,7 @@ export interface ProjectDocument {
   uploaded_by: string
   /**
    * Texte extrait (docx/pdf natif) ou collé directement par l'utilisateur —
-   * ajouté Phase 33 (TD-031), pour servir de document de référence à la
+   * ajouté pour servir de document de référence à la
    * génération de brouillon par adaptation (§4.1bis). Chaîne
    * vide pour un document chargé depuis la section "Documents" générique
    * (§4.9) — l'extraction de texte n'est pas requise
@@ -162,7 +162,7 @@ export interface ProjectDocument {
    * prévisualiser le fichier d'origine, contrairement à ce que l'exigence
    * "section Documents pour charger des fichiers de référence" impose).
    * Jamais synchronisé vers GitHub (portée de `useSynchronisationStore`
-   * limitée aux projets/sections, SDS §5) — IndexedDB local uniquement,
+   * limitée aux projets/sections) — IndexedDB local uniquement,
    * même régime que `GabaritExportClient.fichier`.
    */
   content: Blob | null
@@ -171,7 +171,7 @@ export interface ProjectDocument {
 }
 
 /**
- * Secteur d'activité d'un client (§4.0ter, Phase 40, refonte du parcours
+ * Secteur d'activité d'un client (§4.0ter, refonte du parcours
  * « Mes clients » demandée le 04/09/2026) — trois valeurs seulement,
  * cohérent avec le périmètre annoncé du produit (cadrage §1) ; pas de
  * nomenclature extensible fabriquée sans besoin réel démontré.
@@ -179,23 +179,23 @@ export interface ProjectDocument {
 export type SecteurClient = 'pharmaceutique' | 'dispositif_medical' | 'autre'
 
 /**
- * Entité `client` — identité minimale (FS §3, v12, gap trouvé en
+ * Entité `client` — identité minimale (v12, gap trouvé en
  * construisant le connecteur Drive) : `client_id` était référencé partout
  * (`Project.client_id`, `ClientConfig`, `asset_hierarchy_schema`,
  * `asset_node`) sans jamais être lui-même modélisé. Volontairement
  * minimal — l'identité seule ; c'est `ClientConfig` qui porte les réglages.
  *
- * `adresse`/`secteur`/`details` ajoutés en Phase 40 (§13 du prompt maître
+ * `adresse`/`secteur`/`details` ajoutés (§13 du prompt maître
  * du 03/09/2026, « nom de l'entreprise, adresse, secteur, informations
  * complémentaires ») — tous optionnels (`null` par défaut), un client créé
  * avant cette version reste valide sans ces champs.
  *
- * **Phase 39 (TD-046)** : le Worker d'authentification (Cloudflare D1)
- * devient la source de vérité de cette entité — nécessaire pour qu'un
+ * Le Worker d'authentification (Cloudflare D1)
+ * est la source de vérité de cette entité — nécessaire pour qu'un
  * admin voie réellement tous les clients de l'organisation, structurellement
  * impossible avec un stockage seulement local (IndexedDB par navigateur).
  * `created_by_user_id`/`shared_with` sont additifs (même convention que
- * `Project.owner_id`/`shared_with`, TD-043/TD-044 — mais désormais
+ * `Project.owner_id`/`shared_with` — mais désormais
  * réellement appliqués côté serveur, pas seulement une convention
  * d'affichage). `audit_log` reste présent pour compatibilité de forme mais
  * n'est plus alimenté par `useClientsStore` — l'audit d'un client géré par
@@ -215,16 +215,16 @@ export interface Client {
   archived_by: string | null
   audit_log: EntreeJournalAudit[]
   created_at: string
-  /** Phase 39 (TD-046) — id de l'utilisateur réel (Worker) qui a créé ce client. */
+  /** Id de l'utilisateur réel (Worker) qui a créé ce client. */
   created_by_user_id: string | null
-  /** Phase 39 (TD-046) — ids d'utilisateurs réels avec qui ce client est partagé (lecture+écriture). */
+  /** Ids d'utilisateurs réels avec qui ce client est partagé (lecture+écriture). */
   shared_with: string[]
 }
 
 /**
- * Une qualification de fiabilité (FS §3 v14) — voir `ClientConfig.
+ * Une qualification de fiabilité (v14) — voir `ClientConfig.
  * ai_provider_reliability_qualification` pour le garde-fou de séparation
- * par mode d'usage (Phase 32).
+ * par mode d'usage.
  */
 export interface QualificationFiabiliteIA {
   date: string
@@ -233,7 +233,7 @@ export interface QualificationFiabiliteIA {
   qualification_test_set_version: string
   /**
    * Identifiant de version de modèle exposé par le fournisseur au
-   * moment de cette qualification (FS §3 v14) — distinct de
+   * moment de cette qualification (v14) — distinct de
    * `qualification_test_set_version` (version du jeu de test, pas du
    * moteur évalué). `null` si le fournisseur n'exposait aucune version
    * au moment de la qualification.
@@ -246,17 +246,17 @@ export interface ClientConfig {
   ai_provider: string
   /**
    * Accusé de réception des conditions de traitement des données du
-   * fournisseur actuellement configuré (FS §3 v15) — un accusé par
+   * fournisseur actuellement configuré (v15) — un accusé par
    * fournisseur, jamais un simple booléen global : changer de fournisseur
    * exige un nouvel accusé, les conditions différant d'un fournisseur à
    * l'autre.
    */
   ai_provider_conditions_acquittees: { fournisseur: string; date: string } | null
   /**
-   * Qualification de fiabilité, **une par mode d'usage** (Phase 32, TD-030)
+   * Qualification de fiabilité, **une par mode d'usage**
    * — chat normatif et audit simulé n'ont pas le même profil
-   * de risque, une qualification unique ne couvre pas les deux. Avant la
-   * Phase 32, ce champ était un objet unique partagé entre modes ; migré
+   * de risque, une qualification unique ne couvre pas les deux. Auparavant,
+   * ce champ était un objet unique partagé entre modes ; migré
    * vers un enregistrement indexé par `ModeUsageIA`, jamais réinterprété
    * comme valable pour l'autre mode.
    */
@@ -266,7 +266,7 @@ export interface ClientConfig {
 }
 
 /**
- * Schéma de hiérarchie des actifs (FS §3) — par client,
+ * Schéma de hiérarchie des actifs — par client,
  * aucune structure imposée par défaut. `levels[]` est ordonné du plus
  * générique au plus spécifique (ex. Site > Zone > Système > Équipement),
  * mais cet ordre n'est pas encore appliqué comme garde-fou dans cet
@@ -280,11 +280,11 @@ export interface AssetHierarchySchema {
 }
 
 /**
- * Nœud du référentiel d'actifs (FS §3) — arbre
+ * Nœud du référentiel d'actifs — arbre
  * (`parent_id`, sans cycle) et graphe libre
  * (`associated_nodes[]`, cycles acceptés). `qms_connector_id` et
  * `periodic_qualification`/`qualification_status` sont modélisés dès
- * cette version (alignés sur FS §3) mais leur exploitation (pull QMS,
+ * cette version mais leur exploitation (pull QMS,
  * alertes de périodicité) reste hors périmètre du premier incrément —
  * voir le backlog.
  *
@@ -325,7 +325,7 @@ export interface AssetNode {
 }
 
 /**
- * Journal de session de chat (FS §3 v16) — jamais le contenu
+ * Journal de session de chat (v16) — jamais le contenu
  * échangé, seulement horodatage début/fin, fournisseur, moteur exact et
  * indication qu'un document a été joint. `section.audit_log` ne pouvait
  * pas porter cette information : une session peut se dérouler sans
@@ -343,8 +343,7 @@ export interface AiChatSessionLog {
 }
 
 /**
- * Question d'une méthode ACFC (FS §4.6bis, Phase 1 de convergence
- * architecturale — `docs/convergence/CONVERGENCE_PLAN.md`). Le texte est
+ * Question d'une méthode ACFC. Le texte est
  * conservé mot pour mot tel que fourni par le client, jamais reformulé ni
  * traduit automatiquement (seule la langue explicitement saisie est
  * garantie fidèle ; les autres langues du record restent vides tant que
@@ -359,9 +358,8 @@ export interface QuestionACFC {
 export type OrigineMethodeACFC = 'procedure_client' | 'defini_utilisateur' | 'baseline_validapharm'
 
 /**
- * Méthode ACFC configurable par client (FS §4.6bis, remplace la grille de
- * criticité codée en dur — voir `docs/convergence/TECHNICAL_DECISIONS.md`
- * TD-002). Un client peut avoir 4, 6, 7, 9 ou N questions ; **jamais de
+ * Méthode ACFC configurable par client (remplace la grille de
+ * criticité codée en dur). Un client peut avoir 4, 6, 7, 9 ou N questions ; **jamais de
  * valeur figée dans le code**. Immuable une fois créée (principe de
  * versionnement du package Target Architecture, "Versioned records are
  * immutable") : toute modification crée une nouvelle version, elle ne
@@ -391,7 +389,7 @@ export interface MethodProfileACFC {
 export type ReponseQuestionACFC = 'oui' | 'non' | 'inconnu' | 'sans_objet'
 
 /**
- * Une évaluation ACFC (FS §4.6bis) : l'exécution d'un `MethodProfileACFC`
+ * Une évaluation ACFC : l'exécution d'un `MethodProfileACFC`
  * contre un élément réel (composant/fonction), optionnellement rattaché à
  * un nœud de Structure Système (§4.10). `method_profile_version` fige la
  * version utilisée au moment de l'évaluation (traçabilité/reproductibilité
@@ -414,15 +412,13 @@ export interface EvaluationACFC {
 }
 
 /**
- * Paramètre de procédé/produit (Phase 2 de convergence architecturale,
- * `docs/convergence/CONVERGENCE_PLAN.md`). Objet de base — ne porte lui-même
+ * Paramètre de procédé/produit. Objet de base — ne porte lui-même
  * aucune notion de criticité : le niveau d'importance/criticité est un objet
  * séparé (`ClassificationCriticiteParametre`), jamais un champ mutable ici,
  * pour qu'une classification reste un événement daté et justifié plutôt
  * qu'un simple attribut qu'on écrase.
  *
- * @requirement Target Architecture §10 (`01_ARCHITECTURE_MASTER_FINAL.md`),
- * DEC-019/DEC-020
+ * @requirement Target Architecture §10
  */
 export interface Parameter {
   id: string
@@ -448,7 +444,7 @@ export type NiveauCriticiteParametre = 'important' | 'critique'
  *
  * **Ne crée jamais de `CPP` ni de `CQA`.** Le package l'interdit
  * explicitement (§10 : *"Un CPP ne doit jamais être promu automatiquement à
- * partir d'un simple score de criticité"*, DEC-019). Un `CPP`/`CQA` ne peut
+ * partir d'un simple score de criticité"*). Un `CPP`/`CQA` ne peut
  * être créé que par une déclaration humaine explicite et séparée.
  */
 export interface ClassificationCriticiteParametre {
@@ -464,12 +460,12 @@ export interface ClassificationCriticiteParametre {
 
 /**
  * CPP (Critical Process Parameter, ICH Q8/Q9/Q10) — déclaration humaine
- * explicite, jamais dérivée automatiquement d'une `ClassificationCriticiteParametre`
- * (DEC-019). Contextuel (DEC-021, "CQA/CPP context change" —
+ * explicite, jamais dérivée automatiquement d'une `ClassificationCriticiteParametre`.
+ * Contextuel ("CQA/CPP context change" —
  * `11_USE_CASES_70_SCENARIOS.md`) : un même `Parameter` peut être un CPP
  * dans un contexte produit/procédé donné et ne pas l'être dans un autre.
  * `contexte` reste un champ texte libre tant que `ManufacturingContext`
- * n'existe pas comme entité relationnelle (Phase 4 du plan de convergence) —
+ * n'existe pas comme entité relationnelle —
  * pas une simplification définitive, une étape intermédiaire assumée.
  *
  * Immuable comme événement : un changement de contexte ne mute jamais un
@@ -511,9 +507,8 @@ export interface CQA {
 }
 
 /**
- * Impact Assessment / System Classification (F1 du catalogue §10, URS v27
- * — Phase 3 de convergence architecturale, `docs/convergence/
- * CONVERGENCE_PLAN.md`). Étape **en amont** de l'ACFC (F2), pas la même
+ * Impact Assessment / System Classification (F1 du catalogue §10, URS v27).
+ * Étape **en amont** de l'ACFC (F2), pas la même
  * chose : détermine si un système entre dans le périmètre GMP qualifiable
  * ("Direct Impact") avant toute analyse de risque. Même mécanisme que
  * `MethodProfileACFC` (questionnaire Oui/Non configurable par client,
@@ -575,8 +570,7 @@ export type CategorieGAMP5 = 1 | 2 | 3 | 4 | 5
  * Computer System Assessment (F3 du catalogue §10, URS v27) — évaluation
  * dédiée aux systèmes informatisés (catégorie GAMP5, pertinence GxP,
  * pertinence ERES/Part 11), brique distincte de F1 et F2, jamais fusionnée
- * avec elles (erreur documentée et corrigée en Phase 0bis, `docs/
- * convergence/ARCHITECTURE_CONFLICTS.md` CONFLICT-002).
+ * avec elles.
  *
  * @requirement F3, Computer System Assessment
  */
@@ -597,10 +591,10 @@ export interface EvaluationCSVAssessment {
 
 /**
  * Risk Assessment (AMDEC — Analyse des Modes de Défaillance, de leurs
- * Effets et de leur Criticité, ICH Q9) autonome (Phase 29 de convergence
- * architecturale, TD-027) — corrige la dette technique documentée trois
- * fois indépendamment (`CURRENT_ARCHITECTURE.md`/`LEGACY_MAPPING.md`,
- * "AMDEC non autonome") : `calculerIPR` (Phase 1, S×O×D) n'existait
+ * Effets et de leur Criticité, ICH Q9) autonome — corrige la dette
+ * technique documentée trois fois indépendamment
+ * (`CURRENT_ARCHITECTURE.md`/`LEGACY_MAPPING.md`,
+ * "AMDEC non autonome") : `calculerIPR` (S×O×D) n'existait
  * jusqu'ici que comme colonne calculée imbriquée dans le gabarit DQ, jamais
  * comme module de risque indépendant, alors que le calcul lui-même n'a pas
  * changé (**KEEP**, réutilisé tel quel).
@@ -615,7 +609,7 @@ export interface EvaluationCSVAssessment {
  * suivi d'action ni de risque résiduel).
  *
  * Même patron de méthodologie versionnée par client que
- * `MethodProfileACFC`/`MethodProfileImpactAssessment` (Phase 1/3) —
+ * `MethodProfileACFC`/`MethodProfileImpactAssessment` —
  * `echelle`/`seuil_action` remplacent le questionnaire Oui/Non, mécanisme
  * réellement différent (numérique plutôt que binaire), d'où un type
  * volontairement distinct, jamais fusionné (même discipline que
@@ -646,7 +640,7 @@ export type VerdictRiskAssessment = 'acceptable' | 'action_requise'
 /**
  * Une ligne AMDEC : l'exécution d'un `MethodProfileRiskAssessment` contre
  * un mode de défaillance réel, optionnellement rattaché à un `AssetNode`
- * (§4.10) et/ou à un `Parameter` déjà classifié (Phase 2 — "Target
+ * (§4.10) et/ou à un `Parameter` déjà classifié ("Target
  * Equivalent" documenté dans `LEGACY_MAPPING.md` : "logique de scoring d'un
  * futur RiskAssessment/AMDEC, avec Parameter/CriticalParameter en amont").
  * `method_profile_version` fige l'échelle/le seuil utilisés au moment de
@@ -689,9 +683,8 @@ export interface RiskAssessment {
 }
 
 /**
- * Process (Phase 4 de convergence architecturale, `docs/convergence/
- * CONVERGENCE_PLAN.md`) — générique, pas limité à la production
- * (Target Architecture §4, `01_ARCHITECTURE_MASTER_FINAL.md`). EXTEND pur :
+ * Process — générique, pas limité à la production
+ * (Target Architecture §4). EXTEND pur :
  * n'existait auparavant que comme gabarit de texte libre (famille A,
  * "Contexte procédé"), qui reste une des sorties possibles, plus la seule
  * source de vérité.
@@ -723,7 +716,7 @@ export interface Process {
 }
 
 /**
- * Function (Phase 4) — indépendante du type de `Process` (Target
+ * Function — indépendante du type de `Process` (Target
  * Architecture §5) : exprime ce qui doit être réalisé/protégé/fourni
  * (production, mesure, contrôle, alarme, interlock, manutention, EHS,
  * nettoyage, support, logistique, fonction digitale), l'implémentation
@@ -764,8 +757,8 @@ export interface AssociationFonctionProcess {
 }
 
 /**
- * Relation typée et dirigée entre deux `AssetNode` (Phase 18 de convergence
- * architecturale, TD-013 — domaine "Architecture Technique"). Contrairement
+ * Relation typée et dirigée entre deux `AssetNode` (domaine "Architecture
+ * Technique"). Contrairement
  * à `associated_nodes[]` (graphe libre non typé), cette jointure explicite
  * distingue "contrôlé par" de "connecté à" de "hébergé sur" — condition
  * nécessaire pour répondre à "quel PLC contrôle cet équipement ?" plutôt
@@ -773,11 +766,11 @@ export interface AssociationFonctionProcess {
  *
  * Aucune nouvelle entité d'équipement (PLC/SCADA/Server) : ces objets sont
  * déjà des `AssetNode` avec un `level_key` approprié
- * (`AssetHierarchySchema.levels[]` est libre par client, TD-013). Aucune
+ * (`AssetHierarchySchema.levels[]` est libre par client). Aucune
  * détection de cycle ici, même tolérance qu'`associated_nodes[]`
  * (documentée comme "graphe libre, cycles acceptés").
  *
- * @requirement docs/convergence/PHASE_18_ARCHITECTURE_TECHNIQUE_SPEC.md, TD-013
+ * @requirement Architecture Technique
  */
 export type TypeRelationTechnique = 'controle_par' | 'connecte_a' | 'heberge_sur'
 
@@ -791,7 +784,7 @@ export interface RelationTechnique {
 }
 
 /**
- * ManufacturingContext (Phase 4) — relie explicitement un `AssetNode`
+ * ManufacturingContext — relie explicitement un `AssetNode`
  * (Equipment/DigitalSystem) à un `Process`, un produit et, le cas échéant,
  * une recette/un format (Target Architecture §7). Empêche de déduire
  * qu'une relation Equipment↔Process est universelle alors qu'elle n'est
@@ -800,8 +793,8 @@ export interface RelationTechnique {
  * Granulation/Produit B/Recette R05 dans un autre.
  *
  * `Product`/`Recipe`/`Format`/`Configuration` ne sont pas encore des
- * entités séparées (hors périmètre de cette phase, EXTEND pur) : modélisés
- * en texte libre ici, comme le champ `contexte` de `CPP`/`CQA` (Phase 2)
+ * entités séparées (hors périmètre actuel, EXTEND pur) : modélisés
+ * en texte libre ici, comme le champ `contexte` de `CPP`/`CQA`
  * en attendant — pas une simplification définitive.
  *
  * @requirement Target Architecture §7
@@ -820,19 +813,18 @@ export interface ManufacturingContext {
 }
 
 /**
- * QualityEvent (Phase 5 de convergence architecturale, `docs/convergence/
- * CONVERGENCE_PLAN.md`, spec détaillée dans `PHASE_5_QUALITY_EVENTS_SPEC.md`)
- * — comble la famille H de l'URS (Change Control, CAPA), aujourd'hui vide
- * de code, et absorbe `Deviation`/`Investigation`/`AuditFinding`
- * (absents du catalogue jusqu'ici) ainsi que `PeriodicReview` (famille I).
+ * QualityEvent — comble la famille H de l'URS (Change Control, CAPA),
+ * aujourd'hui vide de code, et absorbe `Deviation`/`Investigation`/
+ * `AuditFinding` (absents du catalogue jusqu'ici) ainsi que `PeriodicReview`
+ * (famille I).
  *
  * Un seul type avec discriminant `type`, pas 6 interfaces dupliquées :
  * aucune source lue ne documente de champs distincts par sous-type
- * au-delà du nom (à la différence de l'Assessment générique, Phase 3, où
+ * au-delà du nom (à la différence de l'Assessment générique, où
  * `CSVAssessment` avait un mécanisme réellement différent).
  *
  * `origine`/`reference_externe` portent le principe non négociable de la
- * cible (DEC-002/DEC-055) : un événement externe est référencé, jamais
+ * cible : un événement externe est référencé, jamais
  * dupliqué comme contenu officiel, et ne bloque **jamais** par
  * construction une activité indépendante — aucun garde-fou de blocage
  * automatique n'existe dans ce module, intentionnellement.
@@ -882,22 +874,21 @@ export interface ReferenceQualityEvent {
 }
 
 /**
- * Phase 7a de convergence architecturale (`docs/convergence/
- * CONVERGENCE_PLAN.md`) — première sous-étape du Test/Execution/Evidence
- * engine (marqué "risque élevé... à séquencer en sous-étapes, jamais en un
- * seul commit" par le plan) : uniquement la chaîne de **définition**
+ * Première sous-étape du Test/Execution/Evidence engine (risque élevé, à
+ * séquencer en étapes distinctes, jamais en un seul commit) : uniquement
+ * la chaîne de **définition**
  * `Requirement → TestObjective → TestCandidate → Test`, jamais
  * l'exécution (Execution/ExecutionStep/Measurement/ExecutionEvent,
- * sous-étape 7b) ni l'Evidence (7c). Aucune génération IA ici — DEC-038 à
- * DEC-041 (Test Design Engine assisté par IA, critique IA, NEEDS_REVIEW)
- * restent hors périmètre tant qu'aucun module de génération IA n'existe
- * encore pour ce domaine (même prudence que Parameter/CPP/CQA, Phase 2).
+ * traitée séparément) ni l'Evidence (également traitée séparément). Aucune
+ * génération IA ici — le Test Design Engine assisté par IA (critique IA,
+ * NEEDS_REVIEW) reste hors périmètre tant qu'aucun module de génération IA
+ * n'existe encore pour ce domaine (même prudence que Parameter/CPP/CQA).
  *
  * `Requirement` n'existait pas encore comme entité (`GAP.md`/
  * `03_DOMAIN_DATA_MODEL.md` du package Target la liste sous "Quality" —
- * gap non comblé par les phases précédentes) : ajoutée ici en tant que
+ * gap non comblé jusqu'ici) : ajoutée ici en tant que
  * fondation minimale de la chaîne de traçabilité exigée par l'acceptance
- * criteria de la Phase 7.
+ * criteria de cette étape.
  *
  * @requirement Target Architecture, domaine "Test" (`03_DOMAIN_DATA_MODEL.md`)
  */
@@ -948,11 +939,11 @@ export type StatutTestCandidate =
  * `duplique_de_id`/`remplace_par_id` ne sont renseignés que pour les
  * statuts `doublon`/`remplace` respectivement.
  *
- * `risk_assessment_id` (Phase 35 — Test Design Engine, TD-036) : `null`
+ * `risk_assessment_id` (Test Design Engine) : `null`
  * pour un candidat saisi manuellement ; renseigné quand le candidat a été
  * **proposé** par `genererCandidatsDepuisRisques` à partir d'un
  * `RiskAssessment` dont le verdict est `action_requise` — comble le gap
- * identifié en Phase 0 ("Risk isn't wired into Requirement/Test directly").
+ * identifié ("Risk isn't wired into Requirement/Test directly").
  * Jamais déduit après coup : un candidat créé manuellement pour couvrir
  * le même risque reste `null` sauf lien explicite de l'utilisateur.
  */
@@ -1015,8 +1006,7 @@ export interface Couverture {
 }
 
 /**
- * Phase 7b (`docs/convergence/PHASE_7B_EXECUTION_SPEC.md`) — instance
- * d'exécution d'un `Test` approuvé. Un même `Test` peut être exécuté
+ * Instance d'exécution d'un `Test` approuvé. Un même `Test` peut être exécuté
  * plusieurs fois (retest après échec, exécution sur plusieurs actifs) —
  * `asset_node_id` précise sur quel actif elle a eu lieu, optionnel.
  * `verdict` reste `null` tant que l'exécution n'est pas clôturée et n'est
@@ -1066,7 +1056,7 @@ export interface ExecutionStep {
  * étape peut produire plusieurs mesures (ex. 3 points de température),
  * d'où une entité séparée plutôt qu'un champ unique sur `ExecutionStep`.
  * `valeur` reste en texte (pas de type numérique imposé) — même choix que
- * `Parameter`/`CPP` (Phase 2), rien dans les sources ne justifie un type
+ * `Parameter`/`CPP`, rien dans les sources ne justifie un type
  * de valeur unique.
  */
 export interface Measurement {
@@ -1080,14 +1070,13 @@ export interface Measurement {
 }
 
 /**
- * Journal d'événements *pendant* une exécution — distinct du `QualityEvent`
- * (Phase 5), qui est l'objet de gestion qualité formel. `quality_event_id`
+ * Journal d'événements *pendant* une exécution — distinct du `QualityEvent`,
+ * qui est l'objet de gestion qualité formel. `quality_event_id`
  * référence *optionnellement* un `QualityEvent` déjà existant, jamais créé
- * automatiquement (DEC-002 : aucun couplage bloquant/automatique entre
- * modules, déjà appliqué en Phase 5).
+ * automatiquement (aucun couplage bloquant/automatique entre modules).
  *
  * **Réaligné (25/08/2026) sur le vrai modèle cible** (`10_TEST_ENGINE.md`,
- * `01_ARCHITECTURE_MASTER_FINAL.md` §29, DEC-056/057) après lecture directe
+ * `01_ARCHITECTURE_MASTER_FINAL.md` §29) après lecture directe
  * du package source (Google Drive reconnecté en cours de session) : un
  * résultat inattendu suit `ExecutionEvent → Assessment → Decision →
  * Continue/Action/Retest/Deviation/Change/Stop/External` — ce type reflète
@@ -1118,15 +1107,14 @@ export interface ExecutionEvent {
 }
 
 /**
- * Phase 7c (`docs/convergence/PHASE_7C_EVIDENCE_SPEC.md`) — dernière
- * sous-étape de la Phase 7, dont l'Acceptance Criteria (traçabilité
+ * Dernière sous-étape dont l'Acceptance Criteria (traçabilité
  * Requirement→Test→Execution→Evidence démontrable) se clôt ici. Une
  * `Evidence` est toujours rattachée à une `Execution` réelle — jamais une
  * preuve orpheline — et optionnellement à un `ExecutionStep` précis.
  * `type: native` = l'observation directe de l'exécutant fait foi, sans
  * fichier source ; `type: document` renvoie à un fichier externe via
  * `EvidenceLocation`. Immutable une fois créée, même garde-fou de
- * post-clôture qu'`ExecutionStep`/`Measurement` (Phase 7b, ALCOA+).
+ * post-clôture qu'`ExecutionStep`/`Measurement` (ALCOA+).
  */
 export type TypeEvidence = 'native' | 'document'
 
@@ -1146,7 +1134,7 @@ export interface Evidence {
  * Pointeur déclaratif vers où réside un document de preuve — jamais le
  * contenu binaire lui-même (aucun stockage de fichier réel construit dans
  * cet incrément, cf. §5 de la spec). Cohérent avec l'architecture déjà
- * actée (SDS §3/§5bis) : dépôt Git dédié = source de vérité, Drive =
+ * actée : dépôt Git dédié = source de vérité, Drive =
  * miroir. Ne peut exister que pour une `Evidence` de type `document`.
  */
 export type SystemeEvidenceLocation = 'github' | 'drive' | 'externe'
@@ -1176,8 +1164,7 @@ export interface ProvenanceLink {
 }
 
 /**
- * Phase 8a (`docs/convergence/PHASE_8A_SOURCE_INTELLIGENCE_SPEC.md`) —
- * document/image d'origine.
+ * Document/image d'origine.
  *
  * **Réaligné (25/08/2026) sur le vrai modèle cible**
  * (`03_DOMAIN_DATA_MODEL.md`, domaine "Source Intelligence" :
@@ -1185,11 +1172,11 @@ export interface ProvenanceLink {
  * après lecture directe du package source (Google Drive reconnecté en
  * cours de session) : la chaîne complète est
  * `Source → SourceVersion → Extraction → ExtractionItem → KnowledgeItem`,
- * pas `Source → Extraction → KnowledgeItem` (version fabriquée en 8a
+ * pas `Source → Extraction → KnowledgeItem` (version fabriquée initialement
  * faute de source disponible à l'époque). `SourceLocation` est un pointeur
  * déclaratif séparé de `Source` — un même `Source` peut avoir plusieurs
  * localisations (ex. miroir Drive + référence externe) ; même limite
- * assumée qu'`EvidenceLocation` (7c) : aucun stockage de fichier binaire
+ * assumée qu'`EvidenceLocation` : aucun stockage de fichier binaire
  * réel construit dans ce périmètre.
  */
 export type TypeSource = 'document' | 'image'
@@ -1227,19 +1214,19 @@ export interface SourceVersion {
 }
 
 /**
- * Une exécution d'extraction (OCR via le relais Phase 6, ingestion Office
- * native Phase 19 — TD-014, ou saisie manuelle directe) sur une
+ * Une exécution d'extraction (OCR via le relais, ingestion Office
+ * native, ou saisie manuelle directe) sur une
  * `SourceVersion` précise. Ne porte plus le texte brut directement —
  * celui-ci est désormais porté par `ExtractionItem` (0..N par
  * `Extraction`), cohérent avec `Relationship Matrix` : `Extraction
  * produces ExtractionItem 1:N`.
  *
- * `docx_natif` (Phase 19) : extraction locale (`connecteurs/office/
+ * `docx_natif` : extraction locale (`connecteurs/office/
  * DocxNatifAdapter.ts`), aucun appel réseau, contrairement à `ocr_azure`.
- * `pdf_natif` (Phase 23, TD-021) : extraction locale (`connecteurs/pdf/
+ * `pdf_natif` : extraction locale (`connecteurs/pdf/
  * PdfNatifAdapter.ts`, `pdfjs-dist`), même absence d'appel réseau.
  * `xlsx_natif` volontairement absent à ce stade — aucune bibliothèque
- * d'ingestion Excel propre n'a été retenue (TD-014 : `xlsx`/SheetJS porte
+ * d'ingestion Excel propre n'a été retenue (`xlsx`/SheetJS porte
  * une vulnérabilité haute sans correctif sur le registre npm ;
  * `exceljs` introduit une dépendance transitive vulnérable) — limite
  * assumée, jamais une valeur fabriquée sans implémentation réelle.
@@ -1258,7 +1245,7 @@ export interface Extraction {
  * Fragment de texte brut granulaire produit par une `Extraction` —
  * immutable, la "preuve de premier niveau" (ce que `GAP.md` nomme
  * "Evidence" dans ce pipeline, pour éviter toute collision avec
- * l'`Evidence` de traçabilité Test/Execution, Phase 7c, qui est un
+ * l'`Evidence` de traçabilité Test/Execution, qui est un
  * concept distinct).
  */
 export interface ExtractionItem {
@@ -1273,7 +1260,7 @@ export interface ExtractionItem {
  * Interprétation structurée candidate d'un `ExtractionItem`. **Garde-fou
  * non négociable** : toujours créé au statut `a_valider` (NEEDS_REVIEW),
  * jamais `valide` à la création, quel que soit le contenu — cohérent
- * avec le principe fondateur n°1 et l'Acceptance Criteria de la Phase 8.
+ * avec le principe fondateur n°1 et l'Acceptance Criteria applicable.
  * Aucun appel IA n'est fait par ce module : `valeur_interpretee` est
  * toujours fournie par l'appelant. `extraction_item_id` est une
  * simplification N:1 du N:M réel du modèle cible (un `KnowledgeItem`
@@ -1346,18 +1333,18 @@ export interface Conflict {
 }
 
 /**
- * Phase 9 (`docs/convergence/PHASE_9_CONTENT_PLAN_SPEC.md`) — planifie
- * quelles entrées (Method/Template, contexte d'actif/procédé) alimentent
- * un livrable, sans produire le contenu réglementaire lui-même. Ne couvre
- * que la première moitié du pipeline (`Request → Resolve → Context
- * Snapshot → Content Plan`) — `Generate → Render → Approve → Freeze`
- * (intégration avec `DefinitionGabarit`/`RenduGabarit.vue` et le cycle de
- * vie de `Section`) reste un chantier distinct, non engagé ici.
+ * Planifie quelles entrées (Method/Template, contexte d'actif/procédé)
+ * alimentent un livrable, sans produire le contenu réglementaire
+ * lui-même. Ne couvre que la première moitié du pipeline (`Request →
+ * Resolve → Context Snapshot → Content Plan`) — `Generate → Render →
+ * Approve → Freeze` (intégration avec `DefinitionGabarit`/
+ * `RenduGabarit.vue` et le cycle de vie de `Section`) reste un chantier
+ * distinct, non engagé ici.
  * `context_snapshot` est figé une seule fois à la création et reste
  * immutable — même si le `MethodProfile` référencé évolue plus tard.
  * `method_profile_type` distingue la table réellement référencée, car il
  * n'existe pas de type `Method` générique unifiant `MethodProfileACFC`/
- * `MethodProfileImpactAssessment` (décision déjà actée en Phase 3).
+ * `MethodProfileImpactAssessment`.
  *
  * `readiness` (ajouté 25/08/2026, réalignement après lecture directe de
  * `01_ARCHITECTURE_MASTER_FINAL.md` §26 et `09_DELIVERABLE_ENGINE.md`) :
@@ -1389,14 +1376,13 @@ export interface ContentPlan {
 }
 
 /**
- * Phase 10 (`docs/convergence/PHASE_10_INTEGRATION_GATEWAY_SPEC.md`) —
- * connecteur générique vers un système documentaire externe (domaine
+ * Connecteur générique vers un système documentaire externe (domaine
  * "Integration" de `03_DOMAIN_DATA_MODEL.md` : `Connector, SyncJob,
  * ExternalReference`). `github`/`google_drive` sont les connecteurs de
  * stockage propres à ValidaPharm (source de vérité/miroir, déjà
- * existants), réutilisés ici en ADAPT (TD-005) comme deux premières
+ * existants), réutilisés ici en ADAPT comme deux premières
  * implémentations concrètes de l'interface générique — pas le cœur
- * métier de cette phase, qui vise les vrais connecteurs QMS/documentaires
+ * métier de ce chantier, qui vise les vrais connecteurs QMS/documentaires
  * tiers. `AssetNode.qms_connector_id` (Structure Système) référence
  * désormais un `Connector` de ce domaine.
  */
@@ -1458,8 +1444,8 @@ export type Connector = {
 /**
  * Une tentative de synchronisation via un `Connector`. **Garde-fou non
  * négociable** : `indisponible`/`echec` ne bloque jamais une activité
- * métier indépendante — cohérent avec DEC-002/055 déjà appliqué à
- * `QualityEvent` (Phase 5), étendu ici explicitement aux connecteurs
+ * métier indépendante — cohérent avec le principe déjà appliqué à
+ * `QualityEvent`, étendu ici explicitement aux connecteurs
  * (`05_CONTRACTS_EVENTS.md` : `PENDING/UNAVAILABLE/RETRYING/FAILED`).
  */
 export type StatutSyncJob =
@@ -1479,7 +1465,7 @@ export interface SyncJob {
 /**
  * Pointeur vers un document/objet externe — jamais son contenu dupliqué
  * comme contenu officiel (même principe que `EvidenceLocation`/
- * `SourceLocation`, Phases 7c/8a).
+ * `SourceLocation`).
  */
 export interface ExternalReference {
   id: string
@@ -1491,17 +1477,16 @@ export interface ExternalReference {
 }
 
 /**
- * Phase 11 (`docs/convergence/PHASE_11_ORGANIZATION_MIGRATION_SPEC.md`) —
- * remplace le modèle `Client` plat par une hiérarchie organisationnelle
+ * Remplace le modèle `Client` plat par une hiérarchie organisationnelle
  * réelle (`01_ARCHITECTURE_MASTER_FINAL.md` §3 : `Organization → Workspace
- * → Global/Corporate ou Site N → Facility → Area`, DEC-003/061).
+ * → Global/Corporate ou Site N → Facility → Area`).
  *
  * **Décision structurante** : `Organization.id` reprend exactement
  * l'`id` du `Client` migré — aucune des ~25 tables existantes (toutes
  * indexées par `client_id`) n'a besoin d'être modifiée dans cet
  * incrément, leur `client_id` référence désormais `Organization.id`
  * (même valeur). `Client` devient ainsi littéralement "un cas particulier
- * à un seul niveau d'Organization" (TD-006), sans Big Bang.
+ * à un seul niveau d'Organization", sans Big Bang.
  */
 export interface Organization {
   id: string
@@ -1530,10 +1515,9 @@ export interface Workspace {
 }
 
 /**
- * Phase 13 (`docs/convergence/PHASE_13_MISSION_ACTIVITY_SPEC.md`) — domaine
- * "Work" de `03_DOMAIN_DATA_MODEL.md` (`Mission, Activity, Dependency,
- * WorkflowDefinition, WorkflowInstance, WorkflowStep, Approval`),
- * décision d'entrée TD-009 : `Mission`/`Activity` seulement,
+ * Domaine "Work" de `03_DOMAIN_DATA_MODEL.md` (`Mission, Activity,
+ * Dependency, WorkflowDefinition, WorkflowInstance, WorkflowStep,
+ * Approval`), décision d'entrée : `Mission`/`Activity` seulement,
  * `WorkflowDefinition`/`WorkflowInstance`/`Approval` différés sur besoin
  * réel démontré.
  *
@@ -1589,8 +1573,8 @@ export interface AssociationMissionQualityEvent {
  * `Activity` n'existe jamais hors d'une `Mission`).
  *
  * `Activity produces Evidence` (matrice cible) volontairement **non
- * construit** ici (voir spec §3, CONFLICT) : contredirait le garde-fou
- * non négociable déjà testé d'`Evidence` (Phase 7c — "jamais une preuve
+ * construit** ici (voir spec §3) : contredirait le garde-fou
+ * non négociable déjà testé d'`Evidence` ("jamais une preuve
  * orpheline", `execution_id` non nul). Résolution différée à un incrément
  * qui la traitera explicitement.
  */
@@ -1615,7 +1599,7 @@ export interface Activity {
  * exprime seulement un ordre attendu, jamais un verrou bloquant (aucune
  * fonction de ce module n'empêche de démarrer/terminer une `Activity`
  * dont une dépendance n'est pas encore terminée — même discipline que
- * DEC-002/055 déjà appliquée à `QualityEvent`/`Connector`).
+ * le principe déjà appliqué à `QualityEvent`/`Connector`).
  */
 export interface Dependency {
   id: string
@@ -1626,12 +1610,12 @@ export interface Dependency {
 }
 
 /**
- * Phase 14 (`docs/convergence/PHASE_14_CONTEXT_ENGINE_SPEC.md`) — domaine
- * "Context" de `03_DOMAIN_DATA_MODEL.md` (`ContextView, ContextSnapshot,
- * Applicability, Effectivity, Override`). Généralise la résolution
- * Scope+Applicability+Effectivity+Override (`resoudreRegleEffective`,
- * `ancetresWorkspace`, Phase 11/12), jusqu'ici câblée sur le seul store
- * Structure Système, en une entité réutilisable par toute `Mission`.
+ * Domaine "Context" de `03_DOMAIN_DATA_MODEL.md` (`ContextView,
+ * ContextSnapshot, Applicability, Effectivity, Override`). Généralise la
+ * résolution Scope+Applicability+Effectivity+Override
+ * (`resoudreRegleEffective`, `ancetresWorkspace`), jusqu'ici câblée sur le
+ * seul store Structure Système, en une entité réutilisable par toute
+ * `Mission`.
  *
  * **Immutable** (invariant #12 de `03_DOMAIN_DATA_MODEL.md` : "ContextSnapshot
  * is immutable") : aucune fonction de mise à jour n'est exposée par
@@ -1681,12 +1665,10 @@ export interface ContextSnapshotItem {
 }
 
 /**
- * Phase 15 (`docs/convergence/PHASE_15_REASONING_ENGINE_SPEC.md`) — domaine
- * "AI" de `03_DOMAIN_DATA_MODEL.md` (`AIRequest, AIResponse,
+ * Domaine "AI" de `03_DOMAIN_DATA_MODEL.md` (`AIRequest, AIResponse,
  * AIConfiguration, AIModelVersion, AIEvaluation`). Décisions d'entrée :
- * TD-007 (orchestration côté navigateur, relais reste un simple proxy sans
- * état) et TD-008 (états de confiance discrets, jamais un score
- * numérique).
+ * orchestration côté navigateur (relais reste un simple proxy sans état)
+ * et états de confiance discrets, jamais un score numérique.
  *
  * **États fermés et documentés mot pour mot** (même discipline que
  * `StatutKnowledgeItem`) : `connu` (vérifié — au moins une citation
@@ -1717,7 +1699,7 @@ export interface TraceAppelOutil {
 
 /**
  * Configuration versionnée du moteur de raisonnement (condition E4 de la
- * revue panel — `PHASE_13_17_REVUE_PANEL_MOTEUR_RAISONNEMENT.md` : "sa
+ * revue panel : "sa
  * configuration doit être versionnée pour qu'une décision passée reste
  * reconstructible même après une évolution du moteur"). Immuable une fois
  * créée — une évolution de l'ensemble d'outils disponibles crée une
@@ -1733,7 +1715,7 @@ export interface AIConfiguration {
 
 /**
  * Une invocation du moteur de raisonnement — optionnellement rattachée à
- * une `Mission` et/ou un `ContextSnapshot` déjà assemblé (Phases 13/14),
+ * une `Mission` et/ou un `ContextSnapshot` déjà assemblé,
  * référence toujours l'`AIConfiguration` exacte utilisée (reproductibilité,
  * invariant #4 : "Effective configuration is deterministic and
  * traceable"). Immuable une fois créée.
@@ -1752,7 +1734,7 @@ export interface AIRequest {
  * Résultat d'une `AIRequest`. **Garde-fou non négociable** : le contenu
  * d'une `AIResponse` n'est jamais écrit directement dans
  * `Requirement`/`Test`/`KnowledgeItem` par aucune fonction de ce domaine —
- * même principe que `Confirmation` (Phase 8a), cohérent avec le principe
+ * même principe que `Confirmation`, cohérent avec le principe
  * fondateur n°1 (`00-cadrage-projet.md`) et l'invariant #8
  * ("AI output is not canonical by confidence alone"). Immuable une fois
  * créée.
@@ -1780,7 +1762,7 @@ export type TypeObjetCitable =
 /**
  * Jointure explicite et polymorphe "citations obligatoires vers
  * Evidence/ProvenanceLink" (portée de la revue panel, Question A) — même
- * pattern que `ContextSnapshotItem` (Phase 14).
+ * pattern que `ContextSnapshotItem`.
  */
 export interface CitationAIResponse {
   id: string
@@ -1791,20 +1773,20 @@ export interface CitationAIResponse {
 }
 
 /**
- * Une procédure (SOP/WI) structurée par un humain — cerveau procédural
- * (Phase 20, TD-016). `reference` est l'identifiant stable à travers les
+ * Une procédure (SOP/WI) structurée par un humain — cerveau procédural.
+ * `reference` est l'identifiant stable à travers les
  * révisions (ex. "SOP-QA-012") ; `numero_version` est auto-incrémenté par
- * référence, même patron que `SourceVersion` (Phase 8a) — immuable une
+ * référence, même patron que `SourceVersion` — immuable une
  * fois créée : une nouvelle révision crée une nouvelle `Procedure`,
  * jamais une mutation (répond à R-21, `02-analyse-de-risque-outil.md` :
  * ne jamais confondre une révision obsolète avec la version applicable).
  *
  * **Garde-fou non négociable** : aucune structuration automatique par
  * IA — `ProcedureStep` est toujours saisi par un humain ayant lu la
- * procédure (assisté par `extraireTexteDocx`/`extraireImagesDocx`, Phase
- * 19), même discipline que `KnowledgeItem.valeur_interpretee` (Phase 8a).
+ * procédure (assisté par `extraireTexteDocx`/`extraireImagesDocx`),
+ * même discipline que `KnowledgeItem.valeur_interpretee`.
  *
- * @requirement docs/convergence/PHASE_20_PROCEDURAL_KNOWLEDGE_SPEC.md, TD-016
+ * @requirement Connaissance procédurale
  */
 export interface Procedure {
   id: string
@@ -1837,12 +1819,12 @@ export interface ProcedureStep {
 
 /**
  * Rôle sémantique d'une section de SOP, indépendant du libellé exact
- * choisi par un client donné (Phase 21, `PHASE_21_PARSEUR_STRUCTURE_
- * PROCEDURE_SPEC.md`) — établi en confrontant deux SOP pharma réelles de
- * clients différents (Sanofi Lyon, Ferring International Center) : les
- * deux suivent le même enchaînement sémantique (objectif → périmètre →
- * responsabilités → définitions → corps de procédure → références →
- * historique/annexes) sous des libellés lexicalement différents
+ * choisi par un client donné — établi en confrontant deux SOP pharma
+ * réelles de clients différents (Sanofi Lyon, Ferring International
+ * Center) : les deux suivent le même enchaînement sémantique (objectif →
+ * périmètre → responsabilités → définitions → corps de procédure →
+ * références → historique/annexes) sous des libellés lexicalement
+ * différents
  * ("OBJECTIF" vs "But", "CHAMP D'APPLICATION" vs "Domaine d'application"...).
  * `'autre'` couvre un intitulé numéroté reconnu comme en-tête (forme
  * courte, numérotation séquentielle) mais absent du dictionnaire connu —
@@ -1871,10 +1853,11 @@ export interface SectionDetectee {
  * Une étape candidate extraite (par motif, jamais par IA) du corps de la
  * section canonique `'procedure'`. Reste une **proposition** : rien ici
  * n'est écrit dans `ProcedureStep` sans confirmation humaine explicite
- * via `useProcedureStore.ajouterEtape` (même garde-fou que TD-016).
+ * via `useProcedureStore.ajouterEtape` (même garde-fou que pour
+ * `Procedure`/`ProcedureStep`).
  * `conditionDetectee`/`responsableDetecte`/`contexteDetecte` restent
  * `null` plutôt que d'être devinés quand aucun motif clair ne matche.
- * `contexteDetecte` (Phase 21 extension, TD-018) porte le dernier
+ * `contexteDetecte` porte le dernier
  * sous-titre numéroté ("2.1 Pre-requisites") rencontré avant cette étape,
  * quand le document en a un — jamais fabriqué si absent.
  */
@@ -1893,20 +1876,19 @@ export interface PropositionStructureProcedure {
 }
 
 /**
- * Repli IA-assisté de structuration procédurale (Phase 24, TD-022) — pour
- * un document hors couverture du parseur déterministe (Phases 21-22 :
- * aucun en-tête numéroté ni tableau reconnu, ex. genre Nordson, en-têtes
- * en gras sans numérotation). Même garde-fou non négociable que partout
- * ailleurs (TD-016) : `PropositionStructureProcedureIA` n'est **jamais**
- * écrite dans `Procedure`/`ProcedureStep` sans confirmation humaine
- * explicite.
+ * Repli IA-assisté de structuration procédurale — pour un document hors
+ * couverture du parseur déterministe (aucun en-tête numéroté ni tableau
+ * reconnu, ex. genre Nordson, en-têtes en gras sans numérotation). Même
+ * garde-fou non négociable que partout ailleurs :
+ * `PropositionStructureProcedureIA` n'est **jamais** écrite dans
+ * `Procedure`/`ProcedureStep` sans confirmation humaine explicite.
  *
  * `etat_confiance` par élément (`EtatConfianceIA`) résulte d'une
  * vérification déterministe d'ancrage — le texte proposé doit
  * effectivement apparaître (normalisé) dans le document source ; sinon
  * `'a_verifier'`, jamais un état plus confiant sur la seule affirmation
  * du modèle (même discipline que la vérification de citation
- * déterministe du Reasoning Engine, Phase 15 — ici appliquée au texte
+ * déterministe du Reasoning Engine — ici appliquée au texte
  * source plutôt qu'à un objet du domaine, faute d'objet préexistant à
  * citer pour une structure encore proposée).
  */
@@ -1921,7 +1903,7 @@ export interface EtapeProposeeIA {
   etat_confiance: EtatConfianceIA
 }
 
-/** `texteReponseBrute` : réponse brute du modèle, jamais rejetée même si le parsing échoue — traçabilité minimale même en cas d'échec (même discipline qu'`AIResponse.texte`, Phase 15). */
+/** `texteReponseBrute` : réponse brute du modèle, jamais rejetée même si le parsing échoue — traçabilité minimale même en cas d'échec (même discipline qu'`AIResponse.texte`). */
 export interface PropositionStructureProcedureIA {
   sections: SectionDetecteeIA[]
   etapesProposees: EtapeProposeeIA[]
@@ -1929,8 +1911,8 @@ export interface PropositionStructureProcedureIA {
 }
 
 /**
- * Un tableau brut extrait d'un `.docx` (`extraireTableauxDocx`, Phase 22,
- * TD-019) — fait structurel du document, sans interprétation. Grille de
+ * Un tableau brut extrait d'un `.docx` (`extraireTableauxDocx`) — fait
+ * structurel du document, sans interprétation. Grille de
  * cellules telle quelle : une cellule fusionnée verticalement apparaît
  * vide sur ses lignes de continuation (jamais un contenu deviné), une
  * fusion horizontale réduit simplement le nombre de cellules de la ligne
@@ -1945,8 +1927,7 @@ export interface TableauDocx {
 }
 
 /**
- * Gabarit d'export personnalisé fourni par un client (Phase 26 de
- * convergence architecturale, TD-024) — isolé strictement
+ * Gabarit d'export personnalisé fourni par un client — isolé strictement
  * par `client_id`, jamais partagé entre deux clients (propriété
  * intellectuelle du client, même principe que `AssetNode`).
  * `tags_trouves`/`tags_obligatoires_manquants` sont figés au moment de

@@ -13,14 +13,14 @@ export interface ResultatEnvoiRoute {
 }
 
 /**
- * Orchestration du routeur IA (SDS §6) : intercepte spécifiquement
+ * Orchestration du routeur IA : intercepte spécifiquement
  * `TimeoutError`/`IndisponibleError` pour basculer automatiquement vers
  * le modèle local, avec indicateur de bascule — jamais pour
  * `QuotaExceededError`/`ReponseInvalideError`, remontées telles quelles
  * (un quota dépassé n'est pas une indisponibilité, ne doit pas déclencher
  * un changement de fournisseur silencieux).
  *
- * @requirement SDS §6, mitige AR-R-12
+ * @requirement Mitigation du risque de bascule de fournisseur non signalée à l'utilisateur
  *
  * Fonction pure d'orchestration — ne décide d'aucune règle métier
  * au-delà de ce routage ; les adaptateurs eux-mêmes (connecteurs/ia/)

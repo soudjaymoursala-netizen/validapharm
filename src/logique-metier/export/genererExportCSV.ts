@@ -3,10 +3,10 @@ import type { Langue } from '../domaine/types'
 import { evaluerColonneCalculee } from '../gabarits/evaluerColonneCalculee'
 
 /**
- * Export CSV d'un tableau dynamique (FS §4.3 : "export CSV/XLSX
+ * Export CSV d'un tableau dynamique ("export CSV/XLSX
  * pour les tableaux dynamiques, ex. registre AMDEC").
  *
- * @requirement FS §4.3
+ * @requirement Export CSV de tableau dynamique
  *
  * CSV plutôt que XLSX binaire dans cet incrément : "CSV/XLSX" de l'URS
  * n'impose pas les deux formats, et CSV couvre sans perte l'usage
@@ -29,7 +29,7 @@ export function genererExportCSV(
   )
   const rangees = lignes.map((ligne) =>
     colonnes.map((colonne) => {
-      // Colonne calculée (ex. IPR, FDS §5) : jamais persistée, recalculée
+      // Colonne calculée (ex. IPR) : jamais persistée, recalculée
       // ici comme à l'écran (`RenduGabarit.vue`) — sinon le CSV exporté
       // contient une cellule vide là où l'écran montre une valeur.
       const valeur =

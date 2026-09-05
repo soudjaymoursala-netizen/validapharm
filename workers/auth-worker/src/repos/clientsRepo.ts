@@ -1,7 +1,7 @@
 import type { ClientEnregistre, UtilisateurEnregistre } from '../types'
 
 /**
- * Dépôt clients — D1 devient la source de vérité (TD-046) : nécessaire
+ * Dépôt clients — D1 devient la source de vérité : nécessaire
  * pour qu'un admin puisse réellement "voir tous les clients de
  * l'organisation", structurellement impossible tant que `Client` restait
  * seulement local (IndexedDB par navigateur, un utilisateur = un poste).
@@ -9,7 +9,7 @@ import type { ClientEnregistre, UtilisateurEnregistre } from '../types'
  * Visibilité (`listerVisiblesPar`) : un admin voit tout ; un utilisateur
  * voit les clients qu'il a créés ou ceux explicitement partagés avec lui
  * (`sharedWith`) — même convention `owner_id`/`shared_with` que
- * `Project` (TD-043/TD-044), désormais réellement appliquée côté serveur
+ * `Project`, désormais réellement appliquée côté serveur
  * plutôt qu'en simple convention d'affichage.
  */
 export interface ClientsRepo {

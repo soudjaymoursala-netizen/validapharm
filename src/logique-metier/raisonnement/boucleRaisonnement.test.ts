@@ -222,7 +222,7 @@ describe('executerBoucleRaisonnement — vérification de citation déterministe
   })
 })
 
-describe('executerBoucleRaisonnement — dégradation gracieuse (TD-007 A3)', () => {
+describe('executerBoucleRaisonnement — dégradation gracieuse', () => {
   test('un modèle qui ignore totalement le protocole ne crashe jamais : texte brut, a_verifier', async () => {
     const fournisseur = fournisseurMock()
     fournisseur.envoyerMessage.mockResolvedValueOnce(reponse("Je pense que l'impact est limité."))
@@ -262,7 +262,7 @@ describe("executerBoucleRaisonnement — plafond d'itérations (jamais une boucl
   })
 })
 
-describe('executerBoucleRaisonnement — narratif de contexte assemblé (Phase 27, TD-025)', () => {
+describe('executerBoucleRaisonnement — narratif de contexte assemblé', () => {
   const narratif: NarratifContexteSnapshot = {
     ou: [{ id: 'n1', texte: 'Ligne A12 (SYS-A12) — statut de qualification : qualifie' }],
     quoi: [],

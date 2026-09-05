@@ -7,9 +7,9 @@ export interface RegleEffective<T> {
 }
 
 /**
- * Résolution de configuration effective (Phase 11, `01_ARCHITECTURE_
+ * Résolution de configuration effective (`01_ARCHITECTURE_
  * MASTER_FINAL.md` §3 : `Scope + Applicability + Effectivity +
- * Inheritance/Override`, DEC-061).
+ * Inheritance/Override`).
  *
  * Remonte l'arbre `Workspace` depuis `workspaceId` vers la racine
  * (`global`) via `ancetresWorkspace`, et retourne la première règle

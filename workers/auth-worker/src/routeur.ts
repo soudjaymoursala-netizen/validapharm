@@ -85,7 +85,7 @@ async function consignerAudit(
 }
 
 /**
- * Routeur HTTP du Worker d'authentification (TD-046) — logique pure,
+ * Routeur HTTP du Worker d'authentification — logique pure,
  * indépendante du binding D1 réel (mêmes principes que `ocrHandler.ts` de
  * `workers/ocr-relay`) : `index.ts` ne fait que construire les dépôts D1
  * et les secrets, puis déléguer ici. Entièrement testable contre
@@ -145,7 +145,7 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
     return gererAutoriserAction(request, ctx, entetes)
   }
 
-  // --- Clients (D1 = source de vérité, TD-046) ---
+  // --- Clients (D1 = source de vérité) ---
   if (chemin === '/clients' && request.method === 'GET') {
     return gererListerClients(request, ctx, entetes)
   }
@@ -644,7 +644,7 @@ function peutVoirClient(utilisateur: UtilisateurEnregistre, client: ClientEnregi
 }
 
 function peutModifierClient(utilisateur: UtilisateurEnregistre, client: ClientEnregistre): boolean {
-  // Cohérent avec la vision utilisateur (TD-043) : "lecture pour tous [les
+  // Cohérent avec la vision utilisateur : "lecture pour tous [les
   // partagés], écriture pour le créateur + les partagés" — jamais un
   // simple lecteur sans lien de partage/propriété.
   return peutVoirClient(utilisateur, client)

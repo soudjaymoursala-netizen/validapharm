@@ -2,10 +2,10 @@ import { GitHubConnector, type ConfigGitHubConnector } from '../github/GitHubCon
 import type { ConnecteurDocumentaire, DocumentExterne } from './ConnecteurDocumentaire'
 
 /**
- * ADAPT (TD-005) : enveloppe `GitHubConnector` déjà existant et testé,
+ * ADAPT : enveloppe `GitHubConnector` déjà existant et testé,
  * sans réécrire sa logique validée — première implémentation concrète de
  * `ConnecteurDocumentaire`. `GitHubConnector` reste le connecteur de
- * source de vérité de ValidaPharm lui-même (SDS §5) ; cet adaptateur ne
+ * source de vérité de ValidaPharm lui-même ; cet adaptateur ne
  * fait qu'exposer le même contrat générique que les futurs connecteurs
  * QMS tiers.
  */

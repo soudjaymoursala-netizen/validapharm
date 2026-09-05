@@ -1,5 +1,5 @@
 /**
- * Contrat d'erreur typé du relais OCR (TD-001, même principe que
+ * Contrat d'erreur typé du relais OCR (même principe que
  * `connecteurs/ia/erreurs.ts`) — jamais une exception générique pour un
  * cas prévu par la conception.
  */

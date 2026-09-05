@@ -75,7 +75,7 @@ async function construireDocxAvecCorps(corpsXml: string): Promise<ArrayBuffer> {
   return zip.generateAsync({ type: 'arraybuffer' })
 }
 
-describe('extraireTexteDocx (Phase 19, TD-014)', () => {
+describe('extraireTexteDocx', () => {
   test("extrait le texte brut d'un .docx réellement valide", async () => {
     const docx = await construireDocxMinimal('Voici la procédure Impact Assessment.')
     const resultat = await extraireTexteDocx(docx)
@@ -182,7 +182,7 @@ describe("extraireImagesDocx — schémas/photos incorporés (constat de l'utili
   })
 })
 
-describe('extraireTableauxDocx — étapes sous tableau (Phase 22, TD-019, calibré sur le manuel Markem-Imaje réel)', () => {
+describe('extraireTableauxDocx — étapes sous tableau (calibré sur le manuel Markem-Imaje réel)', () => {
   test('extrait la grille de cellules et le titre le plus proche précédant le tableau', async () => {
     const docx = await construireDocxAvecCorps(`
       <w:p><w:r><w:t>Powering on the controller</w:t></w:r></w:p>

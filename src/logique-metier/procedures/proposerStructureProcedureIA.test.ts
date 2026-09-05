@@ -17,7 +17,7 @@ function providerMock(texteReponse: string): ProviderAdapter {
   }
 }
 
-describe('proposerStructureProcedureParIA (Phase 24, TD-022)', () => {
+describe('proposerStructureProcedureParIA', () => {
   it("transmet le texte source au fournisseur via contenu_joint, jamais sans l'indicateur de confirmation", async () => {
     const provider = providerMock('SECTION|objectif|To fill the tank')
     await proposerStructureProcedureParIA('To fill the tank\nOpen the tank lid.', provider)

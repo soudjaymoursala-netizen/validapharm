@@ -1,12 +1,11 @@
 /**
- * Table de décision (FS §4.6) — mappe (criticité ACFC binaire,
- * complexité) vers une conclusion parmi la liste fermée déjà fixée en FS.
- * **Table de décision fermée au sens FDS §5** : un calcul réglementaire
+ * Table de décision (§4.6) — mappe (criticité ACFC binaire,
+ * complexité) vers une conclusion parmi la liste fermée déjà fixée.
+ * **Table de décision fermée** : un calcul réglementaire
  * versionné indépendamment, jamais une extrapolation — toute combinaison
  * non couverte explicitement renvoie `autre`, jamais une valeur devinée.
  *
- * **Adaptée le 25/08/2026** (Phase 1 de convergence architecturale,
- * `docs/convergence/CONVERGENCE_PLAN.md`) : la criticité d'entrée est
+ * **Adaptée le 25/08/2026** : la criticité d'entrée est
  * désormais le verdict binaire réel de l'ACFC (`evaluerVerdictACFC.ts` —
  * "critique"/"non_critique", confirmé sur 4 sources indépendantes),
  * remplaçant l'ancien modèle à 4 niveaux (`critique/majeur/mineur/
@@ -16,7 +15,7 @@
  * **PROVISOIRE** : le mapping vers FAT/SAT/IQ/IQ+OQ/IQ+OQ+PQ reste une
  * première proposition, jamais validée par un expert qualification réel.
  *
- * @requirement FDS §5
+ * @requirement Table de décision de stratégie de qualification
  */
 
 export type NiveauComplexite = 'catalogue' | 'specifique'
@@ -25,7 +24,7 @@ export type ConclusionStrategieQualification =
   'aucun_impact' | 'revue_documentaire' | 'fat' | 'sat' | 'iq' | 'iq_oq' | 'iq_oq_pq' | 'autre'
 
 /**
- * Version de la table elle-même (FDS §5 : "versionnée indépendamment,
+ * Version de la table elle-même ("versionnée indépendamment,
  * même principe que `template_engine_version`") — à incrémenter à
  * chaque modification de la table, jamais silencieusement.
  */

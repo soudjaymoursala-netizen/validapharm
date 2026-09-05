@@ -1,9 +1,9 @@
 /**
- * Contrat d'erreur typé du connecteur GitHub (SDS §5) — jamais une
+ * Contrat d'erreur typé du connecteur GitHub — jamais une
  * exception générique pour un cas prévu par la conception.
  */
 
-/** HTTP 409 sur une écriture : le SHA distant a changé depuis la dernière lecture (AR-R-34). */
+/** HTTP 409 sur une écriture : le SHA distant a changé depuis la dernière lecture (mitige le risque de conflit d'écriture silencieux). */
 export class ConflitShaError extends Error {
   constructor(message = 'Le contenu distant a changé depuis la dernière lecture (SHA différent).') {
     super(message)
@@ -45,7 +45,7 @@ export class FichierIntrouvableError extends Error {
   }
 }
 
-/** HTTP 403 avec `X-RateLimit-Remaining: 0` : quota d'appels API épuisé (AR-R-63). */
+/** HTTP 403 avec `X-RateLimit-Remaining: 0` : quota d'appels API épuisé (mitige le risque de quota API dépassé). */
 export class QuotaApiDepasseError extends Error {
   constructor(
     message: string,

@@ -1,7 +1,7 @@
 /**
- * Knowledge Graph générique (Phase 31 de convergence architecturale,
- * TD-029) — extrait le parcours en largeur déjà construit et testé pour
- * l'Architecture Technique (`chaineTechniqueDepuis`, Phase 18) en un
+ * Knowledge Graph générique — extrait le parcours en largeur déjà
+ * construit et testé pour
+ * l'Architecture Technique (`chaineTechniqueDepuis`) en un
  * utilitaire réutilisable pour tout ensemble d'arêtes typées reliant deux
  * nœuds par id (`{ id }`), quel que soit le nom réel de leurs champs
  * source/cible — jamais figé sur `noeud_source_id`/`noeud_cible_id`
@@ -24,8 +24,8 @@ export interface EtapeParcoursGraphe<TArete, TNoeud> {
 
 /**
  * Parcours en largeur des arêtes *sortantes* depuis un nœud de départ.
- * Aucune détection de cycle (même tolérance que `chaineTechniqueDepuis`,
- * TD-013) : un `visites` défensif évite seulement une boucle infinie
+ * Aucune détection de cycle (même tolérance que `chaineTechniqueDepuis`) :
+ * un `visites` défensif évite seulement une boucle infinie
  * d'exécution, il ne rejette jamais une arête valide.
  */
 export function parcourirGraphe<TArete, TNoeud extends { id: string }>(

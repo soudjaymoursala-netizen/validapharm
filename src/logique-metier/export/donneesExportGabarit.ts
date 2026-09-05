@@ -6,7 +6,7 @@ import { libelleStatut } from '../i18n/libellesStatut'
 /**
  * Données d'export construites une seule fois et consommées par **tous**
  * les générateurs de document (HTML/`.doc`, `.docx` OOXML réel via un
- * gabarit client — Phase 26, TD-024) — jamais reconstruites séparément par
+ * gabarit client) — jamais reconstruites séparément par
  * chaque renderer. C'est ce partage qui garantit par construction
  * l'équivalence de contenu exigée entre gabarit par défaut et gabarit
  * personnalisé : les deux renderers reçoivent exactement les
@@ -96,7 +96,7 @@ function construireSections(
           lignes: lignes.map((ligne) =>
             champ.colonnes
               .map((c) => {
-                // Colonne calculée (ex. IPR, FDS §5) : jamais persistée
+                // Colonne calculée (ex. IPR) : jamais persistée
                 // (`ligne[c.field_key]` vaut toujours `null`) — recalculée
                 // ici comme le fait `RenduGabarit.vue` à l'écran, sinon le
                 // livrable exporté affiche une cellule vide là où l'écran
