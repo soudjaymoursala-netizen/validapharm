@@ -138,7 +138,7 @@ Radicalement différent ("inexistant en ingestion"): parsing DOCX natif réel (t
 
 ### Deliverables (mise à jour)
 
-Le calcul de `readiness` existe maintenant réellement (`construireReadinessContentPlan`) et parcourt la vraie chaîne Requirement→Couverture→Test→Execution→Evidence, bloquant sur `QualityEvent` ouvert. Reste vrai: pas d'objet `DeliverableVersion` unifié référençant l'ensemble des versions utilisées (voir).
+Le calcul de `readiness` existe maintenant réellement (`construireReadinessContentPlan`) et parcourt la vraie chaîne Requirement→Couverture→Test→Execution→Evidence, bloquant sur `QualityEvent` ouvert. Reste vrai: pas d'objet `DeliverableVersion` unifié référençant l'ensemble des versions utilisées.
 
 ### Test System (mise à jour)
 

@@ -68,7 +68,7 @@ Catégories de la checklist déjà vérifiées sur le code réel (types, moteurs
 
 Chaque item ci-dessus, quand il est engagé, suit la discipline déjà en place : Spec → (revue panel E1-E7 si nouveau domaine) → Implémentation → Vérification (tests + typecheck + lint + navigateur réel si UI) → Alignement documentaire (URS, spécification fonctionnelle) → Commit/Push → mise à jour de la table de suivi de `CONVERGENCE_PLAN.md`.
 
-## 5. Pourquoi commencer par la
+## 5. Pourquoi commencer par l'Architecture Technique
 
 Parmi les 4 chantiers P0, l'Architecture Technique est la seule à ne nécessiter **aucune nouvelle dépendance externe** ni recherche préalable (contrairement à l'ingestion Office, qui exige un choix de librairie documenté) — c'est un ajout de domaine pur (types + Dexie + store + fonction pure), suivant exactement le patron déjà validé et testé des jointures typées existantes (`Couverture`, `ContextSnapshotItem`). Elle débloque directement:
 - le scénario TEST 6 de la checklist (tracer Equipment→PLC→SCADA→Server);
@@ -81,9 +81,9 @@ Parmi les 4 chantiers P0, l'Architecture Technique est la seule à ne nécessite
 - Aucune détection de cycle sur les relations techniques: `associated_nodes[]` (graphe libre) tolère déjà les cycles par conception documentée; les relations typées suivent la même tolérance, pour ne pas imposer une contrainte que la vision ne demande pas.
 - Aucun écran dédié dans ce lot (même discipline que les autres domaines construits sans écran: domaine + persistance + store + outil de raisonnement d'abord, écran quand un cas d'usage réel le réclame).
 
-## 7. Prochaine étape après la
+## 7. Prochaine étape après le parseur déterministe
 
-Le point ouvert a été tranché par l'utilisateur: chemin déterministe (sans IA) d'abord, IA en repli seulement si la couverture réelle le réclame. La livre ce chemin déterministe, calibré sur 2 SOP réelles de clients différents. Reste, non planifié ici:
+Le point ouvert a été tranché par l'utilisateur: chemin déterministe (sans IA) d'abord, IA en repli seulement si la couverture réelle le réclame. Cette étape livre ce chemin déterministe, calibré sur 2 SOP réelles de clients différents. Reste, non planifié ici:
 
 - **Repli IA-assisté pour la structuration procédurale** — à engager seulement si un usage réel démontre que `detecterSections`/`proposerStructureProcedure` ne couvre pas suffisamment (ex. genre "instruction technique illustrée", voir §5 de la spec) — jamais par anticipation.
 - **Continuer sur le plan documenté**: Template Intelligence généralisée (item 5 du §4) — génération de documents au format client réel, `docxtemplater`+`pizzip` déjà pré-choisis.
