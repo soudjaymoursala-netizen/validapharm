@@ -4,7 +4,7 @@ import { ref } from 'vue'
 const CLE_LOCALSTORAGE = 'validapharm.client_actif_id'
 
 /**
- * Mémoire de navigation du dernier client visité (Phase 16, `docs/
+ * Mémoire de navigation du dernier client visité (`docs/
  * convergence/PHASE_16_COQUILLE_UX_SPEC.md` §2) — une commodité de
  * navigation côté navigateur, **jamais une donnée métier persistée en
  * base** (`localStorage`, pas Dexie). Sert uniquement à ce que la

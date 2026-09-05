@@ -25,14 +25,14 @@ export interface NouvelleActivityInput {
 }
 
 /**
- * Store `Mission`/`Activity` (Phase 13 de convergence architecturale —
- * spec détaillée dans `docs/convergence/PHASE_13_MISSION_ACTIVITY_SPEC.md`,
- * TD-009). Une `Mission` est un conteneur de travail contextualisé, pas un
+ * Store `Mission`/`Activity` (convergence architecturale —
+ * spec détaillée dans `docs/convergence/PHASE_13_MISSION_ACTIVITY_SPEC.md`).
+ * Une `Mission` est un conteneur de travail contextualisé, pas un
  * moteur de raisonnement en soi — ce store ne fait que la persistance et
  * les relations de base (dépendances entre `Activity`, association à des
  * `QualityEvent`), sans aucune logique de planification ou d'IA.
  *
- * @requirement docs/convergence/CONVERGENCE_PLAN.md, Phase 13
+ * @requirement docs/convergence/CONVERGENCE_PLAN.md
  */
 export const useMissionStore = defineStore('mission', () => {
   const missions = ref<Mission[]>([])
@@ -106,7 +106,7 @@ export const useMissionStore = defineStore('mission', () => {
   /**
    * Association N:M optionnelle à un `QualityEvent` (ex. une Mission
    * ouverte en réponse à un Change Control) — jamais une étape obligatoire,
-   * même discipline que `ReferenceQualityEvent` (DEC-002/055).
+   * même discipline que `ReferenceQualityEvent`.
    */
   async function associerQualityEvent(
     clientId: string,
@@ -184,7 +184,7 @@ export const useMissionStore = defineStore('mission', () => {
    * Dépendance `Activity → Activity` (ordre attendu) — jamais un verrou
    * bloquant : aucune fonction de ce store n'empêche de changer le statut
    * d'une `Activity` dont une dépendance n'est pas encore `terminee`, même
-   * discipline que DEC-002/055 déjà appliquée à `QualityEvent`/`Connector`.
+   * discipline déjà appliquée à `QualityEvent`/`Connector`.
    */
   async function ajouterDependance(
     clientId: string,

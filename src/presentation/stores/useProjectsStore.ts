@@ -24,8 +24,8 @@ export interface NouveauProjetInput {
 export type ErreurArchivageProjet = { erreur: 'introuvable' | 'deja_archive' | 'deja_actif' }
 
 /**
- * Store de la Couche Présentation (SDS §6) orchestrant la persistance
- * locale (`persistance/db.ts`) pour la gestion de projets (FS §4.0). Ne
+ * Store de la Couche Présentation orchestrant la persistance
+ * locale (`persistance/db.ts`) pour la gestion de projets. Ne
  * contient aucune règle métier elle-même — les décisions restent dans
  * `logique-metier/` ; ce store ne fait qu'appeler/persister.
  *
@@ -34,11 +34,11 @@ export const useProjectsStore = defineStore('projects', () => {
   const projects = ref<Project[]>([])
   const enChargement = ref(false)
   /**
-   * Identité résolue de l'utilisateur courant (Phase 37, TD-044) — mise à
+   * Identité résolue de l'utilisateur courant — mise à
    * jour à chaque `chargerProjets`/`creerProjet`, consommée par les
    * écrans pour la garde d'affichage `peutModifierProjet`. Vaut
    * `IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1` tant qu'aucun profil local
-   * n'est défini (comportement Phase 1 inchangé).
+   * n'est défini (comportement historique inchangé).
    */
   const identiteCourante = ref<string>(IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1)
 
@@ -93,7 +93,7 @@ export const useProjectsStore = defineStore('projects', () => {
   }
 
   /**
-   * Partage explicite d'un projet (Phase 37, TD-044) — ajoute ou met à
+   * Partage explicite d'un projet — ajoute ou met à
    * jour le niveau d'accès d'un utilisateur dans `shared_with`, jamais
    * déduit automatiquement. Le propriétaire lui-même n'a pas besoin d'un
    * enregistrement de partage — `peutModifierProjet` le reconnaît déjà
@@ -165,7 +165,7 @@ export const useProjectsStore = defineStore('projects', () => {
 
   /**
    * Crée un lien non dirigé entre deux sections d'un même projet
-   * (`project.links[]`, FDS §3.3/§3.6) — c'est le seul mécanisme qui permet
+   * (`project.links[]`) — c'est le seul mécanisme qui permet
    * de satisfaire les garde-fous de finalisation U-01/U-02/U-03
    * (`gardesFinalisation.ts`) autrement qu'en forçant avec un motif
    * obligatoire. Absent jusqu'ici de l'interface (aucune fonction ne
@@ -239,7 +239,7 @@ export const useProjectsStore = defineStore('projects', () => {
   }
 
   /**
-   * Archivage (§4.31, TD-033) — jamais une suppression physique
+   * Archivage (§4.31) — jamais une suppression physique
    * (ALCOA+) : `statut` bascule à `archive`, le projet reste lisible et
    * restaurable. La garde de confirmation (nom retapé + mot de passe
    * local) est vérifiée par l'appelant avant d'invoquer cette fonction,

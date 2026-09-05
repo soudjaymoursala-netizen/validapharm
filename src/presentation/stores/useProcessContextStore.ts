@@ -32,8 +32,8 @@ export interface NouveauManufacturingContextInput {
 }
 
 /**
- * Store `Process`/`FonctionActif`/`ManufacturingContext` (Phase 4 de
- * convergence architecturale, `docs/convergence/CONVERGENCE_PLAN.md`).
+ * Store `Process`/`FonctionActif`/`ManufacturingContext` (convergence
+ * architecturale, `docs/convergence/CONVERGENCE_PLAN.md`).
  * EXTEND pur : `AssetNode` et sa hiérarchie (Structure Système, §4.10) ne
  * sont jamais mutés ici, seulement référencés par id.
  *

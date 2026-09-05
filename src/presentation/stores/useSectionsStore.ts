@@ -36,8 +36,8 @@ export type ResultatActionSection =
   | { ok: false; raisonTransition: RaisonBlocageTransition }
 
 /**
- * Entrées de la génération de brouillon par adaptation (§4.1bis, Phase 33,
- * TD-031) — `nomDocumentReference` sert uniquement de nom affiché,
+ * Entrées de la génération de brouillon par adaptation (§4.1bis) —
+ * `nomDocumentReference` sert uniquement de nom affiché,
  * jamais de contenu ; le texte réellement transmis à l'IA est
  * `texteDocumentReference` (collé directement ou déjà extrait d'un fichier
  * .docx/.pdf côté écran).
@@ -60,13 +60,11 @@ const VERSION_MOTEUR_GABARITS = '0.1.0'
 
 /**
  * Store de la Couche Présentation orchestrant la rédaction de sections
- * (FS §4.1) et leur cycle de vie (FS §4.2, FDS §3.2/§3.3). Les décisions
+ * et leur cycle de vie. Les décisions
  * (transition autorisée ou non, blocage de finalisation) restent dans
  * `logique-metier/` — ce store se contente de rassembler le contexte
  * nécessaire (liens du projet, rôles renseignés) et de persister le
  * résultat.
- *
- * @requirement FS §4.0/§4.1/§4.2, FDS §3.2/§3.3
  */
 export const useSectionsStore = defineStore('sections', () => {
   const sectionsParProjet = ref<Record<string, Section[]>>({})
@@ -119,7 +117,7 @@ export const useSectionsStore = defineStore('sections', () => {
 
   /**
    * Génération de brouillon par adaptation d'un document de référence
-   * (§4.1bis, Phase 33, TD-031).
+   * (§4.1bis).
    *
    * Garde-fous non négociables, dans l'ordre :
    * - Refuse tant que `confirmationDroitUsage` n'est pas
@@ -213,7 +211,7 @@ export const useSectionsStore = defineStore('sections', () => {
       .filter((c) => c.origineTechnique && nouvellesValeurs[c.field_key] === c.valeur)
       .map((c) => c.field_key)
 
-    // Lignes de tableau dynamique (Phase 38, TD-045) — re-vérifiées vides
+    // Lignes de tableau dynamique — re-vérifiées vides
     // ici sur le même `section` chargé en tête de fonction (jamais un
     // écrasement), même discipline que `nouvellesValeurs` ci-dessus.
     const nouvellesTables = { ...section.tables }
@@ -275,13 +273,13 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
-   * Recrée une section importée depuis un export JSON (FS §4.3,
-   * "transfert entre postes") comme une section **nouvelle** dans le
+   * Recrée une section importée depuis un export JSON
+   * ("transfert entre postes") comme une section **nouvelle** dans le
    * projet cible — jamais un écrasement par id, qui risquerait une
    * collision entre installations (voir `analyserImportJSON.ts`).
    * Préserve l'historique importé (`audit_log`/`revisions`) et lui ajoute
    * une entrée `import` — jamais "création", qui masquerait l'origine
-   * (ALCOA+ "Attributable"/"Original", FS §3 v13).
+   * (ALCOA+ "Attributable"/"Original").
    */
   async function importerSection(
     projectId: string,
@@ -313,12 +311,10 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
-   * Journalise un export réussi (FS §3 : `audit_log.action` inclut
+   * Journalise un export réussi (`audit_log.action` inclut
    * "export"/"export_force") — jamais bloqué par le verrouillage
    * `valide_en_interne` (l'export d'une section validée est précisément
-   * l'usage principal, FS §4.3), contrairement à `mettreAJourValeurs`.
-   *
-   * @requirement FS §4.3
+   * l'usage principal), contrairement à `mettreAJourValeurs`.
    */
   async function journaliserExport(sectionId: string, force: boolean): Promise<void> {
     const section = await chargerSection(sectionId)
@@ -345,7 +341,7 @@ export const useSectionsStore = defineStore('sections', () => {
    * passer par une nouvelle révision (backlog).
    *
    * @requirement `audit_log.action` inclut explicitement
-   * "modification" dans le modèle pivot (FS §3) : une sauvegarde de
+   * "modification" dans le modèle pivot : une sauvegarde de
    * contenu qui ne laisserait aucune trace serait un écart de
    * traçabilité, pas seulement un détail d'implémentation. Une entrée
    * par appel (donc par sauvegarde debounced), jamais par frappe.
@@ -367,7 +363,7 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
-   * Sauvegarde automatique locale des lignes d'un tableau dynamique (FDS §4)
+   * Sauvegarde automatique locale des lignes d'un tableau dynamique
    * — même discipline que `mettreAJourValeurs` (verrouillage,
    * piste d'audit), pour la partie `Section.tables` du modèle pivot plutôt
    * que `Section.values`.
@@ -393,7 +389,7 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
-   * Renseigne l'approbateur final du workflow (FDS §3.2 : requis dès
+   * Renseigne l'approbateur final du workflow (requis dès
    * l'engagement du cycle, voir note d'interprétation sur
    * `appliquerTransition`).
    */
@@ -467,14 +463,14 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
-   * §4.1bis, clarification ALCOA+ (FS §3, v04) : le passage de
+   * §4.1bis, clarification ALCOA+ : le passage de
    * `propose_par_ia_non_valide` à `brouillon_aide` DOIT laisser une entrée
    * `revisions` distincte motif "validation utilisateur" — jamais fusionnée
    * avec l'entrée "génération assistée" déjà posée par
    * `genererBrouillonIA`, pour respecter le principe "Contemporaneous".
    * Documenté depuis la conception initiale mais jamais réellement posé
    * jusqu'ici (aucune fonction ne produisait encore ce statut) — corrigé
-   * en même temps que la génération elle-même (Phase 33, TD-031).
+   * en même temps que la génération elle-même.
    */
   async function validerSectionIA(sectionId: string): Promise<ResultatActionSection> {
     const section = await chargerSection(sectionId)

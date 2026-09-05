@@ -188,7 +188,7 @@ describe('useExecutionStore — garde-fous', () => {
     expect(secondeCloture).toEqual({ erreur: 'execution_deja_cloturee' })
   })
 
-  test('un ExecutionEvent ne crée jamais automatiquement de QualityEvent (DEC-002)', async () => {
+  test('un ExecutionEvent ne crée jamais automatiquement de QualityEvent', async () => {
     const test = await creerTestApprouve('client-1')
     const store = useExecutionStore()
     const execution = await store.demarrerExecution('client-1', {

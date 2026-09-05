@@ -27,10 +27,10 @@ export type ErreurEcriturePreuve = {
 }
 
 /**
- * Store des preuves (`Evidence`) rattachées à une `Execution` (Phase 7c de
- * convergence architecturale — spec dans
- * `docs/convergence/PHASE_7C_EVIDENCE_SPEC.md`). Dernière sous-étape de la
- * Phase 7 : `preuvesPourRequirement` démontre la traçabilité complète
+ * Store des preuves (`Evidence`) rattachées à une `Execution` (convergence
+ * architecturale — spec dans
+ * `docs/convergence/PHASE_7C_EVIDENCE_SPEC.md`). Dernière sous-étape de
+ * convergence : `preuvesPourRequirement` démontre la traçabilité complète
  * Requirement→Test→Execution→Evidence exigée par son Acceptance Criteria.
  * Ne construit aucun stockage de fichier réel — `EvidenceLocation` est un
  * pointeur déclaratif, jamais un flux binaire (limite assumée, §5 de la spec).
@@ -141,7 +141,7 @@ export const useEvidenceStore = defineStore('evidence', () => {
     return evidenceLocations.value.filter((l) => l.evidence_id === evidenceId)
   }
 
-  /** Démontre la traçabilité complète Requirement→Test→Execution→Evidence (Acceptance Criteria Phase 7). */
+  /** Démontre la traçabilité complète Requirement→Test→Execution→Evidence (Acceptance Criteria). */
   function preuvesPourRequirement(requirementId: string): Evidence[] {
     const idsPreuves = provenanceLinks.value
       .filter((p) => p.requirement_id === requirementId)

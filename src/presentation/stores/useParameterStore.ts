@@ -38,16 +38,16 @@ export interface NouveauCQAInput {
 }
 
 /**
- * Store `Parameter`/`ClassificationCriticiteParametre`/`CPP`/`CQA` (Phase 2
- * de convergence architecturale, `docs/convergence/CONVERGENCE_PLAN.md`).
+ * Store `Parameter`/`ClassificationCriticiteParametre`/`CPP`/`CQA` (convergence
+ * architecturale, `docs/convergence/CONVERGENCE_PLAN.md`).
  *
  * Garde-fou central : aucune fonction de ce store ne crée un `CPP` ou un
  * `CQA` à partir d'une `ClassificationCriticiteParametre` — ce sont deux
  * actes de déclaration humaine distincts et volontairement non reliés par
  * du code (`docs/convergence/GAP.md`, ligne "Parameter / CriticalParameter
- * / CPP / CQA" ; Target Architecture §10, DEC-019).
+ * / CPP / CQA" ; Target Architecture §10).
  *
- * @requirement Target Architecture §10, DEC-019/DEC-020/DEC-021
+ * @requirement Target Architecture §10
  */
 export const useParameterStore = defineStore('parameter', () => {
   const parametres = ref<Parameter[]>([])

@@ -337,7 +337,7 @@ describe('useTestDefinitionStore — isolation stricte par client', () => {
   })
 })
 
-describe('useTestDefinitionStore — Test Design Engine (Phase 35, TD-036)', () => {
+describe('useTestDefinitionStore — Test Design Engine', () => {
   test('genererCandidatsRisquesPourObjectif crée des candidats proposés depuis les risques action_requise', async () => {
     await db.risksAssessment.put(risqueTest())
     const store = useTestDefinitionStore()

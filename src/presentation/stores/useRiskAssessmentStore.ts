@@ -45,8 +45,8 @@ export interface ActionResiduelleRiskAssessmentInput {
 export type ErreurEcritureRiskAssessment = { erreur: 'introuvable' }
 
 /**
- * Store Risk Assessment / AMDEC autonome (Phase 29 de convergence
- * architecturale, TD-027). Même principe d'immuabilité versionnée que
+ * Store Risk Assessment / AMDEC autonome (convergence
+ * architecturale). Même principe d'immuabilité versionnée que
  * `useMethodProfileACFCStore`/`useImpactAssessmentStore` : une nouvelle
  * version de méthode ne mute jamais la précédente ; une évaluation figée
  * reste lisible avec l'échelle/le seuil de sa propre version.

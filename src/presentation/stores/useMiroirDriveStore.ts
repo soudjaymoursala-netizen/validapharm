@@ -9,17 +9,15 @@ export type ResultatMiroir = { ok: true; nbFichiers: number } | { ok: false; mes
 const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
 
 /**
- * Orchestrateur du miroir Drive (SDS §5bis) — relie le connecteur GitHub
+ * Orchestrateur du miroir Drive — relie le connecteur GitHub
  * (source de vérité, un seul dépôt pour toute l'installation) au
  * connecteur Drive (par client) : lit l'intégralité de l'état courant
  * depuis GitHub et l'écrit dans le dossier Drive dédié du client
  * (OQ-41 : "le miroir Drive reflète l'état du dépôt Git à l'identique").
  *
- * @requirement SDS §5bis
- *
  * Déclenchement manuel uniquement dans cet incrément ("Sauvegarder
  * maintenant") — le déclenchement automatique par heuristique
- * d'inactivité/fermeture de session (SDS §5bis) reste backlog : il
+ * d'inactivité/fermeture de session reste backlog : il
  * suppose une détection de fin de session qui n'existe pas encore dans
  * l'application, et un faux déclenchement automatique non testé serait
  * pire qu'une absence honnête de cette capacité.

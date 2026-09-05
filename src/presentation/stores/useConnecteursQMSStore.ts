@@ -8,8 +8,8 @@ export type NouveauConnecteurInput = { nom: string; actif: boolean } & ConfigCon
 /**
  * Configuration des connecteurs QMS/documentaires tiers — le type de
  * domaine `Connector` et sa table Dexie existaient
- * depuis la Phase 10 sans jamais avoir de store ni d'écran (trouvé en
- * inventoriant les écarts §12 de la FDS, corrigé le 31/08/2026).
+ * depuis longtemps sans jamais avoir de store ni d'écran (trouvé en
+ * inventoriant les écarts §12 de la conception, corrigé le 31/08/2026).
  *
  * **Périmètre** : CRUD de la configuration uniquement (nom, type, actif,
  * paramètres de connexion). Les adaptateurs `veeva_vault`/`sharepoint`/

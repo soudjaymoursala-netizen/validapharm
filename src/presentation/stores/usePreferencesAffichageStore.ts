@@ -14,7 +14,7 @@ const PILES_POLICE: Record<PoliceAffichage, string> = {
 
 /**
  * Préférences d'affichage (§9 du prompt maître du 03/09/2026, écran
- * Paramètres, Phase 40) — thème et police uniquement : les deux seules
+ * Paramètres) — thème et police uniquement : les deux seules
  * préférences réellement câblées de bout en bout (jetons `tokens.css`
  * modifiés via l'attribut `data-theme`/`--vp-police`). La langue d'interface
  * et une densité d'affichage ne sont volontairement PAS proposées ici —

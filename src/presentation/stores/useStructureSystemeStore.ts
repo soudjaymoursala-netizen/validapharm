@@ -59,7 +59,7 @@ export type ResultatCreationRelationTechnique =
   | { ok: false; raison: 'clients_differents' }
 
 /**
- * Store de la Couche Présentation pour le référentiel d'actifs (FS §4.10) —
+ * Store de la Couche Présentation pour le référentiel d'actifs —
  * hiérarchie configurable + CRUD de nœuds avec
  * les deux garde-fous non négociables (absence de cycle, unicité du code
  * par client), relations techniques et statut de
@@ -150,7 +150,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
 
   /**
    * Import en lot d'une hiérarchie d'actifs depuis un classeur `.xlsx`
-   * (Phase 36, TD-042) — lecture native minimale
+   * — lecture native minimale
    * (`XlsxNatifAdapter.extraireGrilleXlsx`) puis planification pure
    * (`preparerImportHierarchie`), jamais d'écriture avant validation
    * complète du plan. Écrit en un seul lot Dexie (`bulkPut`) plutôt
@@ -258,7 +258,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
    * s'il est assigné à l'un de ses ancêtres (héritage descendant), ou s'il
    * n'a pas encore été assigné (`workspace_id: null`, non-régression).
    *
-   * Délègue à la fonction pure extraite en Phase 14
+   * Délègue à la fonction pure extraite
    * (`logique-metier/organisation/noeudsVisiblesDepuisWorkspace.ts`),
    * réutilisée par l'assemblage de `ContextSnapshot` sans dupliquer la
    * logique — signature et comportement inchangés pour ce store.
@@ -271,11 +271,11 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
   }
 
   /**
-   * Relation typée et dirigée entre deux `AssetNode` (Phase 18, TD-013) —
+   * Relation typée et dirigée entre deux `AssetNode` —
    * garde-fou : les deux nœuds doivent exister et appartenir au même
    * client, jamais silencieusement tolérée (même discipline que
    * `creerNoeud`/`workspace_introuvable`). Aucune détection de cycle
-   * (voir `chaineTechniqueDepuis`/TD-013).
+   * (voir `chaineTechniqueDepuis`).
    */
   async function creerRelationTechnique(
     clientId: string,
@@ -303,7 +303,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     return { ok: true, relation }
   }
 
-  /** Délègue à la fonction pure `chaineTechniqueDepuis` (Phase 18). */
+  /** Délègue à la fonction pure `chaineTechniqueDepuis`. */
   function chaineTechniqueDepuisNoeud(noeudDepartId: string): EtapeChaineTechnique[] {
     return chaineTechniqueDepuis(noeudDepartId, relationsTechniques.value, noeuds.value)
   }

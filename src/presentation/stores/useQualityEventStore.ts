@@ -22,10 +22,10 @@ export interface NouveauQualityEventInput {
 }
 
 /**
- * Store `QualityEvent` (Phase 5 de convergence architecturale — spec
+ * Store `QualityEvent` (convergence architecturale — spec
  * détaillée dans `docs/convergence/PHASE_5_QUALITY_EVENTS_SPEC.md`).
  *
- * Garde-fou central (DEC-002/DEC-055) : ce store ne contient **aucune**
+ * Garde-fou central : ce store ne contient **aucune**
  * fonction qui bloque une opération d'un autre module à partir d'un
  * `QualityEvent` externe — un événement externe est seulement référencé
  * (`reference_externe`), jamais un verrou. Voir le test de régression

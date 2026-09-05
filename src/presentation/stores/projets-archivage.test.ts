@@ -22,7 +22,7 @@ async function creerProjet() {
   })
 }
 
-describe('useProjectsStore — archivage (§4.31, TD-033)', () => {
+describe('useProjectsStore — archivage (§4.31)', () => {
   test('un projet créé est actif, apparaît dans projetsActifs et pas dans projetsArchives', async () => {
     const store = useProjectsStore()
     const projet = await creerProjet()
@@ -88,8 +88,8 @@ describe('useProjectsStore — archivage (§4.31, TD-033)', () => {
   })
 })
 
-describe('useProjectsStore — partage de projet (Phase 37, TD-044)', () => {
-  test("un projet créé sans profil local a pour owner_id l'espace réservé Phase 1", async () => {
+describe('useProjectsStore — partage de projet', () => {
+  test("un projet créé sans profil local a pour owner_id l'espace réservé local", async () => {
     const projet = await creerProjet()
     expect(projet.owner_id).toBe('utilisateur-local-phase1')
     expect(projet.shared_with).toEqual([])

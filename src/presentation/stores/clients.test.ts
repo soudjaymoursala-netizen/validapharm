@@ -21,7 +21,7 @@ afterEach(() => {
   demonter()
 })
 
-describe('useClientsStore (Worker/D1, TD-046)', () => {
+describe('useClientsStore (Worker/D1)', () => {
   test('creerClient persiste et ajoute au state', async () => {
     const store = useClientsStore()
     const resultat = await store.creerClient({ name: 'Client A' })
@@ -116,7 +116,7 @@ describe('useClientsStore (Worker/D1, TD-046)', () => {
     expect(await store.desarchiverClient(client.id)).toEqual({ erreur: 'deja_actif' })
   })
 
-  test('creerClient persiste adresse/secteur/détails (§13 du prompt maître, Phase 40)', async () => {
+  test('creerClient persiste adresse/secteur/détails (§13 du prompt maître)', async () => {
     const store = useClientsStore()
     const resultat = await store.creerClient({
       name: 'Client A',
@@ -165,7 +165,7 @@ describe('useClientsStore (Worker/D1, TD-046)', () => {
     expect(resultat).toEqual({ erreur: 'introuvable' })
   })
 
-  test('supprimerDefinitivement retire le client (admin, TD-046)', async () => {
+  test('supprimerDefinitivement retire le client (admin)', async () => {
     const store = useClientsStore()
     const client = await store.creerClient({ name: 'Client A' })
     if ('erreur' in client) throw client

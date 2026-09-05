@@ -41,11 +41,11 @@ export type ErreurEcritureExecution = {
 }
 
 /**
- * Store de l'exécution d'un `Test` approuvé (Phase 7b de convergence
+ * Store de l'exécution d'un `Test` approuvé (convergence
  * architecturale — spec dans `docs/convergence/PHASE_7B_EXECUTION_SPEC.md`).
  * Ne couvre que la traçabilité structurée du résultat (Execution →
  * ExecutionStep → Measurement, + ExecutionEvent) — pas l'Evidence
- * documentaire associée (Phase 7c), ni aucune génération IA.
+ * documentaire associée, ni aucune génération IA.
  *
  * @requirement Target Architecture, domaine "Execution"
  */
@@ -151,7 +151,7 @@ export const useExecutionStore = defineStore('execution', () => {
 
   /**
    * `quality_event_id` référence optionnellement un `QualityEvent` déjà
-   * existant — jamais créé automatiquement par ce module (DEC-002).
+   * existant — jamais créé automatiquement par ce module.
    */
   async function consignerEvenement(
     clientId: string,

@@ -4,11 +4,11 @@ import type { ProjectDocument } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
 
 /**
- * Section "Documents" d'un projet (FS §4.9, Must) —
+ * Section "Documents" d'un projet (Must) —
  * chargement de fichiers de référence sous n'importe quel format (PDF,
  * Office, images, etc.). Comblait un écart connu et documenté (les seuls
- * `ProjectDocument` existants venaient du besoin ponctuel §4.1bis, Phase
- * 33 — aucun écran générique de bibliothèque n'existait, cf.
+ * `ProjectDocument` existants venaient du besoin ponctuel §4.1bis
+ * — aucun écran générique de bibliothèque n'existait, cf.
  * `logique-metier/domaine/types.ts`).
  *
  * **Garde-fou non négociable** : chaque document est

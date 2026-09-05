@@ -12,13 +12,11 @@ export type ResultatTestConnexionDrive =
   { ok: true; nomDossier: string } | { ok: false; message: string }
 
 /**
- * Store de configuration du miroir Drive (SDS §5bis) — une connexion par
+ * Store de configuration du miroir Drive — une connexion par
  * client (`client_id`), jamais globale (contrairement à GitHub) : le
- * dossier et le jeton sont isolés par client (SDS §7). Toutes les méthodes
+ * dossier et le jeton sont isolés par client. Toutes les méthodes
  * prennent donc explicitement le `client_id` concerné, plutôt qu'un état
  * de connexion unique comme `useConnexionGitHubStore`.
- *
- * @requirement SDS §5bis, §7
  */
 export const useConnexionDriveStore = defineStore('connexionDrive', () => {
   const connexion = ref<EnregistrementConnexionDrive | null>(null)

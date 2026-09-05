@@ -7,7 +7,7 @@ export type ModeAffichage = 'expert' | 'assistant'
 const MODE_PAR_DEFAUT: ModeAffichage = 'expert'
 
 /**
- * Bascule Mode Expert / Mode Assistant (Phase 16, `docs/convergence/
+ * Bascule Mode Expert / Mode Assistant (`docs/convergence/
  * PHASE_16_COQUILLE_UX_SPEC.md` §3) — préférence d'affichage côté
  * navigateur (`localStorage`), pas une donnée métier. "Coexistants sur le
  * même moteur" (vision produit) : aucun nouveau moteur n'est créé pour le

@@ -163,7 +163,7 @@ describe('useQualityEventStore — références optionnelles entre événements 
   })
 })
 
-describe('scénario obligatoire "external deviation/change ne bloque pas une activité indépendante" (11_USE_CASES, DEC-002/DEC-055)', () => {
+describe('scénario obligatoire "external deviation/change ne bloque pas une activité indépendante" (11_USE_CASES)', () => {
   test("un Change Control externe ouvert référençant un nœud n'empêche pas la création d'un ManufacturingContext indépendant sur ce même nœud", async () => {
     const qualityEventStore = useQualityEventStore()
     const processContextStore = useProcessContextStore()

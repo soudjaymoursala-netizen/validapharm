@@ -76,7 +76,7 @@ describe('useIntegrationStore — cycle nominal', () => {
   })
 })
 
-describe('useIntegrationStore — garde-fou non-bloquant (DEC-002/055)', () => {
+describe('useIntegrationStore — garde-fou non-bloquant', () => {
   test('un SyncJob en échec ou indisponible ne bloque jamais une opération indépendante', async () => {
     const store = useIntegrationStore()
     const connector = await store.creerConnector('client-1', {

@@ -32,7 +32,7 @@ function wireVersClient(w: ClientWire): Client {
     archived_by: w.archivedBy,
     // L'audit d'un client géré par le Worker vit désormais côté serveur
     // (table `audit_log` D1, consultable par un admin via `/admin/audit`)
-    // — jamais dupliqué ici (TD-046).
+    // — jamais dupliqué ici.
     audit_log: [],
     created_at: w.createdAt,
     created_by_user_id: w.createdByUserId,
@@ -45,24 +45,24 @@ function trierParNom(clients: Client[]): Client[] {
 }
 
 /**
- * Store de la Couche Présentation (SDS §6) pour l'entité `client` — depuis
- * la Phase 39 (TD-046), un client REST du Worker d'authentification
+ * Store de la Couche Présentation pour l'entité `client` — désormais
+ * un client REST du Worker d'authentification
  * (Cloudflare D1 devient la source de vérité), plus un accès Dexie direct
  * : nécessaire pour qu'un admin voie réellement tous les clients de
  * l'organisation, structurellement impossible avec un stockage seulement
  * local par navigateur. `Project`/`Section`/gabarits restent inchangés
- * (IndexedDB + synchronisation GitHub, TD-005).
+ * (IndexedDB + synchronisation GitHub).
  *
- * **Archivage (§4.31, TD-033)** : jamais une suppression
+ * **Archivage (§4.31)** : jamais une suppression
  * physique (ALCOA+) — `archiverClient` change `statut`, le client reste
- * lisible et restaurable. Contrairement à avant Phase 39, l'identité de
+ * lisible et restaurable. Contrairement à avant, l'identité de
  * l'acteur (`archived_by`) est désormais résolue **côté serveur** depuis
  * la session authentifiée, jamais déclarée par l'appelant — la garde de
  * confirmation (re-saisie du vrai mot de passe, `useAuthStore.
  * verifierMotDePasse`) reste côté appelant (composant), avant d'invoquer
  * `archiverClient`, cohérent avec le reste de l'app.
  *
- * **Suppression définitive** (`supprimerDefinitivement`, TD-046) :
+ * **Suppression définitive** (`supprimerDefinitivement`) :
  * réservée au rôle admin (vérifié côté serveur, jamais seulement côté
  * client), justification obligatoire, tracée en audit — jamais pour les
  * autres entités (`Project`/`Section` restent archivage-only).
@@ -115,8 +115,8 @@ export const useClientsStore = defineStore('clients', () => {
   }
 
   /**
-   * Modification des informations d'entreprise (§13 du prompt maître,
-   * Phase 40) — jamais le nom seul comme le faisait l'écran initial :
+   * Modification des informations d'entreprise (§13 du prompt maître) —
+   * jamais le nom seul comme le faisait l'écran initial :
    * adresse/secteur/détails éditables après création, sans re-création.
    */
   async function modifierClient(
@@ -164,7 +164,7 @@ export const useClientsStore = defineStore('clients', () => {
   /**
    * Suppression **définitive** — admin uniquement (vérifié côté serveur),
    * justification obligatoire, jamais un simple bouton côté client sans
-   * garde réelle (TD-046, contrairement à `archiverClient` qui reste
+   * garde réelle (contrairement à `archiverClient` qui reste
    * réversible).
    */
   async function supprimerDefinitivement(

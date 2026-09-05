@@ -16,19 +16,19 @@ export type EntreesAssemblage = Omit<
 }
 
 /**
- * Store `ContextSnapshot` (Phase 14 de convergence architecturale — spec
+ * Store `ContextSnapshot` (convergence architecturale — spec
  * détaillée dans `docs/convergence/PHASE_14_CONTEXT_ENGINE_SPEC.md`).
  * Généralise la résolution Scope+Applicability+Effectivity+Override
- * (`resoudreRegleEffective`/`ancetresWorkspace`, Phase 11/12), jusqu'ici
+ * (`resoudreRegleEffective`/`ancetresWorkspace`), jusqu'ici
  * câblée sur le seul store Structure Système, en une entité réutilisable
  * par toute `Mission`.
  *
  * **Garde-fou non négociable** : aucune fonction de mise à jour n'est
  * exposée — un `ContextSnapshot` est immuable une fois créé (invariant #12
  * de `03_DOMAIN_DATA_MODEL.md`), même discipline que `Evidence`/
- * `ExecutionStep` (Phase 7b/7c).
+ * `ExecutionStep`.
  *
- * @requirement docs/convergence/CONVERGENCE_PLAN.md, Phase 14
+ * @requirement docs/convergence/CONVERGENCE_PLAN.md
  */
 export const useContextEngineStore = defineStore('contextEngine', () => {
   const snapshots = ref<ContextSnapshot[]>([])

@@ -39,11 +39,9 @@ export interface MessageChatAffiche {
 }
 
 /**
- * Panneau Chat expert (FDS §3.4, FS §4.4) — orchestre l'envoi via le
+ * Panneau Chat expert — orchestre l'envoi via le
  * routeur IA (`envoyerAvecBascule`) et journalise la session (pas le
  * contenu échangé) à la fermeture.
- *
- * @requirement FDS §3.4
  */
 export const usePanneauChatStore = defineStore('panneauChat', () => {
   const configStore = useClientConfigStore()
@@ -111,7 +109,7 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
   /**
    * @param question Texte réellement envoyé au fournisseur — pour le mode
    * `audit_simule`, l'appelant y passe le prompt déjà construit par
-   * `construirePromptAuditSimule` (Phase 32), jamais la question brute.
+   * `construirePromptAuditSimule`, jamais la question brute.
    * @param questionAffichee Texte affiché dans l'historique du panneau —
    * par défaut identique à `question` ; permet à l'écran de conserver la
    * question brute de l'utilisateur à l'affichage même quand `question`
@@ -155,7 +153,7 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
       }
     } catch (e) {
       // Toute erreur d'envoi (y compris Quota/ReponseInvalide, jamais
-      // basculées automatiquement par le routeur — SDS §6) est affichée
+      // basculées automatiquement par le routeur) est affichée
       // telle quelle, jamais masquée par un plantage silencieux.
       erreur.value = e instanceof Error ? e.message : "Erreur inconnue lors de l'envoi."
     } finally {

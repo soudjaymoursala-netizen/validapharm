@@ -10,7 +10,7 @@ import { envoyerAvecBascule } from '../../logique-metier/routeur-ia/envoyerAvecB
 // Aucun écran de sélection du modèle local n'est spécifié à ce stade ;
 // valeur par défaut documentée plutôt que silencieusement câblée en dur
 // sans trace (backlog : rendre configurable si un client utilise un
-// modèle Ollama différent). Extrait de `usePanneauChatStore` (Phase 17)
+// modèle Ollama différent). Extrait de `usePanneauChatStore`
 // pour être réutilisé par le Mission workspace sans dupliquer la logique.
 const MODELE_OLLAMA_PAR_DEFAUT = 'llama3'
 
@@ -39,8 +39,8 @@ export function construireAdaptateursIA(entrees: EntreesConstructionAdaptateurs)
 
 /**
  * Adapte la paire principal/local en un unique `ProviderAdapter` appliquant
- * la bascule automatique (`envoyerAvecBascule`, SDS §6) à chaque appel —
- * nécessaire là où l'appelant (ex. `executerBoucleRaisonnement`, Phase 15)
+ * la bascule automatique (`envoyerAvecBascule`) à chaque appel —
+ * nécessaire là où l'appelant (ex. `executerBoucleRaisonnement`)
  * attend un seul `ProviderAdapter`, sans connaître la logique de bascule.
  */
 export function adaptateurAvecBascule(

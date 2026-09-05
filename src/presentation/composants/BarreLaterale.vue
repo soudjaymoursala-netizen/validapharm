@@ -1,18 +1,18 @@
 <script setup lang="ts">
-// Sidebar de navigation par intention (Phase 16, `docs/convergence/
-// PHASE_16_COQUILLE_UX_SPEC.md` §3 ; restructurée Phase 40, §11 du prompt
+// Sidebar de navigation par intention (`docs/convergence/
+// PHASE_16_COQUILLE_UX_SPEC.md` §3 ; restructurée §11 du prompt
 // maître du 03/09/2026 — demande explicite : « refonte UX comme prévue,
 // ultra améliorée et optimisée »).
 //
-// Avant Phase 40 : la section « Mon site » listait les ~16 outils d'un
+// Avant cette refonte : la section « Mon site » listait les ~16 outils d'un
 // client à plat, sans hiérarchie. Cette refonte les regroupe par intention
 // (Architecture/Process/Procédures/Templates/Projets — les 5 branches
 // exactes du parcours demandé — puis Qualité & Ingénierie / Connaissance &
 // IA / Configuration pour le reste), cohérent avec §11 du prompt maître qui
 // propose exactement ce découpage. Chaque outil garde son drapeau `guide`
 // (Mode Assistant = parcours restreint) — aucun changement de ce mécanisme,
-// seulement de présentation. Le lien « Fiche client » (`fiche-client`,
-// Phase 40) est le point d'entrée du Mode 1 (« travail contextuel », §12
+// seulement de présentation. Le lien « Fiche client » (`fiche-client`)
+// est le point d'entrée du Mode 1 (« travail contextuel », §12
 // du prompt maître) ; cette sidebar reste le Mode 2 (« expert ») — l'accès
 // direct aux briques ne disparaît jamais, conformément à ce même §12.
 import { computed, ref, watch } from 'vue'

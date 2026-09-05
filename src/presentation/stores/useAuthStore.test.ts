@@ -22,7 +22,7 @@ afterEach(() => {
   demonter()
 })
 
-describe('useAuthStore (TD-046)', () => {
+describe('useAuthStore', () => {
   test('login réussi peuple utilisateur/jeton et persiste la session', async () => {
     await connecterAdminDeTest('admin@pharmatech.example', 'CoffreFort!2026')
     const store = useAuthStore()

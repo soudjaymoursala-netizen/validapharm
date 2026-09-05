@@ -9,11 +9,9 @@ const IDENTIFIANT_SESSION_UNIQUE = 'unique'
 export type ResultatLogin = { ok: true } | { ok: false; erreur: string }
 
 /**
- * Session d'authentification réelle (TD-046) — remplace le verrou local
- * (TD-033) comme unique système d'identité de l'application : un jeton
+ * Session d'authentification réelle — remplace le verrou local
+ * comme unique système d'identité de l'application : un jeton
  * JWT obtenu via `/auth/login`, vérifié côté serveur à chaque appel.
- *
- * @requirement TD-046
  */
 export const useAuthStore = defineStore('auth', () => {
   const utilisateur = ref<UtilisateurWire | null>(null)
@@ -71,7 +69,7 @@ export const useAuthStore = defineStore('auth', () => {
     await db.sessionAuthentification.delete(IDENTIFIANT_SESSION_UNIQUE)
   }
 
-  /** Re-authentification pour un geste sensible (archivage, suppression définitive) — remplace le verrou local TD-033. */
+  /** Re-authentification pour un geste sensible (archivage, suppression définitive) — remplace le verrou local historique. */
   async function verifierMotDePasse(motDePasse: string): Promise<boolean> {
     if (!jeton.value) return false
     const api = await client()
