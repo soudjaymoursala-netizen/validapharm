@@ -240,7 +240,15 @@ const noeudsAffiches = computed(() =>
 <template>
   <main class="structure-systeme">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
-    <h1>Structure Système — {{ nomClient ?? props.clientId }}</h1>
+    <div class="entete">
+      <h1>Structure Système — {{ nomClient ?? props.clientId }}</h1>
+      <RouterLink
+        :to="{ name: 'suivi-periodicite', params: { clientId: props.clientId } }"
+        class="lien-suivi-periodicite"
+      >
+        Suivi de périodicité
+      </RouterLink>
+    </div>
 
     <section class="bloc-hierarchie">
       <h2>Hiérarchie configurable</h2>
@@ -487,6 +495,20 @@ const noeudsAffiches = computed(() =>
   flex-direction: column;
   gap: 1.5rem;
   max-width: 40rem;
+}
+
+.entete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.lien-suivi-periodicite {
+  font-size: 0.85rem;
+  color: var(--vp-marque);
+  white-space: nowrap;
 }
 
 .formulaire {

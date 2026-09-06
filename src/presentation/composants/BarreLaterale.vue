@@ -96,6 +96,12 @@ const GROUPES_OUTILS_CLIENT = (clientId: string): GroupeOutils[] => [
         guide: true,
       },
       {
+        nom: 'Suivi de périodicité',
+        icone: 'horloge',
+        route: { name: 'suivi-periodicite', params: { clientId } },
+        guide: false,
+      },
+      {
         nom: 'Process',
         icone: 'flux',
         route: { name: 'gestion-process', params: { clientId } },

@@ -44,6 +44,12 @@ function routeurDeTest(): Router {
         component: { template: '<div />' },
       },
       {
+        path: '/clients/:clientId/suivi-periodicite',
+        name: 'suivi-periodicite',
+        component: { template: '<div />' },
+      },
+      { path: '/recherche', name: 'recherche-globale', component: { template: '<div />' } },
+      {
         path: '/clients/:clientId/strategie-qualification',
         name: 'assistant-strategie-qualification',
         component: { template: '<div />' },

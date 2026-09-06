@@ -145,6 +145,12 @@ export const router = createRouter({
       props: true,
     },
     {
+      path: '/clients/:clientId/suivi-periodicite',
+      name: 'suivi-periodicite',
+      component: () => import('../screens/SuiviPeriodicite.vue'),
+      props: true,
+    },
+    {
       path: '/clients/:clientId/impact-assessment',
       name: 'impact-assessment',
       component: () => import('../screens/ImpactAssessment.vue'),
