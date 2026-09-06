@@ -247,3 +247,55 @@ describe('useProjectsStore — partage de projet', () => {
     })
   })
 })
+
+describe('useProjectsStore — phase du cycle de vie (ISPE Baseline, tâche #112)', () => {
+  test('un projet créé démarre en phase concept', async () => {
+    const projet = await creerProjet()
+    expect(projet.phase).toBe('concept')
+  })
+
+  test('changerPhaseProjet fait avancer la phase, tracé dans audit_log', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+
+    const resultat = await store.changerPhaseProjet(projet.id, 'realisation', 'QLD')
+    expect('erreur' in resultat).toBe(false)
+    if ('erreur' in resultat) return
+
+    expect(resultat.phase).toBe('realisation')
+    expect(resultat.audit_log.at(-1)?.action).toBe('changement_phase (realisation)')
+
+    const enBase = await db.projects.get(projet.id)
+    expect(enBase?.phase).toBe('realisation')
+  })
+
+  test('changerPhaseProjet autorise un retour en arrière (ex. remise en service)', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+    await store.changerPhaseProjet(projet.id, 'retrait', 'QLD')
+
+    const resultat = await store.changerPhaseProjet(projet.id, 'operation', 'QLD')
+    expect('erreur' in resultat).toBe(false)
+    if ('erreur' in resultat) return
+    expect(resultat.phase).toBe('operation')
+  })
+
+  test('changerPhaseProjet ne modifie jamais le statut (axes indépendants)', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+    await store.suspendreProjet(projet.id, 'QLD')
+
+    const resultat = await store.changerPhaseProjet(projet.id, 'operation', 'QLD')
+    expect('erreur' in resultat).toBe(false)
+    if ('erreur' in resultat) return
+    expect(resultat.statut).toBe('suspendu')
+    expect(resultat.phase).toBe('operation')
+  })
+
+  test('changerPhaseProjet refuse un projet introuvable', async () => {
+    const store = useProjectsStore()
+    expect(await store.changerPhaseProjet('inconnu', 'operation', 'QLD')).toEqual({
+      erreur: 'introuvable',
+    })
+  })
+})

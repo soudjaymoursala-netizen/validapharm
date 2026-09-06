@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { Langue, LienProjet, Project } from '../../logique-metier/domaine/types'
+import type { Langue, LienProjet, PhaseProjet, Project } from '../../logique-metier/domaine/types'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
@@ -77,6 +77,7 @@ export const useProjectsStore = defineStore('projects', () => {
       documents: [],
       links: [],
       statut: 'actif',
+      phase: 'concept',
       owner_id: ownerId,
       shared_with: [],
       archived_at: null,
@@ -296,6 +297,39 @@ export const useProjectsStore = defineStore('projects', () => {
   }
 
   /**
+   * Change la phase du cycle de vie (ISPE Baseline — `PhaseProjet`,
+   * jamais à confondre avec le pipeline de qualification d'une
+   * section) — une information déclarative, jamais une machine à états
+   * contrainte : contrairement à `statut` (archivage/suspension), aucun
+   * ordre n'est imposé entre phases (un retour de `retrait` à
+   * `operation` reste légitime, ex. remise en service d'un actif).
+   * Tracée dans `audit_log` comme tout changement significatif.
+   */
+  async function changerPhaseProjet(
+    projectId: string,
+    phase: PhaseProjet,
+    identiteDeclaree: string,
+  ): Promise<Project | ErreurArchivageProjet> {
+    const existant = await db.projects.get(projectId)
+    if (!existant) return { erreur: 'introuvable' }
+
+    const maintenant = new Date().toISOString()
+    const projetMisAJour: Project = {
+      ...existant,
+      phase,
+      updated_at: maintenant,
+      audit_log: [
+        ...existant.audit_log,
+        { timestamp: maintenant, actor: identiteDeclaree, action: `changement_phase (${phase})` },
+      ],
+    }
+    await db.projects.put(projetMisAJour)
+    const index = projects.value.findIndex((p) => p.id === projectId)
+    if (index !== -1) projects.value[index] = projetMisAJour
+    return projetMisAJour
+  }
+
+  /**
    * Suspension — mise en pause temporaire (ex. attente client),
    * distincte de l'archivage : un projet suspendu reste dans le
    * périmètre de travail courant, il n'a pas terminé son cycle de vie.
@@ -403,6 +437,7 @@ export const useProjectsStore = defineStore('projects', () => {
     retirerLien,
     archiverProjet,
     desarchiverProjet,
+    changerPhaseProjet,
     suspendreProjet,
     reprendreProjet,
     supprimerProjet,

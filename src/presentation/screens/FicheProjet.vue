@@ -9,7 +9,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { detecterEcartsStructurels } from '../../logique-metier/analyse-projet/detecterEcartsStructurels'
-import type { Project, TemplateType } from '../../logique-metier/domaine/types'
+import type { PhaseProjet, Project, TemplateType } from '../../logique-metier/domaine/types'
 import { analyserImportJSON } from '../../logique-metier/export/analyserImportJSON'
 import { peutModifierProjet } from '../../logique-metier/permissions/permissionsProjet'
 import ModaleConfirmationArchivage from '../composants/ModaleConfirmationArchivage.vue'
@@ -98,6 +98,23 @@ async function confirmerSuppression(identiteDeclaree: string): Promise<void> {
   await projetsStore.supprimerProjet(props.projectId, identiteDeclaree)
   modaleSuppressionOuverte.value = false
   await router.push({ name: 'tableau-de-bord' })
+}
+
+const LIBELLES_PHASE: Record<PhaseProjet, string> = {
+  concept: 'Concept',
+  realisation: 'Réalisation',
+  operation: 'Opération',
+  retrait: 'Retrait',
+}
+
+async function changerPhase(evenement: Event): Promise<void> {
+  const phase = (evenement.target as HTMLSelectElement).value as PhaseProjet
+  const resultat = await projetsStore.changerPhaseProjet(
+    props.projectId,
+    phase,
+    projetsStore.identiteCourante,
+  )
+  if (!('erreur' in resultat)) projet.value = resultat
 }
 
 // Catalogue restreint à ce qui est réellement exploitable par la machine à
@@ -300,6 +317,25 @@ async function importerFichier(evenement: Event): Promise<void> {
         <dt>Portée exclue</dt>
         <dd>{{ projet.scope_out || '—' }}</dd>
       </dl>
+    </section>
+
+    <section class="carte phase-projet">
+      <h2 class="carte__titre-discret">Phase du cycle de vie</h2>
+      <p class="rappel">
+        Où en est ce projet dans le cycle de vie de l'actif qu'il qualifie — sans rapport avec
+        l'avancement des sections (une revue périodique en phase Opération peut très bien contenir
+        des sections en cours de rédaction).
+      </p>
+      <select
+        :value="projet.phase"
+        :disabled="!peutModifier"
+        class="selecteur-phase"
+        @change="changerPhase"
+      >
+        <option v-for="(libelle, valeur) in LIBELLES_PHASE" :key="valeur" :value="valeur">
+          {{ libelle }}
+        </option>
+      </select>
     </section>
 
     <section class="carte partage">
@@ -625,6 +661,23 @@ async function importerFichier(evenement: Event): Promise<void> {
   color: var(--vp-danger);
   font-size: 0.85rem;
   margin: 0;
+}
+
+.selecteur-phase {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon-sm);
+  padding: 0.5rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: var(--vp-poids-medium);
+  color: var(--vp-texte-principal);
+  background-color: var(--vp-fond-page);
+  align-self: flex-start;
+}
+
+.selecteur-phase:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .carte {

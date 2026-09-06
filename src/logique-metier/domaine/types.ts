@@ -83,6 +83,26 @@ export type StatutArchivage = 'actif' | 'archive'
  */
 export type StatutProjet = 'actif' | 'suspendu' | 'archive' | 'supprime'
 
+/**
+ * Phase du cycle de vie d'un projet (ISPE Baseline Guide — Concept,
+ * Project/Réalisation, Opération, Retrait) — **sans rapport** avec le
+ * pipeline de qualification d'une section (`contexte_procede` → `urs` →
+ * `dq` → … → `validation_procede`, `TemplateType`/`StatutSection`) : la
+ * phase décrit où en est le PROJET dans le cycle de vie de l'actif
+ * qu'il qualifie, jamais l'avancement d'un livrable individuel. Un
+ * projet en phase `operation` peut très bien encore avoir des sections
+ * en `brouillon_aide` (ex. une revue périodique qui démarre) — les deux
+ * axes sont indépendants.
+ * - `concept` : phase amont (expression du besoin, URS, choix de
+ *   principe) — phase par défaut à la création d'un projet.
+ * - `realisation` : conception détaillée, construction, mise en service,
+ *   qualification (IQ/OQ/PQ) — le gros du travail de cet outil.
+ * - `operation` : actif qualifié en exploitation courante (maintenance,
+ *   revues périodiques, gestion des changements).
+ * - `retrait` : déqualification / mise hors service.
+ */
+export type PhaseProjet = 'concept' | 'realisation' | 'operation' | 'retrait'
+
 export interface Project {
   id: string
   name: string
@@ -96,6 +116,7 @@ export interface Project {
   documents: string[]
   links: LienProjet[]
   statut: StatutProjet
+  phase: PhaseProjet
   /**
    * Partage de projet — identité résolue depuis le compte réel
    * authentifié (email, `useAuthStore`/`identifiantActeurCourant`),
