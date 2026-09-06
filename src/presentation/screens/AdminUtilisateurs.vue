@@ -171,6 +171,8 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 /* `.bouton-principal` seulement (même bug que GestionClients.vue) :
@@ -242,6 +244,7 @@ header {
 .liste-comptes li {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon);

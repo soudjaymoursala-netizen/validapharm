@@ -34,6 +34,8 @@ export type NomIcone =
   | 'cadenas'
   | 'epingle'
   | 'recherche'
+  | 'menu'
+  | 'fermer'
 
 const props = withDefaults(defineProps<{ nom: NomIcone; taille?: number }>(), { taille: 18 })
 
@@ -69,6 +71,8 @@ const TRACES: Record<NomIcone, string> = {
   epingle:
     'M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z',
   recherche: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.35-4.35',
+  menu: 'M4 6h16 M4 12h16 M4 18h16',
+  fermer: 'M6 6l12 12 M18 6 6 18',
 }
 </script>
 

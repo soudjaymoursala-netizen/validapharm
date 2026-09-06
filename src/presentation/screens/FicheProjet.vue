@@ -607,6 +607,7 @@ async function importerFichier(evenement: Event): Promise<void> {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 
@@ -634,8 +635,8 @@ async function importerFichier(evenement: Event): Promise<void> {
 .entete-projet__actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.6rem;
-  flex-shrink: 0;
 }
 
 .pastille-statut {
@@ -726,6 +727,7 @@ async function importerFichier(evenement: Event): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 
@@ -762,6 +764,7 @@ async function importerFichier(evenement: Event): Promise<void> {
 .actions-entete {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
@@ -960,12 +963,14 @@ button {
 
 .formulaire-partage {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
 
 .formulaire-partage input {
   flex: 1;
+  min-width: 12rem;
 }
 
 .guide-demarrage__titre {
@@ -1025,6 +1030,7 @@ button {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 

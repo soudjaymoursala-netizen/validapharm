@@ -296,6 +296,7 @@ header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 1rem;
 }
 
@@ -314,8 +315,8 @@ header h1 {
 .actions-entete {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.6rem;
-  flex-shrink: 0;
 }
 
 button {
@@ -399,6 +400,7 @@ button {
 
 .actions-sync {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 

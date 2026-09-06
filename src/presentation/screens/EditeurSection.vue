@@ -1334,6 +1334,14 @@ button {
   cursor: pointer;
 }
 
+/* Le contrôle natif du fichier (« Choisir un fichier » + nom, largeur
+   fixée par le navigateur) débordait sur mobile — seul le libellé stylé
+   doit être visible, le `<label>` englobant continue de déclencher le
+   sélecteur de fichier natif au clic. */
+.bouton-fichier input[type='file'] {
+  display: none;
+}
+
 .bandeau-erreur {
   color: var(--vp-statut-requalification-en-retard);
 }

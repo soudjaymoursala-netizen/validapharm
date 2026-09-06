@@ -260,3 +260,24 @@ describe('BarreLaterale — bascule Mode Expert / Assistant', () => {
     expect(wrapper.text()).toContain('Connecteurs QMS')
   })
 })
+
+describe('BarreLaterale — responsive (tiroir mobile)', () => {
+  test('prop ouverte absente ou fausse -> classe sidebar--ouverte absente', async () => {
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(BarreLaterale, { global: { plugins: [router] } })
+
+    expect(wrapper.find('.sidebar').classes()).not.toContain('sidebar--ouverte')
+  })
+
+  test('prop ouverte=true -> classe sidebar--ouverte présente (pilotage par CoquilleApplication.vue)', async () => {
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(BarreLaterale, {
+      props: { ouverte: true },
+      global: { plugins: [router] },
+    })
+
+    expect(wrapper.find('.sidebar').classes()).toContain('sidebar--ouverte')
+  })
+})

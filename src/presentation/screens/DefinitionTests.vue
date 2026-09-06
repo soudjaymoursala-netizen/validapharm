@@ -474,8 +474,14 @@ textarea {
 
 .ligne-etape {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.ligne-etape input {
+  flex: 1;
+  min-width: 8rem;
 }
 
 .meta {

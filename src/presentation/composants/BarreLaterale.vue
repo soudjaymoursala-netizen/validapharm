@@ -24,6 +24,12 @@ import { useEpinglageStore } from '../stores/useEpinglageStore'
 import { useModeAffichageStore, type ModeAffichage } from '../stores/useModeAffichageStore'
 import IconeSvg, { type NomIcone } from './IconeSvg.vue'
 
+// `ouverte` : uniquement pertinent sous le point de rupture mobile (voir
+// `@media` en bas de fichier) — pilote le tiroir superposé plutôt que la
+// sidebar fixe habituelle. Au-dessus du point de rupture, ignoré (la
+// sidebar reste toujours visible, comme avant cette refonte responsive).
+const props = withDefaults(defineProps<{ ouverte?: boolean }>(), { ouverte: false })
+
 const clientActifStore = useClientActifStore()
 const clientsStore = useClientsStore()
 const modeStore = useModeAffichageStore()
@@ -265,7 +271,11 @@ function basculerEpinglage(outil: OutilClient): void {
 </script>
 
 <template>
-  <nav class="sidebar" aria-label="Navigation principale">
+  <nav
+    class="sidebar"
+    :class="{ 'sidebar--ouverte': props.ouverte }"
+    aria-label="Navigation principale"
+  >
     <div class="sidebar__marque">
       <span class="sidebar__logo" aria-hidden="true">VP</span>
       <span class="sidebar__nom-produit">ValidaPharm</span>
@@ -696,5 +706,29 @@ function basculerEpinglage(outil: OutilClient): void {
   font-style: italic;
   font-size: 0.85rem;
   padding: 0.45rem 0.5rem;
+}
+
+/* Responsive (ajouté — la sidebar restait fixe à 260px, illisible sur un
+   écran de téléphone, seule media query de toute l'app hors thème sombre
+   avant cette refonte) : sous ~768px, la sidebar quitte le flux (retirée
+   du `display:flex` de `CoquilleApplication.vue`, qui laisse alors le
+   contenu occuper toute la largeur) et devient un tiroir superposé,
+   fermé par défaut (translation hors écran) — piloté par le bouton
+   hamburger de `CoquilleApplication.vue` via la prop `ouverte`. */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 85vw;
+    max-width: 300px;
+    transform: translateX(-100%);
+    transition: transform var(--vp-transition);
+    z-index: 60;
+    box-shadow: var(--vp-ombre-lg);
+  }
+
+  .sidebar--ouverte {
+    transform: translateX(0);
+  }
 }
 </style>
