@@ -22,7 +22,7 @@ import {
 import { codeDejaUtilise } from '../../logique-metier/structure-systeme/validerCodeUnique'
 import { extraireGrilleXlsx } from '../../connecteurs/office/XlsxNatifAdapter'
 import { DocumentInvalideError } from '../../connecteurs/office/erreurs'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouveauNiveauInput {
@@ -137,9 +137,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       qms_connector_id: null,
       periodic_qualification: { applicable: false, deadline: null },
       qualification_status: 'non_qualifie',
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -200,7 +198,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       audit_log: [
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: 'création (import XLSX)',
         },
       ],
@@ -242,7 +240,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
         ...noeud.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: 'modification',
         },
       ],
@@ -337,7 +335,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
         ...noeud.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: 'modification',
         },
       ],

@@ -5,7 +5,7 @@ import type {
   TemplateType,
   TypeMethodProfileReference,
 } from '../../logique-metier/domaine/types'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 import { construireReadinessContentPlan } from '../../logique-metier/deliverable/readinessContentPlan'
 import {
@@ -115,9 +115,7 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
       context_snapshot: JSON.stringify(input.contextSnapshot),
       readiness,
       statut: 'brouillon',
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -149,7 +147,7 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
         ...existant.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: `recalcul readiness : ${readiness}`,
         },
       ],
@@ -204,7 +202,7 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
         ...existant.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: `changement de statut : ${statut}`,
         },
       ],

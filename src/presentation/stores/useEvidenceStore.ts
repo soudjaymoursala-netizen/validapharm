@@ -7,7 +7,7 @@ import type {
   SystemeEvidenceLocation,
   TypeEvidence,
 } from '../../logique-metier/domaine/types'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouvellePreuveInput {
@@ -81,7 +81,7 @@ export const useEvidenceStore = defineStore('evidence', () => {
       titre: input.titre,
       description: input.description,
       horodatage: new Date().toISOString(),
-      actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+      actor: identifiantActeurCourant(),
     }
     await db.evidences.put(preuve)
     evidences.value = [...evidences.value, preuve]

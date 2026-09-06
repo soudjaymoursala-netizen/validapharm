@@ -9,7 +9,7 @@ import type {
   TypeExecutionEvent,
   VerdictExecution,
 } from '../../logique-metier/domaine/types'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouvelleExecutionInput {
@@ -83,13 +83,13 @@ export const useExecutionStore = defineStore('execution', () => {
       client_id: clientId,
       test_id: input.testId,
       asset_node_id: input.assetNodeId,
-      executant: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+      executant: identifiantActeurCourant(),
       statut: 'en_cours',
       verdict: null,
       date_debut: maintenant,
       date_fin: null,
       audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'démarrage' },
+        { timestamp: maintenant, actor: identifiantActeurCourant(), action: 'démarrage' },
       ],
       created_at: maintenant,
       updated_at: maintenant,
@@ -170,7 +170,7 @@ export const useExecutionStore = defineStore('execution', () => {
       description: input.description,
       quality_event_id: input.qualityEventId,
       horodatage: new Date().toISOString(),
-      actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+      actor: identifiantActeurCourant(),
     }
     await db.executionEvents.put(evenement)
     executionEvents.value = [...executionEvents.value, evenement]
@@ -198,7 +198,7 @@ export const useExecutionStore = defineStore('execution', () => {
         ...existante.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: `clôture : ${verdict}`,
         },
       ],

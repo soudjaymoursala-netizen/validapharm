@@ -14,7 +14,7 @@ import {
   type CouvertureRisque,
 } from '../../logique-metier/test-design/evaluerCouvertureRisques'
 import { genererCandidatsDepuisRisques } from '../../logique-metier/test-design/genererCandidatsDepuisRisques'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouveauRequirementInput {
@@ -95,9 +95,7 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       description: input.description,
       asset_node_id: input.assetNodeId,
       process_id: input.processId,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -141,9 +139,7 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       motif_rejet: null,
       duplique_de_id: null,
       remplace_par_id: null,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -194,7 +190,7 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       audit_log: [
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: 'création (proposé depuis analyse de risque)',
         },
       ],
@@ -293,7 +289,7 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
         ...existant.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: `changement de statut : ${statut}${motifRejet ? ` (${motifRejet})` : ''}`,
         },
       ],
@@ -330,9 +326,7 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       description: input.description,
       etapes,
       statut: 'brouillon',
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -353,7 +347,7 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
         ...existant.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: 'approbation',
         },
       ],

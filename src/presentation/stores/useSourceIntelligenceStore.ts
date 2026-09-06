@@ -14,7 +14,7 @@ import type {
   SystemeLocalisationSource,
   TypeSource,
 } from '../../logique-metier/domaine/types'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouvelleSourceInput {
@@ -222,9 +222,7 @@ export const useSourceIntelligenceStore = defineStore('sourceIntelligence', () =
       valeur_interpretee: input.valeurInterpretee,
       statut: 'a_valider',
       valide_par: null,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }

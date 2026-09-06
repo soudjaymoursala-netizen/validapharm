@@ -8,7 +8,7 @@ import type {
 import { calculerIPR } from '../../logique-metier/moteur-calcul/calculerIPR'
 import { evaluerVerdictRiskAssessment } from '../../logique-metier/risque/evaluerVerdictRiskAssessment'
 import { numeroVersion } from '../../logique-metier/versionnage/numeroVersion'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouveauProfilRiskAssessmentInput {
@@ -147,9 +147,7 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
       detectabilite_residuelle: null,
       ipr_residuel: null,
       verdict_residuel: null,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -202,7 +200,7 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
         ...existant.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: 'action résiduelle enregistrée',
         },
       ],

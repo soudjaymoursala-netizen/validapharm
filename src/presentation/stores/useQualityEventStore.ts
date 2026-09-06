@@ -7,7 +7,7 @@ import type {
   ReferenceQualityEvent,
   TypeQualityEvent,
 } from '../../logique-metier/domaine/types'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouveauQualityEventInput {
@@ -68,9 +68,7 @@ export const useQualityEventStore = defineStore('qualityEvent', () => {
       process_id: input.processId,
       manufacturing_context_id: input.manufacturingContextId,
       statut: 'ouvert',
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -95,7 +93,7 @@ export const useQualityEventStore = defineStore('qualityEvent', () => {
         ...existant.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: `changement de statut : ${statut}`,
         },
       ],

@@ -23,7 +23,7 @@ function routeurDeTest() {
         name: 'fiche-client',
         component: { template: '<div />' },
       },
-      { path: '/profil-local', name: 'profil-local', component: { template: '<div />' } },
+      { path: '/profil', name: 'profil', component: { template: '<div />' } },
       {
         path: '/clients/:clientId/missions',
         name: 'liste-missions',

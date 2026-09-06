@@ -8,7 +8,7 @@ import type {
   StatutActivity,
   StatutMission,
 } from '../../logique-metier/domaine/types'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouvelleMissionInput {
@@ -66,9 +66,7 @@ export const useMissionStore = defineStore('mission', () => {
       titre: input.titre,
       description: input.description,
       statut: 'ouverte',
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -93,7 +91,7 @@ export const useMissionStore = defineStore('mission', () => {
         ...existante.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: `changement de statut : ${statut}`,
         },
       ],
@@ -143,9 +141,7 @@ export const useMissionStore = defineStore('mission', () => {
       titre: input.titre,
       description: input.description,
       statut: 'a_faire',
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -170,7 +166,7 @@ export const useMissionStore = defineStore('mission', () => {
         ...existante.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: `changement de statut : ${statut}`,
         },
       ],

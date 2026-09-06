@@ -30,7 +30,7 @@ import {
 } from '../../logique-metier/qualite-redaction/detecterFormulationsFaibles'
 import { construireObjectifAssistantSection } from '../../logique-metier/raisonnement/assistantSection'
 import RenduGabarit from '../composants/RenduGabarit.vue'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { libelleStatut, messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
 import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
 import { useClientConfigStore } from '../stores/useClientConfigStore'
@@ -516,7 +516,7 @@ async function genererBrouillon(): Promise<void> {
           nomDocumentReference.value.trim() || `Texte collé — ${new Date().toLocaleString()}`,
         contexteNouveauCas: contexteNouveauCas.value,
         confirmationDroitUsage: confirmationDroitUsage.value,
-        actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+        actor: identifiantActeurCourant(),
       },
       adaptateurAvecBascule(principal, local),
     )

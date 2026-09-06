@@ -9,7 +9,7 @@ import type {
 import type { ReponseQuestionOuiNon } from '../../logique-metier/assessment/moteurQuestionsOuiNon'
 import { evaluerVerdictImpactAssessment } from '../../logique-metier/assessment/evaluerVerdictImpactAssessment'
 import { numeroVersion } from '../../logique-metier/versionnage/numeroVersion'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouvelleQuestionImpactInput {
@@ -117,9 +117,7 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
       nom_element: input.nomElement,
       reponses: input.reponses,
       verdict,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }

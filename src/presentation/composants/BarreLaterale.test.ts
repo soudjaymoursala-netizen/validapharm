@@ -19,7 +19,6 @@ function routeurDeTest(): Router {
         name: 'fiche-client',
         component: { template: '<div />' },
       },
-      { path: '/profil-local', name: 'profil-local', component: { template: '<div />' } },
       { path: '/profil', name: 'profil', component: { template: '<div />' } },
       { path: '/parametres', name: 'parametres', component: { template: '<div />' } },
       { path: '/configuration', name: 'configuration-client', component: { template: '<div />' } },

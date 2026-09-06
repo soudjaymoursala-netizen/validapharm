@@ -1,12 +1,25 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { db } from '../../persistance/db'
 import { useProjectsStore } from './useProjectsStore'
+
+let demonter: (() => void) | undefined
 
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.projects.clear()
+  await reinitialiserAuthDeTest()
+})
+
+afterEach(() => {
+  demonter?.()
+  demonter = undefined
 })
 
 async function creerProjet() {
@@ -89,10 +102,20 @@ describe('useProjectsStore — archivage (§4.31)', () => {
 })
 
 describe('useProjectsStore — partage de projet', () => {
-  test("un projet créé sans profil local a pour owner_id l'espace réservé local", async () => {
+  test("un projet créé hors session authentifiée a pour owner_id l'espace réservé local", async () => {
     const projet = await creerProjet()
     expect(projet.owner_id).toBe('utilisateur-local-phase1')
     expect(projet.shared_with).toEqual([])
+  })
+
+  test('un projet créé par un compte réel connecté a pour owner_id et acteur d’audit son email réel', async () => {
+    demonter = installerFauxWorkerAuth().demonter
+    await connecterAdminDeTest('qa.lead@pharmatech.example', 'CoffreFort!2026')
+
+    const projet = await creerProjet()
+
+    expect(projet.owner_id).toBe('qa.lead@pharmatech.example')
+    expect(projet.audit_log.at(0)?.actor).toBe('qa.lead@pharmatech.example')
   })
 
   test('partagerProjet ajoute un utilisateur avec un niveau d’accès, tracé dans audit_log', async () => {

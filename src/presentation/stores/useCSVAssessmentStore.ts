@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { CategorieGAMP5, EvaluationCSVAssessment } from '../../logique-metier/domaine/types'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouvelleEvaluationCSVInput {
@@ -55,9 +55,7 @@ export const useCSVAssessmentStore = defineStore('csvAssessment', () => {
       pertinence_gxp: input.pertinenceGxp,
       pertinence_eres_part11: input.pertinenceEresPart11,
       justification_pertinence: input.justificationPertinence,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }

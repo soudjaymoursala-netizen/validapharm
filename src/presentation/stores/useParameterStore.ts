@@ -7,7 +7,7 @@ import type {
   NiveauCriticiteParametre,
   Parameter,
 } from '../../logique-metier/domaine/types'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouveauParametreInput {
@@ -86,9 +86,7 @@ export const useParameterStore = defineStore('parameter', () => {
       nom: input.nom,
       description: input.description,
       unite: input.unite,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -113,9 +111,7 @@ export const useParameterStore = defineStore('parameter', () => {
       niveau: input.niveau,
       contexte: input.contexte,
       justification: input.justification,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
     }
     await db.classificationsCriticiteParametre.put(classification)
@@ -133,9 +129,7 @@ export const useParameterStore = defineStore('parameter', () => {
       contexte: input.contexte,
       justification: input.justification,
       actif: true,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -164,7 +158,7 @@ export const useParameterStore = defineStore('parameter', () => {
         ...existant.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: `désactivation : ${motif}`,
         },
       ],
@@ -185,9 +179,7 @@ export const useParameterStore = defineStore('parameter', () => {
       contexte: input.contexte,
       justification: input.justification,
       actif: true,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }
@@ -211,7 +203,7 @@ export const useParameterStore = defineStore('parameter', () => {
         ...existant.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: `désactivation : ${motif}`,
         },
       ],

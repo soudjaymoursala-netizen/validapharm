@@ -9,7 +9,7 @@ import type {
 } from '../../logique-metier/domaine/types'
 import { evaluerVerdictACFC } from '../../logique-metier/acfc/evaluerVerdictACFC'
 import { numeroVersion } from '../../logique-metier/versionnage/numeroVersion'
-import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export interface NouvelleQuestionInput {
@@ -118,9 +118,7 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
       nom_element: input.nomElement,
       reponses: input.reponses,
       verdict,
-      audit_log: [
-        { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
-      ],
+      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
     }

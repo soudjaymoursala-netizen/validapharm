@@ -82,14 +82,15 @@ export interface Project {
   links: LienProjet[]
   statut: StatutArchivage
   /**
-   * Partage de projet — identité résolue depuis le
-   * profil local (email, §4.31), **jamais** une identité
-   * GitHub individuelle (un compte GitHub par employé
-   * exclurait les clients sans compte GitHub individuel — le jeton
-   * GitHub reste au niveau de l'organisation/du client, inchangé).
+   * Partage de projet — identité résolue depuis le compte réel
+   * authentifié (email, `useAuthStore`/`identifiantActeurCourant`),
+   * **jamais** une identité GitHub individuelle (un compte GitHub par
+   * employé exclurait les clients sans compte GitHub individuel — le
+   * jeton GitHub reste au niveau de l'organisation/du client, inchangé).
    * `owner_id` : identité résolue au moment de la création, `null`
    * jamais utilisé (retombe sur `IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1`
-   * si aucun profil local n'est encore défini — additif, non bloquant).
+   * hors session, cas défensif qui ne devrait jamais se produire derrière
+   * la garde de routeur globale).
    * `shared_with` : même convention UX que `Section.owner_id`/`shared_with`
    * — un contrôle d'affichage, jamais une frontière de sécurité
    * réelle (l'accès Git sous-jacent reste au niveau du dépôt entier).

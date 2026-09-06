@@ -82,11 +82,6 @@ export const router = createRouter({
       props: true,
     },
     {
-      path: '/profil-local',
-      name: 'profil-local',
-      component: () => import('../screens/ProfilLocal.vue'),
-    },
-    {
       path: '/profil',
       name: 'profil',
       component: () => import('../screens/Profil.vue'),

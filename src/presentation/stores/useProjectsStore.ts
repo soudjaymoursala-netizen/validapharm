@@ -1,11 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Langue, LienProjet, Project } from '../../logique-metier/domaine/types'
-import {
-  IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
-  identifiantUtilisateurCourant,
-} from '../identite/identiteLocale'
-import { useProfilLocalStore } from './useProfilLocalStore'
+import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
 
 export type NiveauAccesPartage = 'lecture' | 'édition'
@@ -34,21 +30,18 @@ export const useProjectsStore = defineStore('projects', () => {
   const projects = ref<Project[]>([])
   const enChargement = ref(false)
   /**
-   * Identité résolue de l'utilisateur courant — mise à
-   * jour à chaque `chargerProjets`/`creerProjet`, consommée par les
-   * écrans pour la garde d'affichage `peutModifierProjet`. Vaut
-   * `IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1` tant qu'aucun profil local
-   * n'est défini (comportement historique inchangé).
+   * Identité résolue de l'utilisateur courant (email du compte réel
+   * connecté, `useAuthStore`) — mise à jour à chaque
+   * `chargerProjets`/`creerProjet`, consommée par les écrans pour la garde
+   * d'affichage `peutModifierProjet`.
    */
-  const identiteCourante = ref<string>(IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1)
+  const identiteCourante = ref<string>(identifiantActeurCourant())
 
   const projetsActifs = computed(() => projects.value.filter((p) => p.statut !== 'archive'))
   const projetsArchives = computed(() => projects.value.filter((p) => p.statut === 'archive'))
 
-  async function resoudreIdentiteCourante(): Promise<string> {
-    const profilStore = useProfilLocalStore()
-    if (profilStore.profil === null) await profilStore.charger()
-    identiteCourante.value = identifiantUtilisateurCourant(profilStore.profil)
+  function resoudreIdentiteCourante(): string {
+    identiteCourante.value = identifiantActeurCourant()
     return identiteCourante.value
   }
 
@@ -57,14 +50,14 @@ export const useProjectsStore = defineStore('projects', () => {
     try {
       const tous = await db.projects.toArray()
       projects.value = tous.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-      await resoudreIdentiteCourante()
+      resoudreIdentiteCourante()
     } finally {
       enChargement.value = false
     }
   }
 
   async function creerProjet(input: NouveauProjetInput): Promise<Project> {
-    const ownerId = await resoudreIdentiteCourante()
+    const ownerId = resoudreIdentiteCourante()
     const maintenant = new Date().toISOString()
     const projet: Project = {
       id: crypto.randomUUID(),
@@ -190,7 +183,7 @@ export const useProjectsStore = defineStore('projects', () => {
     const lien: LienProjet = {
       from_section_id: fromSectionId,
       to_section_id: toSectionId,
-      created_by: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+      created_by: identifiantActeurCourant(),
       created_at: maintenant,
     }
     const projetMisAJour: Project = {
@@ -201,7 +194,7 @@ export const useProjectsStore = defineStore('projects', () => {
         ...projet.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: 'lien_ajoute',
         },
       ],
@@ -228,7 +221,7 @@ export const useProjectsStore = defineStore('projects', () => {
         ...projet.audit_log,
         {
           timestamp: maintenant,
-          actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1,
+          actor: identifiantActeurCourant(),
           action: 'lien_retire',
         },
       ],
