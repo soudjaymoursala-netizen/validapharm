@@ -1879,9 +1879,22 @@ export interface Procedure {
   numero_version: number
   titre: string
   effective_date: string
+  /**
+   * Catégorisation CQV/CSV vs Production — un même site peut avoir des
+   * procédures purement CQV (protocoles/rapports de qualification), CSV
+   * (validation de systèmes informatisés) ou de production courante
+   * (SOP/WI opérationnelles) : trois familles au périmètre et au cycle
+   * d'approbation distincts, jamais mélangées dans une même liste sans
+   * distinction. Saisie obligatoire à la création — jamais déduite du
+   * contenu ni d'une valeur par défaut silencieuse (une mauvaise
+   * catégorisation fausserait le filtrage réglementaire).
+   */
+  categorie: CategorieProcedure
   source_id: string | null
   created_at: string
 }
+
+export type CategorieProcedure = 'cqv' | 'csv' | 'production'
 
 /**
  * Étape d'une `Procedure` précise (une version) — immuable, jamais

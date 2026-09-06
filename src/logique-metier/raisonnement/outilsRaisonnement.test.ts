@@ -165,6 +165,7 @@ function procedure(id: string, reference: string, numeroVersion: number): Proced
     numero_version: numeroVersion,
     titre: `Procédure ${reference}`,
     effective_date: '2026-01-01',
+    categorie: 'production',
     source_id: null,
     created_at: '2026-01-01T00:00:00.000Z',
   }

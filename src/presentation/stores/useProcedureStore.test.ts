@@ -34,6 +34,7 @@ describe('useProcedureStore — creerProcedure (versionnée)', () => {
       reference: 'SOP-QA-012',
       titre: 'Impact Assessment',
       effectiveDate: '2026-01-01',
+      categorie: 'production',
     })
     expect(procedure.numero_version).toBe(1)
   })
@@ -45,11 +46,13 @@ describe('useProcedureStore — creerProcedure (versionnée)', () => {
       reference: 'SOP-QA-012',
       titre: 'Impact Assessment',
       effectiveDate: '2026-01-01',
+      categorie: 'production',
     })
     const v2 = await store.creerProcedure('client-1', {
       reference: 'SOP-QA-012',
       titre: 'Impact Assessment (révisée)',
       effectiveDate: '2026-06-01',
+      categorie: 'production',
     })
 
     expect(v2.numero_version).toBe(2)
@@ -67,12 +70,14 @@ describe('useProcedureStore — creerProcedure (versionnée)', () => {
       reference: 'SOP-QA-012',
       titre: 'Impact Assessment',
       effectiveDate: '2026-01-01',
+      categorie: 'production',
     })
     await store.charger('client-B')
     const procedureB = await store.creerProcedure('client-B', {
       reference: 'SOP-QA-012',
       titre: 'Impact Assessment (client B)',
       effectiveDate: '2026-01-01',
+      categorie: 'production',
     })
     expect(procedureB.numero_version).toBe(1)
   })
@@ -86,6 +91,7 @@ describe('useProcedureStore — ajouterEtape', () => {
       reference: 'SOP-QA-012',
       titre: 'Impact Assessment',
       effectiveDate: '2026-01-01',
+      categorie: 'production',
     })
     await store.ajouterEtape('client-1', procedure.id, {
       description: 'Vérifier le contexte',
@@ -114,6 +120,7 @@ describe('useProcedureStore — ajouterEtape', () => {
       reference: 'SOP-QA-012',
       titre: 'Impact Assessment',
       effectiveDate: '2026-01-01',
+      categorie: 'production',
     })
 
     const resultatIntrouvable = await store.ajouterEtape('client-1', 'id-inconnu', {
@@ -130,6 +137,37 @@ describe('useProcedureStore — ajouterEtape', () => {
   })
 })
 
+describe('useProcedureStore — proceduresParCategorie (§4.20, tâche #114)', () => {
+  test('filtre les procédures par catégorie CQV/CSV/Production, jamais mélangées', async () => {
+    const store = useProcedureStore()
+    await store.charger('client-1')
+    await store.creerProcedure('client-1', {
+      reference: 'PQ-COMPRESSION',
+      titre: 'Protocole de qualification presse',
+      effectiveDate: '2026-01-01',
+      categorie: 'cqv',
+    })
+    await store.creerProcedure('client-1', {
+      reference: 'VAL-MES-01',
+      titre: 'Validation du système de supervision',
+      effectiveDate: '2026-01-01',
+      categorie: 'csv',
+    })
+    await store.creerProcedure('client-1', {
+      reference: 'SOP-PROD-04',
+      titre: 'Conduite de la compression',
+      effectiveDate: '2026-01-01',
+      categorie: 'production',
+    })
+
+    expect(store.proceduresParCategorie('cqv').map((p) => p.reference)).toEqual(['PQ-COMPRESSION'])
+    expect(store.proceduresParCategorie('csv').map((p) => p.reference)).toEqual(['VAL-MES-01'])
+    expect(store.proceduresParCategorie('production').map((p) => p.reference)).toEqual([
+      'SOP-PROD-04',
+    ])
+  })
+})
+
 describe('useProcedureStore — derniereVersion', () => {
   test('retourne toujours le numero_version le plus élevé, jamais une version arbitraire', async () => {
     const store = useProcedureStore()
@@ -138,16 +176,19 @@ describe('useProcedureStore — derniereVersion', () => {
       reference: 'SOP-QA-012',
       titre: 'v1',
       effectiveDate: '2026-01-01',
+      categorie: 'production',
     })
     await store.creerProcedure('client-1', {
       reference: 'SOP-QA-012',
       titre: 'v2',
       effectiveDate: '2026-06-01',
+      categorie: 'production',
     })
     await store.creerProcedure('client-1', {
       reference: 'AUTRE-SOP',
       titre: 'autre',
       effectiveDate: '2026-01-01',
+      categorie: 'production',
     })
 
     const derniere = store.derniereVersion('SOP-QA-012')
@@ -198,7 +239,12 @@ describe('useProcedureStore — genererProposition/annulerProposition/confirmerP
 
     const procedure = await store.confirmerProposition(
       'client-1',
-      { reference: 'SOP-QA-020', titre: 'Structuration confirmée', effectiveDate: '2026-01-01' },
+      {
+        reference: 'SOP-QA-020',
+        titre: 'Structuration confirmée',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      },
       [
         { description: 'Première étape retenue', obligatoire: true },
         { description: 'Deuxième étape retenue', obligatoire: false, responsable: 'QA' },

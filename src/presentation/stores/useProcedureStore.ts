@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
-import type { Procedure, ProcedureStep, TableauDocx } from '../../logique-metier/domaine/types'
+import type {
+  CategorieProcedure,
+  Procedure,
+  ProcedureStep,
+  TableauDocx,
+} from '../../logique-metier/domaine/types'
 import type { PropositionAvecSource } from '../../logique-metier/procedures/proposerStructureProcedureAvecRepli'
 import { proposerStructureProcedureAvecRepli } from '../../logique-metier/procedures/proposerStructureProcedureAvecRepli'
 import { db } from '../../persistance/db'
@@ -10,6 +15,7 @@ export interface NouvelleProcedureInput {
   reference: string
   titre: string
   effectiveDate: string
+  categorie: CategorieProcedure
   sourceId?: string | null
 }
 
@@ -70,6 +76,7 @@ export const useProcedureStore = defineStore('procedure', () => {
       numero_version: numeroVersion,
       titre: input.titre,
       effective_date: input.effectiveDate,
+      categorie: input.categorie,
       source_id: input.sourceId ?? null,
       created_at: new Date().toISOString(),
     }
@@ -111,6 +118,11 @@ export const useProcedureStore = defineStore('procedure', () => {
     return procedureSteps.value
       .filter((e) => e.procedure_id === procedureId)
       .sort((a, b) => a.ordre - b.ordre)
+  }
+
+  /** Filtre par catégorie (CQV/CSV/Production) — pour les vues séparant les trois familles. */
+  function proceduresParCategorie(categorie: CategorieProcedure): Procedure[] {
+    return procedures.value.filter((p) => p.categorie === categorie)
   }
 
   /** La version la plus récente (numéro le plus élevé) d'une `reference` donnée — jamais une version arbitraire. */
@@ -173,6 +185,7 @@ export const useProcedureStore = defineStore('procedure', () => {
     creerProcedure,
     ajouterEtape,
     etapesDeProcedure,
+    proceduresParCategorie,
     derniereVersion,
     genererProposition,
     annulerProposition,

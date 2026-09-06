@@ -8,7 +8,11 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { extraireTableauxDocx, extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
 import { extraireTextePdf } from '../../connecteurs/pdf/PdfNatifAdapter'
-import type { EtatConfianceIA, TableauDocx } from '../../logique-metier/domaine/types'
+import type {
+  CategorieProcedure,
+  EtatConfianceIA,
+  TableauDocx,
+} from '../../logique-metier/domaine/types'
 import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
 import { useClientConfigStore } from '../stores/useClientConfigStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
@@ -45,7 +49,12 @@ const sectionsProposees = ref<
 const texteReponseBrute = ref<string | null>(null)
 const etapesEditables = ref<EtapeEditable[]>([])
 
-const procedureInput = reactive({ reference: '', titre: '', effectiveDate: '' })
+const procedureInput = reactive<{
+  reference: string
+  titre: string
+  effectiveDate: string
+  categorie: CategorieProcedure
+}>({ reference: '', titre: '', effectiveDate: '', categorie: 'production' })
 
 const nomFournisseurActuel = computed(
   () => NOMS_FOURNISSEURS[configStore.config?.ai_provider ?? 'claude'] ?? 'Claude',
@@ -54,6 +63,22 @@ const nomFournisseurActuel = computed(
 const procedureExistantes = computed(() =>
   procedureStore.procedures.filter((p) => p.client_id === props.clientId),
 )
+
+/**
+ * Trois familles au périmètre et au cycle d'approbation distincts
+ * (§4.20 — catégorisation CQV/CSV vs Production) — jamais mélangées
+ * dans une même liste sans distinction visuelle.
+ */
+const CATEGORIES_PROCEDURE: readonly CategorieProcedure[] = ['cqv', 'csv', 'production']
+const LIBELLES_CATEGORIE: Record<CategorieProcedure, string> = {
+  cqv: 'CQV (Qualification/Validation)',
+  csv: 'CSV (Systèmes informatisés)',
+  production: 'Production',
+}
+
+function proceduresExistantesParCategorie(categorie: CategorieProcedure) {
+  return procedureExistantes.value.filter((p) => p.categorie === categorie)
+}
 
 const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
   connu: 'Connu (vérifié)',
@@ -149,6 +174,7 @@ function reinitialiser(): void {
   procedureInput.reference = ''
   procedureInput.titre = ''
   procedureInput.effectiveDate = ''
+  procedureInput.categorie = 'production'
 }
 
 function annuler(): void {
@@ -278,6 +304,14 @@ async function confirmer(): Promise<void> {
           Date d'effet
           <input v-model="procedureInput.effectiveDate" type="date" required />
         </label>
+        <label>
+          Catégorie
+          <select v-model="procedureInput.categorie">
+            <option v-for="categorie in CATEGORIES_PROCEDURE" :key="categorie" :value="categorie">
+              {{ LIBELLES_CATEGORIE[categorie] }}
+            </option>
+          </select>
+        </label>
         <div class="actions">
           <button type="submit">Confirmer et créer la procédure</button>
           <button type="button" class="secondaire" @click="annuler">Annuler</button>
@@ -287,17 +321,30 @@ async function confirmer(): Promise<void> {
 
     <section v-if="procedureExistantes.length > 0" class="procedures-existantes">
       <h2>Procédures déjà créées</h2>
-      <article v-for="procedure in procedureExistantes" :key="procedure.id" class="procedure">
-        <header>
-          <strong>{{ procedure.titre }}</strong>
-          <span>{{ procedure.reference }} — v{{ procedure.numero_version }}</span>
-        </header>
-        <ol>
-          <li v-for="etape in procedureStore.etapesDeProcedure(procedure.id)" :key="etape.id">
-            {{ etape.description }}
-          </li>
-        </ol>
-      </article>
+      <div v-for="categorie in CATEGORIES_PROCEDURE" :key="categorie" class="groupe-categorie">
+        <template v-if="proceduresExistantesParCategorie(categorie).length > 0">
+          <h3 :class="['titre-categorie', `titre-categorie--${categorie}`]">
+            {{ LIBELLES_CATEGORIE[categorie] }} ({{
+              proceduresExistantesParCategorie(categorie).length
+            }})
+          </h3>
+          <article
+            v-for="procedure in proceduresExistantesParCategorie(categorie)"
+            :key="procedure.id"
+            class="procedure"
+          >
+            <header>
+              <strong>{{ procedure.titre }}</strong>
+              <span>{{ procedure.reference }} — v{{ procedure.numero_version }}</span>
+            </header>
+            <ol>
+              <li v-for="etape in procedureStore.etapesDeProcedure(procedure.id)" :key="etape.id">
+                {{ etape.description }}
+              </li>
+            </ol>
+          </article>
+        </template>
+      </div>
     </section>
   </main>
 </template>
@@ -371,6 +418,32 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+.groupe-categorie {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.titre-categorie {
+  margin: 0;
+  font-size: 0.9rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid var(--vp-bordure);
+}
+
+.titre-categorie--cqv {
+  border-color: var(--vp-marque, #2563eb);
+}
+
+.titre-categorie--csv {
+  border-color: var(--vp-attention, #b45309);
+}
+
+.titre-categorie--production {
+  border-color: var(--vp-succes, #15803d);
 }
 
 .section header,

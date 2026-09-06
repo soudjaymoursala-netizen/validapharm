@@ -198,6 +198,7 @@ describe('useReasoningEngineStore — scénario réel : lecture de procédure', 
       numero_version: 1,
       titre: 'Impact Assessment',
       effective_date: '2026-01-01',
+      categorie: 'production',
       source_id: null,
       created_at: maintenant,
     })
