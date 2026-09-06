@@ -54,6 +54,12 @@ export const router = createRouter({
       props: true,
     },
     {
+      path: '/projets/:projectId/assistant-livrable',
+      name: 'assistant-creation-livrable',
+      component: () => import('../screens/AssistantCreationLivrable.vue'),
+      props: true,
+    },
+    {
       path: '/configuration',
       name: 'configuration-client',
       component: () => import('../screens/ConfigurationClient.vue'),

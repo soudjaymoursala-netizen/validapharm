@@ -369,6 +369,27 @@ describe('useSectionsStore — journaliserExport', () => {
   })
 })
 
+describe('useSectionsStore — journaliserContexteAssemble (assistant guidé, tâche #115)', () => {
+  test('ajoute une entrée audit_log décrivant le contexte réellement consulté', async () => {
+    const { sections, section } = await creerProjetEtSection('oq')
+    await sections.journaliserContexteAssemble(
+      section.id,
+      'procédure SOP-QA-012 — Impact Assessment, méthode ACFC v1',
+    )
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(sectionEnBase?.audit_log.at(-1)?.action).toBe(
+      'contexte_assemble : procédure SOP-QA-012 — Impact Assessment, méthode ACFC v1',
+    )
+  })
+
+  test("n'invente aucun nouveau champ sur Section — reste un simple audit_log", async () => {
+    const { sections, section } = await creerProjetEtSection('oq')
+    await sections.journaliserContexteAssemble(section.id, 'méthode AMDEC v1')
+    const sectionEnBase = await db.sections.get(section.id)
+    expect(Object.keys(sectionEnBase ?? {}).sort()).toEqual(Object.keys(section).sort())
+  })
+})
+
 describe('useSectionsStore — importerSection', () => {
   test('crée une section nouvelle (id distinct), rattachée au projet cible, avec entrée "import"', async () => {
     const { sections, projet } = await creerProjetEtSection('contexte_procede')

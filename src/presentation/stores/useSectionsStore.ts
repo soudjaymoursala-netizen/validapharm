@@ -334,6 +334,34 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
+   * Trace dans `audit_log` le contexte réellement rassemblé avant
+   * génération (assistant guidé de création de livrable, §4.32) —
+   * procédure/méthode/précédents effectivement consultés, jamais une
+   * association structurelle nouvelle (`Section` ne gagne aucun champ) :
+   * un simple enregistrement auditable, même discipline que
+   * `journaliserExport`.
+   */
+  async function journaliserContexteAssemble(
+    sectionId: string,
+    description: string,
+  ): Promise<void> {
+    const section = await chargerSection(sectionId)
+    const maintenant = new Date().toISOString()
+    await db.sections.put({
+      ...section,
+      audit_log: [
+        ...section.audit_log,
+        {
+          timestamp: maintenant,
+          actor: section.owner_id,
+          action: `contexte_assemble : ${description}`,
+        },
+      ],
+    })
+    await chargerSectionsDuProjet(section.project_id)
+  }
+
+  /**
    * Sauvegarde automatique locale des valeurs saisies (debounce à la
    * charge de l'appelant — ce store ne fait qu'écrire).
    * Refuse silencieusement toute modification si la section est
@@ -607,6 +635,7 @@ export const useSectionsStore = defineStore('sections', () => {
     obtenirDocumentReference,
     importerSection,
     journaliserExport,
+    journaliserContexteAssemble,
     mettreAJourValeurs,
     mettreAJourTable,
     assignerApprobateurFinal,

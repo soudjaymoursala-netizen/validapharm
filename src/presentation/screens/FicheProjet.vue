@@ -398,6 +398,12 @@ async function importerFichier(evenement: Event): Promise<void> {
             <IconeSvg nom="plus" :taille="15" />
             Ajouter une section
           </button>
+          <RouterLink
+            class="bouton-secondaire"
+            :to="{ name: 'assistant-creation-livrable', params: { projectId: props.projectId } }"
+          >
+            Assistant guidé
+          </RouterLink>
         </div>
         <p v-else class="meta-lecture-seule">
           Lecture seule — vous n'êtes ni créateur ni partagé en édition.
