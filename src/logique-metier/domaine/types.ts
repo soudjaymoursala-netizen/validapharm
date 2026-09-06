@@ -781,6 +781,19 @@ export interface Process {
   nom: string
   description: string
   type: TypeProcess
+  /**
+   * Provenance documentaire — même convention que
+   * `Procedure.source_id` : `null` pour un process créé en saisie
+   * directe, sinon l'id du `Source` (Source Intelligence) dont le
+   * document importé a été extrait. **Garde-fou non négociable**, même
+   * discipline que `Procedure`/`KnowledgeItem.valeur_interpretee` :
+   * aucune structuration automatique par IA — `nom`/`description`
+   * restent toujours saisis/édités par un humain, assisté par
+   * `extraireTextePdf`/`extraireTexteDocx` (texte brut affiché pour
+   * relecture, jamais un `Process` créé directement depuis le texte
+   * extrait sans confirmation).
+   */
+  source_id: string | null
   audit_log: EntreeJournalAudit[]
   created_at: string
   updated_at: string

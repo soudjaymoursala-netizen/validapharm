@@ -23,7 +23,20 @@ describe('useProcessContextStore — Process et Function de base', () => {
       type: 'manufacturing',
     })
     expect(process.type).toBe('manufacturing')
+    expect(process.source_id).toBeNull()
     expect(store.processes).toHaveLength(1)
+  })
+
+  test('un Process créé depuis un document importé porte le source_id (tâche #113)', async () => {
+    const store = useProcessContextStore()
+    await store.charger('client-1')
+    const process = await store.creerProcess('client-1', {
+      nom: 'Compression',
+      description: 'Texte extrait du document.',
+      type: 'manufacturing',
+      sourceId: 'source-1',
+    })
+    expect(process.source_id).toBe('source-1')
   })
 
   test('une Function est indépendante du type de Process (EHS, alarme, etc.)', async () => {

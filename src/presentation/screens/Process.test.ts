@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
+import JSZip from 'jszip'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -11,6 +12,47 @@ import {
 } from '../../test-utils/fauxWorkerAuth'
 import { useClientsStore } from '../stores/useClientsStore'
 import Process from './Process.vue'
+
+async function construireDocxMinimal(texte: string): Promise<ArrayBuffer> {
+  const zip = new JSZip()
+  zip.file(
+    '[Content_Types].xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`,
+  )
+  zip.file(
+    '_rels/.rels',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`,
+  )
+  zip.file(
+    'word/document.xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+    <w:p><w:r><w:t>${texte}</w:t></w:r></w:p>
+</w:body></w:document>`,
+  )
+  return zip.generateAsync({ type: 'arraybuffer' })
+}
+
+async function deposerDocument(
+  wrapper: ReturnType<typeof mount>,
+  buffer: ArrayBuffer,
+  nomFichier: string,
+): Promise<void> {
+  const fichier = new File([buffer], nomFichier, {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
+  const inputFichier = wrapper.find('.bloc-process input[type="file"]')
+  Object.defineProperty(inputFichier.element, 'files', { value: [fichier], configurable: true })
+  await inputFichier.trigger('change')
+}
 
 function routeurDeTest() {
   return createRouter({
@@ -48,6 +90,10 @@ beforeEach(async () => {
   await db.fonctionsActif.clear()
   await db.associationsFonctionProcess.clear()
   await db.associationsFonctionAssetNode.clear()
+  await db.sources.clear()
+  await db.sourceVersions.clear()
+  await db.extractions.clear()
+  await db.extractionItems.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
@@ -99,6 +145,43 @@ describe('Process — écran Process/Fonction (§6 du prompt maître)', () => {
     expect(association?.function_id).toBe(fonctionId)
     expect(association?.process_id).toBe(processId)
     expect(wrapper.text()).toContain('process : Compression')
+  })
+
+  test('importer un document (.docx) extrait le texte, le préremplit et trace la provenance (tâche #113)', async () => {
+    const clientsStore = useClientsStore()
+    const client = await clientsStore.creerClient({ name: 'Client Import' })
+    if ('erreur' in client) throw client
+
+    const router = routeurDeTest()
+    await router.push({ name: 'gestion-process', params: { clientId: client.id } })
+    const wrapper = mount(Process, {
+      props: { clientId: client.id },
+      global: { plugins: [router] },
+    })
+    await attendreQue(() => wrapper.text().includes('Client Import'))
+
+    const docx = await construireDocxMinimal('Description du process de compression.')
+    await deposerDocument(wrapper, docx, 'Process compression.docx')
+    const nomInput = () =>
+      wrapper.find('.bloc-process .formulaire input[type="text"]').element as HTMLInputElement
+    const descriptionTextarea = () =>
+      wrapper.find('.bloc-process .formulaire textarea').element as HTMLTextAreaElement
+    await attendreQue(() => descriptionTextarea().value.length > 0)
+
+    expect(nomInput().value).toBe('Process compression')
+    expect(descriptionTextarea().value).toContain('Description du process de compression.')
+    expect(wrapper.text()).toContain('Texte extrait de « Process compression.docx »')
+
+    const sourcesAvantSoumission = await db.sources.toArray()
+    expect(sourcesAvantSoumission).toHaveLength(1)
+    expect(sourcesAvantSoumission[0]?.titre).toBe('Process compression.docx')
+
+    await wrapper.find('.bloc-process .formulaire').trigger('submit.prevent')
+    await attendreQue(async () => (await db.processes.toArray()).length > 0)
+
+    const process = (await db.processes.toArray())[0]
+    expect(process?.source_id).toBe(sourcesAvantSoumission[0]?.id)
+    expect(wrapper.text()).toContain('importé de « Process compression.docx »')
   })
 
   test('affiche un état vide tant qu’aucun process ni fonction n’existe', async () => {

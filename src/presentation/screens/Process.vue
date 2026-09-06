@@ -6,9 +6,12 @@
 // mais n'avait jamais eu d'écran de création, malgré son usage réel côté
 // Content Plan/Context Engine.
 import { onMounted, ref } from 'vue'
+import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
+import { extraireTextePdf } from '../../connecteurs/pdf/PdfNatifAdapter'
 import type { TypeProcess } from '../../logique-metier/domaine/types'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useProcessContextStore } from '../stores/useProcessContextStore'
+import { useSourceIntelligenceStore } from '../stores/useSourceIntelligenceStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 
 defineOptions({ name: 'EcranProcess' })
@@ -17,6 +20,7 @@ const props = defineProps<{ clientId: string }>()
 const clientsStore = useClientsStore()
 const processStore = useProcessContextStore()
 const structureStore = useStructureSystemeStore()
+const sourceStore = useSourceIntelligenceStore()
 
 const nomClient = ref<string | null>(null)
 
@@ -25,6 +29,7 @@ onMounted(async () => {
   nomClient.value = client?.name ?? null
   await processStore.charger(props.clientId)
   await structureStore.charger(props.clientId)
+  await sourceStore.charger(props.clientId)
 })
 
 const LIBELLES_TYPE_PROCESS: Record<TypeProcess, string> = {
@@ -47,16 +52,76 @@ const nomProcess = ref('')
 const descriptionProcess = ref('')
 const typeProcess = ref<TypeProcess>('manufacturing')
 
+/**
+ * Import de document (§4.10bis) — extraction déterministe
+ * (`extraireTextePdf`/`extraireTexteDocx`, jamais d'IA) du texte brut,
+ * affiché pour relecture humaine dans le champ Description : le nom et
+ * la description restent toujours saisis/édités par l'utilisateur,
+ * jamais un `Process` créé automatiquement depuis le texte extrait
+ * (même garde-fou que `Procedure`, cf. `Process.source_id`). Le
+ * document importé est enregistré comme `Source` (Source
+ * Intelligence) dès l'extraction, pour rester traçable même si le
+ * formulaire n'est finalement jamais soumis.
+ */
+const nomFichierImporte = ref<string | null>(null)
+const sourceIdCourante = ref<string | null>(null)
+const enExtraction = ref(false)
+const erreurExtraction = ref<string | null>(null)
+
+async function importerDocumentProcess(evenement: Event): Promise<void> {
+  erreurExtraction.value = null
+  const fichier = (evenement.target as HTMLInputElement).files?.[0]
+  if (!fichier) return
+
+  enExtraction.value = true
+  try {
+    const tampon = await fichier.arrayBuffer()
+    const texte = fichier.name.toLowerCase().endsWith('.pdf')
+      ? (await extraireTextePdf(tampon)).texte
+      : (await extraireTexteDocx(tampon)).texte
+
+    const source = await sourceStore.creerSource(props.clientId, {
+      type: 'document',
+      titre: fichier.name,
+    })
+    const version = await sourceStore.creerSourceVersion(props.clientId, source.id)
+    if ('erreur' in version) throw new Error(version.erreur)
+    const extraction = await sourceStore.enregistrerExtraction(props.clientId, version.id, {
+      methode: fichier.name.toLowerCase().endsWith('.pdf') ? 'pdf_natif' : 'docx_natif',
+    })
+    if ('erreur' in extraction) throw new Error(extraction.erreur)
+    await sourceStore.ajouterExtractionItem(props.clientId, extraction.id, {
+      contenu: texte,
+      position: 1,
+    })
+
+    descriptionProcess.value = texte
+    if (nomProcess.value.trim().length === 0)
+      nomProcess.value = fichier.name.replace(/\.[^.]+$/, '')
+    nomFichierImporte.value = fichier.name
+    sourceIdCourante.value = source.id
+  } catch (e) {
+    erreurExtraction.value =
+      e instanceof Error ? e.message : "Erreur inconnue lors de l'extraction du fichier."
+  } finally {
+    enExtraction.value = false
+    ;(evenement.target as HTMLInputElement).value = ''
+  }
+}
+
 async function creerProcess(): Promise<void> {
   if (nomProcess.value.trim().length === 0) return
   await processStore.creerProcess(props.clientId, {
     nom: nomProcess.value.trim(),
     description: descriptionProcess.value.trim(),
     type: typeProcess.value,
+    sourceId: sourceIdCourante.value,
   })
   nomProcess.value = ''
   descriptionProcess.value = ''
   typeProcess.value = 'manufacturing'
+  nomFichierImporte.value = null
+  sourceIdCourante.value = null
 }
 
 // --- Fonctions ---
@@ -98,6 +163,10 @@ async function rattacherAActif(): Promise<void> {
   assetNodeCibleRattachement.value = ''
 }
 
+function libelleSourceProcess(sourceId: string): string {
+  return sourceStore.sources.find((s) => s.id === sourceId)?.titre ?? sourceId
+}
+
 function libelleProcess(processId: string): string {
   return processStore.processes.find((p) => p.id === processId)?.nom ?? processId
 }
@@ -135,6 +204,23 @@ function actifsDeFonction(functionId: string): string[] {
 
     <section class="bloc-process">
       <h2>Process</h2>
+      <p class="rappel">
+        Import de document optionnel — le texte est extrait tel quel (jamais par IA) pour relecture
+        et édition avant création ; rien n'est jamais créé automatiquement.
+      </p>
+      <label class="bouton-fichier">
+        {{ enExtraction ? 'Extraction en cours…' : 'Importer un document (PDF/Word)' }}
+        <input
+          type="file"
+          accept=".pdf,.docx"
+          :disabled="enExtraction"
+          @change="importerDocumentProcess"
+        />
+      </label>
+      <p v-if="erreurExtraction" class="erreur" role="alert">{{ erreurExtraction }}</p>
+      <p v-if="nomFichierImporte" class="meta-import">
+        Texte extrait de « {{ nomFichierImporte }} » — relisez et éditez avant de créer le process.
+      </p>
       <form class="formulaire" @submit.prevent="creerProcess">
         <label>
           Nom
@@ -158,6 +244,9 @@ function actifsDeFonction(functionId: string): string[] {
         <li v-for="p in processStore.processes" :key="p.id">
           <strong>{{ p.nom }}</strong>
           <span class="meta">({{ LIBELLES_TYPE_PROCESS[p.type] }})</span>
+          <span v-if="p.source_id" class="meta meta-provenance">
+            — importé de « {{ libelleSourceProcess(p.source_id) }} »
+          </span>
           <p v-if="p.description">{{ p.description }}</p>
         </li>
       </ul>
@@ -304,6 +393,35 @@ li {
 
 .etat-vide {
   color: var(--vp-texte-secondaire);
+}
+
+.bouton-fichier {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--vp-bordure, #ccc);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.bouton-fichier input[type='file'] {
+  display: none;
+}
+
+.erreur {
+  color: var(--vp-danger, #b91c1c);
+  font-size: 0.85em;
+}
+
+.meta-import {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.85em;
+}
+
+.meta-provenance {
+  font-style: italic;
 }
 
 .bloc-rattachement {

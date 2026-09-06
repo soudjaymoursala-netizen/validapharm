@@ -15,6 +15,8 @@ export interface NouveauProcessInput {
   nom: string
   description: string
   type: TypeProcess
+  /** Provenance documentaire — voir `Process.source_id`. `null`/omis pour une saisie directe. */
+  sourceId?: string | null
 }
 
 export interface NouvelleFonctionInput {
@@ -77,6 +79,7 @@ export const useProcessContextStore = defineStore('processContext', () => {
       nom: input.nom,
       description: input.description,
       type: input.type,
+      source_id: input.sourceId ?? null,
       audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
