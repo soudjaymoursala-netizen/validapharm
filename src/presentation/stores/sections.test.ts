@@ -407,6 +407,8 @@ describe('useSectionsStore — importerSection', () => {
       values: {},
       tables: {},
       generation_source: { source_document_id: null, generated_fields: [] },
+      procedure_id: null,
+      asset_node_id: null,
       audit_log: [
         { timestamp: '2026-01-01T00:00:00.000Z', actor: 'u-distant', action: 'création' },
       ],

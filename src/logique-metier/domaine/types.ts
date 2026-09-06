@@ -170,6 +170,17 @@ export interface Section {
   values: Record<string, string | number | null>
   tables: Record<string, Array<Record<string, string | number | null>>>
   generation_source: { source_document_id: string | null; generated_fields: string[] }
+  /**
+   * Liens structurels réels (tâche #118) — jusqu'ici l'assistant guidé de
+   * création de livrable ne traçait la procédure/le nœud considérés que
+   * dans `audit_log` (texte non exploitable pour une navigation retour
+   * depuis `RevueStructureProcedure.vue`/`DossierVivantActif.vue`).
+   * `null` : aucun lien (valeur par défaut, y compris pour toute section
+   * créée avant cette version — champ absent traité comme `null`, même
+   * garantie de non-régression que `workspace_id`/`readiness`).
+   */
+  procedure_id: string | null
+  asset_node_id: string | null
   audit_log: EntreeJournalAudit[]
   created_at: string
   updated_at: string

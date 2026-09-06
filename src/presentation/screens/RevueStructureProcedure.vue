@@ -11,8 +11,10 @@ import { extraireTextePdf } from '../../connecteurs/pdf/PdfNatifAdapter'
 import type {
   CategorieProcedure,
   EtatConfianceIA,
+  Section,
   TableauDocx,
 } from '../../logique-metier/domaine/types'
+import { db } from '../../persistance/db'
 import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
 import { useClientConfigStore } from '../stores/useClientConfigStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
@@ -88,12 +90,35 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
   a_verifier: 'À vérifier',
 }
 
+/**
+ * Livrables liés (tâche #118) — `Section.procedure_id` est un vrai lien
+ * structurel (assistant guidé ou éditeur de section), regroupé ici par
+ * procédure pour la navigation retour, jamais chargé section par section
+ * (une seule requête indexée).
+ */
+const sectionsLieesParProcedure = ref<Record<string, Section[]>>({})
+
+function sectionsLieesA(procedureId: string): Section[] {
+  return sectionsLieesParProcedure.value[procedureId] ?? []
+}
+
 onMounted(async () => {
   await Promise.all([
     procedureStore.charger(props.clientId),
     configStore.charger(props.clientId),
     relaisStore.charger(),
   ])
+  const idsProcedures = procedureExistantes.value.map((p) => p.id)
+  if (idsProcedures.length > 0) {
+    const sections = await db.sections.where('procedure_id').anyOf(idsProcedures).toArray()
+    const groupes: Record<string, Section[]> = {}
+    for (const section of sections) {
+      const id = section.procedure_id
+      if (!id) continue
+      groupes[id] = [...(groupes[id] ?? []), section]
+    }
+    sectionsLieesParProcedure.value = groupes
+  }
 })
 
 async function importerFichier(evenement: Event): Promise<void> {
@@ -342,6 +367,19 @@ async function confirmer(): Promise<void> {
                 {{ etape.description }}
               </li>
             </ol>
+            <div v-if="sectionsLieesA(procedure.id).length > 0" class="livrables-lies">
+              <span class="livrables-lies__titre">Livrables liés :</span>
+              <RouterLink
+                v-for="s in sectionsLieesA(procedure.id)"
+                :key="s.id"
+                :to="{
+                  name: 'editeur-section',
+                  params: { projectId: s.project_id, sectionId: s.id },
+                }"
+              >
+                {{ s.meta.titre }}
+              </RouterLink>
+            </div>
           </article>
         </template>
       </div>
@@ -377,6 +415,17 @@ section {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.livrables-lies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.livrables-lies__titre {
+  color: var(--vp-texte-secondaire);
 }
 
 .bouton-fichier {

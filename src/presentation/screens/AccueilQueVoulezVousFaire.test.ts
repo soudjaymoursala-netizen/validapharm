@@ -223,6 +223,8 @@ function sectionMinimale(
     values: {},
     tables: {},
     generation_source: { source_document_id: null, generated_fields: [] },
+    procedure_id: null,
+    asset_node_id: null,
     audit_log: [],
     created_at: maintenant,
     updated_at: maintenant,

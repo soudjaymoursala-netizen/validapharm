@@ -19,6 +19,8 @@ function sectionMinimale(): Section {
     values: { description_procede: 'Un procédé' },
     tables: { cpp: [{ parametre: 'Température', valeur_cible: '25°C', tolerance: '±2°C' }] },
     generation_source: { source_document_id: null, generated_fields: [] },
+    procedure_id: null,
+    asset_node_id: null,
     audit_log: [{ timestamp: '2026-01-01T00:00:00.000Z', actor: 'u1', action: 'création' }],
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',

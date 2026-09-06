@@ -28,6 +28,9 @@ export interface NouvelleSectionInput {
   language: Langue
   titre: string
   owner_id: string
+  /** Liens structurels réels (tâche #118) — omis ou `null` : aucun lien, comportement inchangé. */
+  procedure_id?: string | null
+  asset_node_id?: string | null
 }
 
 export type ResultatActionSection =
@@ -92,6 +95,8 @@ export const useSectionsStore = defineStore('sections', () => {
       values: {},
       tables: {},
       generation_source: { source_document_id: null, generated_fields: [] },
+      procedure_id: input.procedure_id ?? null,
+      asset_node_id: input.asset_node_id ?? null,
       audit_log: [{ timestamp: maintenant, actor: input.owner_id, action: 'création' }],
       created_at: maintenant,
       updated_at: maintenant,
@@ -357,6 +362,35 @@ export const useSectionsStore = defineStore('sections', () => {
           action: `contexte_assemble : ${description}`,
         },
       ],
+    })
+    await chargerSectionsDuProjet(section.project_id)
+  }
+
+  /**
+   * Lie/délie manuellement cette section à une procédure ou un nœud
+   * Structure Système (tâche #118) — mêmes champs que ceux renseignés par
+   * l'assistant guidé à la création (`creerSection`), éditables ensuite
+   * depuis `EditeurSection.vue` pour les sections créées avant cette
+   * fonctionnalité ou hors du parcours assisté. `null` retire le lien.
+   */
+  async function lierProcedure(sectionId: string, procedureId: string | null): Promise<void> {
+    const section = await chargerSection(sectionId)
+    if (section.status === 'valide_en_interne') return
+    await db.sections.put({
+      ...section,
+      procedure_id: procedureId,
+      updated_at: new Date().toISOString(),
+    })
+    await chargerSectionsDuProjet(section.project_id)
+  }
+
+  async function lierAssetNode(sectionId: string, assetNodeId: string | null): Promise<void> {
+    const section = await chargerSection(sectionId)
+    if (section.status === 'valide_en_interne') return
+    await db.sections.put({
+      ...section,
+      asset_node_id: assetNodeId,
+      updated_at: new Date().toISOString(),
     })
     await chargerSectionsDuProjet(section.project_id)
   }
@@ -636,6 +670,8 @@ export const useSectionsStore = defineStore('sections', () => {
     importerSection,
     journaliserExport,
     journaliserContexteAssemble,
+    lierProcedure,
+    lierAssetNode,
     mettreAJourValeurs,
     mettreAJourTable,
     assignerApprobateurFinal,

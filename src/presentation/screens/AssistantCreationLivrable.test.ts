@@ -14,6 +14,7 @@ import { useProcedureStore } from '../stores/useProcedureStore'
 import { useProcessContextStore } from '../stores/useProcessContextStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useSectionsStore } from '../stores/useSectionsStore'
+import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import AssistantCreationLivrable from './AssistantCreationLivrable.vue'
 
 function routeurDeTest() {
@@ -53,6 +54,7 @@ beforeEach(async () => {
   await db.sections.clear()
   await db.processes.clear()
   await db.procedures.clear()
+  await db.assetNodes.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
@@ -113,6 +115,19 @@ describe('AssistantCreationLivrable — chaîne de création de livrable assembl
       categorie: 'cqv',
     })
 
+    const structureStore = useStructureSystemeStore()
+    await structureStore.ajouterNiveau(client.id, {
+      key: 'equipement',
+      label: { fr: 'Équipement', en: 'Equipment', de: 'Equipment' },
+      numbering_pattern: '',
+    })
+    await structureStore.creerNoeud(client.id, {
+      level_key: 'equipement',
+      name: 'Presse P-200',
+      code: 'P-200',
+      parent_id: null,
+    })
+
     const router = routeurDeTest()
     await router.push({ name: 'assistant-creation-livrable', params: { projectId: projet.id } })
     const wrapper = mount(AssistantCreationLivrable, {
@@ -133,9 +148,11 @@ describe('AssistantCreationLivrable — chaîne de création de livrable assembl
     await wrapper.find('.actions button:last-child').trigger('click')
     await flushPromises()
 
-    // Étape 3 — architecture (réelle, vide ici).
+    // Étape 3 — architecture (réelle, sélectionnable — lien structurel réel, tâche #118).
     expect(wrapper.text()).toContain('3. Architecture associée')
-    expect(wrapper.text()).toContain('Aucun actif défini')
+    expect(wrapper.text()).toContain('Presse P-200')
+    const noeudEnBase = (await db.assetNodes.toArray())[0]
+    await wrapper.find('.etape select').setValue(noeudEnBase?.id)
     await wrapper.find('.actions button:last-child').trigger('click')
     await flushPromises()
 
@@ -183,9 +200,13 @@ describe('AssistantCreationLivrable — chaîne de création de livrable assembl
     const sectionCreee = (await db.sections.where('project_id').equals(projet.id).toArray())[0]
     expect(sectionCreee?.template_type).toBe('oq')
     expect(sectionCreee?.meta.titre).toBe('OQ presse P-200')
+    // Liens structurels réels (tâche #118) — plus seulement une phrase dans audit_log.
+    expect(sectionCreee?.procedure_id).toBe(procedureEnBase?.id)
+    expect(sectionCreee?.asset_node_id).toBe(noeudEnBase?.id)
     const derniereEntree = sectionCreee?.audit_log.at(-1)
     expect(derniereEntree?.action).toContain('contexte_assemble')
     expect(derniereEntree?.action).toContain('PQ-COMPRESSION')
+    expect(derniereEntree?.action).toContain('Presse P-200')
     expect(derniereEntree?.action).toContain('1 précédent')
   })
 })

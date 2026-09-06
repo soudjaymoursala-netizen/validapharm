@@ -37,6 +37,11 @@ function routeurDeTest() {
         name: 'mission-workspace',
         component: { template: '<div />' },
       },
+      {
+        path: '/projets/:projectId/sections/:sectionId',
+        name: 'editeur-section',
+        component: { template: '<div />' },
+      },
     ],
   })
 }
@@ -48,6 +53,7 @@ beforeEach(async () => {
   await db.evaluationsCSVAssessment.clear()
   await db.missions.clear()
   await db.qualityEvents.clear()
+  await db.sections.clear()
 })
 
 describe('DossierVivantActif', () => {
@@ -113,6 +119,58 @@ describe('DossierVivantActif', () => {
     expect(wrapper.text()).toContain('PLC autoclave')
     expect(wrapper.text()).toContain('Traçabilité incomplète de la requalification')
     expect(wrapper.text()).toContain("Constat d'audit")
+  })
+
+  test('liste les livrables explicitement liés à cet actif (tâche #118)', async () => {
+    const maintenant = new Date().toISOString()
+    await db.assetNodes.put({
+      id: 'noeud-2',
+      client_id: 'client-1',
+      workspace_id: null,
+      level_key: 'equipement',
+      name: 'Presse P-200',
+      code: 'P-200',
+      parent_id: null,
+      associated_nodes: [],
+      source: 'manuel',
+      qms_connector_id: null,
+      periodic_qualification: { applicable: false, deadline: null },
+      qualification_status: 'non_qualifie',
+      audit_log: [],
+      created_at: maintenant,
+      updated_at: maintenant,
+    })
+    await db.sections.put({
+      id: 'section-1',
+      project_id: 'projet-1',
+      template_type: 'oq',
+      template_engine_version: '0.1.0',
+      owner_id: 'admin@pharmatech.example',
+      shared_with: [],
+      language: 'fr',
+      status: 'brouillon_aide',
+      meta: { ref: '', titre: 'OQ presse P-200', version: '0.1' },
+      workflow: { authors: [], reviewers: [], approver_final: null },
+      signatures: { redacteur: {}, verificateur: {}, approbateur: {} },
+      revisions: [],
+      values: {},
+      tables: {},
+      generation_source: { source_document_id: null, generated_fields: [] },
+      procedure_id: null,
+      asset_node_id: 'noeud-2',
+      audit_log: [],
+      created_at: maintenant,
+      updated_at: maintenant,
+    })
+
+    const wrapper = mount(DossierVivantActif, {
+      props: { clientId: 'client-1', noeudId: 'noeud-2' },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await attendreQue(() => wrapper.text().includes('Presse P-200'))
+
+    expect(wrapper.text()).toContain('OQ presse P-200')
+    expect(wrapper.text()).not.toContain('Aucun livrable explicitement lié')
   })
 
   test('nœud introuvable -> message explicite, jamais un écran vide silencieux', async () => {

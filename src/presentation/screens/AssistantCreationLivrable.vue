@@ -3,13 +3,17 @@
 // partir des capacités déjà construites séparément : Architecture
 // [Structure Système], Process, Procédures [catégorisées CQV/CSV/
 // Production, tâche #114], Risques [AMDEC], Méthode [ACFC/AMDEC],
-// précédents [autres sections du même type chez ce client]. Aucune
-// nouvelle association structurelle n'est inventée ici — chaque étape
-// affiche des données réelles déjà persistées ailleurs ; seule la
-// sélection de procédure/méthode effectivement considérée est tracée
-// dans `Section.audit_log` via `journaliserContexteAssemble` (jamais un
-// nouveau champ sur `Section`). Vision utilisateur : "Context First" —
-// les sections ne sont jamais des silos indépendants.
+// précédents [autres sections du même type chez ce client]. Chaque étape
+// affiche des données réelles déjà persistées ailleurs. La procédure et le
+// nœud Structure Système effectivement sélectionnés à l'étape 3/5 sont
+// désormais de vrais liens structurels (`Section.procedure_id`/
+// `asset_node_id`, tâche #118) — jusqu'ici seule une phrase dans
+// `Section.audit_log` (texte non exploitable pour une navigation retour
+// depuis `RevueStructureProcedure.vue`/`DossierVivantActif.vue`) en gardait
+// trace ; la méthode/les précédents restent, eux, sans champ structurel
+// dédié et continuent de n'être journalisés qu'en texte. Vision
+// utilisateur : "Context First" — les sections ne sont jamais des silos
+// indépendants.
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { db } from '../../persistance/db'
@@ -73,6 +77,7 @@ const indexEtape = computed(() => ETAPES.indexOf(etapeCourante.value))
 
 const templateChoisi = ref<TemplateType | null>(null)
 const titreLivrable = ref('')
+const noeudSelectionneId = ref<string>('')
 const procedureSelectionneeId = ref<string>('')
 const precedents = ref<
   Array<{ id: string; projectId: string; projectName: string; titre: string }>
@@ -149,6 +154,11 @@ function libelleProcedure(procedureId: string): string {
   return p ? `${p.reference} — ${p.titre}` : procedureId
 }
 
+function libelleNoeud(noeudId: string): string {
+  const n = structureStore.noeuds.find((n) => n.id === noeudId)
+  return n ? `${n.name} (${n.code})` : noeudId
+}
+
 async function genererLivrable(depuisDocument: boolean): Promise<void> {
   if (!templateChoisi.value || titreLivrable.value.trim().length === 0 || !projet.value) return
   enGeneration.value = true
@@ -159,11 +169,20 @@ async function genererLivrable(depuisDocument: boolean): Promise<void> {
       language: projet.value.language_default,
       titre: titreLivrable.value.trim(),
       owner_id: projetsStore.identiteCourante,
+      procedure_id: procedureSelectionneeId.value || null,
+      asset_node_id: noeudSelectionneId.value || null,
     })
 
     const elementsContexte: string[] = []
     if (procedureSelectionneeId.value) {
-      elementsContexte.push(`procédure ${libelleProcedure(procedureSelectionneeId.value)}`)
+      elementsContexte.push(
+        `procédure ${libelleProcedure(procedureSelectionneeId.value)} (lien structurel)`,
+      )
+    }
+    if (noeudSelectionneId.value) {
+      elementsContexte.push(
+        `nœud Structure Système ${libelleNoeud(noeudSelectionneId.value)} (lien structurel)`,
+      )
     }
     if (methodStore.profilActif)
       elementsContexte.push(`méthode ACFC ${methodStore.profilActif.version}`)
@@ -257,9 +276,15 @@ async function genererLivrable(depuisDocument: boolean): Promise<void> {
       <p v-if="structureStore.noeuds.length === 0" class="etat-vide">
         Aucun actif défini pour ce site pour l'instant.
       </p>
-      <ul v-else>
-        <li v-for="n in structureStore.noeuds" :key="n.id">{{ n.name }} ({{ n.code }})</li>
-      </ul>
+      <label v-else>
+        Nœud lié (facultatif) — lien structurel réel, retrouvable depuis son dossier vivant
+        <select v-model="noeudSelectionneId">
+          <option value="">— aucun —</option>
+          <option v-for="n in structureStore.noeuds" :key="n.id" :value="n.id">
+            {{ n.name }} ({{ n.code }})
+          </option>
+        </select>
+      </label>
       <div class="actions">
         <button type="button" @click="precedent">Précédent</button>
         <button type="button" @click="suivant">Suivant</button>
@@ -286,7 +311,7 @@ async function genererLivrable(depuisDocument: boolean): Promise<void> {
         Aucune procédure enregistrée pour ce site pour l'instant.
       </p>
       <label v-else>
-        Procédure liée (facultatif)
+        Procédure liée (facultatif) — lien structurel réel, retrouvable depuis la fiche procédure
         <select v-model="procedureSelectionneeId">
           <option value="">— aucune —</option>
           <option v-for="p in procedurePertinentes" :key="p.id" :value="p.id">
@@ -351,9 +376,11 @@ async function genererLivrable(depuisDocument: boolean): Promise<void> {
     <section v-else-if="etapeCourante === 'generation'" class="carte etape">
       <h2>9. Génération</h2>
       <p class="rappel">
-        Le contexte assemblé ci-dessus est tracé dans le journal d'audit du livrable — la rédaction
-        elle-même reste entièrement sous contrôle humain (contrôle IA puis contrôle déterministe
-        puis revue humaine, comme pour toute section).
+        La procédure et le nœud Structure Système sélectionnés deviennent des liens structurels
+        réels du livrable (retrouvables depuis leurs propres fiches) ; le reste du contexte assemblé
+        ci-dessus est tracé dans le journal d'audit du livrable. La rédaction elle-même reste
+        entièrement sous contrôle humain (contrôle IA puis contrôle déterministe puis revue humaine,
+        comme pour toute section).
       </p>
       <div class="actions">
         <button type="button" @click="precedent">Précédent</button>

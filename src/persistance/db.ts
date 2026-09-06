@@ -535,6 +535,20 @@ export class ValidaPharmDatabase extends Dexie {
       normativeDocuments: 'id, category, source',
       connexionDriveLectureNormes: 'id',
     })
+    /**
+     * Liens structurels réels Section↔Procedure / Section↔AssetNode
+     * (tâche #118) — remplace l'assistant guidé de création de livrable qui
+     * ne traçait la procédure/le nœud considérés que dans `Section.audit_log`
+     * (texte non exploitable pour une navigation retour). Indexés pour
+     * permettre l'inverse (« quels livrables pour cette procédure/cet
+     * actif ? ») depuis `RevueStructureProcedure.vue`/`DossierVivantActif.vue`.
+     * Sections créées avant cette version : champ absent traité comme `null`
+     * côté store, même garantie de non-régression que `workspace_id`/
+     * `readiness`/`statut` (notes de version précédentes).
+     */
+    this.version(31).stores({
+      sections: 'id, project_id, template_type, status, updated_at, procedure_id, asset_node_id',
+    })
   }
 }
 

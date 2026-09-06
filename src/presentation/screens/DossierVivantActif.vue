@@ -16,7 +16,17 @@
 // dans son dossier vivant alors que `QualityEvent.asset_node_id` existe
 // au même titre que les autres évaluations agrégées ci-dessus — trouvé
 // en consultant réellement l'écran après avoir consigné un constat.
+//
+// Livrables liés ajoutés (tâche #118) : `Section.asset_node_id` est
+// désormais un vrai lien structurel (posé par l'assistant guidé de
+// création de livrable ou manuellement depuis `EditeurSection.vue`) —
+// referme partiellement la limite documentée ci-dessous ("aucune section
+// de gabarit liée à un nœud") : les sections EXPLICITEMENT liées
+// apparaissent bien ici désormais ; seule l'absence de lien automatique/
+// déduit reste inchangée (toujours une association manuelle explicite).
 import { computed, onMounted, ref } from 'vue'
+import { db } from '../../persistance/db'
+import type { Section } from '../../logique-metier/domaine/types'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import { useMethodProfileACFCStore } from '../stores/useMethodProfileACFCStore'
@@ -38,6 +48,7 @@ const missionStore = useMissionStore()
 const qualityEventStore = useQualityEventStore()
 
 const nomClient = ref<string | null>(null)
+const sectionsLiees = ref<Section[]>([])
 
 onMounted(async () => {
   const client = await clientsStore.obtenirClient(props.clientId)
@@ -50,6 +61,13 @@ onMounted(async () => {
     riskStore.charger(props.clientId),
     missionStore.charger(props.clientId),
     qualityEventStore.charger(props.clientId),
+    db.sections
+      .where('asset_node_id')
+      .equals(props.noeudId)
+      .toArray()
+      .then((s) => {
+        sectionsLiees.value = s
+      }),
   ])
 })
 
@@ -211,13 +229,32 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
         <p v-else class="etat-vide">Aucun événement qualité rattaché à cet actif pour l'instant.</p>
       </section>
 
+      <section class="bloc-livrables">
+        <h2>Livrables liés</h2>
+        <ul v-if="sectionsLiees.length > 0" class="liste-livrables">
+          <li v-for="s in sectionsLiees" :key="s.id">
+            <RouterLink
+              :to="{
+                name: 'editeur-section',
+                params: { projectId: s.project_id, sectionId: s.id },
+              }"
+            >
+              {{ s.meta.titre }} ({{ s.template_type }})
+            </RouterLink>
+          </li>
+        </ul>
+        <p v-else class="etat-vide">
+          Aucun livrable explicitement lié à cet actif pour l'instant — le lien se pose depuis
+          l'assistant guidé de création ou depuis l'éditeur de la section.
+        </p>
+      </section>
+
       <section class="bloc-perimetre">
         <h2>Périmètre non couvert par cet écran</h2>
         <p class="rappel">
-          Les sections de projet (DQ/FAT/SAT/IQ/OQ/PQ…) ne portent aujourd'hui aucun lien direct
-          vers un nœud Structure Système — seul le lien section↔section (garde-fous de finalisation)
-          existe. Ce dossier vivant n'agrège donc pas encore les livrables de gabarit ;
-          retrouvez-les depuis la fiche du projet concerné.
+          Seules les sections de projet (DQ/FAT/SAT/IQ/OQ/PQ…) explicitement liées à ce nœud
+          (assistant guidé ou éditeur de section) apparaissent ci-dessus — aucun lien n'est déduit
+          automatiquement (ex. via la chaîne technique ou le procédé associé).
         </p>
       </section>
     </template>
@@ -257,7 +294,8 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
 }
 
 .liste-evaluations,
-.liste-missions {
+.liste-missions,
+.liste-livrables {
   list-style: none;
   padding: 0;
   display: flex;
@@ -267,6 +305,7 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
 
 .liste-evaluations li,
 .liste-missions li,
+.liste-livrables li,
 .liste-anomalies li {
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon);

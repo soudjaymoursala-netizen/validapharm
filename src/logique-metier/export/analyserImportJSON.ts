@@ -114,6 +114,10 @@ export function analyserImportJSON(texteBrut: string): ResultatImportJSON {
     values: candidat.values as DonneesImportSection['values'],
     tables: candidat.tables as DonneesImportSection['tables'],
     generation_source: candidat.generation_source as DonneesImportSection['generation_source'],
+    // Absents d'un export produit avant la tâche #118 — traités comme
+    // `null` (aucun lien), jamais une erreur d'import.
+    procedure_id: (candidat.procedure_id as string | null | undefined) ?? null,
+    asset_node_id: (candidat.asset_node_id as string | null | undefined) ?? null,
     audit_log: candidat.audit_log as DonneesImportSection['audit_log'],
     created_at: candidat.created_at as string,
   }

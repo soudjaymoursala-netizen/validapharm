@@ -38,9 +38,11 @@ import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 import { useGabaritExportStore } from '../stores/useGabaritExportStore'
 import { useNormativeDocumentsStore } from '../stores/useNormativeDocumentsStore'
 import { NOMS_FOURNISSEURS } from '../stores/usePanneauChatStore'
+import { useProcedureStore } from '../stores/useProcedureStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
 import { useSectionsStore, type ResultatActionSection } from '../stores/useSectionsStore'
+import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 
 const props = defineProps<{ projectId: string; sectionId: string }>()
 
@@ -52,6 +54,8 @@ const configStore = useClientConfigStore()
 const relaisStore = useConnexionRelaisIAStore()
 const reasoningStore = useReasoningEngineStore()
 const normativeDocumentsStore = useNormativeDocumentsStore()
+const procedureStore = useProcedureStore()
+const structureStore = useStructureSystemeStore()
 const section = ref<Section | undefined>(undefined)
 const projet = ref<Project | undefined>(undefined)
 const gabaritSelectionneId = ref<string>('')
@@ -64,6 +68,8 @@ const nouvelApprobateur = ref('')
 const nouvelAvisRelecteurId = ref('')
 const nouvelAvisRelecteurTexte = ref('')
 const sectionCibleLienId = ref('')
+const procedureLienId = ref('')
+const noeudLienId = ref('')
 const dernierResultat = ref<ResultatActionSection | undefined>(undefined)
 let minuteurSauvegarde: ReturnType<typeof setTimeout> | undefined
 
@@ -207,6 +213,45 @@ async function delierSection(autreSectionId: string): Promise<void> {
   projet.value = await projetsStore.obtenirProjet(props.projectId)
 }
 
+/**
+ * Liens structurels réels Section↔Procedure / Section↔AssetNode (tâche
+ * #118) — jusqu'ici renseignés uniquement par l'assistant guidé de
+ * création de livrable, sans possibilité de les poser ensuite ou pour une
+ * section créée hors de ce parcours. Édition manuelle uniquement (mêmes
+ * champs, mêmes valeurs) : jamais de lien déduit automatiquement.
+ */
+const procedureLiee = computed(() =>
+  section.value?.procedure_id
+    ? (procedureStore.procedures.find((p) => p.id === section.value?.procedure_id) ?? null)
+    : null,
+)
+const noeudLie = computed(() =>
+  section.value?.asset_node_id
+    ? (structureStore.noeuds.find((n) => n.id === section.value?.asset_node_id) ?? null)
+    : null,
+)
+
+async function lierProcedureSelectionnee(): Promise<void> {
+  if (!procedureLienId.value) return
+  await sectionsStore.lierProcedure(props.sectionId, procedureLienId.value)
+  procedureLienId.value = ''
+  await recharger()
+}
+async function delierProcedure(): Promise<void> {
+  await sectionsStore.lierProcedure(props.sectionId, null)
+  await recharger()
+}
+async function lierAssetNodeSelectionne(): Promise<void> {
+  if (!noeudLienId.value) return
+  await sectionsStore.lierAssetNode(props.sectionId, noeudLienId.value)
+  noeudLienId.value = ''
+  await recharger()
+}
+async function delierAssetNode(): Promise<void> {
+  await sectionsStore.lierAssetNode(props.sectionId, null)
+  await recharger()
+}
+
 onMounted(async () => {
   await recharger()
   projet.value = await projetsStore.obtenirProjet(props.projectId)
@@ -216,6 +261,8 @@ onMounted(async () => {
     await relaisStore.charger()
     await reasoningStore.charger(projet.value.client_id)
     await normativeDocumentsStore.charger()
+    await procedureStore.charger(projet.value.client_id)
+    await structureStore.charger(projet.value.client_id)
   }
   // Arrivée depuis "À partir d'un document" (Fiche Projet) — porte
   // directement l'attention sur le panneau §4.1bis déjà construit,
@@ -825,6 +872,83 @@ async function ajouterAvisRelecteur(): Promise<void> {
       </div>
     </section>
 
+    <section class="liens-structurels no-print">
+      <h2>Liens structurels (procédure, actif)</h2>
+      <p class="rappel">
+        Liens réels (tâche #118), retrouvables depuis la fiche procédure ou le dossier vivant de
+        l'actif — jamais un simple texte d'audit.
+      </p>
+      <div class="lien-structurel">
+        <template v-if="procedureLiee">
+          <span
+            >Procédure :
+            <strong>{{ procedureLiee.reference }} — {{ procedureLiee.titre }}</strong></span
+          >
+          <button
+            v-if="section.status !== 'valide_en_interne'"
+            type="button"
+            @click="delierProcedure"
+          >
+            Délier
+          </button>
+        </template>
+        <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+          <label>
+            Lier à une procédure
+            <select v-model="procedureLienId">
+              <option value="">— choisir —</option>
+              <option v-for="p in procedureStore.procedures" :key="p.id" :value="p.id">
+                {{ p.reference }} — {{ p.titre }}
+              </option>
+            </select>
+          </label>
+          <button type="button" :disabled="!procedureLienId" @click="lierProcedureSelectionnee">
+            Lier
+          </button>
+        </div>
+        <p v-else>Aucune procédure liée.</p>
+      </div>
+      <div class="lien-structurel">
+        <template v-if="noeudLie">
+          <span
+            >Actif :
+            <RouterLink
+              v-if="projet?.client_id"
+              :to="{
+                name: 'dossier-vivant-actif',
+                params: { clientId: projet.client_id, noeudId: noeudLie.id },
+              }"
+            >
+              {{ noeudLie.name }} ({{ noeudLie.code }})
+            </RouterLink>
+            <template v-else>{{ noeudLie.name }} ({{ noeudLie.code }})</template></span
+          >
+          <button
+            v-if="section.status !== 'valide_en_interne'"
+            type="button"
+            @click="delierAssetNode"
+          >
+            Délier
+          </button>
+        </template>
+        <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+          <label>
+            Lier à un nœud Structure Système
+            <select v-model="noeudLienId">
+              <option value="">— choisir —</option>
+              <option v-for="n in structureStore.noeuds" :key="n.id" :value="n.id">
+                {{ n.name }} ({{ n.code }})
+              </option>
+            </select>
+          </label>
+          <button type="button" :disabled="!noeudLienId" @click="lierAssetNodeSelectionne">
+            Lier
+          </button>
+        </div>
+        <p v-else>Aucun actif lié.</p>
+      </div>
+    </section>
+
     <section v-if="section.status !== 'valide_en_interne'" class="workflow no-print">
       <h2>Workflow</h2>
       <p>
@@ -1135,6 +1259,13 @@ button {
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lien-structurel {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
