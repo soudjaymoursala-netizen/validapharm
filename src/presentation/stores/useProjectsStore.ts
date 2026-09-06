@@ -18,6 +18,9 @@ export interface NouveauProjetInput {
 }
 
 export type ErreurArchivageProjet = { erreur: 'introuvable' | 'deja_archive' | 'deja_actif' }
+export type ErreurStatutProjet = {
+  erreur: 'introuvable' | 'deja_suspendu' | 'pas_suspendu' | 'deja_supprime' | 'pas_archive'
+}
 
 /**
  * Store de la Couche Présentation orchestrant la persistance
@@ -37,8 +40,10 @@ export const useProjectsStore = defineStore('projects', () => {
    */
   const identiteCourante = ref<string>(identifiantActeurCourant())
 
-  const projetsActifs = computed(() => projects.value.filter((p) => p.statut !== 'archive'))
+  const projetsActifs = computed(() => projects.value.filter((p) => p.statut === 'actif'))
+  const projetsSuspendus = computed(() => projects.value.filter((p) => p.statut === 'suspendu'))
   const projetsArchives = computed(() => projects.value.filter((p) => p.statut === 'archive'))
+  const projetsSupprimes = computed(() => projects.value.filter((p) => p.statut === 'supprime'))
 
   function resoudreIdentiteCourante(): string {
     identiteCourante.value = identifiantActeurCourant()
@@ -290,10 +295,104 @@ export const useProjectsStore = defineStore('projects', () => {
     return projetMisAJour
   }
 
+  /**
+   * Suspension — mise en pause temporaire (ex. attente client),
+   * distincte de l'archivage : un projet suspendu reste dans le
+   * périmètre de travail courant, il n'a pas terminé son cycle de vie.
+   */
+  async function suspendreProjet(
+    projectId: string,
+    identiteDeclaree: string,
+  ): Promise<Project | ErreurStatutProjet> {
+    const existant = await db.projects.get(projectId)
+    if (!existant) return { erreur: 'introuvable' }
+    if (existant.statut === 'suspendu') return { erreur: 'deja_suspendu' }
+
+    const maintenant = new Date().toISOString()
+    const projetMisAJour: Project = {
+      ...existant,
+      statut: 'suspendu',
+      updated_at: maintenant,
+      audit_log: [
+        ...existant.audit_log,
+        { timestamp: maintenant, actor: identiteDeclaree, action: 'suspension' },
+      ],
+    }
+    await db.projects.put(projetMisAJour)
+    const index = projects.value.findIndex((p) => p.id === projectId)
+    if (index !== -1) projects.value[index] = projetMisAJour
+    return projetMisAJour
+  }
+
+  /** Lève une suspension — restaure le projet en statut `actif`. */
+  async function reprendreProjet(
+    projectId: string,
+    identiteDeclaree: string,
+  ): Promise<Project | ErreurStatutProjet> {
+    const existant = await db.projects.get(projectId)
+    if (!existant) return { erreur: 'introuvable' }
+    if (existant.statut !== 'suspendu') return { erreur: 'pas_suspendu' }
+
+    const maintenant = new Date().toISOString()
+    const projetMisAJour: Project = {
+      ...existant,
+      statut: 'actif',
+      updated_at: maintenant,
+      audit_log: [
+        ...existant.audit_log,
+        { timestamp: maintenant, actor: identiteDeclaree, action: 'reprise' },
+      ],
+    }
+    await db.projects.put(projetMisAJour)
+    const index = projects.value.findIndex((p) => p.id === projectId)
+    if (index !== -1) projects.value[index] = projetMisAJour
+    return projetMisAJour
+  }
+
+  /**
+   * Suppression déclarée par l'utilisateur — statut terminal
+   * `supprime`, **jamais** une suppression physique (ALCOA+, même
+   * principe que l'archivage) : la ligne et son `audit_log` restent
+   * intégralement en base, seule la visibilité dans l'interface change.
+   * La garde de confirmation (nom retapé + mot de passe réel) est
+   * vérifiée par l'appelant avant d'invoquer cette fonction, jamais ici.
+   *
+   * Exige un projet déjà archivé (même parcours qu'`useClientsStore.
+   * supprimerDefinitivement` : on archive d'abord, on supprime ensuite
+   * depuis la vue des archives) — jamais une suppression directe d'un
+   * projet actif ou suspendu, pour limiter le risque d'erreur.
+   */
+  async function supprimerProjet(
+    projectId: string,
+    identiteDeclaree: string,
+  ): Promise<Project | ErreurStatutProjet> {
+    const existant = await db.projects.get(projectId)
+    if (!existant) return { erreur: 'introuvable' }
+    if (existant.statut === 'supprime') return { erreur: 'deja_supprime' }
+    if (existant.statut !== 'archive') return { erreur: 'pas_archive' }
+
+    const maintenant = new Date().toISOString()
+    const projetMisAJour: Project = {
+      ...existant,
+      statut: 'supprime',
+      updated_at: maintenant,
+      audit_log: [
+        ...existant.audit_log,
+        { timestamp: maintenant, actor: identiteDeclaree, action: 'suppression' },
+      ],
+    }
+    await db.projects.put(projetMisAJour)
+    const index = projects.value.findIndex((p) => p.id === projectId)
+    if (index !== -1) projects.value[index] = projetMisAJour
+    return projetMisAJour
+  }
+
   return {
     projects,
     projetsActifs,
+    projetsSuspendus,
     projetsArchives,
+    projetsSupprimes,
     enChargement,
     identiteCourante,
     resoudreIdentiteCourante,
@@ -304,6 +403,9 @@ export const useProjectsStore = defineStore('projects', () => {
     retirerLien,
     archiverProjet,
     desarchiverProjet,
+    suspendreProjet,
+    reprendreProjet,
+    supprimerProjet,
     partagerProjet,
     retirerPartage,
   }

@@ -68,6 +68,21 @@ export interface SignatureRole {
  */
 export type StatutArchivage = 'actif' | 'archive'
 
+/**
+ * Statuts d'un projet — distinct de `StatutArchivage` (qui reste le
+ * statut de `Client`, non concerné par « suspendu »/« supprimé ») :
+ * - `actif` : en cours, apparaît dans la liste principale.
+ * - `suspendu` : mis en pause temporairement (ex. attente client), toujours
+ *   restaurable via `reprendreProjet`, distinct d'un archivage définitif.
+ * - `archive` : cycle de vie terminé (§4.31), restaurable via
+ *   `desarchiverProjet`.
+ * - `supprime` : statut terminal déclaré par l'utilisateur — **jamais**
+ *   une suppression physique (même principe ALCOA+ que l'archivage) : la
+ *   ligne et son `audit_log` restent intégralement en base, seule la
+ *   visibilité dans l'interface change.
+ */
+export type StatutProjet = 'actif' | 'suspendu' | 'archive' | 'supprime'
+
 export interface Project {
   id: string
   name: string
@@ -80,7 +95,7 @@ export interface Project {
   sections: string[]
   documents: string[]
   links: LienProjet[]
-  statut: StatutArchivage
+  statut: StatutProjet
   /**
    * Partage de projet — identité résolue depuis le compte réel
    * authentifié (email, `useAuthStore`/`identifiantActeurCourant`),

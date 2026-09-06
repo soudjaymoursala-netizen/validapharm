@@ -101,6 +101,93 @@ describe('useProjectsStore — archivage (§4.31)', () => {
   })
 })
 
+describe('useProjectsStore — suspension et suppression (§4.31, tâche #111)', () => {
+  test('suspendreProjet bascule le statut, distinct de archive/supprime', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+
+    const resultat = await store.suspendreProjet(projet.id, 'QLD')
+    expect('erreur' in resultat).toBe(false)
+    if ('erreur' in resultat) return
+
+    expect(resultat.statut).toBe('suspendu')
+    expect(resultat.audit_log.at(-1)?.action).toBe('suspension')
+    expect(store.projetsActifs.map((p) => p.id)).not.toContain(projet.id)
+    expect(store.projetsSuspendus.map((p) => p.id)).toContain(projet.id)
+  })
+
+  test('suspendreProjet refuse un projet déjà suspendu', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+    await store.suspendreProjet(projet.id, 'QLD')
+
+    expect(await store.suspendreProjet(projet.id, 'QLD')).toEqual({ erreur: 'deja_suspendu' })
+  })
+
+  test('suspendreProjet refuse un projet introuvable', async () => {
+    const store = useProjectsStore()
+    expect(await store.suspendreProjet('inconnu', 'QLD')).toEqual({ erreur: 'introuvable' })
+  })
+
+  test('reprendreProjet restaure un projet suspendu en statut actif, tracé dans audit_log', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+    await store.suspendreProjet(projet.id, 'QLD')
+
+    const resultat = await store.reprendreProjet(projet.id, 'QLD')
+    expect('erreur' in resultat).toBe(false)
+    if ('erreur' in resultat) return
+
+    expect(resultat.statut).toBe('actif')
+    expect(resultat.audit_log.at(-1)?.action).toBe('reprise')
+    expect(store.projetsActifs.map((p) => p.id)).toContain(projet.id)
+  })
+
+  test('reprendreProjet refuse un projet qui n’est pas suspendu', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+    expect(await store.reprendreProjet(projet.id, 'QLD')).toEqual({ erreur: 'pas_suspendu' })
+  })
+
+  test('supprimerProjet exige un projet déjà archivé (même parcours que les clients)', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+
+    expect(await store.supprimerProjet(projet.id, 'QLD')).toEqual({ erreur: 'pas_archive' })
+
+    await store.suspendreProjet(projet.id, 'QLD')
+    expect(await store.supprimerProjet(projet.id, 'QLD')).toEqual({ erreur: 'pas_archive' })
+  })
+
+  test('supprimerProjet marque le projet supprimé sans jamais le retirer de la base (ALCOA+)', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+    await store.archiverProjet(projet.id, 'QLD')
+
+    const resultat = await store.supprimerProjet(projet.id, 'QLD (q.lead@pharmatech.example)')
+    expect('erreur' in resultat).toBe(false)
+    if ('erreur' in resultat) return
+
+    expect(resultat.statut).toBe('supprime')
+    expect(resultat.audit_log.at(-1)?.action).toBe('suppression')
+    expect(store.projetsArchives.map((p) => p.id)).not.toContain(projet.id)
+    expect(store.projetsSupprimes.map((p) => p.id)).toContain(projet.id)
+
+    const enBase = await db.projects.get(projet.id)
+    expect(enBase).toBeDefined()
+    expect(enBase?.statut).toBe('supprime')
+  })
+
+  test('supprimerProjet refuse un projet déjà supprimé', async () => {
+    const store = useProjectsStore()
+    const projet = await creerProjet()
+    await store.archiverProjet(projet.id, 'QLD')
+    await store.supprimerProjet(projet.id, 'QLD')
+
+    expect(await store.supprimerProjet(projet.id, 'QLD')).toEqual({ erreur: 'deja_supprime' })
+  })
+})
+
 describe('useProjectsStore — partage de projet', () => {
   test("un projet créé hors session authentifiée a pour owner_id l'espace réservé local", async () => {
     const projet = await creerProjet()

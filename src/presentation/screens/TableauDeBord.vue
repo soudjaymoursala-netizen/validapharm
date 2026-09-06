@@ -21,6 +21,7 @@ const router = useRouter()
 const route = useRoute()
 const formulaireOuvert = ref(false)
 const afficherArchives = ref(false)
+const afficherSuspendus = ref(false)
 
 /**
  * Filtrage optionnel par client (accès depuis la Fiche Client —
@@ -247,6 +248,21 @@ function nomClient(clientId: string | null): string | null {
       </li>
     </ul>
 
+    <section v-if="projetsStore.projetsSuspendus.length > 0" class="bloc-archives">
+      <button type="button" class="lien-archives" @click="afficherSuspendus = !afficherSuspendus">
+        {{ afficherSuspendus ? 'Masquer' : 'Afficher' }} les projets suspendus ({{
+          projetsStore.projetsSuspendus.length
+        }})
+      </button>
+      <ul v-if="afficherSuspendus" class="liste-projets liste-projets--archives">
+        <li v-for="projet in projetsStore.projetsSuspendus" :key="projet.id">
+          <RouterLink :to="{ name: 'fiche-projet', params: { projectId: projet.id } }">
+            {{ projet.name }}
+          </RouterLink>
+        </li>
+      </ul>
+    </section>
+
     <section v-if="projetsStore.projetsArchives.length > 0" class="bloc-archives">
       <button type="button" class="lien-archives" @click="afficherArchives = !afficherArchives">
         {{ afficherArchives ? 'Masquer' : 'Afficher' }} les projets archivés ({{
@@ -255,7 +271,9 @@ function nomClient(clientId: string | null): string | null {
       </button>
       <ul v-if="afficherArchives" class="liste-projets liste-projets--archives">
         <li v-for="projet in projetsStore.projetsArchives" :key="projet.id">
-          {{ projet.name }}
+          <RouterLink :to="{ name: 'fiche-projet', params: { projectId: projet.id } }">
+            {{ projet.name }}
+          </RouterLink>
           <span class="meta">archivé le {{ projet.archived_at }} par {{ projet.archived_by }}</span>
         </li>
       </ul>
@@ -529,5 +547,15 @@ button {
   display: flex;
   justify-content: space-between;
   opacity: 0.75;
+}
+
+.liste-projets--archives li a {
+  color: var(--vp-texte-principal);
+  text-decoration: none;
+}
+
+.liste-projets--archives li a:hover {
+  color: var(--vp-marque);
+  text-decoration: underline;
 }
 </style>

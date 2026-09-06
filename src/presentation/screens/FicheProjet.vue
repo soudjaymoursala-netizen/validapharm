@@ -32,6 +32,7 @@ const nouveauTitre = ref('')
 const nouveauTemplateType = ref<TemplateType>('contexte_procede')
 const erreurImport = ref<string | null>(null)
 const modaleArchivageOuverte = ref(false)
+const modaleSuppressionOuverte = ref(false)
 const erreurImportDocument = ref<string | null>(null)
 const nouvelUtilisateurPartage = ref('')
 const nouveauNiveauPartage = ref<'lecture' | 'édition'>('lecture')
@@ -66,6 +67,36 @@ async function retirerPartage(userId: string): Promise<void> {
 async function confirmerArchivage(identiteDeclaree: string): Promise<void> {
   await projetsStore.archiverProjet(props.projectId, identiteDeclaree)
   modaleArchivageOuverte.value = false
+  await router.push({ name: 'tableau-de-bord' })
+}
+
+async function suspendreProjet(): Promise<void> {
+  const resultat = await projetsStore.suspendreProjet(
+    props.projectId,
+    projetsStore.identiteCourante,
+  )
+  if (!('erreur' in resultat)) projet.value = resultat
+}
+
+async function reprendreProjet(): Promise<void> {
+  const resultat = await projetsStore.reprendreProjet(
+    props.projectId,
+    projetsStore.identiteCourante,
+  )
+  if (!('erreur' in resultat)) projet.value = resultat
+}
+
+async function desarchiverProjet(): Promise<void> {
+  const resultat = await projetsStore.desarchiverProjet(
+    props.projectId,
+    projetsStore.identiteCourante,
+  )
+  if (!('erreur' in resultat)) projet.value = resultat
+}
+
+async function confirmerSuppression(identiteDeclaree: string): Promise<void> {
+  await projetsStore.supprimerProjet(props.projectId, identiteDeclaree)
+  modaleSuppressionOuverte.value = false
   await router.push({ name: 'tableau-de-bord' })
 }
 
@@ -206,22 +237,58 @@ async function importerFichier(evenement: Event): Promise<void> {
     </RouterLink>
     <header class="entete-projet">
       <div>
-        <h1>{{ projet.name }}</h1>
+        <div class="entete-projet__titre">
+          <h1>{{ projet.name }}</h1>
+          <span
+            v-if="projet.statut !== 'actif'"
+            :class="['pastille-statut', `pastille-statut--${projet.statut}`]"
+          >
+            {{ { suspendu: 'Suspendu', archive: 'Archivé', supprime: 'Supprimé' }[projet.statut] }}
+          </span>
+        </div>
         <p v-if="projet.deadline" class="entete-projet__echeance">
           <IconeSvg nom="horloge" :taille="14" />
           Échéance : {{ projet.deadline }}
         </p>
       </div>
-      <button
-        v-if="peutModifier"
-        type="button"
-        class="bouton-archiver"
-        @click="modaleArchivageOuverte = true"
-      >
-        <IconeSvg nom="archive" :taille="15" />
-        Archiver ce projet
-      </button>
+      <div v-if="peutModifier" class="entete-projet__actions">
+        <template v-if="projet.statut === 'actif'">
+          <button type="button" class="bouton-secondaire" @click="suspendreProjet">
+            <IconeSvg nom="horloge" :taille="15" />
+            Suspendre
+          </button>
+          <button type="button" class="bouton-archiver" @click="modaleArchivageOuverte = true">
+            <IconeSvg nom="archive" :taille="15" />
+            Archiver ce projet
+          </button>
+        </template>
+        <template v-else-if="projet.statut === 'suspendu'">
+          <button type="button" class="bouton-secondaire" @click="reprendreProjet">
+            Reprendre
+          </button>
+          <button type="button" class="bouton-archiver" @click="modaleArchivageOuverte = true">
+            <IconeSvg nom="archive" :taille="15" />
+            Archiver ce projet
+          </button>
+        </template>
+        <template v-else-if="projet.statut === 'archive'">
+          <button type="button" class="bouton-secondaire" @click="desarchiverProjet">
+            Désarchiver
+          </button>
+          <button
+            type="button"
+            class="bouton-texte-danger"
+            @click="modaleSuppressionOuverte = true"
+          >
+            Supprimer
+          </button>
+        </template>
+      </div>
     </header>
+    <p v-if="projet.statut === 'supprime'" class="rappel-suppression">
+      Ce projet est marqué comme supprimé — retiré des listes actives, ses données restent
+      conservées (ALCOA+).
+    </p>
 
     <section class="carte contexte">
       <h2 class="carte__titre-discret">Contexte</h2>
@@ -452,6 +519,15 @@ async function importerFichier(evenement: Event): Promise<void> {
       @confirme="confirmerArchivage"
       @annule="modaleArchivageOuverte = false"
     />
+    <ModaleConfirmationArchivage
+      v-if="modaleSuppressionOuverte"
+      :nom="projet.name"
+      titre="Confirmer la suppression"
+      message="Cette action marque « {nom} » comme supprimé — retiré de toutes les listes actives. Les données restent conservées (ALCOA+), mais ce projet ne peut plus être restauré depuis l'interface."
+      libelle-bouton="Supprimer"
+      @confirme="confirmerSuppression"
+      @annule="modaleSuppressionOuverte = false"
+    />
   </main>
   <p v-else>Chargement…</p>
 </template>
@@ -505,6 +581,50 @@ async function importerFichier(evenement: Event): Promise<void> {
   margin: 0.4rem 0 0;
   color: var(--vp-texte-secondaire);
   font-size: 0.85rem;
+}
+
+.entete-projet__titre {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.entete-projet__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.pastille-statut {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--vp-rayon-sm);
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: var(--vp-poids-medium);
+}
+
+.pastille-statut--suspendu {
+  background-color: var(--vp-attention-fond-leger);
+  color: var(--vp-attention);
+}
+
+.pastille-statut--archive {
+  background-color: var(--vp-fond-page);
+  color: var(--vp-texte-secondaire);
+  border: 1px solid var(--vp-bordure);
+}
+
+.pastille-statut--supprime {
+  background-color: var(--vp-danger-fond-leger);
+  color: var(--vp-danger);
+}
+
+.rappel-suppression {
+  color: var(--vp-danger);
+  font-size: 0.85rem;
+  margin: 0;
 }
 
 .carte {

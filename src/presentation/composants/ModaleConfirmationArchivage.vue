@@ -10,11 +10,26 @@
 // ré-authentification serveur (`useAuthStore.verifierMotDePasse`,
 // `POST /auth/verify-password`) — un seul système d'identité désormais,
 // jamais deux mécanismes de mot de passe parallèles.
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useAuthStore } from '../stores/useAuthStore'
 
-const props = defineProps<{ nom: string }>()
+const props = withDefaults(
+  defineProps<{
+    nom: string
+    titre?: string
+    message?: string
+    libelleBouton?: string
+  }>(),
+  {
+    titre: "Confirmer l'archivage",
+    message:
+      "Cette action archive « {nom} » — les données ne sont jamais supprimées, l'élément reste restaurable depuis les archives.",
+    libelleBouton: 'Archiver',
+  },
+)
 const emit = defineEmits<{ confirme: [identiteDeclaree: string]; annule: [] }>()
+
+const messageAffiche = computed(() => props.message.replace('{nom}', props.nom))
 
 const authStore = useAuthStore()
 const nomSaisi = ref('')
@@ -49,12 +64,9 @@ async function confirmer(): Promise<void> {
 <template>
   <div class="fond-modale" role="dialog" aria-modal="true">
     <div class="modale">
-      <h2>Confirmer l'archivage</h2>
+      <h2>{{ titre }}</h2>
 
-      <p>
-        Cette action archive <strong>« {{ nom }} »</strong> — les données ne sont jamais supprimées,
-        l'élément reste restaurable depuis les archives.
-      </p>
+      <p>{{ messageAffiche }}</p>
       <form class="formulaire" @submit.prevent="confirmer">
         <label>
           Retapez le nom pour confirmer
@@ -73,7 +85,7 @@ async function confirmer(): Promise<void> {
         <div class="actions">
           <button type="button" @click="emit('annule')">Annuler</button>
           <button type="submit" class="bouton-danger" :disabled="verificationEnCours">
-            {{ verificationEnCours ? 'Vérification…' : 'Archiver' }}
+            {{ verificationEnCours ? 'Vérification…' : libelleBouton }}
           </button>
         </div>
       </form>
