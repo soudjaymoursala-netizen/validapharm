@@ -70,6 +70,11 @@ export const router = createRouter({
       component: () => import('../screens/BibliothequeNormes.vue'),
     },
     {
+      path: '/recherche',
+      name: 'recherche-globale',
+      component: () => import('../screens/RechercheGlobale.vue'),
+    },
+    {
       path: '/resolution-conflit',
       name: 'resolution-conflit',
       component: () => import('../screens/ResolutionConflit.vue'),

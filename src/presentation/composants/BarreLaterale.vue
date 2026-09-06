@@ -36,6 +36,14 @@ async function seDeconnecter(): Promise<void> {
   await router.push({ name: 'connexion' })
 }
 
+const requeteRecherche = ref('')
+
+function lancerRecherche(): void {
+  if (requeteRecherche.value.trim().length === 0) return
+  void router.push({ name: 'recherche-globale', query: { q: requeteRecherche.value.trim() } })
+  requeteRecherche.value = ''
+}
+
 const nomClientActif = ref<string | null>(null)
 
 watch(
@@ -283,6 +291,16 @@ function basculerEpinglage(outil: OutilClient): void {
       </button>
     </div>
 
+    <form class="sidebar__recherche" @submit.prevent="lancerRecherche">
+      <IconeSvg nom="recherche" :taille="15" />
+      <input
+        v-model="requeteRecherche"
+        type="search"
+        placeholder="Rechercher…"
+        aria-label="Recherche globale"
+      />
+    </form>
+
     <div class="sidebar__scroll">
       <div class="sidebar__groupe">
         <p class="sidebar__titre-groupe">Accueil</p>
@@ -494,6 +512,33 @@ function basculerEpinglage(outil: OutilClient): void {
 .sidebar__bascule-mode button.actif {
   background-color: var(--vp-marque);
   color: var(--vp-marque-bouton-texte);
+}
+
+.sidebar__recherche {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  background-color: var(--vp-fond-page);
+  color: var(--vp-texte-secondaire);
+}
+
+.sidebar__recherche:focus-within {
+  border-color: var(--vp-marque);
+}
+
+.sidebar__recherche input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: var(--vp-texte-principal);
 }
 
 .sidebar__groupe {
