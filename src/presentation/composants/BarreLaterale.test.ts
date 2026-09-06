@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { useClientActifStore } from '../stores/useClientActifStore'
+import { useEpinglageStore } from '../stores/useEpinglageStore'
 import BarreLaterale from './BarreLaterale.vue'
 
 function routeurDeTest(): Router {
@@ -19,6 +20,7 @@ function routeurDeTest(): Router {
         component: { template: '<div />' },
       },
       { path: '/profil-local', name: 'profil-local', component: { template: '<div />' } },
+      { path: '/profil', name: 'profil', component: { template: '<div />' } },
       { path: '/parametres', name: 'parametres', component: { template: '<div />' } },
       { path: '/configuration', name: 'configuration-client', component: { template: '<div />' } },
       { path: '/normes', name: 'bibliotheque-normes', component: { template: '<div />' } },
@@ -172,6 +174,29 @@ describe('BarreLaterale — groupes de navigation', () => {
 
     const lienArchitecture = wrapper.findAll('a').find((a) => a.text() === 'Architecture')
     expect(lienArchitecture?.attributes('href')).toContain('client-1')
+  })
+
+  test('épingler un outil du site actif le persiste, désépingler le retire', async () => {
+    useClientActifStore().definirClientActif('client-1')
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(BarreLaterale, { global: { plugins: [router] } })
+
+    const conteneurArchitecture = wrapper
+      .findAll('.sidebar__lien-epinglable')
+      .find((div) => div.text().includes('Architecture'))
+    const boutonEpingle = conteneurArchitecture?.find('button')
+    expect(boutonEpingle?.exists()).toBe(true)
+
+    await boutonEpingle?.trigger('click')
+    expect(useEpinglageStore().raccourcis).toHaveLength(1)
+    expect(useEpinglageStore().raccourcis[0]).toMatchObject({
+      routeName: 'structure-systeme',
+      routeParams: { clientId: 'client-1' },
+    })
+
+    await boutonEpingle?.trigger('click')
+    expect(useEpinglageStore().raccourcis).toHaveLength(0)
   })
 })
 

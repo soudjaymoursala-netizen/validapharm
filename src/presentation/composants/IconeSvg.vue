@@ -32,6 +32,7 @@ export type NomIcone =
   | 'flacon'
   | 'graphique'
   | 'cadenas'
+  | 'epingle'
 
 const props = withDefaults(defineProps<{ nom: NomIcone; taille?: number }>(), { taille: 18 })
 
@@ -64,6 +65,8 @@ const TRACES: Record<NomIcone, string> = {
   flacon: 'M9 2h6 M10 2v5.5L4.5 17a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 7.5V2 M7.5 14h9',
   graphique: 'M4 20V10 M10 20V4 M16 20v-7 M4 20h16',
   cadenas: 'M6 10.5V7a6 6 0 1 1 12 0v3.5 M5 10.5h14V21H5z',
+  epingle:
+    'M12 17v5 M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z',
 }
 </script>
 

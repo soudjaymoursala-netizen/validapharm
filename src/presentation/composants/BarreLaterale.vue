@@ -20,6 +20,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useClientActifStore } from '../stores/useClientActifStore'
 import { useClientsStore } from '../stores/useClientsStore'
+import { useEpinglageStore } from '../stores/useEpinglageStore'
 import { useModeAffichageStore, type ModeAffichage } from '../stores/useModeAffichageStore'
 import IconeSvg, { type NomIcone } from './IconeSvg.vue'
 
@@ -27,6 +28,7 @@ const clientActifStore = useClientActifStore()
 const clientsStore = useClientsStore()
 const modeStore = useModeAffichageStore()
 const authStore = useAuthStore()
+const epinglageStore = useEpinglageStore()
 const router = useRouter()
 
 async function seDeconnecter(): Promise<void> {
@@ -231,6 +233,21 @@ const groupesOutilsClientActif = computed<GroupeOutils[] | null>(() => {
 function basculerMode(nouveauMode: ModeAffichage): void {
   modeStore.definirMode(nouveauMode)
 }
+
+/** Id d'épinglage stable pour un outil du site actif — dépend du client, un même outil épinglé pour deux clients différents reste deux raccourcis distincts. */
+function idEpinglage(outil: OutilClient): string {
+  const clientId = outil.route.params?.clientId ?? ''
+  return `${outil.route.name}:${clientId}`
+}
+
+function basculerEpinglage(outil: OutilClient): void {
+  epinglageStore.basculer({
+    id: idEpinglage(outil),
+    libelle: `${outil.nom} — ${nomClientActif.value ?? clientActifStore.clientActifId}`,
+    routeName: outil.route.name,
+    routeParams: outil.route.params ?? {},
+  })
+}
 </script>
 
 <template>
@@ -277,8 +294,8 @@ function basculerMode(nouveauMode: ModeAffichage): void {
 
       <div class="sidebar__groupe">
         <p class="sidebar__titre-groupe">Mon espace</p>
-        <RouterLink :to="{ name: 'profil-local' }">
-          <IconeSvg nom="cadenas" :taille="16" />
+        <RouterLink :to="{ name: 'profil' }">
+          <IconeSvg nom="utilisateur" :taille="16" />
           Profil
         </RouterLink>
         <RouterLink :to="{ name: 'parametres' }">
@@ -328,10 +345,28 @@ function basculerMode(nouveauMode: ModeAffichage): void {
         </p>
         <div v-for="groupe in groupesOutilsClientActif" :key="groupe.titre" class="sidebar__groupe">
           <p class="sidebar__titre-groupe">{{ groupe.titre }}</p>
-          <RouterLink v-for="outil in groupe.outils" :key="outil.nom" :to="outil.route">
-            <IconeSvg :nom="outil.icone" :taille="16" />
-            {{ outil.nom }}
-          </RouterLink>
+          <div v-for="outil in groupe.outils" :key="outil.nom" class="sidebar__lien-epinglable">
+            <RouterLink :to="outil.route">
+              <IconeSvg :nom="outil.icone" :taille="16" />
+              {{ outil.nom }}
+            </RouterLink>
+            <button
+              type="button"
+              class="sidebar__bouton-epingle"
+              :class="{
+                'sidebar__bouton-epingle--actif': epinglageStore.estEpingle(idEpinglage(outil)),
+              }"
+              :aria-label="
+                epinglageStore.estEpingle(idEpinglage(outil))
+                  ? `Désépingler ${outil.nom}`
+                  : `Épingler ${outil.nom}`
+              "
+              :title="epinglageStore.estEpingle(idEpinglage(outil)) ? 'Désépingler' : 'Épingler'"
+              @click="basculerEpinglage(outil)"
+            >
+              <IconeSvg nom="epingle" :taille="14" />
+            </button>
+          </div>
         </div>
       </template>
       <div v-else class="sidebar__groupe">
@@ -554,6 +589,47 @@ function basculerMode(nouveauMode: ModeAffichage): void {
 
 .sidebar__groupe a:hover :deep(svg),
 .sidebar__groupe a.router-link-active :deep(svg) {
+  color: var(--vp-marque);
+}
+
+.sidebar__lien-epinglable {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.sidebar__lien-epinglable a {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar__bouton-epingle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: none;
+  border-radius: var(--vp-rayon-sm);
+  background: transparent;
+  color: var(--vp-texte-secondaire);
+  opacity: 0;
+  cursor: pointer;
+  transition: var(--vp-transition);
+}
+
+.sidebar__lien-epinglable:hover .sidebar__bouton-epingle,
+.sidebar__bouton-epingle--actif {
+  opacity: 1;
+}
+
+.sidebar__bouton-epingle:hover {
+  background-color: var(--vp-fond-page);
+  color: var(--vp-marque);
+}
+
+.sidebar__bouton-epingle--actif {
   color: var(--vp-marque);
 }
 
