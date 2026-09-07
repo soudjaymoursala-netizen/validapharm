@@ -81,46 +81,65 @@ redéploiement de code nécessaire.
   racine référencé, `vite.config.ts` dont `test.include` couvre déjà
   `workers/**/*.test.ts`).
 
-## Ce qui NE PEUT PAS être fait depuis une session Claude Code distante
+## Déploiement réel — fait et vérifié le 07/09/2026
 
-Cette session n'a pas accès au compte Cloudflare ni OpenAI de
-l'utilisateur — même limite que pour `workers/ocr-relay/`, les étapes
-suivantes restent **à faire par l'utilisateur** :
+Contrairement à `workers/ocr-relay/` (déployé en CLI `wrangler deploy`
+manuel), ce Worker est déployé via **Cloudflare Workers Builds, connecté
+directement au dépôt GitHub** (`soudjaymoursala-netizen/validapharm`,
+répertoire racine `workers/ia-relay`, commande `npx wrangler deploy`) —
+choisi car la session Claude Code utilisée n'avait accès ni à un
+terminal local ni à l'API Cloudflare (bloquée par la politique réseau de
+l'environnement distant), mais avait déjà poussé ce code sur GitHub.
+**Conséquence utile** : un `git push` sur `main` touchant
+`workers/ia-relay/` redéploie désormais ce Worker automatiquement, sans
+étape manuelle.
 
-1. **Obtenir une clé API OpenAI** (platform.openai.com) et configurer un
-   plafond de dépense **côté tableau de bord OpenAI lui-même** (limite
-   mensuelle + alerte) — exigence explicite de conception
-   (`22-SDS-outil.md` §10quater : « le second niveau DOIT être configuré
-   avant toute mise en production, pas seulement documenté »), distincte
-   du quota applicatif déjà géré côté `client_config`.
-2. **Choisir un jeton d'accès fort** (ex. généré par un gestionnaire de
-   mots de passe) pour `RELAIS_JETON_ACCES` — jamais un mot simple.
-3. **Déployer ce Worker** :
-   ```
-   cd workers/ia-relay
-   npm install
-   wrangler login
-   wrangler secret put OPENAI_API_KEY
-   wrangler secret put RELAIS_JETON_ACCES
-   wrangler secret put CORS_ORIGIN_AUTORISE   # origine exacte de la PWA déployée, jamais '*'
-   wrangler deploy
-   ```
-   (`MODELE_CHAT_NORMATIF`/`MODELE_AUDIT_SIMULE` sont déjà dans
-   `wrangler.toml` — à vérifier/ajuster directement dans ce fichier avant
-   déploiement, voir ci-dessus, pas un secret.)
-4. **Vérifier la joignabilité réseau réelle** depuis le poste professionnel
-   de l'utilisateur — même méthode que pour les deux autres Workers déjà
-   déployés (`validapharm-auth-worker`) : charger l'URL `*.workers.dev` de
-   ce nouveau Worker et confirmer qu'elle répond.
-5. **Vérifier le contrat Chat Completions API en conditions réelles** (le
-   code a été écrit à partir de la documentation OpenAI connue au
-   07/09/2026, jamais appelée en vrai depuis cette session) — envoyer une
-   vraie question et confirmer que la réponse a exactement la forme
-   attendue, et que `gpt-4o` (ou le modèle choisi) est bien disponible sur
-   le compte utilisé.
-6. **Configurer l'URL du Worker déployé** dans l'écran « Configuration »
-   de la PWA → section « Relais IA » (URL du relais + le jeton d'accès
-   choisi à l'étape 2).
+Étapes réellement effectuées (utilisateur, depuis le dashboard Cloudflare
+web — aucune n'a nécessité de terminal) :
+
+1. Clé API OpenAI créée (platform.openai.com), moyen de paiement ajouté,
+   plafond de dépense mensuel configuré côté tableau de bord OpenAI
+   (`Settings → Limits`) — exigence de conception non négociable
+   (`22-SDS-outil.md` §10quater).
+2. Worker créé via **"Workers & Pages" → "Create" → "Continue with
+   GitHub"** (pas "Start with Hello World" + copier-coller), en pointant
+   sur ce dépôt avec `Root directory = workers/ia-relay` et
+   `Deploy command = npx wrangler deploy` — nécessite un
+   `package-lock.json` dans ce répertoire (généré via `npm install`,
+   commité) car Cloudflare Workers Builds utilise `npm ci`.
+3. Sous-domaine `workers.dev` activé (onglet "Domains") — désactivé par
+   défaut à la création.
+4. 3 secrets ajoutés dans `Settings → Variables and Secrets` (type
+   **Secret**, jamais "Text") : `OPENAI_API_KEY`, `RELAIS_JETON_ACCES`
+   (généré aléatoirement), `CORS_ORIGIN_AUTORISE` (origine exacte de la
+   PWA GitHub Pages — **sans le chemin** : `https://<owner>.github.io`,
+   jamais `https://<owner>.github.io/<repo>/`, le navigateur n'envoyant
+   jamais le chemin dans l'en-tête `Origin`).
+5. Joignabilité vérifiée en ouvrant l'URL `*.workers.dev` directement au
+   navigateur — réponse `405 methode_non_autorisee` obtenue (attendu, ce
+   relais n'accepte que `POST`).
+6. URL du Worker + jeton d'accès saisis dans l'écran « Configuration » de
+   la PWA → section « Relais IA ».
+7. **Contrat Chat Completions API vérifié en conditions réelles** : une
+   vraie question envoyée depuis le chat expert de la PWA a reçu une
+   réponse exploitable de ChatGPT — `gpt-4o` confirmé disponible sur le
+   compte utilisé.
+
+### Déploiement manuel alternatif (rollback / poste avec CLI)
+
+Si le déploiement Git-connecté doit être remplacé par un déploiement CLI
+classique (ex. dépannage), la méthode `workers/ocr-relay/` s'applique à
+l'identique :
+
+```
+cd workers/ia-relay
+npm install
+wrangler login
+wrangler secret put OPENAI_API_KEY
+wrangler secret put RELAIS_JETON_ACCES
+wrangler secret put CORS_ORIGIN_AUTORISE   # origine exacte de la PWA déployée, jamais '*'
+wrangler deploy
+```
 
 ## Revenir à Claude (Anthropic)
 

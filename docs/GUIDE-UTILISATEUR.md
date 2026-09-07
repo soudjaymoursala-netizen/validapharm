@@ -193,10 +193,12 @@ etc.) — voir les sections correspondantes pour la configuration **par client**
 du fournisseur choisi ([§30](#30-configuration-ia-par-client)).
 
 Code serveur réel de ce relais : `workers/ia-relay/` (Cloudflare Worker,
-architecture swappable — voir `workers/ia-relay/README.md`), actuellement
-câblé sur ChatGPT (OpenAI). Une fois déployé, l'URL du Worker et le jeton
-d'accès choisi lors du déploiement sont exactement ce qui se saisit dans ce
-bloc.
+architecture swappable — voir `workers/ia-relay/README.md`), câblé sur
+ChatGPT (OpenAI). **Déployé et vérifié en conditions réelles depuis le
+07/09/2026** (Worker `validapharm-ia-relay`, connecté au dépôt GitHub —
+redéploiement automatique à chaque mise à jour du code de ce relais).
+L'URL du Worker et le jeton d'accès choisi lors du déploiement sont
+exactement ce qui se saisit dans ce bloc.
 
 ### 1.3 Authentification (comptes réels)
 
