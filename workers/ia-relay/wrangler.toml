@@ -2,16 +2,17 @@
 # API, jeton d'accès) : voir README.md pour `wrangler secret put`. Les
 # noms de modèle ci-dessous ne sont pas sensibles (pas une clé), donc en
 # [vars] plutôt qu'en secret — modifiables sans redéploiement de code.
+#
+# Fournisseur : ChatGPT (OpenAI) — voir src/index.ts et README.md.
 
 name = "validapharm-ia-relay"
 main = "src/index.ts"
 compatibility_date = "2026-09-07"
 
 [vars]
-# Claude 5 (dernière famille disponible au 07/09/2026) — équilibré pour un
-# chat normatif à forte volumétrie. Changer ici pour basculer de modèle
-# sans toucher au code.
-MODELE_CHAT_NORMATIF = "claude-sonnet-5"
-# Modèle le plus capable pour le débat contradictoire multi-angles du mode
-# audit simulé, à faible volumétrie mais où la qualité prime sur le coût.
-MODELE_AUDIT_SIMULE = "claude-opus-5"
+# Identifiants connus au moment de l'écriture de ce fichier (07/09/2026),
+# jamais confirmés contre le catalogue de modèles OpenAI réellement
+# disponible au moment du déploiement — à vérifier/ajuster ici avant mise
+# en production, voir openaiProvider.ts.
+MODELE_CHAT_NORMATIF = "gpt-4o"
+MODELE_AUDIT_SIMULE = "gpt-4o"
