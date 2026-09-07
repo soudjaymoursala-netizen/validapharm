@@ -29,7 +29,6 @@ const configStore = useClientConfigStore()
 const nomClient = ref<string | null>(null)
 
 const FOURNISSEURS_CLOUD = [
-  { id: 'claude', nom: 'Claude' },
   { id: 'openai', nom: 'OpenAI' },
   { id: 'copilot', nom: 'Copilot' },
   { id: 'deepseek', nom: 'DeepSeek' },
@@ -46,7 +45,7 @@ const MODES_USAGE: ReadonlyArray<{ id: ModeUsageIA; nom: string }> = [
   { id: 'audit_simule', nom: 'Audit simulé' },
 ]
 
-const fournisseurChoisi = ref<string>('claude')
+const fournisseurChoisi = ref<string>('openai')
 const modeQualificationChoisi = ref<ModeUsageIA>('chat_normatif')
 
 const qualificationBrouillon = reactive({
@@ -80,7 +79,13 @@ onMounted(async () => {
 
   await configStore.charger(props.clientId)
   if (configStore.config) {
-    fournisseurChoisi.value = configStore.config.ai_provider
+    // « claude » : valeur historique, plus jamais proposée dans la liste
+    // ci-dessus (07/09/2026) — un client déjà configuré avec cette valeur
+    // ne doit jamais se retrouver avec un sélecteur sans option
+    // correspondante, plutôt rebasculé silencieusement sur OpenAI (le
+    // fournisseur réellement câblé côté relais).
+    fournisseurChoisi.value =
+      configStore.config.ai_provider === 'claude' ? 'openai' : configStore.config.ai_provider
   }
 })
 

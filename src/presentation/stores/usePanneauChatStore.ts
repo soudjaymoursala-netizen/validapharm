@@ -14,12 +14,18 @@ import { construireAdaptateursIA } from './construireAdaptateursIA'
 import { useClientConfigStore } from './useClientConfigStore'
 import { useConnexionRelaisIAStore } from './useConnexionRelaisIAStore'
 
-export const NOMS_FOURNISSEURS: Record<string, string> = {
-  claude: 'Claude',
-  openai: 'OpenAI',
-  copilot: 'Copilot',
-  deepseek: 'DeepSeek',
-  local: 'Modèle local (Ollama)',
+export const NOM_FOURNISSEUR_LOCAL = 'Modèle local (Ollama)'
+
+/**
+ * Libellé affiché à l'utilisateur pour un fournisseur IA — jamais le nom du
+ * fournisseur réel (Claude/OpenAI/Copilot/DeepSeek), quel que soit celui
+ * effectivement câblé côté relais (demande explicite de l'utilisateur,
+ * 07/09/2026) : seul « Assistant IA » est montré pour tout fournisseur
+ * cloud, la distinction cloud/local restant seule pertinente à l'écran
+ * (bascule automatique vers le modèle local en cas d'indisponibilité).
+ */
+export function libelleFournisseurAffiche(idFournisseur: string): string {
+  return idFournisseur === 'local' ? NOM_FOURNISSEUR_LOCAL : 'Assistant IA'
 }
 
 export interface SectionDisponibleAJoindre {
@@ -56,11 +62,9 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
   const dernierMoteurVersion = ref<string | null>(null)
   const enLigne = ref(navigator.onLine)
 
-  const fournisseurActuel = computed(() => configStore.config?.ai_provider ?? 'claude')
+  const fournisseurActuel = computed(() => configStore.config?.ai_provider ?? 'openai')
   const estFournisseurCloud = computed(() => fournisseurActuel.value !== 'local')
-  const nomFournisseurActuel = computed(
-    () => NOMS_FOURNISSEURS[fournisseurActuel.value] ?? fournisseurActuel.value,
-  )
+  const nomFournisseurActuel = computed(() => libelleFournisseurAffiche(fournisseurActuel.value))
 
   /**
    * Dérive détectée entre le dernier moteur journalisé et la version

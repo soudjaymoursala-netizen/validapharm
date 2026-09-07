@@ -37,7 +37,7 @@ import { useClientConfigStore } from '../stores/useClientConfigStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 import { useGabaritExportStore } from '../stores/useGabaritExportStore'
 import { useNormativeDocumentsStore } from '../stores/useNormativeDocumentsStore'
-import { NOMS_FOURNISSEURS } from '../stores/usePanneauChatStore'
+import { libelleFournisseurAffiche } from '../stores/usePanneauChatStore'
 import { useProcedureStore } from '../stores/useProcedureStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
@@ -128,8 +128,8 @@ const toutesLesSousSectionsRevues = computed(() =>
     : true,
 )
 
-const nomFournisseurActuel = computed(
-  () => NOMS_FOURNISSEURS[configStore.config?.ai_provider ?? 'claude'] ?? 'Claude',
+const nomFournisseurActuel = computed(() =>
+  libelleFournisseurAffiche(configStore.config?.ai_provider ?? 'openai'),
 )
 
 /**

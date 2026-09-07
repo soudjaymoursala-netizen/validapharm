@@ -475,7 +475,7 @@ async function reouvrirSession(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 44rem;
+  max-width: 76rem;
   height: calc(100vh - 4rem);
 }
 
@@ -717,7 +717,7 @@ async function reouvrirSession(): Promise<void> {
 .bulle {
   border-radius: var(--vp-rayon-lg);
   padding: 0.7rem 1rem;
-  max-width: 85%;
+  max-width: min(85%, 50rem);
 }
 
 .etiquette-role {

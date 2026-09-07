@@ -37,7 +37,7 @@ describe('usePanneauChatStore — demarrerSession', () => {
   test('charge la config client et le relais, réinitialise les messages', async () => {
     const store = usePanneauChatStore()
     await store.demarrerSession('client-1')
-    expect(store.fournisseurActuel).toBe('claude')
+    expect(store.fournisseurActuel).toBe('openai')
     expect(store.messages).toEqual([])
   })
 })
@@ -54,7 +54,7 @@ describe('usePanneauChatStore — envoyerQuestion (fournisseur cloud)', () => {
     expect(store.messages).toHaveLength(1)
     expect(store.messages[0]).toMatchObject({
       question: 'Question ?',
-      fournisseurUtilise: 'Claude',
+      fournisseurUtilise: 'Assistant IA',
       bascule: false,
       documentJoint: false,
     })
@@ -144,7 +144,7 @@ describe('usePanneauChatStore — fermerSession', () => {
     expect(entrees[0]).toMatchObject({
       client_id: 'client-1',
       mode: 'chat_normatif',
-      ai_provider: 'claude',
+      ai_provider: 'openai',
       moteur_version: 'claude-v2',
       document_joint: true,
     })

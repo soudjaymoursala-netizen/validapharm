@@ -10,12 +10,12 @@ beforeEach(async () => {
 })
 
 describe('useClientConfigStore — charger', () => {
-  test('client sans config existante : renvoie une config par défaut (fournisseur claude, rien acquitté)', async () => {
+  test('client sans config existante : renvoie une config par défaut (fournisseur openai, rien acquitté)', async () => {
     const store = useClientConfigStore()
     await store.charger('client-1')
     expect(store.config).toEqual({
       client_id: 'client-1',
-      ai_provider: 'claude',
+      ai_provider: 'openai',
       ai_provider_conditions_acquittees: null,
       ai_provider_reliability_qualification: { chat_normatif: null, audit_simule: null },
       export_template_id: null,

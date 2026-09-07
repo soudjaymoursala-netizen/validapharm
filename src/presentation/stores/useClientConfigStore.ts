@@ -12,7 +12,7 @@ export interface SaisieQualification {
   moteur_version_qualifiee: string | null
 }
 
-const FOURNISSEUR_PAR_DEFAUT = 'claude'
+const FOURNISSEUR_PAR_DEFAUT = 'openai'
 
 /** Aucune qualification pour aucun mode — jamais un mode oublié dans le `Record`. */
 function qualificationVide(): ClientConfig['ai_provider_reliability_qualification'] {

@@ -138,9 +138,22 @@ const nomClientActif = ref<string | null>(null)
 watch(
   () => clientActifStore.clientActifId,
   async (clientId) => {
-    nomClientActif.value = clientId
-      ? ((await clientsStore.obtenirClient(clientId))?.name ?? null)
-      : null
+    if (!clientId) {
+      nomClientActif.value = null
+      return
+    }
+    const client = await clientsStore.obtenirClient(clientId)
+    if (!client) {
+      // Référence orpheline (client supprimé côté serveur, ou préférence de
+      // navigation antérieure à la bascule des clients vers D1/le Worker
+      // d'authentification) — jamais laisser un identifiant brut affiché
+      // indéfiniment dans "Site actif" : la préférence est nettoyée plutôt
+      // que de continuer à pointer dans le vide.
+      nomClientActif.value = null
+      clientActifStore.reinitialiser()
+      return
+    }
+    nomClientActif.value = client.name
   },
   { immediate: true },
 )

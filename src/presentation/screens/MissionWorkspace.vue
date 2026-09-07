@@ -14,7 +14,7 @@ import { useClientConfigStore } from '../stores/useClientConfigStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 import { useContextEngineStore } from '../stores/useContextEngineStore'
 import { useMissionStore } from '../stores/useMissionStore'
-import { NOMS_FOURNISSEURS } from '../stores/usePanneauChatStore'
+import { libelleFournisseurAffiche } from '../stores/usePanneauChatStore'
 import { useOrganizationStore } from '../stores/useOrganizationStore'
 import { useProcessContextStore } from '../stores/useProcessContextStore'
 import { useQualityEventStore } from '../stores/useQualityEventStore'
@@ -78,8 +78,8 @@ const invocationsMission = computed(() =>
     .reverse(),
 )
 
-const nomFournisseurActuel = computed(
-  () => NOMS_FOURNISSEURS[configStore.config?.ai_provider ?? 'claude'] ?? 'Claude',
+const nomFournisseurActuel = computed(() =>
+  libelleFournisseurAffiche(configStore.config?.ai_provider ?? 'openai'),
 )
 
 onMounted(async () => {

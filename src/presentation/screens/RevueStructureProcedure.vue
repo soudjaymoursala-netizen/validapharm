@@ -18,7 +18,7 @@ import { db } from '../../persistance/db'
 import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
 import { useClientConfigStore } from '../stores/useClientConfigStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
-import { NOMS_FOURNISSEURS } from '../stores/usePanneauChatStore'
+import { libelleFournisseurAffiche } from '../stores/usePanneauChatStore'
 import { useProcedureStore } from '../stores/useProcedureStore'
 
 const props = defineProps<{ clientId: string }>()
@@ -58,8 +58,8 @@ const procedureInput = reactive<{
   categorie: CategorieProcedure
 }>({ reference: '', titre: '', effectiveDate: '', categorie: 'production' })
 
-const nomFournisseurActuel = computed(
-  () => NOMS_FOURNISSEURS[configStore.config?.ai_provider ?? 'claude'] ?? 'Claude',
+const nomFournisseurActuel = computed(() =>
+  libelleFournisseurAffiche(configStore.config?.ai_provider ?? 'openai'),
 )
 
 const procedureExistantes = computed(() =>
