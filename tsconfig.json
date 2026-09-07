@@ -4,6 +4,7 @@
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.node.json" },
     { "path": "./workers/ocr-relay" },
-    { "path": "./workers/auth-worker" }
+    { "path": "./workers/auth-worker" },
+    { "path": "./workers/ia-relay" }
   ]
 }
