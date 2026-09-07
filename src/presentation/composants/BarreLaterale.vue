@@ -15,7 +15,7 @@
 // est le point d'entrée du Mode 1 (« travail contextuel », §12
 // du prompt maître) ; cette sidebar reste le Mode 2 (« expert ») — l'accès
 // direct aux briques ne disparaît jamais, conformément à ce même §12.
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useClientActifStore } from '../stores/useClientActifStore'
@@ -41,6 +41,89 @@ async function seDeconnecter(): Promise<void> {
   await authStore.deconnecter()
   await router.push({ name: 'connexion' })
 }
+
+// Largeur redimensionnable (demande explicite de l'utilisateur) — pure
+// commodité d'affichage par poste, même discipline que `useClientActifStore`
+// (localStorage, jamais une donnée métier) : pas de store Pinia dédié, cet
+// état n'est consommé que par ce composant. Bornes choisies pour rester
+// utilisable (`LARGEUR_MIN`, en dessous les libellés des outils tronquent
+// mal) sans jamais empiéter excessivement sur la zone de contenu
+// (`LARGEUR_MAX`).
+const CLE_LARGEUR_SIDEBAR = 'validapharm.sidebar_largeur'
+const LARGEUR_PAR_DEFAUT = 260
+const LARGEUR_MIN = 200
+const LARGEUR_MAX = 420
+const PAS_CLAVIER = 12
+
+function bornerLargeur(valeur: number): number {
+  return Math.min(LARGEUR_MAX, Math.max(LARGEUR_MIN, valeur))
+}
+
+function lireLargeurStockee(): number {
+  try {
+    const valeur = Number(localStorage.getItem(CLE_LARGEUR_SIDEBAR))
+    return Number.isFinite(valeur) && valeur > 0 ? bornerLargeur(valeur) : LARGEUR_PAR_DEFAUT
+  } catch {
+    return LARGEUR_PAR_DEFAUT
+  }
+}
+
+const largeurSidebar = ref(lireLargeurStockee())
+const redimensionnementEnCours = ref(false)
+let largeurAuDebutDuGeste = 0
+let positionXAuDebutDuGeste = 0
+
+function persisterLargeur(valeur: number): void {
+  try {
+    localStorage.setItem(CLE_LARGEUR_SIDEBAR, String(valeur))
+  } catch {
+    // Stockage indisponible — la préférence reste valide pour la session en cours.
+  }
+}
+
+function demarrerRedimensionnement(evenement: PointerEvent): void {
+  redimensionnementEnCours.value = true
+  largeurAuDebutDuGeste = largeurSidebar.value
+  positionXAuDebutDuGeste = evenement.clientX
+  // Pendant le geste : curseur cohérent et texte non sélectionnable même
+  // quand le pointeur quitte la poignée (les écouteurs sont sur `window`,
+  // pas sur la poignée elle-même) — jamais laissé accroché si le geste
+  // se termine hors de la poignée.
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  window.addEventListener('pointermove', gererDeplacementRedimensionnement)
+  window.addEventListener('pointerup', arreterRedimensionnement)
+}
+
+function gererDeplacementRedimensionnement(evenement: PointerEvent): void {
+  const delta = evenement.clientX - positionXAuDebutDuGeste
+  largeurSidebar.value = bornerLargeur(largeurAuDebutDuGeste + delta)
+}
+
+function arreterRedimensionnement(): void {
+  redimensionnementEnCours.value = false
+  persisterLargeur(largeurSidebar.value)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  window.removeEventListener('pointermove', gererDeplacementRedimensionnement)
+  window.removeEventListener('pointerup', arreterRedimensionnement)
+}
+
+/** Redimensionnement au clavier (poignée focusable) — accessibilité, pas seulement à la souris/au tactile. */
+function gererToucheRedimensionnement(evenement: KeyboardEvent): void {
+  if (evenement.key !== 'ArrowLeft' && evenement.key !== 'ArrowRight') return
+  evenement.preventDefault()
+  const signe = evenement.key === 'ArrowRight' ? 1 : -1
+  largeurSidebar.value = bornerLargeur(largeurSidebar.value + signe * PAS_CLAVIER)
+  persisterLargeur(largeurSidebar.value)
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', gererDeplacementRedimensionnement)
+  window.removeEventListener('pointerup', arreterRedimensionnement)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+})
 
 const requeteRecherche = ref('')
 
@@ -273,7 +356,11 @@ function basculerEpinglage(outil: OutilClient): void {
 <template>
   <nav
     class="sidebar"
-    :class="{ 'sidebar--ouverte': props.ouverte }"
+    :class="{
+      'sidebar--ouverte': props.ouverte,
+      'sidebar--redimensionnement': redimensionnementEnCours,
+    }"
+    :style="{ '--sidebar-largeur': `${largeurSidebar}px` }"
     aria-label="Navigation principale"
   >
     <div class="sidebar__marque">
@@ -410,6 +497,18 @@ function basculerEpinglage(outil: OutilClient): void {
         </RouterLink>
       </div>
     </div>
+    <div
+      class="sidebar__poignee-redimensionnement"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Redimensionner la barre latérale"
+      :aria-valuenow="Math.round(largeurSidebar)"
+      :aria-valuemin="LARGEUR_MIN"
+      :aria-valuemax="LARGEUR_MAX"
+      tabindex="0"
+      @pointerdown="demarrerRedimensionnement"
+      @keydown="gererToucheRedimensionnement"
+    ></div>
   </nav>
 </template>
 
@@ -417,7 +516,7 @@ function basculerEpinglage(outil: OutilClient): void {
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 260px;
+  width: var(--sidebar-largeur, 260px);
   flex-shrink: 0;
   height: 100vh;
   position: sticky;
@@ -708,6 +807,47 @@ function basculerEpinglage(outil: OutilClient): void {
   padding: 0.45rem 0.5rem;
 }
 
+/* Poignée de redimensionnement (demande explicite de l'utilisateur) — piste
+   large (0.75rem) pour rester facile à saisir à la souris/au tactile, mais
+   avec un filet visuel étroit (`::after`, 2px) au repos : une poignée
+   large en permanence aurait cassé la ligne verticale nette entre sidebar
+   et contenu sur les ~40 écrans existants. `position: absolute` s'ancre
+   sur `.sidebar` (bloc de positionnement déjà établi par son
+   `position: sticky`), jamais un élément séparé dans `CoquilleApplication.vue`
+   — la poignée doit suivre la sidebar quel que soit le layout parent. */
+.sidebar__poignee-redimensionnement {
+  position: absolute;
+  top: 0;
+  right: -0.375rem;
+  width: 0.75rem;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 10;
+}
+
+.sidebar__poignee-redimensionnement::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 100%;
+  background-color: transparent;
+  transition: background-color var(--vp-transition);
+}
+
+.sidebar__poignee-redimensionnement:hover::after,
+.sidebar__poignee-redimensionnement:focus-visible::after,
+.sidebar--redimensionnement .sidebar__poignee-redimensionnement::after {
+  background-color: var(--vp-marque);
+}
+
+.sidebar__poignee-redimensionnement:focus-visible {
+  outline: none;
+}
+
 /* Responsive (ajouté — la sidebar restait fixe à 260px, illisible sur un
    écran de téléphone, seule media query de toute l'app hors thème sombre
    avant cette refonte) : sous ~768px, la sidebar quitte le flux (retirée
@@ -729,6 +869,10 @@ function basculerEpinglage(outil: OutilClient): void {
 
   .sidebar--ouverte {
     transform: translateX(0);
+  }
+
+  .sidebar__poignee-redimensionnement {
+    display: none;
   }
 }
 </style>

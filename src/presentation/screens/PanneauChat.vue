@@ -22,7 +22,6 @@ import {
   LIBELLES_PERSONA_AUDIT_SIMULE,
   type PersonaAuditSimule,
 } from '../../logique-metier/audit-simule/construirePromptAuditSimule'
-import { useClientsStore } from '../stores/useClientsStore'
 import { usePanneauChatStore, type SectionDisponibleAJoindre } from '../stores/usePanneauChatStore'
 import { rendreMarkdown } from '../rendreMarkdown'
 
@@ -45,10 +44,8 @@ const props = defineProps<{ clientId: string }>()
 const modeActuel = ref<ModeUsageIA>('chat_normatif')
 const personasChoisies = ref<PersonaAuditSimule[]>([])
 
-const clientsStore = useClientsStore()
 const chatStore = usePanneauChatStore()
 
-const nomClient = ref<string | null>(null)
 const sectionsDisponibles = ref<SectionDisponibleAJoindre[]>([])
 const question = ref('')
 const sectionAJoindreId = ref('')
@@ -119,8 +116,6 @@ function gererClicExterieurMenuJoint(evenement: MouseEvent): void {
 
 onMounted(async () => {
   document.addEventListener('click', gererClicExterieurMenuJoint)
-  const client = await clientsStore.obtenirClient(props.clientId)
-  nomClient.value = client?.name ?? null
   await demarrer()
   minuteurInactivite = setInterval(() => void verifierInactivite(), VERIFICATION_INACTIVITE_MS)
 })
@@ -236,7 +231,7 @@ async function reouvrirSession(): Promise<void> {
     <header class="en-tete-chat">
       <div class="avatar-assistant" aria-hidden="true">✨</div>
       <div class="en-tete-texte">
-        <h1>Assistant qualité — {{ nomClient ?? props.clientId }}</h1>
+        <h1>Assistant IA</h1>
         <p class="sous-titre">
           Aide à la rédaction et à la compréhension réglementaire.
           <strong>Aide, pas avis opposable.</strong>
