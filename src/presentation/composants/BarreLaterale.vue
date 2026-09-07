@@ -142,18 +142,27 @@ watch(
       nomClientActif.value = null
       return
     }
-    const client = await clientsStore.obtenirClient(clientId)
-    if (!client) {
-      // Référence orpheline (client supprimé côté serveur, ou préférence de
-      // navigation antérieure à la bascule des clients vers D1/le Worker
-      // d'authentification) — jamais laisser un identifiant brut affiché
-      // indéfiniment dans "Site actif" : la préférence est nettoyée plutôt
-      // que de continuer à pointer dans le vide.
+    try {
+      const client = await clientsStore.obtenirClient(clientId)
+      if (!client) {
+        // Réponse serveur reçue, sans ambiguïté : ce client n'existe pas
+        // (supprimé, ou préférence de navigation antérieure à la bascule
+        // des clients vers D1/le Worker d'authentification) — jamais
+        // laisser un identifiant brut affiché indéfiniment dans "Site
+        // actif", la préférence orpheline est nettoyée.
+        nomClientActif.value = null
+        clientActifStore.reinitialiser()
+        return
+      }
+      nomClientActif.value = client.name
+    } catch {
+      // Panne réseau/Worker temporairement injoignable (ex. démarrage à
+      // froid) — contrairement au cas ci-dessus, on ne sait pas si ce
+      // client existe réellement : ne jamais effacer la préférence sur une
+      // simple erreur réseau, seulement renoncer à afficher son nom pour
+      // cette fois.
       nomClientActif.value = null
-      clientActifStore.reinitialiser()
-      return
     }
-    nomClientActif.value = client.name
   },
   { immediate: true },
 )
