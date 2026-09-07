@@ -26,58 +26,43 @@ IndexedDB + synchronisation GitHub, inchangés par ce lot.
 - `migrations/0001_init.sql` : schéma initial (`users`, `clients`,
   `audit_log`).
 
-## Ce qui NE PEUT PAS être fait depuis une session Claude Code distante
+## Déploiement — historique et état réel
 
 Initialement écrit en supposant aucun accès Cloudflare — le 04/09/2026,
 l'utilisateur a connecté le connecteur MCP « Cloudflare Developer
 Platform » à cette session, qui a alors pu réaliser les étapes 1 et 2
 réellement (base D1 créée sous le compte réel de l'utilisateur, schéma
-appliqué). Ce connecteur ne fournit toutefois aucun moyen d'uploader le
-code d'un Worker ni de poser un secret (`wrangler secret put` n'a pas
-d'équivalent MCP disponible) — les étapes 3 à 7 restent donc **à faire
-par l'utilisateur**, avec ou sans ce connecteur :
+appliqué). Ce connecteur ne fournissait toutefois aucun moyen d'uploader
+le code d'un Worker ni de poser un secret — les étapes 3 à 7 ont donc été
+faites manuellement par l'utilisateur (`wrangler deploy` en CLI depuis son
+poste), secrets compris.
 
 1. ~~**Créer la base D1**~~ — **fait** (04/09/2026, via le connecteur MCP) :
    base `validapharm-auth`, `database_id` `5fb762ef-fe99-4e68-9086-e57126c5c2aa`,
    déjà renseigné dans `wrangler.toml`.
-
 2. ~~**Appliquer le schéma**~~ — **fait** (04/09/2026, migration `0001_init.sql`
    appliquée statement par statement via le connecteur MCP) : tables
    `users`/`clients`/`audit_log` + les 2 index existent réellement sur la
    base ci-dessus, vérifiées par une requête sur `sqlite_master`.
+3. ~~**Secrets configurés**~~ — **fait** (`JWT_SECRET`, `BOOTSTRAP_TOKEN`,
+   `CORS_ORIGIN_AUTORISE`), en place depuis le premier déploiement CLI.
+4. ~~**Déployé**~~, ~~**premier compte admin créé**~~, ~~**joignabilité
+   vérifiée**~~, ~~**URL configurée côté PWA**~~ — tout **fait**.
 
-3. **Configurer les secrets** (jamais commités) :
-
-   ```
-   wrangler secret put JWT_SECRET          # chaîne aléatoire longue, ex. openssl rand -base64 48
-   wrangler secret put BOOTSTRAP_TOKEN     # jeton à usage unique pour créer le premier admin
-   wrangler secret put CORS_ORIGIN_AUTORISE   # origine exacte de la PWA déployée, jamais '*'
-   ```
-
-4. **Déployer** :
-
-   ```
-   wrangler deploy
-   ```
-
-5. **Créer le premier compte admin** (une seule fois — l'endpoint refuse
-   tout second appel une fois un compte existant) :
-
-   ```
-   curl -X POST https://<votre-worker>.workers.dev/auth/bootstrap-admin \
-     -H "Content-Type: application/json" \
-     -d '{"email":"vous@exemple.com","motDePasse":"...","nom":"...","prenom":"...","jetonBootstrap":"<BOOTSTRAP_TOKEN>"}'
-   ```
-
-6. **Vérifier la joignabilité réseau réelle** depuis le poste professionnel
-   de l'utilisateur — même méthode que pour le relais IA : charger
-   `https://<votre-worker>.workers.dev/auth/me` (401 attendu sans jeton,
-   ce qui confirme que le Worker répond) depuis ce poste.
-
-7. **Configurer l'URL du Worker déployé** dans l'installation ValidaPharm
-   — écran « Configuration de l'authentification » (route
-   `/configuration-authentification`), accessible avant connexion,
-   même principe que `useConnexionRelaisIAStore`.
+**Écart trouvé et corrigé le 07/09/2026** : ce Worker restait déployé
+uniquement en CLI manuelle depuis sa création, jamais redéployé depuis —
+contrairement à `workers/ia-relay/`, il ne recevait donc aucune des
+routes/corrections ajoutées au code au fil des phases suivantes (constaté
+via des `404`/`401` sur des routes pourtant présentes dans `routeur.ts`,
+ex. `GET /clients/:id`). **Reconnecté à GitHub via Cloudflare Workers
+Builds ce même jour** (`Settings → Builds → Git repository`, répertoire
+racine `workers/auth-worker`, commande de déploiement `npx wrangler
+deploy`, chemins surveillés restreints à `workers/auth-worker/**`) — même
+principe que `ia-relay`, sans jamais toucher aux secrets déjà en place
+(un Worker Git-connecté conserve les secrets posés côté `wrangler secret`/
+dashboard, indépendamment de la méthode de déploiement). `main` redéploie
+désormais ce Worker automatiquement à chaque changement dans ce
+répertoire, comme `ia-relay`.
 
 ## Limites assumées
 
