@@ -58,6 +58,7 @@ const CATALOGUE_DISPONIBLE: readonly TemplateType[] = [
   'validation_procede',
   'plan_metrologie',
   'plan_maintenance',
+  'csv',
 ]
 
 const ETAPES = [

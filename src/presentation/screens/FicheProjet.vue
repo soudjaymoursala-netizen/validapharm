@@ -132,6 +132,7 @@ const CATALOGUE_DISPONIBLE: readonly TemplateType[] = [
   'validation_procede',
   'plan_metrologie',
   'plan_maintenance',
+  'csv',
 ]
 
 const sections = computed(() => sectionsStore.sectionsParProjet[props.projectId] ?? [])

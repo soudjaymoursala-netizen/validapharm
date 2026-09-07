@@ -13,6 +13,7 @@ const TOUS_LES_GABARITS_DEFINIS: Array<Parameters<typeof obtenirDefinitionGabari
   'validation_procede',
   'plan_metrologie',
   'plan_maintenance',
+  'csv',
 ]
 
 describe('obtenirDefinitionGabarit', () => {

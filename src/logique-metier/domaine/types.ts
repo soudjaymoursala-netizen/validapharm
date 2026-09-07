@@ -27,6 +27,7 @@ export type TemplateType =
   | 'validation_procede'
   | 'plan_metrologie'
   | 'plan_maintenance'
+  | 'csv'
 
 export type StatutSection =
   | 'brouillon_aide'

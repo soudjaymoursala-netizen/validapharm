@@ -539,6 +539,19 @@ Validation procédé**, plus deux pistes de support non séquentielles :
 **Plan de métrologie** et **Plan de maintenance**. La progression n'est jamais
 simulée : elle reflète uniquement les sections réellement créées.
 
+Le gabarit **CSV (dossier de validation de système informatisé)** n'appartient
+volontairement pas à ce pipeline : un système informatisé suit un cycle de
+validation distinct de celui de l'équipement physique qu'il pilote (Annexe 11
+« Systèmes informatisés » du Guide BPF/EudraLex), même quand cet équipement
+est déjà qualifié séparément. Structure calquée sur cette même Annexe 11 —
+Généralités (nom du système, catégorie GAMP 5, pertinences GxP et ERES/21 CFR
+Part 11, fournisseur), Validation et cycle de vie, puis Sécurité/intégrité des
+données/continuité opérationnelle. Les champs de « Généralités » portent
+volontairement les mêmes noms qu'une évaluation Computer System Assessment
+([§18](#18-computer-system-assessment-gamp5)) pour permettre un futur
+pré-remplissage automatique — non câblé pour l'instant : la saisie reste
+entièrement manuelle.
+
 ### Sections
 - **« Assistant guidé »** (lien) : ouvre l'[assistant guidé de création de
   livrable](#8-assistant-guidé-de-création-de-livrable), qui rassemble le
@@ -546,7 +559,7 @@ simulée : elle reflète uniquement les sections réellement créées.
   précédents) avant de créer la section — recommandé dès que ce contexte
   existe pour le client.
 - **« Ajouter une section »** → formulaire direct (sans passer par
-  l'assistant) : Titre (obligatoire), Gabarit (liste déroulante parmi les 11
+  l'assistant) : Titre (obligatoire), Gabarit (liste déroulante parmi les 12
   types du catalogue), puis choix entre **« Créer la section vierge »**
   (modèle vide) et **« À partir d'un document »** (vous amène directement à
   l'éditeur, panneau de génération de brouillon par adaptation déjà ouvert,
@@ -772,7 +785,7 @@ librement entre les étapes déjà atteintes.
 
 1. **Quel type de livrable ?** — Titre du livrable (obligatoire, texte,
    placeholder `ex. OQ Malaxeur M-300`) et Gabarit (obligatoire, liste
-   déroulante parmi les 11 types du catalogue). Le bouton « Suivant » reste
+   déroulante parmi les 12 types du catalogue). Le bouton « Suivant » reste
    désactivé tant que les deux ne sont pas renseignés.
 2. **Contexte du projet** — rappel en lecture seule du Contexte, de la Portée
    incluse et de la Portée exclue saisis à la création du projet.
@@ -1355,7 +1368,7 @@ KnowledgeItem`, jamais de raccourci) :
 > de fond. Un plan ne peut être gelé que s'il est déjà validé ET que ses
 > données sont prêtes — jamais l'un sans l'autre. »
 
-Formulaire de création : **Gabarit** (obligatoire, un des 11 types du
+Formulaire de création : **Gabarit** (obligatoire, un des 12 types du
 catalogue), Nœud Structure Système optionnel, Procédé optionnel, Type de profil
 de méthode optionnel (ACFC ou Impact Assessment) + sa référence, **Note de
 contexte** (figée définitivement dès la création — non modifiable ensuite,

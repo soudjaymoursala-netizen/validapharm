@@ -40,6 +40,7 @@ const LIBELLES_TEMPLATE: Record<TemplateType, string> = {
   validation_procede: 'Validation procédé',
   plan_metrologie: 'Plan de métrologie',
   plan_maintenance: 'Plan de maintenance',
+  csv: 'CSV — Dossier de validation de système informatisé',
 }
 
 const LIBELLES_READINESS: Record<string, string> = {

@@ -17,6 +17,7 @@ const TYPES_GABARIT_CONNUS: readonly TemplateType[] = [
   'validation_procede',
   'plan_metrologie',
   'plan_maintenance',
+  'csv',
 ]
 
 const STATUTS_CONNUS: readonly StatutSection[] = [

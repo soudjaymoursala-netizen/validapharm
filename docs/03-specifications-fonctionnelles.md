@@ -315,7 +315,7 @@ Ce document ne couvre pas le contenu réglementaire détaillé de chaque type de
 - Contrairement à la méthode ACFC ou Impact Assessment, aucun `MethodProfile` associé: la catégorie GAMP5 est sélectionnée, jamais configurée.
 - Avertissement renforcé systématique: "aide à la décision, non une décision de qualification".
 - L'assistant est accessible directement depuis une section Change Control en cours de rédaction, en plus de son accès en module indépendant.
-- Lorsqu'une évaluation ACFC ou Computer System Assessment (catalogue §10.F) conclut à la nécessité d'un dossier complet, ses réponses pré-remplissent automatiquement les champs correspondants du gabarit cible (ex. section "Généralités" du CSV) — pas de double saisie.
+- Lorsqu'une évaluation ACFC ou Computer System Assessment (catalogue §10.F) conclut à la nécessité d'un dossier complet, ses réponses pré-remplissent automatiquement les champs correspondants du gabarit cible (ex. section "Généralités" du CSV) — pas de double saisie. **(Précision — le gabarit CSV existe depuis le 07/09/2026, `src/logique-metier/gabarits/catalogue/csv.ts`, champs de "Généralités" nommés à l'identique d'`EvaluationCSVAssessment` pour permettre exactement ce pré-remplissage ; le câblage automatique lui-même reste non construit — chantier distinct, saisie manuelle pour l'instant.)**
 
 ### 4.6quinquies Risk Assessment (AMDEC) autonome (nouveau v48)
 

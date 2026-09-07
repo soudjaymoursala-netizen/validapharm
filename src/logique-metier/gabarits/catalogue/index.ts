@@ -1,6 +1,7 @@
 import type { TemplateType } from '../../domaine/types'
 import type { DefinitionGabarit } from '../definitionGabarit'
 import { definitionContexteProcede } from './contexteProcede'
+import { definitionCSV } from './csv'
 import { definitionDQ } from './dq'
 import { definitionFAT } from './fat'
 import { definitionIQ } from './iq'
@@ -14,7 +15,7 @@ import { definitionValidationProcede } from './validationProcede'
 
 /**
  * Registre des gabarits réellement définis. Catalogue complet
- * pour les familles A/C/D/L/M — B (DQ) déjà couvert
+ * pour les familles A/C/D/F/L/M — B (DQ) déjà couvert
  * séparément.
  *
  * Ajouter un gabarit manquant : un nouveau fichier dans ce dossier +
@@ -33,6 +34,7 @@ const CATALOGUE: Partial<Record<TemplateType, DefinitionGabarit>> = {
   validation_procede: definitionValidationProcede,
   plan_metrologie: definitionPlanMetrologie,
   plan_maintenance: definitionPlanMaintenance,
+  csv: definitionCSV,
 }
 
 export function obtenirDefinitionGabarit(
