@@ -279,6 +279,11 @@ email est déjà utilisé par un autre compte. », « Adresse email invalide. »
 « Le mot de passe doit contenir au moins 8 caractères. », « Le nom est
 obligatoire. », « Le prénom est obligatoire. »
 
+À la création, un email est envoyé automatiquement à la personne avec
+l'adresse de connexion, son email et le mot de passe initial saisi
+ci-dessus. Si l'envoi échoue (ex. service d'email non configuré), le compte
+est tout de même créé — communiquez alors les identifiants vous-même.
+
 Chaque compte listé affiche son nom, son email, un badge de rôle
 (admin/utilisateur) et un badge de statut (actif/desactive), avec deux
 actions : **« Promouvoir admin » / « Rétrograder »** et **« Désactiver » /

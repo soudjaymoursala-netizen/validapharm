@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { EnvoyeurEmailMemoire } from './notifications/envoyeurEmail'
 import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
 import { UtilisateursRepoMemoire } from './repos/utilisateursRepo'
@@ -7,6 +8,7 @@ import { routerRequete, type Contexte } from './routeur'
 const ORIGINE = 'https://validapharm.example'
 const JETON_BOOTSTRAP = 'jeton-bootstrap-test'
 const SECRET_JWT = 'secret-jwt-test'
+const URL_APPLICATION = 'https://validapharm.pages.dev'
 
 function nouveauContexte(): Contexte {
   return {
@@ -16,6 +18,8 @@ function nouveauContexte(): Contexte {
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
     corsOrigin: ORIGINE,
+    envoyeurEmail: new EnvoyeurEmailMemoire(),
+    urlApplication: URL_APPLICATION,
   }
 }
 
@@ -63,6 +67,7 @@ interface CorpsReponse {
   auditId: string
   utilisateur: UtilisateurJson
   utilisateurs: UtilisateurJson[]
+  emailEnvoye: boolean
   client: ClientJson
   clients: ClientJson[]
   entrees: EntreeAuditJson[]
@@ -291,6 +296,29 @@ describe('routerRequete — administration des comptes (admin uniquement)', () =
     })
     expect(status).toBe(201)
     expect(corps.utilisateur.role).toBe('utilisateur')
+  })
+
+  test('la création envoie un email de bienvenue avec les identifiants', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const envoyeur = ctx.envoyeurEmail as EnvoyeurEmailMemoire
+
+    const { status, corps } = await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'employe@pharmatech.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'Dupont',
+        prenom: 'Alice',
+        role: 'utilisateur',
+      },
+    })
+    expect(status).toBe(201)
+    expect(corps.emailEnvoye).toBe(true)
+    expect(envoyeur.envoyes).toHaveLength(1)
+    expect(envoyeur.envoyes[0]?.destinataire).toBe('employe@pharmatech.example')
+    expect(envoyeur.envoyes[0]?.texte).toContain('MotDePasse!1')
+    expect(envoyeur.envoyes[0]?.texte).toContain(URL_APPLICATION)
   })
 
   test('un utilisateur non-admin ne peut pas créer de compte (403)', async () => {

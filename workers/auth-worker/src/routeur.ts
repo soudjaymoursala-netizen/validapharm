@@ -1,5 +1,6 @@
 import { signerJwt, verifierJwt } from './jwt'
 import { genererSel, hacherMotDePasse, verifierMotDePasse } from './motDePasse'
+import type { EnvoyeurEmail } from './notifications/envoyeurEmail'
 import type { AuditRepo } from './repos/auditRepo'
 import type { ClientsRepo } from './repos/clientsRepo'
 import type { UtilisateursRepo } from './repos/utilisateursRepo'
@@ -13,6 +14,8 @@ export interface Contexte {
   secretJwt: string
   jetonBootstrap: string
   corsOrigin: string
+  envoyeurEmail: EnvoyeurEmail
+  urlApplication: string
 }
 
 const LONGUEUR_MIN_MOT_DE_PASSE = 8
@@ -387,7 +390,28 @@ async function gererCreerUtilisateur(
   }
   await ctx.utilisateursRepo.creer(nouvelUtilisateur)
   await consignerAudit(ctx, acteur, 'creation_utilisateur', 'user', nouvelUtilisateur.id, null)
-  return reponseJson({ utilisateur: versUtilisateurPublic(nouvelUtilisateur) }, 201, entetes)
+
+  const resultatEmail = await ctx.envoyeurEmail.envoyer({
+    destinataire: nouvelUtilisateur.email,
+    sujet: 'Votre compte ValidaPharm a été créé',
+    texte: [
+      `Bonjour ${nouvelUtilisateur.prenom},`,
+      '',
+      `Un compte ValidaPharm vient d'être créé pour vous par ${acteur.prenom} ${acteur.nom}.`,
+      '',
+      `Adresse de connexion : ${ctx.urlApplication}`,
+      `Identifiant : ${nouvelUtilisateur.email}`,
+      `Mot de passe initial : ${corps.motDePasse as string}`,
+      '',
+      'Nous vous recommandons de changer ce mot de passe dès votre première connexion.',
+    ].join('\n'),
+  })
+
+  return reponseJson(
+    { utilisateur: versUtilisateurPublic(nouvelUtilisateur), emailEnvoye: resultatEmail.ok },
+    201,
+    entetes,
+  )
 }
 
 async function gererModifierUtilisateur(

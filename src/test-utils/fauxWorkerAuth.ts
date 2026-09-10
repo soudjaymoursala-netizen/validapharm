@@ -11,6 +11,7 @@
 // tests de plus haut niveau (stores Pinia, composants Vue) qui ont besoin
 // d'un backend qui se comporte réellement comme le Worker.
 import { vi } from 'vitest'
+import { EnvoyeurEmailMemoire } from '../../workers/auth-worker/src/notifications/envoyeurEmail'
 import { AuditRepoMemoire } from '../../workers/auth-worker/src/repos/auditRepo'
 import { ClientsRepoMemoire } from '../../workers/auth-worker/src/repos/clientsRepo'
 import { UtilisateursRepoMemoire } from '../../workers/auth-worker/src/repos/utilisateursRepo'
@@ -38,6 +39,8 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,
     corsOrigin: '*',
+    envoyeurEmail: new EnvoyeurEmailMemoire(),
+    urlApplication: 'https://validapharm-test.pages.dev',
   }
 
   const fetchReel = globalThis.fetch?.bind(globalThis)
