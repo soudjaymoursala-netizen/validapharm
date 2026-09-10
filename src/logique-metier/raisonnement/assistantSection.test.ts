@@ -39,17 +39,17 @@ describe('construireObjectifAssistantSection', () => {
 
   test('injecte les documents normatifs fournis, tels quels', () => {
     const objectif = construireObjectifAssistantSection(SECTION_MINIMALE, 'Question', [
-      { titre: 'ICH Q9', category: 'norme', extracted_text: 'Gestion du risque qualité.' },
+      { titre: 'ICH Q9', category: 'gmp', extracted_text: 'Gestion du risque qualité.' },
     ])
     expect(objectif).toContain('Documents normatifs disponibles')
-    expect(objectif).toContain('--- ICH Q9 (norme) ---')
+    expect(objectif).toContain('--- ICH Q9 (gmp) ---')
     expect(objectif).toContain('Gestion du risque qualité.')
   })
 
   test('tronque un extrait trop long avec un marqueur explicite, jamais silencieusement', () => {
     const texteLong = 'x'.repeat(5000)
     const objectif = construireObjectifAssistantSection(SECTION_MINIMALE, 'Question', [
-      { titre: 'Guide long', category: 'guideline', extracted_text: texteLong },
+      { titre: 'Guide long', category: 'autre', extracted_text: texteLong },
     ])
     expect(objectif).toContain('[...texte tronqué...]')
     expect(objectif).not.toContain('x'.repeat(5000))
