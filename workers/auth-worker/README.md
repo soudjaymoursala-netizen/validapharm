@@ -25,6 +25,25 @@ IndexedDB + synchronisation GitHub, inchangés par ce lot.
 - `src/index.ts` : câblage réel `env`/D1 → dépôts → routeur.
 - `migrations/0001_init.sql` : schéma initial (`users`, `clients`,
   `audit_log`).
+- `src/notifications/envoyeurEmail.ts` (+ `resendEnvoyeurEmail.ts`) : email
+  de bienvenue envoyé (via [Resend](https://resend.com)) à la création d'un
+  compte par un admin — contient l'adresse de connexion, l'email et le mot
+  de passe initial fixé par l'admin. Un échec d'envoi n'empêche jamais la
+  création du compte (`emailEnvoye: false` renvoyé à l'admin, à charge pour
+  lui de communiquer les identifiants autrement dans ce cas).
+
+### Configuration requise pour l'email de bienvenue
+
+- Secret `RESEND_API_KEY` (`wrangler secret put RESEND_API_KEY`, jamais
+  commité) — clé API d'un compte [Resend](https://resend.com).
+- Variables `RESEND_FROM`/`APP_URL` dans `wrangler.toml` (`[vars]`, non
+  secrètes). Par défaut `RESEND_FROM = "onboarding@resend.dev"` (domaine
+  partagé Resend) — n'envoie alors que vers l'adresse du compte Resend
+  lui-même, jamais vers de vrais utilisateurs (limite anti-spam du web, pas
+  de l'outil). Pour envoyer à de vrais destinataires : vérifier un domaine
+  propre dans Resend (Domains → Add Domain → enregistrements DNS
+  TXT/CNAME fournis par Resend), puis changer `RESEND_FROM` pour une
+  adresse sur ce domaine (ex. `invitations@votredomaine.com`).
 
 ## Déploiement — historique et état réel
 

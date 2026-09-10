@@ -14,3 +14,13 @@ compatibility_date = "2026-08-25"
 binding = "DB"
 database_name = "validapharm-auth"
 database_id = "5fb762ef-fe99-4e68-9086-e57126c5c2aa"
+
+# Variables non secrètes (le secret RESEND_API_KEY se pose via
+# `wrangler secret put`, jamais ici). RESEND_FROM reste sur le domaine
+# partagé de Resend tant qu'aucun domaine propre n'est vérifié — n'envoie
+# alors que vers l'adresse du compte Resend lui-même, jamais vers de vrais
+# utilisateurs (limite du service, pas de l'outil). Basculer vers une
+# adresse @votredomaine.com dès qu'un domaine est vérifié dans Resend.
+[vars]
+RESEND_FROM = "onboarding@resend.dev"
+APP_URL = "https://validapharm.pages.dev"
