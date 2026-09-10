@@ -9,18 +9,30 @@ import {
   useConnexionGitHubStore,
   type ResultatTestConnexion,
 } from '../stores/useConnexionGitHubStore'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useConnexionAuthentificationStore } from '../stores/useConnexionAuthentificationStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
+
+const authStore = useAuthStore()
 
 const store = useConnexionGitHubStore()
 const brouillon = reactive({ owner: '', repo: '', branche: 'main', jeton: '' })
 const resultatTest = ref<ResultatTestConnexion | undefined>(undefined)
 const testEnCours = ref(false)
 const vientDEnregistrer = ref(false)
+const erreurEnregistrement = ref<string | null>(null)
 
 const relaisStore = useConnexionRelaisIAStore()
 const brouillonRelais = reactive({ relayUrl: '', jeton: '' })
 const vientDEnregistrerRelais = ref(false)
+const erreurEnregistrementRelais = ref<string | null>(null)
+
+/** Réservé à un admin côté Worker (paramètre partagé par toute l'installation) — jamais un message technique brut pour ce cas attendu. */
+function messageErreurParametreInstallation(erreur: string): string {
+  return erreur === 'non_autorise'
+    ? "Réservé à un administrateur (paramètre partagé par toute l'installation)."
+    : `Échec de l'enregistrement : ${erreur}`
+}
 
 // Worker d'authentification — volontairement séparé du relais IA
 // ci-dessous : sans jeton fixe (le jeton de session s'obtient dynamiquement
@@ -41,6 +53,18 @@ function signalerEnregistrement(indicateur: Ref<boolean>): void {
 }
 
 onMounted(async () => {
+  // Cet écran est délibérément exclu de la garde de routeur globale
+  // (accessible avant toute connexion, pour indiquer où se connecter) —
+  // ce qui veut aussi dire que `router.beforeEach` n'y appelle jamais
+  // `authStore.charger()`. Sans cet appel explicite, une arrivée directe
+  // sur `/configuration` (lien, rechargement de page...) laisse
+  // `authStore.jeton` non restauré depuis IndexedDB, alors qu'une vraie
+  // session existe : le dépôt GitHub/Relais IA (désormais des paramètres
+  // Worker/D1, voir `useConnexionGitHubStore`) échouait alors à charger
+  // avec `relais_non_configure`, constaté en test — jamais un vrai défaut
+  // de configuration.
+  if (!authStore.sessionInitialisee) await authStore.charger()
+
   await store.charger()
   if (store.connexion) {
     brouillon.owner = store.connexion.owner
@@ -62,7 +86,12 @@ onMounted(async () => {
 })
 
 async function enregistrer(): Promise<void> {
-  await store.enregistrer({ ...brouillon })
+  erreurEnregistrement.value = null
+  const resultat = await store.enregistrer({ ...brouillon })
+  if (!resultat.ok) {
+    erreurEnregistrement.value = messageErreurParametreInstallation(resultat.erreur)
+    return
+  }
   resultatTest.value = undefined
   signalerEnregistrement(vientDEnregistrer)
 }
@@ -86,7 +115,12 @@ async function testerConnexion(): Promise<void> {
 }
 
 async function enregistrerRelais(): Promise<void> {
-  await relaisStore.enregistrer({ ...brouillonRelais })
+  erreurEnregistrementRelais.value = null
+  const resultat = await relaisStore.enregistrer({ ...brouillonRelais })
+  if (!resultat.ok) {
+    erreurEnregistrementRelais.value = messageErreurParametreInstallation(resultat.erreur)
+    return
+  }
   signalerEnregistrement(vientDEnregistrerRelais)
 }
 
@@ -138,6 +172,9 @@ async function enregistrerAuthentification(): Promise<void> {
         <p v-if="vientDEnregistrer" class="confirmation-enregistrement" role="status">
           ✓ Enregistré.
         </p>
+        <p v-if="erreurEnregistrement" class="erreur-enregistrement" role="alert">
+          {{ erreurEnregistrement }}
+        </p>
       </form>
 
       <div class="test-connexion">
@@ -182,6 +219,9 @@ async function enregistrerAuthentification(): Promise<void> {
         </div>
         <p v-if="vientDEnregistrerRelais" class="confirmation-enregistrement" role="status">
           ✓ Enregistré.
+        </p>
+        <p v-if="erreurEnregistrementRelais" class="erreur-enregistrement" role="alert">
+          {{ erreurEnregistrementRelais }}
         </p>
       </form>
     </section>
@@ -292,5 +332,12 @@ button:disabled {
   color: var(--vp-statut-qualifie);
   font-weight: var(--vp-poids-medium);
   align-self: flex-start;
+}
+
+.erreur-enregistrement {
+  color: var(--vp-statut-requalification-en-retard);
+  font-weight: var(--vp-poids-medium);
+  align-self: flex-start;
+  margin: 0;
 }
 </style>

@@ -2,6 +2,12 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
+import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 import { useSynchronisationStore } from './useSynchronisationStore'
 
 function reponseMock(
@@ -22,30 +28,39 @@ function encoderBase64Utf8(texte: string): string {
   return btoa(String.fromCharCode(...octets))
 }
 
+// Le dépôt GitHub est désormais un paramètre d'installation stocké côté
+// Worker/D1 (`useConnexionGitHubStore`) — `fetchMock` ci-dessous ne sert
+// donc plus qu'aux appels réels à l'API GitHub, jamais à
+// l'authentification/la configuration (interceptées par
+// `installerFauxWorkerAuth`, qui délègue tout le reste à `fetchMock`).
 let fetchMock: ReturnType<typeof vi.fn>
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.connexionGitHub.clear()
+  await reinitialiserAuthDeTest()
   await db.etatSynchronisation.clear()
   await db.projects.clear()
   await db.sections.clear()
   fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
 })
 
 afterEach(() => {
-  vi.unstubAllGlobals()
+  demonter()
 })
 
 async function configurerConnexion(): Promise<void> {
-  await db.connexionGitHub.put({
-    id: 'unique',
+  const resultat = await useConnexionGitHubStore().enregistrer({
     owner: 'acme',
     repo: 'data',
     branche: 'main',
     jeton: 'x',
   })
+  if (!resultat.ok)
+    throw new Error(`préparation de la connexion GitHub échouée : ${resultat.erreur}`)
 }
 
 describe('useSynchronisationStore — synchroniser', () => {

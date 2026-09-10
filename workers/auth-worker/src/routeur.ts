@@ -3,13 +3,26 @@ import { genererSel, hacherMotDePasse, verifierMotDePasse } from './motDePasse'
 import type { EnvoyeurEmail } from './notifications/envoyeurEmail'
 import type { AuditRepo } from './repos/auditRepo'
 import type { ClientsRepo } from './repos/clientsRepo'
+import type {
+  ParametresInstallationRepo,
+  ValeurParametreInstallation,
+} from './repos/parametresInstallationRepo'
 import type { UtilisateursRepo } from './repos/utilisateursRepo'
 import type { ClientEnregistre, EntreeAudit, Role, UtilisateurEnregistre } from './types'
 import { versUtilisateurPublic } from './types'
 
+/** Seules clés de paramètre d'installation reconnues — jamais une clé arbitraire fournie par l'appelant. */
+const CLES_PARAMETRES_INSTALLATION = ['github', 'relais-ia', 'drive-normes'] as const
+type CleParametreInstallation = (typeof CLES_PARAMETRES_INSTALLATION)[number]
+
+function estCleParametreInstallationValide(cle: string): cle is CleParametreInstallation {
+  return (CLES_PARAMETRES_INSTALLATION as readonly string[]).includes(cle)
+}
+
 export interface Contexte {
   utilisateursRepo: UtilisateursRepo
   clientsRepo: ClientsRepo
+  parametresInstallationRepo: ParametresInstallationRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -164,6 +177,33 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   }
   if (matchClientId && request.method === 'DELETE') {
     return gererSupprimerClientDefinitivement(request, ctx, entetes, matchClientId[1] as string)
+  }
+
+  // --- Paramètres d'installation (dépôt GitHub dédié, Relais IA, Drive normes) ---
+  const matchParametreInstallation = chemin.match(/^\/parametres-installation\/([^/]+)$/)
+  if (matchParametreInstallation && request.method === 'GET') {
+    return gererObtenirParametreInstallation(
+      request,
+      ctx,
+      entetes,
+      matchParametreInstallation[1] as string,
+    )
+  }
+  if (matchParametreInstallation && request.method === 'PUT') {
+    return gererEnregistrerParametreInstallation(
+      request,
+      ctx,
+      entetes,
+      matchParametreInstallation[1] as string,
+    )
+  }
+  if (matchParametreInstallation && request.method === 'DELETE') {
+    return gererEffacerParametreInstallation(
+      request,
+      ctx,
+      entetes,
+      matchParametreInstallation[1] as string,
+    )
   }
 
   return reponseJson({ erreur: 'route_introuvable' }, 404, entetes)
@@ -654,6 +694,69 @@ async function gererSupprimerClientDefinitivement(
     id,
     corps.justification.trim(),
   )
+  return reponseJson({ ok: true }, 200, entetes)
+}
+
+// --- Handlers : paramètres d'installation ---
+
+async function gererObtenirParametreInstallation(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  cle: string,
+): Promise<Response> {
+  // Lecture ouverte à tout utilisateur authentifié (jamais réservée à
+  // l'admin) : le jeton/PAT qu'elle contient doit être utilisable
+  // directement depuis le navigateur par n'importe quel compte de
+  // l'organisation — exactement ce que chacun devait ressaisir
+  // manuellement avant cette migration (stockage local par poste).
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+  if (!estCleParametreInstallationValide(cle)) {
+    return reponseJson({ erreur: 'cle_invalide' }, 400, entetes)
+  }
+
+  const parametre = await ctx.parametresInstallationRepo.obtenir(cle)
+  return reponseJson({ parametre }, 200, entetes)
+}
+
+async function gererEnregistrerParametreInstallation(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  cle: string,
+): Promise<Response> {
+  const acteur = await exigerAdmin(request, ctx, entetes)
+  if (acteur instanceof Response) return acteur
+  if (!estCleParametreInstallationValide(cle)) {
+    return reponseJson({ erreur: 'cle_invalide' }, 400, entetes)
+  }
+
+  const corps = await lireCorpsJson<{ valeur?: ValeurParametreInstallation }>(request)
+  if (!corps?.valeur || typeof corps.valeur !== 'object') {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  await ctx.parametresInstallationRepo.enregistrer(cle, corps.valeur, acteur.id)
+  await consignerAudit(ctx, acteur, 'modification_parametre_installation', 'parametre', cle, null)
+  const parametre = await ctx.parametresInstallationRepo.obtenir(cle)
+  return reponseJson({ parametre }, 200, entetes)
+}
+
+async function gererEffacerParametreInstallation(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  cle: string,
+): Promise<Response> {
+  const acteur = await exigerAdmin(request, ctx, entetes)
+  if (acteur instanceof Response) return acteur
+  if (!estCleParametreInstallationValide(cle)) {
+    return reponseJson({ erreur: 'cle_invalide' }, 400, entetes)
+  }
+
+  await ctx.parametresInstallationRepo.effacer(cle)
+  await consignerAudit(ctx, acteur, 'suppression_parametre_installation', 'parametre', cle, null)
   return reponseJson({ ok: true }, 200, entetes)
 }
 

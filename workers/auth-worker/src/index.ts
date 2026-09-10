@@ -2,6 +2,7 @@ import type { D1Database } from './d1Types'
 import { ResendEnvoyeurEmail } from './notifications/resendEnvoyeurEmail'
 import { D1AuditRepo } from './repos/d1/d1AuditRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
+import { D1ParametresInstallationRepo } from './repos/d1/d1ParametresInstallationRepo'
 import { D1UtilisateursRepo } from './repos/d1/d1UtilisateursRepo'
 import { routerRequete } from './routeur'
 
@@ -29,6 +30,7 @@ export default {
     return routerRequete(request, {
       utilisateursRepo: new D1UtilisateursRepo(env.DB),
       clientsRepo: new D1ClientsRepo(env.DB),
+      parametresInstallationRepo: new D1ParametresInstallationRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

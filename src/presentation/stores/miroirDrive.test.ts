@@ -2,6 +2,12 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
+import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 import { useMiroirDriveStore } from './useMiroirDriveStore'
 
 function reponseMock(
@@ -22,20 +28,37 @@ function encoderBase64Utf8(texte: string): string {
   return btoa(String.fromCharCode(...octets))
 }
 
+// Le dépôt GitHub est désormais un paramètre d'installation stocké côté
+// Worker/D1 (`useConnexionGitHubStore`) — `fetchMock` ci-dessous ne sert
+// donc plus qu'aux appels réels à l'API GitHub/Drive.
 let fetchMock: ReturnType<typeof vi.fn>
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.connexionGitHub.clear()
+  await reinitialiserAuthDeTest()
   await db.connexionDrive.clear()
   await db.etatMiroirDrive.clear()
   fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
 })
 
 afterEach(() => {
-  vi.unstubAllGlobals()
+  demonter()
 })
+
+async function configurerConnexionGitHub(): Promise<void> {
+  const resultat = await useConnexionGitHubStore().enregistrer({
+    owner: 'acme',
+    repo: 'data',
+    branche: 'main',
+    jeton: 'x',
+  })
+  if (!resultat.ok)
+    throw new Error(`préparation de la connexion GitHub échouée : ${resultat.erreur}`)
+}
 
 describe('useMiroirDriveStore — miroirVersDrive', () => {
   test('sans connexion GitHub configurée : échec explicite, aucun appel réseau', async () => {
@@ -50,13 +73,7 @@ describe('useMiroirDriveStore — miroirVersDrive', () => {
   })
 
   test('sans configuration Drive pour ce client : échec explicite', async () => {
-    await db.connexionGitHub.put({
-      id: 'unique',
-      owner: 'acme',
-      repo: 'data',
-      branche: 'main',
-      jeton: 'x',
-    })
+    await configurerConnexionGitHub()
     const store = useMiroirDriveStore()
     const resultat = await store.miroirVersDrive('client-1')
     expect(resultat).toEqual({
@@ -66,13 +83,7 @@ describe('useMiroirDriveStore — miroirVersDrive', () => {
   })
 
   test('lit l’arborescence GitHub complète et la mirroir vers Drive, enregistre l’horodatage', async () => {
-    await db.connexionGitHub.put({
-      id: 'unique',
-      owner: 'acme',
-      repo: 'data',
-      branche: 'main',
-      jeton: 'x',
-    })
+    await configurerConnexionGitHub()
     await db.connexionDrive.put({ client_id: 'client-1', dossierId: 'dossier-1', jeton: 'y' })
 
     const contenuProjet = JSON.stringify({ id: 'p1', name: 'Projet' })

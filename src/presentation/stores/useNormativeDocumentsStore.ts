@@ -12,11 +12,31 @@ import type {
   NormativeDocument,
 } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
-
-const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
+import { useAuthStore } from './useAuthStore'
+import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 
 /** Extensions dont l'extraction native (locale, sans réseau) est supportée par ce chantier. */
 const EXTENSIONS_TEXTE_BRUT = ['.txt', '.md']
+
+const CLE_PARAMETRE_DRIVE_NORMES = 'drive-normes'
+
+interface ConnexionDriveLectureNormes {
+  dossierId: string
+  jeton: string
+}
+
+async function obtenirConnexionDriveNormes(): Promise<ConnexionDriveLectureNormes | null> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) return null
+  const resultat = await api.obtenirParametreInstallation(
+    authStore.jeton,
+    CLE_PARAMETRE_DRIVE_NORMES,
+  )
+  return resultat.ok && resultat.donnees.parametre
+    ? (resultat.donnees.parametre.valeur as unknown as ConnexionDriveLectureNormes)
+    : null
+}
 
 export type ResultatConnexionDriveNormes =
   { ok: true; nbFichiers: number } | { ok: false; message: string }
@@ -34,9 +54,10 @@ async function extraireTexteSelonExtension(
 /**
  * Bibliothèque de normes — documents importés (§4.5, chantier "Normes &
  * Guidelines") : téléversement direct, lecture d'un dépôt GitHub (le dépôt
- * unique déjà configuré pour toute l'installation, `db.connexionGitHub`),
- * lecture d'un dossier Google Drive dédié (`db.connexionDriveLectureNormes`
- * — une configuration globale distincte du miroir d'écriture par client).
+ * unique déjà configuré pour toute l'installation, `useConnexionGitHubStore`
+ * — Worker/D1), lecture d'un dossier Google Drive dédié (paramètre
+ * d'installation `drive-normes`, également Worker/D1 — une configuration
+ * globale distincte du miroir d'écriture par client).
  *
  * **Limite assumée pour la lecture GitHub** : `GitHubConnector.lire` décode
  * son contenu en UTF-8 (conçu pour les fichiers de données texte de
@@ -87,13 +108,14 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     return document
   }
 
-  /** Liste les fichiers du dépôt GitHub déjà configuré (`db.connexionGitHub`), sous un préfixe de chemin donné. */
+  /** Liste les fichiers du dépôt GitHub déjà configuré (`useConnexionGitHubStore`, Worker/D1), sous un préfixe de chemin donné. */
   async function listerFichiersGitHub(prefixeChemin: string): Promise<EntreeArborescence[]> {
-    const connexion = await db.connexionGitHub.get(IDENTIFIANT_ENREGISTREMENT_UNIQUE)
-    if (connexion === undefined) {
+    const githubStore = useConnexionGitHubStore()
+    await githubStore.charger()
+    if (githubStore.connexion === null) {
       throw new Error('Aucune connexion GitHub configurée (Configuration client).')
     }
-    const connecteur = new GitHubConnector(connexion)
+    const connecteur = new GitHubConnector(githubStore.connexion)
     const arborescence = await connecteur.chargerArborescence()
     return arborescence.filter((entree) => entree.chemin.startsWith(prefixeChemin))
   }
@@ -109,11 +131,12 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
         'Import GitHub limité aux fichiers texte (.md, .txt) dans ce chantier — utiliser le téléversement direct ou Google Drive pour un .docx/.pdf.',
       )
     }
-    const connexion = await db.connexionGitHub.get(IDENTIFIANT_ENREGISTREMENT_UNIQUE)
-    if (connexion === undefined) {
+    const githubStore = useConnexionGitHubStore()
+    await githubStore.charger()
+    if (githubStore.connexion === null) {
       throw new Error('Aucune connexion GitHub configurée (Configuration client).')
     }
-    const connecteur = new GitHubConnector(connexion)
+    const connecteur = new GitHubConnector(githubStore.connexion)
     const { contenu } = await connecteur.lire(chemin)
 
     const document: NormativeDocument = {
@@ -137,17 +160,24 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
   async function configurerConnexionDriveLectureNormes(
     dossierId: string,
     jeton: string,
-  ): Promise<void> {
-    await db.connexionDriveLectureNormes.put({
-      id: IDENTIFIANT_ENREGISTREMENT_UNIQUE,
-      dossierId: dossierId.trim(),
-      jeton: jeton.trim(),
-    })
+  ): Promise<{ ok: true } | { ok: false; erreur: string }> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return { ok: false, erreur: 'relais_non_configure' }
+
+    const valeur: ConnexionDriveLectureNormes = { dossierId: dossierId.trim(), jeton: jeton.trim() }
+    const resultat = await api.enregistrerParametreInstallation(
+      authStore.jeton,
+      CLE_PARAMETRE_DRIVE_NORMES,
+      valeur,
+    )
+    if (!resultat.ok) return { ok: false, erreur: resultat.erreur }
+    return { ok: true }
   }
 
   async function testerConnexionDriveLectureNormes(): Promise<ResultatConnexionDriveNormes> {
-    const connexion = await db.connexionDriveLectureNormes.get(IDENTIFIANT_ENREGISTREMENT_UNIQUE)
-    if (connexion === undefined) {
+    const connexion = await obtenirConnexionDriveNormes()
+    if (connexion === null) {
       return {
         ok: false,
         message: 'Aucune configuration Drive enregistrée pour la bibliothèque de normes.',
@@ -163,8 +193,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
   }
 
   async function listerFichiersDrive(): Promise<FichierDrive[]> {
-    const connexion = await db.connexionDriveLectureNormes.get(IDENTIFIANT_ENREGISTREMENT_UNIQUE)
-    if (connexion === undefined) {
+    const connexion = await obtenirConnexionDriveNormes()
+    if (connexion === null) {
       throw new Error('Aucune configuration Drive enregistrée pour la bibliothèque de normes.')
     }
     const connecteur = new DriveReaderConnector(connexion)
@@ -176,8 +206,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     category: CategorieDocumentNormatif,
     actor: string,
   ): Promise<NormativeDocument> {
-    const connexion = await db.connexionDriveLectureNormes.get(IDENTIFIANT_ENREGISTREMENT_UNIQUE)
-    if (connexion === undefined) {
+    const connexion = await obtenirConnexionDriveNormes()
+    if (connexion === null) {
       throw new Error('Aucune configuration Drive enregistrée pour la bibliothèque de normes.')
     }
     const connecteur = new DriveReaderConnector(connexion)

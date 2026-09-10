@@ -127,10 +127,18 @@ const enListeDrive = ref(false)
 const erreurDrive = ref<string | null>(null)
 
 async function enregistrerConnexionDrive(): Promise<void> {
-  await documentsStore.configurerConnexionDriveLectureNormes(
+  erreurDrive.value = null
+  const resultat = await documentsStore.configurerConnexionDriveLectureNormes(
     brouillonDrive.dossierId,
     brouillonDrive.jeton,
   )
+  if (!resultat.ok) {
+    erreurDrive.value =
+      resultat.erreur === 'non_autorise'
+        ? 'Réservé à un administrateur (paramètre global à toute l’installation).'
+        : `Échec de l'enregistrement : ${resultat.erreur}`
+    return
+  }
   resultatTestDrive.value = undefined
 }
 

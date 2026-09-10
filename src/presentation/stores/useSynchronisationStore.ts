@@ -10,6 +10,7 @@ import {
   type ChoixResolutionChamp,
 } from '../../logique-metier/resolution-conflit/diffChamps'
 import { db } from '../../persistance/db'
+import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 
 export type ResultatSynchronisation =
   | { ok: true; nbFichiers: number }
@@ -54,9 +55,10 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
   const derniereSynchronisation = ref<string | null>(null)
 
   async function obtenirConnecteur(): Promise<GitHubConnector | null> {
-    const connexion = await db.connexionGitHub.get(IDENTIFIANT_ENREGISTREMENT_UNIQUE)
-    if (connexion === undefined) return null
-    return new GitHubConnector(connexion)
+    const githubStore = useConnexionGitHubStore()
+    await githubStore.charger()
+    if (githubStore.connexion === null) return null
+    return new GitHubConnector(githubStore.connexion)
   }
 
   async function obtenirEtat(): Promise<{ shaBrancheConnue: string | null }> {

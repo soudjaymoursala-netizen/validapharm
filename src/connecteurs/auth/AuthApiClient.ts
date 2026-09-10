@@ -36,6 +36,13 @@ export interface EntreeAuditWire {
   timestamp: string
 }
 
+export interface ParametreInstallationWire {
+  cle: string
+  valeur: Record<string, string>
+  updatedAt: string
+  updatedBy: string
+}
+
 export type ResultatApi<T> =
   { ok: true; donnees: T } | { ok: false; erreur: string; status: number }
 
@@ -176,6 +183,27 @@ export class AuthApiClient {
     justification: string,
   ): Promise<ResultatApi<{ ok: true }>> {
     return this.requete('DELETE', `/clients/${id}`, { jeton, body: { justification } })
+  }
+
+  // --- Paramètres d'installation (dépôt GitHub, Relais IA, Drive normes — globaux, partagés par tous les comptes) ---
+
+  obtenirParametreInstallation(
+    jeton: string,
+    cle: string,
+  ): Promise<ResultatApi<{ parametre: ParametreInstallationWire | null }>> {
+    return this.requete('GET', `/parametres-installation/${cle}`, { jeton })
+  }
+
+  enregistrerParametreInstallation(
+    jeton: string,
+    cle: string,
+    valeur: Record<string, string>,
+  ): Promise<ResultatApi<{ parametre: ParametreInstallationWire }>> {
+    return this.requete('PUT', `/parametres-installation/${cle}`, { jeton, body: { valeur } })
+  }
+
+  effacerParametreInstallation(jeton: string, cle: string): Promise<ResultatApi<{ ok: true }>> {
+    return this.requete('DELETE', `/parametres-installation/${cle}`, { jeton })
   }
 
   // --- Aide ---

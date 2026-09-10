@@ -136,3 +136,42 @@ describe('AuthApiClient — clients', () => {
     expect(JSON.parse(options.body as string)).toEqual({ justification: 'Nettoyage test' })
   })
 })
+
+describe('AuthApiClient — paramètres d’installation', () => {
+  test('obtenirParametreInstallation GET /parametres-installation/:cle', async () => {
+    fetchMock.mockResolvedValueOnce(
+      reponseMock({
+        parametre: { cle: 'github', valeur: { owner: 'acme' }, updatedAt: 't', updatedBy: 'u1' },
+      }),
+    )
+    const resultat = await client().obtenirParametreInstallation('jwt-xyz', 'github')
+    expect(resultat.ok).toBe(true)
+
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://auth.exemple.workers.dev/parametres-installation/github')
+    expect(options.method).toBe('GET')
+  })
+
+  test('enregistrerParametreInstallation PUT /parametres-installation/:cle avec { valeur }', async () => {
+    fetchMock.mockResolvedValueOnce(
+      reponseMock({
+        parametre: { cle: 'relais-ia', valeur: { relayUrl: 'x' }, updatedAt: 't', updatedBy: 'u1' },
+      }),
+    )
+    await client().enregistrerParametreInstallation('jwt-xyz', 'relais-ia', { relayUrl: 'x' })
+
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://auth.exemple.workers.dev/parametres-installation/relais-ia')
+    expect(options.method).toBe('PUT')
+    expect(JSON.parse(options.body as string)).toEqual({ valeur: { relayUrl: 'x' } })
+  })
+
+  test('effacerParametreInstallation DELETE /parametres-installation/:cle', async () => {
+    fetchMock.mockResolvedValueOnce(reponseMock({ ok: true }))
+    await client().effacerParametreInstallation('jwt-xyz', 'drive-normes')
+
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://auth.exemple.workers.dev/parametres-installation/drive-normes')
+    expect(options.method).toBe('DELETE')
+  })
+})

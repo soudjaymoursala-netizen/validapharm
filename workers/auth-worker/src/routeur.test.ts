@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { EnvoyeurEmailMemoire } from './notifications/envoyeurEmail'
 import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
+import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
 import { UtilisateursRepoMemoire } from './repos/utilisateursRepo'
 import { routerRequete, type Contexte } from './routeur'
 
@@ -14,6 +15,7 @@ function nouveauContexte(): Contexte {
   return {
     utilisateursRepo: new UtilisateursRepoMemoire(),
     clientsRepo: new ClientsRepoMemoire(),
+    parametresInstallationRepo: new ParametresInstallationRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -71,6 +73,12 @@ interface CorpsReponse {
   client: ClientJson
   clients: ClientJson[]
   entrees: EntreeAuditJson[]
+  parametre: {
+    cle: string
+    valeur: Record<string, string>
+    updatedAt: string
+    updatedBy: string
+  } | null
 }
 
 async function requete(
@@ -578,5 +586,119 @@ describe('routerRequete — audit générique (/audit/authorize-action)', () => 
     expect(status).toBe(200)
     expect(corps.authorized).toBe(true)
     expect(corps.auditId).toBeTruthy()
+  })
+})
+
+describe('routerRequete — paramètres d’installation (dépôt GitHub, Relais IA, Drive normes)', () => {
+  async function creerUtilisateurEtLogin(
+    ctx: Contexte,
+    adminJeton: string,
+    email: string,
+  ): Promise<string> {
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: adminJeton,
+      body: { email, motDePasse: 'MotDePasse!1', nom: 'N', prenom: 'P', role: 'utilisateur' },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email, motDePasse: 'MotDePasse!1' },
+    })
+    return login.corps.jeton
+  }
+
+  test('GET sur une clé jamais enregistrée -> parametre null (jamais 404)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { status, corps } = await requete(ctx, 'GET', '/parametres-installation/github', {
+      jeton: admin.jeton,
+    })
+    expect(status).toBe(200)
+    expect(corps.parametre).toBeNull()
+  })
+
+  test('un admin enregistre un paramètre, un simple utilisateur peut le relire (partagé à toute l’installation)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const jetonUtilisateur = await creerUtilisateurEtLogin(
+      ctx,
+      admin.jeton,
+      'employe@pharmatech.example',
+    )
+
+    const enregistrement = await requete(ctx, 'PUT', '/parametres-installation/github', {
+      jeton: admin.jeton,
+      body: {
+        valeur: { owner: 'acme-corp', repo: 'validapharm-data', branche: 'main', jeton: 'ghp_xxx' },
+      },
+    })
+    expect(enregistrement.status).toBe(200)
+    expect(enregistrement.corps.parametre?.valeur.owner).toBe('acme-corp')
+
+    const lecture = await requete(ctx, 'GET', '/parametres-installation/github', {
+      jeton: jetonUtilisateur,
+    })
+    expect(lecture.status).toBe(200)
+    expect(lecture.corps.parametre?.valeur).toEqual({
+      owner: 'acme-corp',
+      repo: 'validapharm-data',
+      branche: 'main',
+      jeton: 'ghp_xxx',
+    })
+  })
+
+  test('un simple utilisateur ne peut pas enregistrer un paramètre (403)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const jetonUtilisateur = await creerUtilisateurEtLogin(
+      ctx,
+      admin.jeton,
+      'employe@pharmatech.example',
+    )
+
+    const { status } = await requete(ctx, 'PUT', '/parametres-installation/relais-ia', {
+      jeton: jetonUtilisateur,
+      body: { valeur: { relayUrl: 'https://relais.example.workers.dev', jeton: 'x' } },
+    })
+    expect(status).toBe(403)
+  })
+
+  test('clé inconnue -> 400, jamais une clé arbitraire stockée', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+
+    const lecture = await requete(ctx, 'GET', '/parametres-installation/autre-chose', {
+      jeton: admin.jeton,
+    })
+    expect(lecture.status).toBe(400)
+
+    const ecriture = await requete(ctx, 'PUT', '/parametres-installation/autre-chose', {
+      jeton: admin.jeton,
+      body: { valeur: { x: 'y' } },
+    })
+    expect(ecriture.status).toBe(400)
+  })
+
+  test('un admin peut effacer un paramètre déjà enregistré', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    await requete(ctx, 'PUT', '/parametres-installation/drive-normes', {
+      jeton: admin.jeton,
+      body: { valeur: { dossierId: 'dossier-1', jeton: 'x' } },
+    })
+
+    const effacement = await requete(ctx, 'DELETE', '/parametres-installation/drive-normes', {
+      jeton: admin.jeton,
+    })
+    expect(effacement.status).toBe(200)
+
+    const lecture = await requete(ctx, 'GET', '/parametres-installation/drive-normes', {
+      jeton: admin.jeton,
+    })
+    expect(lecture.corps.parametre).toBeNull()
+  })
+
+  test('sans authentification -> 401', async () => {
+    const ctx = nouveauContexte()
+    const { status } = await requete(ctx, 'GET', '/parametres-installation/github')
+    expect(status).toBe(401)
   })
 })

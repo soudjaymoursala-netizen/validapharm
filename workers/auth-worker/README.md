@@ -25,12 +25,34 @@ IndexedDB + synchronisation GitHub, inchangés par ce lot.
 - `src/index.ts` : câblage réel `env`/D1 → dépôts → routeur.
 - `migrations/0001_init.sql` : schéma initial (`users`, `clients`,
   `audit_log`).
+- `migrations/0002_parametres_installation.sql` : table
+  `parametres_installation` (dépôt GitHub dédié, Relais IA, Drive de
+  lecture pour la bibliothèque de normes — paramètres globaux à
+  l'installation, migrés depuis IndexedDB). Voir « Configuration requise »
+  ci-dessous : cette migration doit être appliquée manuellement à la base
+  D1 réelle, un déploiement Git ne l'exécute jamais tout seul.
 - `src/notifications/envoyeurEmail.ts` (+ `resendEnvoyeurEmail.ts`) : email
   de bienvenue envoyé (via [Resend](https://resend.com)) à la création d'un
   compte par un admin — contient l'adresse de connexion, l'email et le mot
   de passe initial fixé par l'admin. Un échec d'envoi n'empêche jamais la
   création du compte (`emailEnvoye: false` renvoyé à l'admin, à charge pour
   lui de communiquer les identifiants autrement dans ce cas).
+
+### Configuration restant à la charge de l'utilisateur — migration 0002
+
+- **Appliquer `migrations/0002_parametres_installation.sql` à la base D1
+  réelle** (`validapharm-auth`) — un `git push` redéploie le code du Worker
+  via Cloudflare Workers Builds, mais n'exécute jamais de migration D1 tout
+  seul. Depuis un poste avec `wrangler` authentifié :
+  `wrangler d1 migrations apply validapharm-auth --remote` (depuis
+  `workers/auth-worker/`). Sans cette étape, `GET/PUT
+  /parametres-installation/:cle` échoue en 500 (table inexistante) — le
+  dépôt GitHub/Relais IA/Drive normes resteront alors bloqués en erreur
+  jusqu'à l'application de cette migration.
+- Une fois la migration appliquée, tout compte existant doit reconfigurer
+  une seule fois le dépôt GitHub/Relais IA/Drive normes (Configuration
+  client / Guides & normes) — la donnée locale précédente (IndexedDB) n'est
+  jamais migrée automatiquement vers le Worker.
 
 ### Configuration requise pour l'email de bienvenue
 

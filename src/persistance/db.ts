@@ -100,20 +100,6 @@ export interface EnregistrementProfilLocal {
 }
 
 /**
- * Configuration de connexion au dépôt GitHub dédié —
- * enregistrement unique, pas par client : un seul dépôt de
- * données pour l'ensemble de l'installation locale (`/data/projects/...`),
- * pas un dépôt par client.
- */
-export interface EnregistrementConnexionGitHub {
-  id: 'unique'
-  owner: string
-  repo: string
-  branche: string
-  jeton: string
-}
-
-/**
  * SHA de branche connu après la dernière synchronisation réussie —
  * nécessaire à la détection de conflit optimiste : chaque
  * `ecrireGroupe` doit connaître le SHA sur lequel il se base.
@@ -143,32 +129,6 @@ export interface EnregistrementEtatMiroirDrive {
 }
 
 /**
- * Configuration de connexion en lecture à un dossier Google Drive pour la
- * bibliothèque de normes — enregistrement unique, pas par client
- * (contrairement à `EnregistrementConnexionDrive`, miroir d'écriture par
- * client) : la bibliothèque de normes est globale à l'installation.
- */
-export interface EnregistrementConnexionDriveLectureNormes {
-  id: 'unique'
-  dossierId: string
-  jeton: string
-}
-
-/**
- * Configuration de connexion au relais IA — enregistrement
- * unique, pas par client : un seul relais serverless pour toute
- * l'installation (même raisonnement que GitHub) ; c'est
- * `client_config.ai_provider` (par client) qui détermine quel fournisseur
- * le relais sélectionne pour une requête donnée, pas l'URL du relais
- * elle-même.
- */
-export interface EnregistrementConnexionRelaisIA {
-  id: 'unique'
-  relayUrl: string
-  jeton: string
-}
-
-/**
  * Configuration de connexion au relais OCR — même principe que le relais
  * IA : enregistrement unique, pas par client, un seul Worker serverless
  * pour toute l'installation.
@@ -178,6 +138,17 @@ export interface EnregistrementConnexionRelaisOCR {
   relayUrl: string
   jeton: string
 }
+
+// Le dépôt GitHub dédié (`EnregistrementConnexionGitHub`), le relais IA
+// (`EnregistrementConnexionRelaisIA`) et la connexion Drive en lecture pour
+// la bibliothèque de normes (`EnregistrementConnexionDriveLectureNormes`)
+// vivaient ici — paramètres globaux à l'installation, jamais partagés
+// entre appareils/postes puisque IndexedDB est strictement local au
+// navigateur (signalé par l'utilisateur : configuration retrouvée vide
+// après connexion depuis un autre poste). Migrés vers le Worker/D1
+// (`parametres_installation`, voir `useConnexionGitHubStore`/
+// `useConnexionRelaisIAStore`/`useNormativeDocumentsStore`), tables retirées
+// ci-dessous (version 32).
 
 /**
  * Configuration de connexion au Worker d'authentification — même principe
@@ -231,12 +202,9 @@ export class ValidaPharmDatabase extends Dexie {
   normativeDocuments!: EntityTable<NormativeDocument, 'id'>
   clientConfigs!: EntityTable<ClientConfig, 'client_id'>
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
-  connexionGitHub!: EntityTable<EnregistrementConnexionGitHub, 'id'>
   etatSynchronisation!: EntityTable<EnregistrementEtatSynchronisation, 'id'>
   connexionDrive!: EntityTable<EnregistrementConnexionDrive, 'client_id'>
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
-  connexionDriveLectureNormes!: EntityTable<EnregistrementConnexionDriveLectureNormes, 'id'>
-  connexionRelaisIA!: EntityTable<EnregistrementConnexionRelaisIA, 'id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
   assetHierarchySchemas!: EntityTable<AssetHierarchySchema, 'client_id'>
@@ -548,6 +516,18 @@ export class ValidaPharmDatabase extends Dexie {
      */
     this.version(31).stores({
       sections: 'id, project_id, template_type, status, updated_at, procedure_id, asset_node_id',
+    })
+
+    // Dépôt GitHub dédié, Relais IA, Drive de lecture pour la bibliothèque
+    // de normes : migrés vers le Worker/D1 (`parametres_installation`) —
+    // un stockage seulement local par navigateur ne survivait jamais à un
+    // changement d'appareil/poste (signalé par l'utilisateur). `null`
+    // supprime réellement ces tables locales, jamais un simple retrait de
+    // leur déclaration (qui les aurait laissées orphelines en IndexedDB).
+    this.version(32).stores({
+      connexionGitHub: null,
+      connexionRelaisIA: null,
+      connexionDriveLectureNormes: null,
     })
   }
 }
