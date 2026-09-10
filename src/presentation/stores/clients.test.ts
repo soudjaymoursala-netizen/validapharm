@@ -1,11 +1,12 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
+import { useAuthStore } from './useAuthStore'
 import { useClientsStore } from './useClientsStore'
 
 let demonter: () => void
@@ -42,6 +43,39 @@ describe('useClientsStore (Worker/D1)', () => {
     await store.chargerClients()
 
     expect(store.clients.map((c) => c.name)).toEqual(['Acme Pharma', 'Zeta Pharma'])
+  })
+
+  test('chargerClients déconnecte réellement sur un jeton expiré/invalide (401), jamais une simple liste vide silencieuse', async () => {
+    const store = useClientsStore()
+    await store.creerClient({ name: 'Client A' })
+
+    const authStore = useAuthStore()
+    authStore.jeton = 'jeton-invalide-ou-expire'
+    expect(authStore.estConnecte).toBe(true) // état local encore optimiste, avant l'appel réseau
+
+    await store.chargerClients()
+
+    expect(authStore.estConnecte).toBe(false)
+  })
+
+  test('chargerClients ne vide jamais la liste déjà chargée sur une simple panne réseau transitoire', async () => {
+    const store = useClientsStore()
+    await store.creerClient({ name: 'Zeta Pharma' })
+    await store.creerClient({ name: 'Acme Pharma' })
+    expect(store.clients).toHaveLength(2)
+
+    const fetchOriginal = globalThis.fetch
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('panne réseau simulée'))),
+    )
+    try {
+      await store.chargerClients()
+    } finally {
+      vi.stubGlobal('fetch', fetchOriginal)
+    }
+
+    expect(store.clients).toHaveLength(2)
   })
 
   test('obtenirClient renvoie undefined pour un id inconnu', async () => {

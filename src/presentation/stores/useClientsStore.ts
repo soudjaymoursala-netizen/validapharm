@@ -74,6 +74,22 @@ export const useClientsStore = defineStore('clients', () => {
   const clientsActifs = computed(() => clients.value.filter((c) => c.statut !== 'archive'))
   const clientsArchives = computed(() => clients.value.filter((c) => c.statut === 'archive'))
 
+  /**
+   * Un jeton JWT expire au bout de 12h (`workers/auth-worker/README.md`,
+   * limite assumée) — après une longue inactivité, le Worker répond 401 à
+   * ce chargement alors que la session locale (`useAuthStore.estConnecte`)
+   * se croit toujours valide (jamais revérifiée tant qu'aucun appel réseau
+   * n'échoue). Avant ce correctif, tout échec ici — y compris ce 401 et
+   * une simple panne réseau transitoire — effaçait silencieusement
+   * `clients.value`, laissant l'utilisateur « connecté » mais sans aucun
+   * client visible jusqu'à une déconnexion/reconnexion manuelle. Un 401
+   * déclenche désormais une vraie déconnexion (l'état reflète la réalité :
+   * la prochaine navigation renvoie à l'écran de connexion via la garde de
+   * routeur) ; toute autre panne (réseau, 5xx) ne touche jamais la liste
+   * déjà chargée — même principe que le correctif « Site actif » de
+   * `BarreLaterale.vue` (jamais confondre absence de réponse et absence de
+   * données).
+   */
   async function chargerClients(): Promise<void> {
     enChargement.value = true
     try {
@@ -84,7 +100,16 @@ export const useClientsStore = defineStore('clients', () => {
         return
       }
       const resultat = await api.listerClients(authStore.jeton)
-      clients.value = resultat.ok ? trierParNom(resultat.donnees.clients.map(wireVersClient)) : []
+      if (resultat.ok) {
+        clients.value = trierParNom(resultat.donnees.clients.map(wireVersClient))
+        return
+      }
+      if (resultat.status === 401) {
+        await authStore.deconnecter()
+      }
+      // Autre échec (403, panne inattendue) : la liste déjà chargée reste affichée.
+    } catch {
+      // Worker injoignable/délai dépassé (panne réseau transitoire) : idem, jamais d'effacement.
     } finally {
       enChargement.value = false
     }
