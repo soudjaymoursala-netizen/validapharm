@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Langue, LienProjet, PhaseProjet, Project } from '../../logique-metier/domaine/types'
+import { peutVoirProjet } from '../../logique-metier/permissions/permissionsProjet'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
+import { useAuthStore } from './useAuthStore'
 import { db } from '../../persistance/db'
 
 export type NiveauAccesPartage = 'lecture' | 'édition'
@@ -50,12 +52,22 @@ export const useProjectsStore = defineStore('projects', () => {
     return identiteCourante.value
   }
 
+  /**
+   * Un compte admin voit tous les projets, sans filtre (comportement
+   * inchangé). Un compte non-admin (créé pour un collaborateur/testeur)
+   * ne voit que les projets dont il est propriétaire ou avec lesquels il
+   * a été explicitement partagé (`partagerProjet`) — jamais les projets
+   * préexistants d'un autre compte.
+   */
   async function chargerProjets(): Promise<void> {
     enChargement.value = true
     try {
+      const identite = resoudreIdentiteCourante()
       const tous = await db.projects.toArray()
-      projects.value = tous.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-      resoudreIdentiteCourante()
+      const visibles = useAuthStore().estAdmin
+        ? tous
+        : tous.filter((p) => peutVoirProjet(p, identite))
+      projects.value = visibles.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     } finally {
       enChargement.value = false
     }
@@ -147,8 +159,18 @@ export const useProjectsStore = defineStore('projects', () => {
     return projetMisAJour
   }
 
+  /**
+   * Ferme, pour la navigation directe (`/projets/:id`), le même accès que
+   * `chargerProjets` ferme pour la liste — sans ça, un compte non-admin
+   * qui devine ou conserve l'URL d'un projet dont il n'a la visibilité ni
+   * par propriété ni par partage pourrait tout de même l'ouvrir
+   * directement, contournant le filtre de la liste.
+   */
   async function obtenirProjet(projectId: string): Promise<Project | undefined> {
-    return db.projects.get(projectId)
+    const projet = await db.projects.get(projectId)
+    if (!projet) return undefined
+    if (useAuthStore().estAdmin) return projet
+    return peutVoirProjet(projet, resoudreIdentiteCourante()) ? projet : undefined
   }
 
   function memeLien(

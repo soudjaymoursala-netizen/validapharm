@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { peutModifierProjet } from './permissionsProjet'
+import { peutModifierProjet, peutVoirProjet } from './permissionsProjet'
 
 describe('peutModifierProjet', () => {
   test('le propriétaire peut toujours modifier', () => {
@@ -36,5 +36,29 @@ describe('peutModifierProjet', () => {
     expect(
       peutModifierProjet({ owner_id: 'alice@ex.com', shared_with: [] }, 'inconnu@ex.com'),
     ).toBe(false)
+  })
+})
+
+describe('peutVoirProjet', () => {
+  test('le propriétaire peut toujours voir', () => {
+    expect(peutVoirProjet({ owner_id: 'alice@ex.com', shared_with: [] }, 'alice@ex.com')).toBe(true)
+  })
+
+  test("un utilisateur partagé peut voir, même avec un accès 'lecture' seule", () => {
+    expect(
+      peutVoirProjet(
+        {
+          owner_id: 'alice@ex.com',
+          shared_with: [{ user_id: 'bob@ex.com', access_level: 'lecture' }],
+        },
+        'bob@ex.com',
+      ),
+    ).toBe(true)
+  })
+
+  test('un utilisateur ni propriétaire ni partagé ne peut pas voir', () => {
+    expect(peutVoirProjet({ owner_id: 'alice@ex.com', shared_with: [] }, 'inconnu@ex.com')).toBe(
+      false,
+    )
   })
 })
