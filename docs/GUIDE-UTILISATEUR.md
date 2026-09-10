@@ -970,6 +970,17 @@ peuvent ensuite être réorganisés (reparentage, voir ci-dessous). Succès :
 de ligne inattendue). Échecs possibles : fichier illisible, grille vide,
 profondeur insuffisante.
 
+### Import d'un export SAP au format .htm/.html
+Troisième sélecteur de fichier, pour le même rapport SAP téléchargé
+« Enregistrer comme fichier HTML » plutôt que « vers feuille de calcul ».
+Mêmes règles et mêmes messages que l'import `.xlsx` ci-dessus (profondeur
+détectée depuis le fichier, jamais imposée) — seule la lecture diffère : la
+profondeur est ici déterminée depuis la position de colonne réelle encodée
+dans le fichier HTML lui-même, jamais depuis le rendu visuel de l'arbre
+(traits `|`/`-`), qui s'est avéré ne pas toujours refléter fidèlement la
+profondeur réelle (un nœud et son enfant unique peuvent partager le même
+rendu visuel).
+
 ### Nœuds du référentiel
 Formulaire de création : **Niveau** (obligatoire, parmi ceux définis
 ci-dessus), **Nom** (obligatoire), **Code** (obligatoire, unique pour ce
