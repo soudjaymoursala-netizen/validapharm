@@ -71,11 +71,11 @@ describe('useNormativeDocumentsStore — importerDepuisFichier', () => {
     const store = useNormativeDocumentsStore()
     const fichier = new File(['Contenu de la norme ICH Q9.'], 'ich-q9.txt', { type: 'text/plain' })
 
-    const document = await store.importerDepuisFichier(fichier, 'norme', 'qa-1')
+    const document = await store.importerDepuisFichier(fichier, 'iso', 'qa-1')
 
     expect(document.extracted_text).toBe('Contenu de la norme ICH Q9.')
     expect(document.source).toBe('televersement')
-    expect(document.category).toBe('norme')
+    expect(document.category).toBe('iso')
     expect(document.source_ref).toBeNull()
     expect(store.documents).toHaveLength(1)
     expect(await db.normativeDocuments.get(document.id)).toMatchObject({ filename: 'ich-q9.txt' })
@@ -88,7 +88,7 @@ describe('useNormativeDocumentsStore — importerDepuisFichier', () => {
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     })
 
-    const document = await store.importerDepuisFichier(fichier, 'guideline', 'qa-1')
+    const document = await store.importerDepuisFichier(fichier, 'gmp', 'qa-1')
 
     expect(document.extracted_text).toBe('Guideline GAMP 5 — extrait.')
   })
@@ -143,7 +143,7 @@ describe('useNormativeDocumentsStore — GitHub', () => {
     )
     const store = useNormativeDocumentsStore()
 
-    const document = await store.importerDepuisGitHub('normes/ich-q9.md', 'norme', 'qa-1')
+    const document = await store.importerDepuisGitHub('normes/ich-q9.md', 'iso', 'qa-1')
 
     expect(document.extracted_text).toBe('Texte de la norme importée depuis GitHub.')
     expect(document.source).toBe('github')
@@ -155,7 +155,7 @@ describe('useNormativeDocumentsStore — GitHub', () => {
     await configurerConnexionGitHub()
     const store = useNormativeDocumentsStore()
 
-    await expect(store.importerDepuisGitHub('normes/annexe.pdf', 'norme', 'qa-1')).rejects.toThrow(
+    await expect(store.importerDepuisGitHub('normes/annexe.pdf', 'iso', 'qa-1')).rejects.toThrow(
       'Import GitHub limité aux fichiers texte',
     )
     expect(fetchMock).not.toHaveBeenCalled()
@@ -205,7 +205,7 @@ describe('useNormativeDocumentsStore — Drive', () => {
         mimeType: 'application/vnd.google-apps.document',
         modifiedTime: '',
       },
-      'norme',
+      'iso',
       'qa-1',
     )
 
@@ -226,7 +226,7 @@ describe('useNormativeDocumentsStore — Drive', () => {
 
     const document = await store.importerDepuisDrive(
       { id: 'fichier-2', nom: 'guideline.txt', mimeType: 'text/plain', modifiedTime: '' },
-      'guideline',
+      'gmp',
       'qa-1',
     )
 
