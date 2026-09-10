@@ -564,6 +564,7 @@ async function genererBrouillon(): Promise<void> {
         contexteNouveauCas: contexteNouveauCas.value,
         confirmationDroitUsage: confirmationDroitUsage.value,
         actor: identifiantActeurCourant(),
+        documentsNormatifs: normativeDocumentsStore.documents,
       },
       adaptateurAvecBascule(principal, local),
     )
