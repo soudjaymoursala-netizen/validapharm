@@ -237,6 +237,47 @@ async function importerFichierSap(evenement: Event): Promise<void> {
   }
 }
 
+// --- Import d'un export SAP au format `.htm`/`.html` (« Enregistrer comme
+// fichier HTML » plutôt que « vers feuille de calcul ») — même
+// planification pure (`preparerImportHierarchieSap`) que la variante
+// `.xlsx` ci-dessus, seule la lecture du fichier diffère
+// (`HtmlSapAdapter.extraireGrilleHtmlSap`).
+const resultatImportSapHtml = ref<ResultatImportHierarchieSap | undefined>(undefined)
+const importSapHtmlEnCours = ref(false)
+const champFichierSapHtml = ref<HTMLInputElement | null>(null)
+
+const MESSAGES_ERREUR_IMPORT_SAP_HTML: Record<string, string> = {
+  fichier_illisible: "Le fichier fourni n'est pas un .htm/.html valide ou n'a pas pu être lu.",
+  grille_vide: 'Le fichier ne contient aucune ligne de données exploitable (arborescence vide).',
+}
+
+function messageErreurImportSapHtml(
+  resultat: Extract<ResultatImportHierarchieSap, { ok: false }>,
+): string {
+  if (resultat.raison === 'profondeur_insuffisante') {
+    return `Ce fichier nécessite ${resultat.profondeurRequise} niveau(x) configuré(s) (profondeur maximale détectée dans l'arborescence), seuls ${resultat.profondeurConfiguree} sont définis — créez les niveaux manquants dans la hiérarchie configurable ci-dessus avant de réimporter.`
+  }
+  return MESSAGES_ERREUR_IMPORT_SAP_HTML[resultat.raison] ?? 'Import refusé.'
+}
+
+async function importerFichierSapHtml(evenement: Event): Promise<void> {
+  const fichier = (evenement.target as HTMLInputElement).files?.[0]
+  if (!fichier) return
+
+  importSapHtmlEnCours.value = true
+  resultatImportSapHtml.value = undefined
+  try {
+    const contenu = await fichier.text()
+    resultatImportSapHtml.value = await structureStore.importerHierarchieSapDepuisHtml(
+      props.clientId,
+      contenu,
+    )
+  } finally {
+    importSapHtmlEnCours.value = false
+    if (champFichierSapHtml.value) champFichierSapHtml.value.value = ''
+  }
+}
+
 async function creerNoeud(): Promise<void> {
   resultatCreation.value = await structureStore.creerNoeud(props.clientId, {
     level_key: brouillonNoeud.level_key,
@@ -390,6 +431,41 @@ const noeudsAffiches = computed(() =>
           </span>
         </p>
         <p v-else class="erreur" role="alert">{{ messageErreurImportSap(resultatImportSap) }}</p>
+      </template>
+    </section>
+
+    <section class="bloc-import">
+      <h2>Importer un export SAP (arborescence) — format .htm/.html</h2>
+      <p class="rappel">
+        Même import que ci-dessus, pour un rapport SAP téléchargé « Enregistrer comme fichier HTML »
+        plutôt que « vers feuille de calcul » — la profondeur est détectée depuis la position réelle
+        de chaque nœud dans le fichier, jamais depuis le rendu visuel de l'arbre (non fiable pour la
+        profondeur). Mêmes règles que l'import .xlsx : créez tous les niveaux nécessaires avant
+        d'importer.
+      </p>
+      <input
+        ref="champFichierSapHtml"
+        type="file"
+        accept=".htm,.html"
+        :disabled="importSapHtmlEnCours"
+        @change="importerFichierSapHtml"
+      />
+      <p v-if="importSapHtmlEnCours" class="etat-vide">Import en cours…</p>
+      <template v-else-if="resultatImportSapHtml">
+        <p v-if="resultatImportSapHtml.ok" class="confirmation">
+          {{ resultatImportSapHtml.noeudsCrees }} nœud(s) créé(s).
+          <span v-if="resultatImportSapHtml.erreurs.length > 0">
+            {{ resultatImportSapHtml.erreurs.length }} ligne(s) ignorée(s) —
+            <template v-for="(erreur, i) in resultatImportSapHtml.erreurs" :key="i">
+              ligne {{ erreur.ligne }} ({{ messageErreurLigneSap(erreur.raison) }}){{
+                i < resultatImportSapHtml.erreurs.length - 1 ? ', ' : ''
+              }}
+            </template>
+          </span>
+        </p>
+        <p v-else class="erreur" role="alert">
+          {{ messageErreurImportSapHtml(resultatImportSapHtml) }}
+        </p>
       </template>
     </section>
 

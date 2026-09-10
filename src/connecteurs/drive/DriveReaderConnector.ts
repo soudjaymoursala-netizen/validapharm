@@ -52,8 +52,19 @@ export class DriveReaderConnector {
     const reponse = await this.appel(
       `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(requete)}&fields=files(id,name,mimeType,modifiedTime)&spaces=drive`,
     )
-    const corps = (await reponse.json()) as { files: FichierDrive[] }
-    return corps.files
+    // L'API Drive répond en anglais (`name`) — jamais un simple cast de type
+    // vers `FichierDrive` (`nom`), qui laisserait le nom silencieusement
+    // `undefined` à l'exécution (constaté : la liste affichée restait vide
+    // de tout nom de fichier malgré un compte de fichiers correct).
+    const corps = (await reponse.json()) as {
+      files: Array<{ id: string; name: string; mimeType: string; modifiedTime: string }>
+    }
+    return corps.files.map((f) => ({
+      id: f.id,
+      nom: f.name,
+      mimeType: f.mimeType,
+      modifiedTime: f.modifiedTime,
+    }))
   }
 
   /**

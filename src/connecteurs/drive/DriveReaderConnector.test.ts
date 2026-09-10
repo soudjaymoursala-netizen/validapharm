@@ -32,19 +32,29 @@ function connecteur(): DriveReaderConnector {
 }
 
 describe('DriveReaderConnector — listerFichiers', () => {
-  test('liste les fichiers du dossier configuré', async () => {
-    const fichiers = [
+  test('liste les fichiers du dossier configuré, en traduisant le champ `name` réel de l’API Drive vers `nom`', async () => {
+    // Forme réelle d'une réponse Drive v3 (champs demandés :
+    // `id,name,mimeType,modifiedTime`) — jamais `nom`, qui n'existe pas côté
+    // API et laissait auparavant le nom silencieusement vide à l'écran.
+    const fichiersBruts = [
+      {
+        id: 'f1',
+        name: 'ICH-Q7.pdf',
+        mimeType: 'application/pdf',
+        modifiedTime: '2026-01-01T00:00:00Z',
+      },
+    ]
+    fetchMock.mockResolvedValueOnce(reponseMock({ files: fichiersBruts }))
+
+    const resultat = await connecteur().listerFichiers()
+    expect(resultat).toEqual([
       {
         id: 'f1',
         nom: 'ICH-Q7.pdf',
         mimeType: 'application/pdf',
         modifiedTime: '2026-01-01T00:00:00Z',
       },
-    ]
-    fetchMock.mockResolvedValueOnce(reponseMock({ files: fichiers }))
-
-    const resultat = await connecteur().listerFichiers()
-    expect(resultat).toEqual(fichiers)
+    ])
 
     const [url] = fetchMock.mock.calls[0] as [string]
     expect(url).toContain('https://www.googleapis.com/drive/v3/files?q=')

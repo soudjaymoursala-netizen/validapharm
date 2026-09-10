@@ -24,6 +24,7 @@ import {
   type ErreurLigneImportHierarchieSap,
 } from '../../logique-metier/structure-systeme/importerHierarchieSapXlsx'
 import { codeDejaUtilise } from '../../logique-metier/structure-systeme/validerCodeUnique'
+import { extraireGrilleHtmlSap } from '../../connecteurs/office/HtmlSapAdapter'
 import { extraireGrilleXlsx } from '../../connecteurs/office/XlsxNatifAdapter'
 import { DocumentInvalideError } from '../../connecteurs/office/erreurs'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
@@ -250,7 +251,38 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       }
       throw erreur
     }
+    return finaliserImportHierarchieSap(clientId, grille)
+  }
 
+  /**
+   * Même import qu'`importerHierarchieSapDepuisXlsx`, depuis le fichier
+   * `.htm`/`.html` produit par SAP pour le même rapport (« Enregistrer
+   * comme fichier HTML ») plutôt que « vers feuille de calcul » — voir
+   * `HtmlSapAdapter.extraireGrilleHtmlSap` pour la convention réelle
+   * reconnue (position de colonne réelle encodée dans l'attribut `id` de
+   * chaque cellule, jamais le rendu visuel de l'arbre, non fiable pour
+   * cette profondeur).
+   */
+  async function importerHierarchieSapDepuisHtml(
+    clientId: string,
+    contenuHtml: string,
+  ): Promise<ResultatImportHierarchieSap> {
+    let grille: string[][]
+    try {
+      grille = extraireGrilleHtmlSap(contenuHtml)
+    } catch (erreur) {
+      if (erreur instanceof DocumentInvalideError) {
+        return { ok: false, raison: 'fichier_illisible' }
+      }
+      throw erreur
+    }
+    return finaliserImportHierarchieSap(clientId, grille)
+  }
+
+  async function finaliserImportHierarchieSap(
+    clientId: string,
+    grille: string[][],
+  ): Promise<ResultatImportHierarchieSap> {
     const schemaActuel = (await db.assetHierarchySchemas.get(clientId)) ?? {
       client_id: clientId,
       levels: [],
@@ -433,6 +465,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     creerNoeud,
     importerHierarchieDepuisXlsx,
     importerHierarchieSapDepuisXlsx,
+    importerHierarchieSapDepuisHtml,
     reparenterNoeud,
     noeudsVisiblesDepuisWorkspace,
     creerRelationTechnique,
