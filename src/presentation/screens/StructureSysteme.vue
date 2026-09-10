@@ -11,6 +11,7 @@ import {
   useStructureSystemeStore,
   type ResultatActionNoeud,
   type ResultatImportHierarchie,
+  type ResultatImportHierarchieSap,
 } from '../stores/useStructureSystemeStore'
 import type {
   AssetNode,
@@ -190,6 +191,52 @@ async function importerFichier(evenement: Event): Promise<void> {
   }
 }
 
+// --- Import d'un export SAP (rapport ALV arborescent) — lecteur natif
+// (`XlsxNatifAdapter.extraireGrilleXlsx`), profondeur détectée depuis le
+// fichier (jamais aplatie de force) : voir `preparerImportHierarchieSap`
+// pour la convention reconnue.
+const resultatImportSap = ref<ResultatImportHierarchieSap | undefined>(undefined)
+const importSapEnCours = ref(false)
+const champFichierSap = ref<HTMLInputElement | null>(null)
+
+const MESSAGES_ERREUR_IMPORT_SAP: Record<string, string> = {
+  fichier_illisible: "Le fichier fourni n'est pas un .xlsx valide ou n'a pas pu être lu.",
+  grille_vide: 'Le fichier ne contient aucune ligne de données exploitable (arborescence vide).',
+}
+
+function messageErreurImportSap(
+  resultat: Extract<ResultatImportHierarchieSap, { ok: false }>,
+): string {
+  if (resultat.raison === 'profondeur_insuffisante') {
+    return `Ce fichier nécessite ${resultat.profondeurRequise} niveau(x) configuré(s) (profondeur maximale détectée dans l'arborescence), seuls ${resultat.profondeurConfiguree} sont définis — créez les niveaux manquants dans la hiérarchie configurable ci-dessus avant de réimporter.`
+  }
+  return MESSAGES_ERREUR_IMPORT_SAP[resultat.raison] ?? 'Import refusé.'
+}
+
+function messageErreurLigneSap(raison: string): string {
+  if (raison === 'code_deja_utilise') return 'code déjà utilisé'
+  if (raison === 'ancetre_manquant') return 'ancêtre attendu introuvable à ce stade du fichier'
+  return 'forme de ligne inattendue'
+}
+
+async function importerFichierSap(evenement: Event): Promise<void> {
+  const fichier = (evenement.target as HTMLInputElement).files?.[0]
+  if (!fichier) return
+
+  importSapEnCours.value = true
+  resultatImportSap.value = undefined
+  try {
+    const contenu = await fichier.arrayBuffer()
+    resultatImportSap.value = await structureStore.importerHierarchieSapDepuisXlsx(
+      props.clientId,
+      contenu,
+    )
+  } finally {
+    importSapEnCours.value = false
+    if (champFichierSap.value) champFichierSap.value.value = ''
+  }
+}
+
 async function creerNoeud(): Promise<void> {
   resultatCreation.value = await structureStore.creerNoeud(props.clientId, {
     level_key: brouillonNoeud.level_key,
@@ -308,6 +355,41 @@ const noeudsAffiches = computed(() =>
           </span>
         </p>
         <p v-else class="erreur" role="alert">{{ messageErreurImport(resultatImport) }}</p>
+      </template>
+    </section>
+
+    <section class="bloc-import">
+      <h2>Importer un export SAP (arborescence)</h2>
+      <p class="rappel">
+        Pour un rapport SAP arborescent (ex. IH01/IH03) téléchargé « vers feuille de calcul » —
+        format différent de l'import ci-dessus : la profondeur de chaque nœud est détectée depuis sa
+        position dans le fichier, jamais imposée. Le fichier peut nécessiter plus de niveaux que
+        ceux déjà configurés ci-dessus (chaque branche de l'arborescence SAP peut être plus ou moins
+        profonde) — créez-les tous avant d'importer, l'ordre doit correspondre à la profondeur
+        réelle du fichier (du plus générique au plus profond). Les nœuds créés peuvent ensuite être
+        réorganisés (reparentage) dans « Nœuds du référentiel » ci-dessous.
+      </p>
+      <input
+        ref="champFichierSap"
+        type="file"
+        accept=".xlsx"
+        :disabled="importSapEnCours"
+        @change="importerFichierSap"
+      />
+      <p v-if="importSapEnCours" class="etat-vide">Import en cours…</p>
+      <template v-else-if="resultatImportSap">
+        <p v-if="resultatImportSap.ok" class="confirmation">
+          {{ resultatImportSap.noeudsCrees }} nœud(s) créé(s).
+          <span v-if="resultatImportSap.erreurs.length > 0">
+            {{ resultatImportSap.erreurs.length }} ligne(s) ignorée(s) —
+            <template v-for="(erreur, i) in resultatImportSap.erreurs" :key="i">
+              ligne {{ erreur.ligne }} ({{ messageErreurLigneSap(erreur.raison) }}){{
+                i < resultatImportSap.erreurs.length - 1 ? ', ' : ''
+              }}
+            </template>
+          </span>
+        </p>
+        <p v-else class="erreur" role="alert">{{ messageErreurImportSap(resultatImportSap) }}</p>
       </template>
     </section>
 

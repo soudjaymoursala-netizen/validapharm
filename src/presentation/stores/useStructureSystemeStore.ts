@@ -19,6 +19,10 @@ import {
   preparerImportHierarchie,
   type ErreurLigneImportHierarchie,
 } from '../../logique-metier/structure-systeme/importerHierarchieXlsx'
+import {
+  preparerImportHierarchieSap,
+  type ErreurLigneImportHierarchieSap,
+} from '../../logique-metier/structure-systeme/importerHierarchieSapXlsx'
 import { codeDejaUtilise } from '../../logique-metier/structure-systeme/validerCodeUnique'
 import { extraireGrilleXlsx } from '../../connecteurs/office/XlsxNatifAdapter'
 import { DocumentInvalideError } from '../../connecteurs/office/erreurs'
@@ -52,6 +56,17 @@ export type ResultatImportHierarchie =
   | { ok: false; raison: 'grille_vide' }
   | { ok: false; raison: 'colonne_niveau_inconnue'; entete: string }
   | { ok: false; raison: 'ordre_colonnes_incoherent'; entete: string }
+
+export type ResultatImportHierarchieSap =
+  | { ok: true; noeudsCrees: number; erreurs: ErreurLigneImportHierarchieSap[] }
+  | { ok: false; raison: 'fichier_illisible' }
+  | { ok: false; raison: 'grille_vide' }
+  | {
+      ok: false
+      raison: 'profondeur_insuffisante'
+      profondeurRequise: number
+      profondeurConfiguree: number
+    }
 
 export type ResultatCreationRelationTechnique =
   | { ok: true; relation: RelationTechnique }
@@ -215,6 +230,70 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
   }
 
   /**
+   * Import en lot d'une hiérarchie d'actifs depuis un export SAP (rapport
+   * ALV arborescent téléchargé « vers feuille de calcul », profondeur
+   * variable selon les branches) — voir la documentation de
+   * `preparerImportHierarchieSap` pour la convention réelle reconnue.
+   * Même discipline que `importerHierarchieDepuisXlsx` : planification
+   * pure puis écriture en un seul lot Dexie.
+   */
+  async function importerHierarchieSapDepuisXlsx(
+    clientId: string,
+    fichier: ArrayBuffer,
+  ): Promise<ResultatImportHierarchieSap> {
+    let grille: string[][]
+    try {
+      grille = (await extraireGrilleXlsx(fichier)).lignes
+    } catch (erreur) {
+      if (erreur instanceof DocumentInvalideError) {
+        return { ok: false, raison: 'fichier_illisible' }
+      }
+      throw erreur
+    }
+
+    const schemaActuel = (await db.assetHierarchySchemas.get(clientId)) ?? {
+      client_id: clientId,
+      levels: [],
+    }
+    const noeudsExistants = await db.assetNodes.where('client_id').equals(clientId).toArray()
+
+    const resultat = preparerImportHierarchieSap(grille, schemaActuel, noeudsExistants)
+    if (!resultat.ok) return resultat
+
+    const maintenant = new Date().toISOString()
+    const nouveauxNoeuds: AssetNode[] = resultat.plan.aCreer.map((n) => ({
+      id: n.id,
+      client_id: clientId,
+      workspace_id: null,
+      level_key: n.level_key,
+      name: n.name,
+      code: n.code,
+      parent_id: n.parent_id,
+      associated_nodes: [],
+      source: 'import_fichier',
+      qms_connector_id: null,
+      periodic_qualification: { applicable: false, deadline: null },
+      qualification_status: 'non_qualifie',
+      audit_log: [
+        {
+          timestamp: maintenant,
+          actor: identifiantActeurCourant(),
+          action: 'création (import SAP)',
+        },
+      ],
+      created_at: maintenant,
+      updated_at: maintenant,
+    }))
+
+    if (nouveauxNoeuds.length > 0) {
+      await db.assetNodes.bulkPut(nouveauxNoeuds)
+      noeuds.value = [...noeuds.value, ...nouveauxNoeuds]
+    }
+
+    return { ok: true, noeudsCrees: nouveauxNoeuds.length, erreurs: resultat.plan.erreurs }
+  }
+
+  /**
    * Reparentage : revalide l'absence de cycle "avec la
    * même rigueur qu'à la création", jamais silencieux (journalisé).
    */
@@ -353,6 +432,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     ajouterNiveau,
     creerNoeud,
     importerHierarchieDepuisXlsx,
+    importerHierarchieSapDepuisXlsx,
     reparenterNoeud,
     noeudsVisiblesDepuisWorkspace,
     creerRelationTechnique,

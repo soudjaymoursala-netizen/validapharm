@@ -950,6 +950,21 @@ lignes ignorées le cas échéant (case vide au milieu de la ligne, code déjà
 utilisé). Échecs possibles : fichier illisible, grille vide, colonne de niveau
 inconnue, ordre des colonnes incohérent.
 
+### Import d'un export SAP (arborescence)
+Second sélecteur de fichier `.xlsx`, pour un format différent : un rapport SAP
+arborescent (ex. transaction IH01/IH03) téléchargé « vers feuille de calcul ».
+La profondeur de chaque nœud est détectée depuis sa position dans le fichier
+(jamais imposée) — deux nœuds peuvent être imbriqués à des profondeurs
+différentes selon la branche, la hiérarchie configurable ci-dessus doit donc
+compter au moins autant de niveaux que la profondeur maximale réellement
+présente dans le fichier (jamais un niveau fabriqué à la volée : import
+refusé sinon, avec le nombre de niveaux manquants indiqué). Les nœuds créés
+peuvent ensuite être réorganisés (reparentage, voir ci-dessous). Succès :
+« {n} nœud(s) créé(s). », avec le détail des lignes ignorées le cas échéant
+(code déjà utilisé, ancêtre attendu introuvable à ce stade du fichier, forme
+de ligne inattendue). Échecs possibles : fichier illisible, grille vide,
+profondeur insuffisante.
+
 ### Nœuds du référentiel
 Formulaire de création : **Niveau** (obligatoire, parmi ceux définis
 ci-dessus), **Nom** (obligatoire), **Code** (obligatoire, unique pour ce
