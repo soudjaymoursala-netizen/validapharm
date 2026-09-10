@@ -1,14 +1,13 @@
 <script setup lang="ts">
-// Bibliothèque de normes — agrégation déterministe des
-// normes/référentiels déjà portés par chaque gabarit du catalogue
-// (inchangé), complétée par une bibliothèque de documents réellement
-// importés (téléversement direct, GitHub, Google Drive) : globale à
-// l'installation, consultable par l'assistant contextuel de section
-// (`construireObjectifAssistantSection`).
+// Bibliothèque de normes — documents réellement importés
+// (téléversement direct, GitHub, Google Drive) : globale à l'installation,
+// consultable par l'assistant contextuel de section
+// (`construireObjectifAssistantSection`). L'ancienne liste de noms de
+// normes agrégée depuis le catalogue de gabarits (sans contenu réel,
+// jamais consultable) a été retirée à la demande de l'utilisateur.
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { EntreeArborescence } from '../../connecteurs/github/GitHubConnector'
 import type { FichierDrive } from '../../connecteurs/drive/DriveReaderConnector'
-import { rechercherNormes } from '../../logique-metier/bibliotheque-normes/rechercherNormes'
 import type { CategorieDocumentNormatif } from '../../logique-metier/domaine/types'
 import { useAuthStore } from '../stores/useAuthStore'
 import {
@@ -18,9 +17,6 @@ import {
 
 const authStore = useAuthStore()
 const documentsStore = useNormativeDocumentsStore()
-
-const motCle = ref('')
-const resultats = computed(() => rechercherNormes(motCle.value))
 
 const LIBELLES_CATEGORIE: Record<CategorieDocumentNormatif, string> = {
   norme: 'Norme',
@@ -151,24 +147,6 @@ onMounted(async () => {
   <main class="bibliotheque-normes">
     <RouterLink :to="{ name: 'tableau-de-bord' }" class="lien-retour">Tableau de bord</RouterLink>
     <h1>Bibliothèque de normes</h1>
-    <p class="rappel">
-      Normes et référentiels cités par les gabarits du catalogue — recherche par mot-clé.
-    </p>
-
-    <label class="champ-recherche">
-      Rechercher une norme
-      <input v-model="motCle" type="text" placeholder="ex. EudraLex, ICH Q9, ASTM" />
-    </label>
-
-    <p v-if="resultats.length === 0" class="etat-vide">Aucune norme ne correspond à ce mot-clé.</p>
-    <ul v-else class="liste-normes">
-      <li v-for="entree in resultats" :key="entree.norme">
-        <strong>{{ entree.norme }}</strong>
-        <span class="gabarits"> — cité par : {{ entree.gabarits.join(', ') }}</span>
-      </li>
-    </ul>
-
-    <hr />
 
     <h2>Documents normatifs importés</h2>
     <p class="rappel">
@@ -322,25 +300,16 @@ onMounted(async () => {
   margin: 0;
 }
 
-.champ-recherche,
 .champ-filtre {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.champ-recherche input {
-  border: 1px solid var(--vp-bordure);
-  border-radius: var(--vp-rayon);
-  padding: 0.5rem;
-  font-family: inherit;
-}
-
 .etat-vide {
   color: var(--vp-texte-secondaire);
 }
 
-.liste-normes,
 .liste-documents,
 .liste-fichiers-externes {
   list-style: none;
@@ -350,23 +319,17 @@ onMounted(async () => {
   gap: 0.5rem;
 }
 
-.liste-normes li,
 .liste-documents li,
 .liste-fichiers-externes li {
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon);
   padding: 0.6rem 0.9rem;
-}
-
-.liste-documents li,
-.liste-fichiers-externes li {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
 }
 
-.gabarits,
 .meta {
   color: var(--vp-texte-secondaire);
   font-size: 0.9em;

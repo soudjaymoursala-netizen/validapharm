@@ -1568,17 +1568,6 @@ Disclaimer permanent : « Aide, pas avis opposable. »
 
 **Écran** : route `/normes` (global à l'installation, pas par client).
 
-### Recherche par mot-clé (gabarits du catalogue)
-> Introduction : « Normes et référentiels cités par les gabarits du catalogue —
-> recherche par mot-clé. »
-
-Un unique champ **« Rechercher une norme »** (`ex. EudraLex, ICH Q9, ASTM`),
-recherche réactive (insensible à la casse et aux accents). Chaque résultat
-affiche le nom de la norme et la liste des gabarits qui la citent. Purement
-consultatif : aucune norme personnalisée ne peut être ajoutée depuis ce bloc,
-seules celles déjà référencées par les gabarits du catalogue apparaissent.
-État vide : « Aucune norme ne correspond à ce mot-clé. »
-
 ### Documents normatifs importés
 > Rappel : « Normes/guidelines/méthodes propres à votre organisation, importées
 > ici et consultables par l'assistant contextuel de section. »
