@@ -47,6 +47,17 @@ export class RelayProviderAdapter implements ProviderAdapter {
     contexte: ContexteEnvoi,
     question: string,
   ): Promise<Reponse> {
+    // Relais jamais configuré (URL vide) : sans cette garde, `fetch('')`
+    // interroge silencieusement la page courante et remonte un statut HTTP
+    // technique (404/200 HTML...) sans aucun rapport avec la vraie cause —
+    // constaté en test manuel, l'utilisateur ne voyait qu'un « échoué (404) »
+    // sans comprendre qu'il fallait renseigner Configuration › Relais IA.
+    if (this.config.relayUrl.trim().length === 0) {
+      throw new ReponseInvalideError(
+        "Relais IA non configuré : renseignez son URL dans Configuration › Relais IA avant d'utiliser l'assistant.",
+      )
+    }
+
     const controleur = new AbortController()
     const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
 
