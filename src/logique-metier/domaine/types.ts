@@ -219,8 +219,19 @@ export interface ProjectDocument {
   mime_type: string
 }
 
-/** Catégorie d'un document dans la bibliothèque de normes — jamais extensible sans besoin réel démontré. */
-export type CategorieDocumentNormatif = 'norme' | 'guideline' | 'methode' | 'autre'
+/**
+ * Catégorie d'un document dans la bibliothèque de normes — jamais
+ * extensible sans besoin réel démontré. Étendue depuis les 4 catégories
+ * génériques initiales ('norme'/'guideline'/'methode'/'autre') vers une
+ * classification par référentiel/organisme, sur import réel d'une
+ * bibliothèque organisée par l'utilisateur en Google Drive selon
+ * exactement ces types (dossiers ISO, EudraLex, PIC/S, ASTM, ISPE,
+ * CQV, CSV) — la classification générique ne distinguait pas des
+ * documents de nature très différente au sein d'une même catégorie
+ * (ex. ISO 9001 et ASTM E2500 tombaient tous deux sous 'norme').
+ */
+export type CategorieDocumentNormatif =
+  'iso' | 'eudralex' | 'pics' | 'astm' | 'ispe' | 'gmp' | 'cqv' | 'csv' | 'autre'
 
 /** Origine d'un document importé dans la bibliothèque de normes. */
 export type SourceDocumentNormatif = 'televersement' | 'github' | 'drive'
