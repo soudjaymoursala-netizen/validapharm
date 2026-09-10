@@ -19,9 +19,14 @@ const authStore = useAuthStore()
 const documentsStore = useNormativeDocumentsStore()
 
 const LIBELLES_CATEGORIE: Record<CategorieDocumentNormatif, string> = {
-  norme: 'Norme',
-  guideline: 'Guideline',
-  methode: 'Méthode',
+  iso: 'ISO',
+  eudralex: 'EudraLex',
+  pics: 'PIC/S',
+  astm: 'ASTM',
+  ispe: 'ISPE',
+  gmp: 'GMP',
+  cqv: 'CQV',
+  csv: 'CSV',
   autre: 'Autre',
 }
 
@@ -37,32 +42,54 @@ function actorCourant(): string {
 }
 
 // --- Téléversement direct ---
-const categorieTeleversement = ref<CategorieDocumentNormatif>('norme')
+const categorieTeleversement = ref<CategorieDocumentNormatif>('autre')
 const enImportTeleversement = ref(false)
+const progressionTeleversement = ref<{ fait: number; total: number } | null>(null)
 const erreurTeleversement = ref<string | null>(null)
 
+/**
+ * Accepte plusieurs fichiers à la fois (`multiple` sur l'input) — une
+ * bibliothèque réelle se peuple par dizaines de documents, jamais un à
+ * la fois. Chaque fichier est importé séquentiellement (jamais en
+ * parallèle : `documents.value` est mutée par chaque import, un import
+ * parallèle risquerait une écriture perdue) sous la même catégorie
+ * choisie une fois pour tout le lot ; un fichier en échec n'interrompt
+ * pas les suivants — les erreurs sont accumulées puis affichées ensemble.
+ */
 async function importerFichier(evenement: Event): Promise<void> {
-  const fichier = (evenement.target as HTMLInputElement).files?.[0]
-  if (!fichier) return
+  const fichiers = Array.from((evenement.target as HTMLInputElement).files ?? [])
+  if (fichiers.length === 0) return
   erreurTeleversement.value = null
   enImportTeleversement.value = true
+  progressionTeleversement.value = { fait: 0, total: fichiers.length }
+  const erreurs: string[] = []
   try {
-    await documentsStore.importerDepuisFichier(
-      fichier,
-      categorieTeleversement.value,
-      actorCourant(),
-    )
-  } catch (e) {
-    erreurTeleversement.value =
-      e instanceof Error ? e.message : 'Erreur inconnue lors du téléversement.'
+    for (const fichier of fichiers) {
+      try {
+        await documentsStore.importerDepuisFichier(
+          fichier,
+          categorieTeleversement.value,
+          actorCourant(),
+        )
+      } catch (e) {
+        erreurs.push(`${fichier.name} : ${e instanceof Error ? e.message : 'erreur inconnue'}`)
+      } finally {
+        progressionTeleversement.value = {
+          fait: (progressionTeleversement.value?.fait ?? 0) + 1,
+          total: fichiers.length,
+        }
+      }
+    }
+    if (erreurs.length > 0) erreurTeleversement.value = erreurs.join(' · ')
   } finally {
     enImportTeleversement.value = false
+    progressionTeleversement.value = null
     ;(evenement.target as HTMLInputElement).value = ''
   }
 }
 
 // --- GitHub ---
-const categorieGitHub = ref<CategorieDocumentNormatif>('norme')
+const categorieGitHub = ref<CategorieDocumentNormatif>('autre')
 const prefixeGitHub = ref('')
 const fichiersGitHub = ref<EntreeArborescence[]>([])
 const enListeGitHub = ref(false)
@@ -92,7 +119,7 @@ async function importerDepuisGitHub(chemin: string): Promise<void> {
 
 // --- Google Drive ---
 const brouillonDrive = reactive({ dossierId: '', jeton: '' })
-const categorieDrive = ref<CategorieDocumentNormatif>('norme')
+const categorieDrive = ref<CategorieDocumentNormatif>('autre')
 const resultatTestDrive = ref<ResultatConnexionDriveNormes | undefined>(undefined)
 const testDriveEnCours = ref(false)
 const fichiersDrive = ref<FichierDrive[]>([])
@@ -138,6 +165,30 @@ async function importerDepuisDrive(fichier: FichierDrive): Promise<void> {
   }
 }
 
+/** Retélécharge le fichier tel qu'importé — jamais une reconstruction à partir du texte extrait (même patron que `FicheProjet.vue`). */
+function telechargerDocument(document: { filename: string; content: Blob | null }): void {
+  if (!document.content) return
+  const url = URL.createObjectURL(document.content)
+  const lien = window.document.createElement('a')
+  lien.href = url
+  lien.download = document.filename
+  lien.click()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Ouvre le texte extrait dans un nouvel onglet — seul recours pour un
+ * document importé depuis GitHub/Drive sans octets bruts conservés
+ * (`content: null`, seul `extracted_text` existe). Jamais utilisé si le
+ * fichier d'origine est disponible (`telechargerDocument` le préfère).
+ */
+function voirTexteExtrait(document: { titre: string; extracted_text: string }): void {
+  const blob = new Blob([document.extracted_text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank')
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
 onMounted(async () => {
   await documentsStore.charger()
 })
@@ -166,10 +217,13 @@ onMounted(async () => {
           </select>
         </label>
         <label>
-          Fichier (.docx, .pdf, .txt, .md)
-          <input type="file" :disabled="enImportTeleversement" @change="importerFichier" />
+          Fichier(s) (.docx, .pdf, .txt, .md — plusieurs à la fois)
+          <input type="file" multiple :disabled="enImportTeleversement" @change="importerFichier" />
         </label>
       </div>
+      <p v-if="progressionTeleversement" class="rappel">
+        Import {{ progressionTeleversement.fait }} / {{ progressionTeleversement.total }}…
+      </p>
       <p v-if="erreurTeleversement" class="erreur" role="alert">{{ erreurTeleversement }}</p>
     </section>
 
@@ -276,9 +330,17 @@ onMounted(async () => {
               — {{ LIBELLES_CATEGORIE[document.category] }} · source : {{ document.source }}
             </span>
           </div>
-          <button type="button" @click="documentsStore.supprimerDocument(document.id)">
-            Supprimer
-          </button>
+          <div class="actions-document">
+            <button v-if="document.content" type="button" @click="telechargerDocument(document)">
+              Télécharger
+            </button>
+            <button v-else type="button" @click="voirTexteExtrait(document)">
+              Voir le texte extrait
+            </button>
+            <button type="button" @click="documentsStore.supprimerDocument(document.id)">
+              Supprimer
+            </button>
+          </div>
         </li>
       </ul>
     </section>
@@ -366,7 +428,8 @@ onMounted(async () => {
   font-family: inherit;
 }
 
-.actions {
+.actions,
+.actions-document {
   display: flex;
   gap: 0.5rem;
 }

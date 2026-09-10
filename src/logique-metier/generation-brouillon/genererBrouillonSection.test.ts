@@ -72,6 +72,25 @@ function providerRepondant(texte: string): ProviderAdapter {
   }
 }
 
+/** Capture le prompt effectivement envoyé, pour vérifier ce qui y est injecté. */
+function providerCapturantLePrompt(texteReponse: string): {
+  provider: ProviderAdapter
+  promptEnvoye: () => string
+} {
+  let capture = ''
+  return {
+    provider: {
+      nomAffiche: 'Fournisseur test',
+      estCloud: true,
+      envoyerMessage: async (_mode, _contexte, question) => {
+        capture = question
+        return { texte: texteReponse, version_moteur: null, citations: [] }
+      },
+    },
+    promptEnvoye: () => capture,
+  }
+}
+
 const ENTREES_BASE = {
   gabarit: GABARIT_TEST,
   texteDocumentReference: 'Document de référence.',
@@ -188,5 +207,31 @@ describe('genererBrouillonSection — lignes de tableau dynamique', () => {
     const provider = providerRepondant(lignes.join('\n'))
     const resultat = await genererBrouillonSection(ENTREES_BASE, provider)
     expect(resultat.lignesTableaux[0]?.lignes).toHaveLength(20)
+  })
+})
+
+describe('genererBrouillonSection — bibliothèque de normes', () => {
+  test('sans documentsNormatifs : aucun bloc "Documents normatifs disponibles" dans le prompt', async () => {
+    const { provider, promptEnvoye } = providerCapturantLePrompt('CHAMP|generalites.objectif|x')
+    await genererBrouillonSection(ENTREES_BASE, provider)
+    expect(promptEnvoye()).not.toContain('Documents normatifs disponibles')
+  })
+
+  test('injecte les documents normatifs fournis dans le prompt, aux côtés du document de référence', async () => {
+    const { provider, promptEnvoye } = providerCapturantLePrompt('CHAMP|generalites.objectif|x')
+    await genererBrouillonSection(
+      {
+        ...ENTREES_BASE,
+        documentsNormatifs: [
+          { titre: 'ISO 9001', category: 'iso', extracted_text: 'Exigences qualité.' },
+        ],
+      },
+      provider,
+    )
+    const prompt = promptEnvoye()
+    expect(prompt).toContain('Documents normatifs disponibles')
+    expect(prompt).toContain('--- ISO 9001 (iso) ---')
+    expect(prompt).toContain('Exigences qualité.')
+    expect(prompt).toContain('--- DOCUMENT DE RÉFÉRENCE ---')
   })
 })

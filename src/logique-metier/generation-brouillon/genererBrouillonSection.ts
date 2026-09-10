@@ -1,3 +1,7 @@
+import {
+  blocDocumentsNormatifsPourPrompt,
+  type DocumentNormatifPourPrompt,
+} from '../bibliotheque-normes/formaterDocumentNormatifPourPrompt'
 import type { ContexteEnvoi, ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
 import type {
   ChampTableauDynamique,
@@ -42,6 +46,14 @@ export interface EntreesGenerationBrouillon {
   langue: Langue
   /** Tables déjà présentes sur la section — détermine quels tableaux sont adressables. */
   tablesExistantes: Section['tables']
+  /**
+   * Bibliothèque de normes de l'organisation (facultative, jamais
+   * requise) — injectée au même titre que le document de référence,
+   * jamais un contenu prioritaire sur lui : le document de référence
+   * reste la source d'adaptation, ces documents ne font qu'ancrer le
+   * brouillon généré dans les référentiels réels de l'organisation.
+   */
+  documentsNormatifs?: readonly DocumentNormatifPourPrompt[]
 }
 
 export interface ChampProposeIA {
@@ -148,6 +160,7 @@ function construirePrompt(entrees: EntreesGenerationBrouillon): string {
     "Réponds UNIQUEMENT avec des lignes au format suivant, une par ligne, rien d'autre :",
     'CHAMP|<section_key>.<field_key>|<valeur proposée>',
     instructionsTableaux,
+    blocDocumentsNormatifsPourPrompt(entrees.documentsNormatifs ?? []),
     '',
     '--- CONTEXTE DU NOUVEAU CAS ---',
     entrees.contexteNouveauCas,

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { DocumentNormatifPourPrompt } from '../../logique-metier/bibliotheque-normes/formaterDocumentNormatifPourPrompt'
 import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
 import { aLienVersTypeSection } from '../../logique-metier/detection-liens/aLienVersTypeSection'
 import type {
@@ -51,6 +52,8 @@ export interface EntreesGenerationBrouillonIA {
   contexteNouveauCas: string
   confirmationDroitUsage: boolean
   actor: string
+  /** Bibliothèque de normes de l'organisation (facultative) — ancre le brouillon généré dans les référentiels réels, sans jamais primer sur le document de référence lui-même. */
+  documentsNormatifs?: readonly DocumentNormatifPourPrompt[]
 }
 
 export type ResultatGenerationBrouillonIA =
@@ -196,6 +199,7 @@ export const useSectionsStore = defineStore('sections', () => {
         contexteNouveauCas: entrees.contexteNouveauCas,
         langue: section.language,
         tablesExistantes: section.tables,
+        documentsNormatifs: entrees.documentsNormatifs,
       },
       provider,
     )
