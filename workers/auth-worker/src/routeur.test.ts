@@ -850,6 +850,24 @@ describe('routerRequete — documents normatifs (Bibliothèque de normes)', () =
     expect(new Uint8Array(await reponseContenu.arrayBuffer())).toEqual(octets)
   })
 
+  test('création avec un contenu binaire vide (0 octet, ex. jeton Drive expiré en cours de lot) -> hasBinaryContent=false, jamais un mensonge sur la disponibilité du fichier', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { status, corps } = await creerDocumentNormatif(ctx, admin.jeton, {
+      contenu: { octets: new Uint8Array([]), nomFichier: 'vide.pdf', typeMime: 'application/pdf' },
+    })
+    expect(status).toBe(201)
+    expect(corps.document.hasBinaryContent).toBe(false)
+
+    const reponseContenu = await routerRequete(
+      new Request(`https://relais.workers.dev/documents-normatifs/${corps.document.id}/contenu`, {
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+      }),
+      ctx,
+    )
+    expect(reponseContenu.status).toBe(404)
+  })
+
   test('/contenu sur un document sans contenu binaire -> 404', async () => {
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)

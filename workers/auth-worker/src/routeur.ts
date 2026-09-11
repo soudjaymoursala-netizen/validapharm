@@ -943,10 +943,20 @@ async function gererCreerDocumentNormatif(
   // d'exécution (jsdom/undici/workerd n'exposent pas nécessairement la
   // même classe `Blob` d'un realm à l'autre) — vérification structurelle
   // (présence d'`arrayBuffer()`) plutôt qu'un test de type nominal.
+  //
+  // `size > 0` est délibéré, jamais une simple présence structurelle : un
+  // import Drive dont le jeton a expiré en cours de lot a été constaté en
+  // production produisant un Blob présent mais vide (0 octet) — la requête
+  // entière n'échoue jamais dans ce cas (le texte déjà extrait côté client
+  // arrive intact dans le même FormData), donc rien ne signalait l'échec.
+  // `hasBinaryContent` affirmait alors à tort qu'un fichier d'origine
+  // existait, pour 177 documents sur l'installation concernée. Un Blob vide
+  // n'est jamais enregistré ni annoncé comme contenu binaire disponible.
   const contenuBlob =
     contenuValeur !== null &&
     typeof contenuValeur === 'object' &&
-    typeof (contenuValeur as Blob).arrayBuffer === 'function'
+    typeof (contenuValeur as Blob).arrayBuffer === 'function' &&
+    (contenuValeur as Blob).size > 0
       ? (contenuValeur as Blob)
       : null
 
