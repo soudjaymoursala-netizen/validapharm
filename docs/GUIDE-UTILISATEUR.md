@@ -973,30 +973,35 @@ utilisé). Échecs possibles : fichier illisible, grille vide, colonne de niveau
 inconnue, ordre des colonnes incohérent.
 
 ### Import d'un export SAP (arborescence)
-Second sélecteur de fichier `.xlsx`, pour un format différent : un rapport SAP
-arborescent (ex. transaction IH01/IH03) téléchargé « vers feuille de calcul ».
-La profondeur de chaque nœud est détectée depuis sa position dans le fichier
-(jamais imposée) — deux nœuds peuvent être imbriqués à des profondeurs
-différentes selon la branche, la hiérarchie configurable ci-dessus doit donc
-compter au moins autant de niveaux que la profondeur maximale réellement
-présente dans le fichier (jamais un niveau fabriqué à la volée : import
-refusé sinon, avec le nombre de niveaux manquants indiqué). Les nœuds créés
-peuvent ensuite être réorganisés (reparentage, voir ci-dessous). Succès :
-« {n} nœud(s) créé(s). », avec le détail des lignes ignorées le cas échéant
-(code déjà utilisé, ancêtre attendu introuvable à ce stade du fichier, forme
-de ligne inattendue). Échecs possibles : fichier illisible, grille vide,
-profondeur insuffisante.
+Second sélecteur de fichier, pour un format différent de l'import Excel
+ci-dessus : un rapport SAP arborescent (ex. transaction IH01/IH03) téléchargé
+soit « vers feuille de calcul », soit « Enregistrer comme fichier HTML ». Un
+seul champ pour les deux : le format réel du fichier (`.xlsx` ou HTML) est
+détecté depuis son contenu (signature d'archive ZIP ou non), **jamais** depuis
+son extension — déposez le fichier tel que téléchargé, même s'il porte
+l'extension `.xls` (fréquent pour l'export SAP « vers feuille de calcul »,
+quel que soit son contenu réel).
 
-### Import d'un export SAP au format .htm/.html
-Troisième sélecteur de fichier, pour le même rapport SAP téléchargé
-« Enregistrer comme fichier HTML » plutôt que « vers feuille de calcul ».
-Mêmes règles et mêmes messages que l'import `.xlsx` ci-dessus (profondeur
-détectée depuis le fichier, jamais imposée) — seule la lecture diffère : la
-profondeur est ici déterminée depuis la position de colonne réelle encodée
-dans le fichier HTML lui-même, jamais depuis le rendu visuel de l'arbre
-(traits `|`/`-`), qui s'est avéré ne pas toujours refléter fidèlement la
-profondeur réelle (un nœud et son enfant unique peuvent partager le même
-rendu visuel).
+La profondeur de chaque nœud est détectée depuis sa position réelle dans le
+fichier (jamais imposée, jamais depuis le rendu visuel de l'arbre — traits
+`|`/`-`, qui ne reflète pas toujours fidèlement la profondeur réelle) — deux
+nœuds peuvent être imbriqués à des profondeurs différentes selon la branche,
+et une même profondeur logique peut apparaître à des colonnes différentes
+selon la branche (icône SAP de largeur différente, compression des chaînes à
+enfant unique) sans jamais être confondue avec un niveau supplémentaire. La
+hiérarchie configurable ci-dessus doit compter au moins autant de niveaux que
+la profondeur maximale réellement présente dans le fichier (jamais un niveau
+fabriqué à la volée : import refusé sinon, avec le nombre de niveaux
+manquants indiqué). Les nœuds créés peuvent ensuite être réorganisés
+(reparentage, voir ci-dessous).
+
+Succès : « {n} nœud(s) créé(s). », avec le détail des lignes ignorées le cas
+échéant (code déjà utilisé ; nœud parent lui-même rejeté, jamais de
+rattachement à un parent qui n'existera pas ; forme de ligne inattendue).
+Échecs possibles : fichier illisible (ni `.xlsx` réel ni HTML reconnu), grille
+vide, profondeur insuffisante. Un réimport du même fichier ne duplique jamais
+les nœuds déjà créés (chaque ligne déjà importée est rejetée pour code déjà
+utilisé).
 
 ### Nœuds du référentiel
 Formulaire de création : **Niveau** (obligatoire, parmi ceux définis
