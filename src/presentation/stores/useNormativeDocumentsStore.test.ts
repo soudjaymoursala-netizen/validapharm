@@ -225,6 +225,100 @@ describe('useNormativeDocumentsStore — Drive', () => {
     expect(document.extracted_text).toBe('Contenu texte téléchargé depuis Drive.')
     expect(document.has_binary_content).toBe(true)
   })
+
+  test('necessiteReparationContenu : faux pour un document Google natif, vrai pour un fichier Drive sans contenu binaire', async () => {
+    const store = useNormativeDocumentsStore()
+    await store.configurerConnexionDriveLectureNormes('dossier-normes-1', 'jeton-drive')
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => 'Texte exporté.',
+    } as Response)
+    const documentNatif = await store.importerDepuisDrive(
+      {
+        id: 'natif-1',
+        nom: 'Norme Google Doc',
+        mimeType: 'application/vnd.google-apps.document',
+        modifiedTime: '',
+      },
+      'iso',
+      'qa-1',
+    )
+    expect(store.necessiteReparationContenu(documentNatif)).toBe(false)
+
+    // Contenu vide (0 octet) simule le jeton Drive expiré en cours d'import (#35).
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => new ArrayBuffer(0),
+    } as Response)
+    const documentVide = await store.importerDepuisDrive(
+      { id: 'fichier-vide-2', nom: 'autre-guide.txt', mimeType: 'text/plain', modifiedTime: '' },
+      'gmp',
+      'qa-1',
+    )
+    expect(store.necessiteReparationContenu(documentVide)).toBe(true)
+  })
+
+  test('repararContenuDocument : re-télécharge depuis Drive, remplace le contenu, jamais le titre déjà personnalisé', async () => {
+    const store = useNormativeDocumentsStore()
+    await store.configurerConnexionDriveLectureNormes('dossier-normes-1', 'jeton-drive')
+
+    // Import initial défaillant : contenu vide (jeton expiré), reproduit fidèlement #35.
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => new ArrayBuffer(0),
+    } as Response)
+    const document = await store.importerDepuisDrive(
+      { id: 'fichier-vide-1', nom: 'guideline.txt', mimeType: 'text/plain', modifiedTime: '' },
+      'gmp',
+      'qa-1',
+    )
+    expect(document.has_binary_content).toBe(false)
+    await store.renommerDocument(document.id, 'Guideline renommée par l’utilisateur')
+
+    // Réparation : cette fois le jeton (renouvelé) renvoie le vrai contenu.
+    const contenuReel = new TextEncoder().encode('Vrai contenu récupéré depuis Drive.').buffer
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => contenuReel,
+    } as Response)
+    await store.repararContenuDocument(document.id)
+
+    const documentRepare = store.documents.find((d) => d.id === document.id)
+    expect(documentRepare?.has_binary_content).toBe(true)
+    expect(documentRepare?.titre).toBe('Guideline renommée par l’utilisateur')
+
+    const blob = await store.telechargerContenu(document.id)
+    expect(await blob.text()).toBe('Vrai contenu récupéré depuis Drive.')
+  })
+
+  test('repararContenuDocument : refuse un document qui n’a jamais eu de fichier d’origine (Google natif)', async () => {
+    const store = useNormativeDocumentsStore()
+    await store.configurerConnexionDriveLectureNormes('dossier-normes-1', 'jeton-drive')
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => 'Texte exporté.',
+    } as Response)
+    const document = await store.importerDepuisDrive(
+      {
+        id: 'natif-2',
+        nom: 'Norme Google Doc 2',
+        mimeType: 'application/vnd.google-apps.document',
+        modifiedTime: '',
+      },
+      'iso',
+      'qa-1',
+    )
+
+    await expect(store.repararContenuDocument(document.id)).rejects.toThrow(
+      "n'a jamais eu de fichier d'origine",
+    )
+  })
 })
 
 describe('useNormativeDocumentsStore — telechargerContenu', () => {
