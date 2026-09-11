@@ -268,6 +268,14 @@ export class AuthApiClient {
     return this.requeteFormData('POST', '/documents-normatifs', jeton, formData)
   }
 
+  renommerDocumentNormatif(
+    jeton: string,
+    id: string,
+    titre: string,
+  ): Promise<ResultatApi<{ document: DocumentNormatifWire }>> {
+    return this.requete('PATCH', `/documents-normatifs/${id}`, { jeton, body: { titre } })
+  }
+
   supprimerDocumentNormatif(jeton: string, id: string): Promise<ResultatApi<{ ok: true }>> {
     return this.requete('DELETE', `/documents-normatifs/${id}`, { jeton })
   }

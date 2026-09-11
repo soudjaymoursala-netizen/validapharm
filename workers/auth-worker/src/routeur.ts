@@ -263,6 +263,14 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
     )
   }
   const matchDocumentNormatifId = chemin.match(/^\/documents-normatifs\/([^/]+)$/)
+  if (matchDocumentNormatifId && request.method === 'PATCH') {
+    return gererRenommerDocumentNormatif(
+      request,
+      ctx,
+      entetes,
+      matchDocumentNormatifId[1] as string,
+    )
+  }
   if (matchDocumentNormatifId && request.method === 'DELETE') {
     return gererSupprimerDocumentNormatif(
       request,
@@ -998,6 +1006,42 @@ async function gererObtenirContenuDocumentNormatif(
       'Content-Disposition': `attachment; filename="${document.filename.replace(/"/g, '')}"`,
     },
   })
+}
+
+async function gererRenommerDocumentNormatif(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const document = await ctx.documentsNormatifsRepo.parId(id)
+  if (!document) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+
+  const corps = await lireCorpsJson<{ titre?: string }>(request)
+  if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps.titre || corps.titre.trim().length === 0) {
+    return reponseJson({ erreur: 'titre_obligatoire' }, 400, entetes)
+  }
+
+  const titre = corps.titre.trim()
+  await ctx.documentsNormatifsRepo.renommer(id, titre)
+  await consignerAudit(
+    ctx,
+    utilisateur,
+    'renommage_document_normatif',
+    'document_normatif',
+    id,
+    null,
+  )
+
+  return reponseJson(
+    { document: await assemblerDocumentNormatif(ctx, { ...document, titre }) },
+    200,
+    entetes,
+  )
 }
 
 async function gererSupprimerDocumentNormatif(

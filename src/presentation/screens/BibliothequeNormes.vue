@@ -212,6 +212,37 @@ async function importerToutDrive(): Promise<void> {
 
 const erreurTelechargement = ref<string | null>(null)
 
+// --- Renommage ---
+const documentIdEnRenommage = ref<string | null>(null)
+const brouillonRenommage = ref('')
+const enRenommage = ref(false)
+const erreurRenommage = ref<string | null>(null)
+
+function ouvrirRenommage(document: { id: string; titre: string }): void {
+  documentIdEnRenommage.value = document.id
+  brouillonRenommage.value = document.titre
+  erreurRenommage.value = null
+}
+
+function annulerRenommage(): void {
+  documentIdEnRenommage.value = null
+}
+
+async function confirmerRenommage(documentId: string): Promise<void> {
+  const nouveauTitre = brouillonRenommage.value.trim()
+  if (nouveauTitre === '') return
+  enRenommage.value = true
+  erreurRenommage.value = null
+  try {
+    await documentsStore.renommerDocument(documentId, nouveauTitre)
+    documentIdEnRenommage.value = null
+  } catch (e) {
+    erreurRenommage.value = e instanceof Error ? e.message : 'Erreur inconnue.'
+  } finally {
+    enRenommage.value = false
+  }
+}
+
 /**
  * Retélécharge le fichier tel qu'importé (récupéré à la demande depuis le
  * Worker — jamais préchargé avec la liste, voir `has_binary_content`),
@@ -249,6 +280,31 @@ function voirTexteExtrait(document: { titre: string; extracted_text: string }): 
   const url = URL.createObjectURL(blob)
   window.open(url, '_blank')
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+const erreurApercu = ref<string | null>(null)
+
+/**
+ * Ouvre le fichier d'origine dans un nouvel onglet (jamais un
+ * téléchargement forcé — voir `telechargerDocument`) : le navigateur rend
+ * nativement ce qu'il sait afficher (PDF, image...), et télécharge sinon
+ * (ex. .docx) — comportement natif du navigateur, jamais simulé ici.
+ */
+async function voirDocumentOriginal(document: {
+  id: string
+  filename: string
+  has_binary_content: boolean
+}): Promise<void> {
+  if (!document.has_binary_content) return
+  erreurApercu.value = null
+  try {
+    const contenu = await documentsStore.telechargerContenu(document.id)
+    const url = URL.createObjectURL(contenu)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (e) {
+    erreurApercu.value = e instanceof Error ? e.message : 'Erreur inconnue.'
+  }
 }
 
 onMounted(async () => {
@@ -408,7 +464,26 @@ onMounted(async () => {
         <summary>{{ documentsFiltres.length }} document(s) — cliquer pour afficher</summary>
         <ul class="liste-documents">
           <li v-for="document in documentsFiltres" :key="document.id">
-            <div>
+            <div v-if="documentIdEnRenommage === document.id" class="edition-titre">
+              <input
+                v-model="brouillonRenommage"
+                type="text"
+                :disabled="enRenommage"
+                @keyup.enter="confirmerRenommage(document.id)"
+                @keyup.escape="annulerRenommage"
+              />
+              <button
+                type="button"
+                :disabled="enRenommage"
+                @click="confirmerRenommage(document.id)"
+              >
+                {{ enRenommage ? 'Enregistrement…' : 'Enregistrer' }}
+              </button>
+              <button type="button" :disabled="enRenommage" @click="annulerRenommage">
+                Annuler
+              </button>
+            </div>
+            <div v-else>
               <strong>{{ document.titre }}</strong>
               <span class="meta">
                 — {{ LIBELLES_CATEGORIE[document.category] }} · source : {{ document.source }}
@@ -419,10 +494,18 @@ onMounted(async () => {
               <button
                 v-if="document.has_binary_content"
                 type="button"
+                @click="voirDocumentOriginal(document)"
+              >
+                Voir l'original
+              </button>
+              <button
+                v-if="document.has_binary_content"
+                type="button"
                 @click="telechargerDocument(document)"
               >
                 Télécharger
               </button>
+              <button type="button" @click="ouvrirRenommage(document)">Renommer</button>
               <button type="button" @click="documentsStore.supprimerDocument(document.id)">
                 Supprimer
               </button>
@@ -430,6 +513,8 @@ onMounted(async () => {
           </li>
         </ul>
       </details>
+      <p v-if="erreurRenommage" class="erreur" role="alert">{{ erreurRenommage }}</p>
+      <p v-if="erreurApercu" class="erreur" role="alert">{{ erreurApercu }}</p>
       <p v-if="erreurTelechargement" class="erreur" role="alert">{{ erreurTelechargement }}</p>
     </section>
   </main>
@@ -442,7 +527,9 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 40rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .rappel {
@@ -495,6 +582,22 @@ onMounted(async () => {
 .meta {
   color: var(--vp-texte-secondaire);
   font-size: 0.9em;
+}
+
+.edition-titre {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.edition-titre input {
+  flex: 1;
+  min-width: 12rem;
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.4rem 0.6rem;
+  font-family: inherit;
 }
 
 .bloc-import,
