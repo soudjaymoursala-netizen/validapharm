@@ -206,7 +206,7 @@ onMounted(async () => {
     </p>
 
     <section class="bloc-import">
-      <h3>Téléversement direct</h3>
+      <h3>Ajouter des documents</h3>
       <div class="formulaire-import">
         <label>
           Catégorie
@@ -331,11 +331,9 @@ onMounted(async () => {
             </span>
           </div>
           <div class="actions-document">
+            <button type="button" @click="voirTexteExtrait(document)">Consulter</button>
             <button v-if="document.content" type="button" @click="telechargerDocument(document)">
               Télécharger
-            </button>
-            <button v-else type="button" @click="voirTexteExtrait(document)">
-              Voir le texte extrait
             </button>
             <button type="button" @click="documentsStore.supprimerDocument(document.id)">
               Supprimer
