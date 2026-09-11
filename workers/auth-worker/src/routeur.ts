@@ -37,7 +37,7 @@ const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 function entetesCors(corsOrigin: string): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': corsOrigin,
-    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   }
 }
