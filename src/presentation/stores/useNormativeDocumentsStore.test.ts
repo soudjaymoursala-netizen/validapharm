@@ -11,6 +11,7 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import { documentsNormatifsAMigrer } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -55,6 +56,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   demonter()
+  documentsNormatifsAMigrer.length = 0
 })
 
 describe('useNormativeDocumentsStore — importerDepuisFichier', () => {
@@ -235,6 +237,43 @@ describe('useNormativeDocumentsStore — telechargerContenu', () => {
     const blob = await store.telechargerContenu(document.id)
 
     expect(new Uint8Array(await blob.arrayBuffer())).toEqual(octets)
+  })
+})
+
+describe('useNormativeDocumentsStore — migration des documents locaux (pré-serveur)', () => {
+  test('charger() envoie au serveur les documents capturés depuis l’ancienne table locale et vide la file', async () => {
+    documentsNormatifsAMigrer.push({
+      id: 'doc-ancien-1',
+      category: 'iso',
+      titre: 'Norme historique',
+      filename: 'norme.txt',
+      source: 'televersement',
+      source_ref: null,
+      extracted_text: 'Texte historique',
+      content: new Blob(['contenu binaire historique'], { type: 'text/plain' }),
+      mime_type: 'text/plain',
+      uploaded_at: '2026-01-01T00:00:00.000Z',
+      uploaded_by: 'user-ancien',
+    })
+    const store = useNormativeDocumentsStore()
+
+    await store.charger()
+
+    expect(documentsNormatifsAMigrer).toHaveLength(0)
+    expect(store.documents).toHaveLength(1)
+    expect(store.documents[0]).toMatchObject({
+      titre: 'Norme historique',
+      extracted_text: 'Texte historique',
+      has_binary_content: true,
+    })
+  })
+
+  test('charger() sans document en attente : aucun appel superflu, comportement inchangé', async () => {
+    const store = useNormativeDocumentsStore()
+
+    await store.charger()
+
+    expect(store.documents).toHaveLength(0)
   })
 })
 

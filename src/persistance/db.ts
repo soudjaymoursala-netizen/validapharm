@@ -185,6 +185,32 @@ export interface EnregistrementSessionAuthentification {
   }
 }
 
+/** Forme de `NormativeDocument` telle qu'enregistrée en IndexedDB avant la version 33 (voir migration ci-dessous). */
+export interface DocumentNormatifAncien {
+  id: string
+  category: string
+  titre: string
+  filename: string
+  source: string
+  source_ref: string | null
+  extracted_text: string
+  content: Blob | null
+  mime_type: string
+  uploaded_at: string
+  uploaded_by: string
+}
+
+/**
+ * Documents capturés depuis l'ancienne table `normativeDocuments` juste
+ * avant sa suppression (version 33) — vide sur un navigateur déjà passé par
+ * cette version (la montée de version IndexedDB ne s'exécute qu'une seule
+ * fois par origine). Muté (jamais réassigné) pour rester la même référence
+ * que celle remplie par `upgrade()` plus bas. Consommé et envoyé au serveur
+ * par `migrerDocumentsLocauxVersServeur` (`useNormativeDocumentsStore`) au
+ * premier chargement de l'écran Bibliothèque de normes.
+ */
+export const documentsNormatifsAMigrer: DocumentNormatifAncien[] = []
+
 /**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
@@ -533,9 +559,22 @@ export class ValidaPharmDatabase extends Dexie {
     // — même limite déjà corrigée pour la connexion GitHub/Relais IA/Drive
     // ci-dessus, cette fois sur les documents eux-mêmes (constaté par
     // l'utilisateur : import fait sur un poste, invisible sur un autre).
-    this.version(33).stores({
-      normativeDocuments: null,
-    })
+    //
+    // La transaction de montée de version a encore accès à l'ancienne table
+    // au moment où `upgrade()` s'exécute (avant sa suppression physique) —
+    // on capture donc son contenu ici plutôt que de le perdre silencieusement :
+    // seul un navigateur qui exécute réellement cette montée de version
+    // (jamais encore ouvert avec le code ≥ v33) a des documents à récupérer.
+    // Consommé et envoyé au serveur par `migrerDocumentsLocauxVersServeur`
+    // (`useNormativeDocumentsStore`) au premier chargement de l'écran.
+    this.version(33)
+      .stores({
+        normativeDocuments: null,
+      })
+      .upgrade(async (tx) => {
+        const anciens = await tx.table<DocumentNormatifAncien>('normativeDocuments').toArray()
+        documentsNormatifsAMigrer.push(...anciens)
+      })
   }
 }
 

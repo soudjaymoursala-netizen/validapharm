@@ -8,6 +8,7 @@ import {
   type FichierDrive,
 } from '../../connecteurs/drive/DriveReaderConnector'
 import { GitHubConnector, type EntreeArborescence } from '../../connecteurs/github/GitHubConnector'
+import { documentsNormatifsAMigrer } from '../../persistance/db'
 import type {
   CategorieDocumentNormatif,
   NormativeDocument,
@@ -96,6 +97,35 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
   const documents = ref<NormativeDocument[]>([])
   const enChargement = ref(false)
 
+  /**
+   * Envoie au serveur les documents capturés depuis l'ancienne table
+   * IndexedDB locale (`db.documentsNormatifsAMigrer`) juste avant sa
+   * suppression — n'a d'effet réel qu'une seule fois, sur le premier
+   * navigateur qui ouvre l'application avec ce code (voir migration
+   * Dexie v33, `persistance/db.ts`) : sans ce filet, ces documents
+   * n'existant qu'en local seraient perdus définitivement. Retire chaque
+   * document de la file uniquement après son envoi réussi, pour réessayer
+   * automatiquement au prochain chargement en cas d'échec réseau/serveur
+   * (ex. relais d'authentification pas encore joignable).
+   */
+  async function migrerDocumentsLocauxVersServeur(): Promise<void> {
+    while (documentsNormatifsAMigrer.length > 0) {
+      const ancien = documentsNormatifsAMigrer[0]
+      if (!ancien) break
+      await envoyerDocument({
+        category: ancien.category as CategorieDocumentNormatif,
+        titre: ancien.titre,
+        filename: ancien.filename,
+        source: ancien.source as SourceDocumentNormatif,
+        sourceRef: ancien.source_ref ?? undefined,
+        mimeType: ancien.mime_type,
+        texte: ancien.extracted_text,
+        ...(ancien.content ? { contenu: ancien.content } : {}),
+      })
+      documentsNormatifsAMigrer.shift()
+    }
+  }
+
   async function charger(): Promise<void> {
     enChargement.value = true
     try {
@@ -104,6 +134,11 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
       if (!api || !authStore.jeton) {
         documents.value = []
         return
+      }
+      try {
+        await migrerDocumentsLocauxVersServeur()
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
       }
       const resultat = await api.listerDocumentsNormatifs(authStore.jeton)
       documents.value = resultat.ok ? resultat.donnees.documents.map(wireVersDomaine) : []
