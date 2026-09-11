@@ -289,6 +289,14 @@ const erreurApercu = ref<string | null>(null)
  * téléchargement forcé — voir `telechargerDocument`) : le navigateur rend
  * nativement ce qu'il sait afficher (PDF, image...), et télécharge sinon
  * (ex. .docx) — comportement natif du navigateur, jamais simulé ici.
+ *
+ * `window.open(urlBlob, '_blank')` échoue silencieusement sur Chrome pour
+ * un PDF (« Échec de chargement du document PDF ») : le nouvel onglet est
+ * une navigation dans un contexte distinct qui ne résout pas toujours une
+ * URL `blob:` créée par l'onglet d'origine. Un clic sur un vrai `<a>`
+ * (même patron que `telechargerDocument`, sans l'attribut `download`) est
+ * la voie fiable documentée pour ce cas — jamais `window.open` pour du
+ * contenu blob.
  */
 async function voirDocumentOriginal(document: {
   id: string
@@ -300,7 +308,11 @@ async function voirDocumentOriginal(document: {
   try {
     const contenu = await documentsStore.telechargerContenu(document.id)
     const url = URL.createObjectURL(contenu)
-    window.open(url, '_blank')
+    const lien = window.document.createElement('a')
+    lien.href = url
+    lien.target = '_blank'
+    lien.rel = 'noopener'
+    lien.click()
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
   } catch (e) {
     erreurApercu.value = e instanceof Error ? e.message : 'Erreur inconnue.'
