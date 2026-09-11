@@ -311,6 +311,47 @@ export class AuthApiClient {
     return { ok: true, blob: await reponse.blob() }
   }
 
+  /**
+   * Remplace le contenu binaire d'un document déjà existant (jamais ses
+   * métadonnées) — corps brut, jamais du JSON ni du multipart : contourne
+   * `requete()`/`requeteFormData()` comme `obtenirContenuDocumentNormatif`.
+   * Réservé à la réparation d'un document dont le contenu s'est révélé
+   * vide après coup (voir #35) — jamais un chemin de création.
+   */
+  async repararContenuDocumentNormatif(
+    jeton: string,
+    id: string,
+    contenu: Blob,
+    mimeType: string,
+  ): Promise<ResultatApi<{ document: DocumentNormatifWire }>> {
+    const controleur = new AbortController()
+    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
+    let reponse: Response
+    try {
+      reponse = await fetch(`${this.relayUrl}/documents-normatifs/${id}/contenu`, {
+        method: 'PUT',
+        signal: controleur.signal,
+        headers: { Authorization: `Bearer ${jeton}`, 'Content-Type': mimeType },
+        body: contenu,
+      })
+    } catch (erreur) {
+      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
+      throw new IndisponibleAuthError()
+    } finally {
+      clearTimeout(minuteur)
+    }
+    if (reponse.status >= 500) throw new IndisponibleAuthError()
+    const corps = await reponse.json().catch(() => null)
+    if (!reponse.ok) {
+      const erreur =
+        corps && typeof corps === 'object' && 'erreur' in corps && typeof corps.erreur === 'string'
+          ? corps.erreur
+          : 'erreur_inconnue'
+      return { ok: false, erreur, status: reponse.status }
+    }
+    return { ok: true, donnees: corps as { document: DocumentNormatifWire } }
+  }
+
   // --- Aide ---
 
   private async requeteFormData<T>(
