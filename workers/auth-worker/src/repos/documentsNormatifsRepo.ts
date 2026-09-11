@@ -21,6 +21,7 @@ export interface DocumentsNormatifsRepo {
   parId(id: string): Promise<DocumentNormatifEnregistre | null>
   creer(document: DocumentNormatifEnregistre): Promise<void>
   renommer(id: string, titre: string): Promise<void>
+  marquerContenuDisponible(id: string): Promise<void>
   supprimer(id: string): Promise<void>
 }
 
@@ -42,6 +43,11 @@ export class DocumentsNormatifsRepoMemoire implements DocumentsNormatifsRepo {
   async renommer(id: string, titre: string): Promise<void> {
     const document = this.parId_.get(id)
     if (document) this.parId_.set(id, { ...document, titre })
+  }
+
+  async marquerContenuDisponible(id: string): Promise<void> {
+    const document = this.parId_.get(id)
+    if (document) this.parId_.set(id, { ...document, hasBinaryContent: true })
   }
 
   async supprimer(id: string): Promise<void> {
