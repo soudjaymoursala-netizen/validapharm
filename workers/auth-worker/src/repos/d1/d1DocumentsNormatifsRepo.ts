@@ -56,6 +56,13 @@ export class D1DocumentsNormatifsRepo implements DocumentsNormatifsRepo {
       .run()
   }
 
+  async renommer(id: string, titre: string): Promise<void> {
+    await this.db
+      .prepare('UPDATE documents_normatifs SET titre = ? WHERE id = ?')
+      .bind(titre, id)
+      .run()
+  }
+
   async supprimer(id: string): Promise<void> {
     await this.db.prepare('DELETE FROM documents_normatifs WHERE id = ?').bind(id).run()
   }
