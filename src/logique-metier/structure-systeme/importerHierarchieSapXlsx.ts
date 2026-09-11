@@ -31,9 +31,34 @@ import type { NoeudAImporter } from './importerHierarchieXlsx'
  * La reconstruction parent→enfant suppose un export en parcours préfixe
  * (chaque nœud immédiatement suivi de ses descendants avant son prochain
  * frère) — hypothèse structurelle de ce type d'export SAP, jamais
- * vérifiée indépendamment ; une rupture de cette hypothèse se traduit par
- * une erreur de ligne explicite (`ancetre_manquant`), jamais un
- * rattachement silencieux à la racine.
+ * vérifiée indépendamment.
+ *
+ * **Profondeur relative, jamais une table globale colonne→rang** : une
+ * première version associait chaque colonne de code distincte, triée,
+ * à un rang croissant (1re colonne = rang 1, etc.) — supposant qu'une même
+ * profondeur logique utilise toujours exactement la même colonne partout
+ * dans le fichier. Constaté sur un export réel (~7 250 lignes) que ce
+ * n'est pas garanti : une même profondeur logique (ex. « Système ou
+ * équipement ») peut se décaler de quelques colonnes selon la branche
+ * (largeur d'icône différente pour un équipement plutôt qu'un
+ * emplacement fonctionnel, compression SAP des chaînes à enfant unique)
+ * — la table globale comptait alors ce décalage comme un niveau
+ * supplémentaire, gonflant à tort `profondeurRequise` et rejetant
+ * l'import entier même hiérarchie correctement configurée (échec
+ * silencieux du point de vue de l'utilisateur : aucune ligne fautive à
+ * montrer, juste "il en faut plus"). Le rang est donc désormais déterminé
+ * *relativement* à la ligne de donnée précédente, via une pile
+ * d'ancêtres : une colonne strictement supérieure au sommet de pile est
+ * un enfant (rang = rang du sommet + 1), une colonne inférieure ou égale
+ * dépile jusqu'à retrouver l'ancêtre correspondant (frère ou oncle) —
+ * jamais affecté par la valeur absolue de la colonne, seulement par sa
+ * position relative aux lignes voisines déjà vues.
+ *
+ * **Échec en cascade, jamais un rattachement fantôme** : si une ligne est
+ * rejetée (code déjà utilisé), ses descendants directs dans le fichier ne
+ * sont jamais rattachés à un nœud qui n'existera pas — ils héritent de la
+ * même erreur (`ancetre_manquant`), jusqu'à ce qu'une ligne de rang égal
+ * ou inférieur referme la branche en échec.
  */
 
 export interface ErreurLigneImportHierarchieSap {
@@ -128,6 +153,56 @@ function extraireLignesDonnees(grille: readonly string[][]): {
   return { lignes, erreurs }
 }
 
+interface AncetrePile {
+  colonne: number
+  rang: number
+  id: string
+}
+
+interface LigneAvecRang {
+  numeroLigne: number
+  code: string
+  nom: string
+  rang: number
+  id: string
+  parentId: string | null
+}
+
+/**
+ * Reconstruit le rang (profondeur) et le parent de chaque ligne via une
+ * pile d'ancêtres, relativement à la colonne des lignes déjà vues —
+ * jamais une table globale colonne→rang (voir docstring du module). Pure
+ * et indépendante du schéma : ne fabrique aucun `NoeudAImporter`, se
+ * limite à la structure, pour permettre de valider la profondeur requise
+ * avant toute création.
+ */
+function reconstruireProfondeurs(lignesDonnees: readonly LigneDonneeSap[]): {
+  lignes: LigneAvecRang[]
+  profondeurRequise: number
+} {
+  const pile: AncetrePile[] = []
+  const lignes: LigneAvecRang[] = []
+  let profondeurRequise = 0
+
+  for (const { numeroLigne, colonneCode, code, nom } of lignesDonnees) {
+    let sommet = pile[pile.length - 1]
+    while (sommet !== undefined && sommet.colonne >= colonneCode) {
+      pile.pop()
+      sommet = pile[pile.length - 1]
+    }
+
+    const parent = sommet ?? null
+    const rang = (parent?.rang ?? 0) + 1
+    profondeurRequise = Math.max(profondeurRequise, rang)
+
+    const id = crypto.randomUUID()
+    lignes.push({ numeroLigne, code, nom, rang, id, parentId: parent?.id ?? null })
+    pile.push({ colonne: colonneCode, rang, id })
+  }
+
+  return { lignes, profondeurRequise }
+}
+
 export function preparerImportHierarchieSap(
   grille: readonly string[][],
   schema: Pick<AssetHierarchySchema, 'levels'>,
@@ -138,10 +213,7 @@ export function preparerImportHierarchieSap(
   const { lignes: lignesDonnees, erreurs: erreursDeForme } = extraireLignesDonnees(grille)
   if (lignesDonnees.length === 0) return { ok: false, raison: 'grille_vide' }
 
-  const colonnesCodeTriees = Array.from(new Set(lignesDonnees.map((l) => l.colonneCode))).sort(
-    (a, b) => a - b,
-  )
-  const profondeurRequise = colonnesCodeTriees.length
+  const { lignes: lignesAvecRang, profondeurRequise } = reconstruireProfondeurs(lignesDonnees)
   if (schema.levels.length < profondeurRequise) {
     return {
       ok: false,
@@ -150,29 +222,27 @@ export function preparerImportHierarchieSap(
       profondeurConfiguree: schema.levels.length,
     }
   }
-  const rangParColonne = new Map(colonnesCodeTriees.map((colonne, i) => [colonne, i + 1]))
 
   const aCreer: NoeudAImporter[] = []
   const erreurs: ErreurLigneImportHierarchieSap[] = [...erreursDeForme]
   const codesUtilises = new Set(noeudsExistants.map((n) => n.code))
-  const dernierIdParRang = new Map<number, string>()
+  const idsEchoues = new Set<string>()
 
-  for (const { numeroLigne, colonneCode, code, nom } of lignesDonnees) {
-    const rang = rangParColonne.get(colonneCode)
-    if (rang === undefined) continue // ne peut pas survenir : colonneCode vient de colonnesCodeTriees
-
-    let parentId: string | null = null
-    if (rang > 1) {
-      const parentTrouve = dernierIdParRang.get(rang - 1)
-      if (parentTrouve === undefined) {
-        erreurs.push({ ligne: numeroLigne, raison: 'ancetre_manquant' })
-        continue
-      }
-      parentId = parentTrouve
-    }
-
+  for (const { numeroLigne, code, nom, rang, id, parentId } of lignesAvecRang) {
+    // Le code propre à la ligne est vérifié avant la cascade parent : un
+    // ré-import intégral du même fichier (toutes les lignes déjà
+    // importées, y compris la racine) doit remonter « code déjà utilisé »
+    // pour chaque ligne individuellement, jamais un « ancêtre manquant »
+    // en cascade qui masquerait la vraie raison, plus directement
+    // exploitable par l'utilisateur.
     if (codesUtilises.has(code)) {
       erreurs.push({ ligne: numeroLigne, raison: 'code_deja_utilise' })
+      idsEchoues.add(id)
+      continue
+    }
+    if (parentId !== null && idsEchoues.has(parentId)) {
+      erreurs.push({ ligne: numeroLigne, raison: 'ancetre_manquant' })
+      idsEchoues.add(id)
       continue
     }
     codesUtilises.add(code)
@@ -180,9 +250,7 @@ export function preparerImportHierarchieSap(
     const niveau = schema.levels[rang - 1]
     if (!niveau) continue // ne peut pas survenir : profondeur déjà validée ci-dessus
 
-    const nouvelId = crypto.randomUUID()
-    aCreer.push({ id: nouvelId, level_key: niveau.key, name: nom, code, parent_id: parentId })
-    dernierIdParRang.set(rang, nouvelId)
+    aCreer.push({ id, level_key: niveau.key, name: nom, code, parent_id: parentId })
   }
 
   return { ok: true, plan: { aCreer, erreurs } }
