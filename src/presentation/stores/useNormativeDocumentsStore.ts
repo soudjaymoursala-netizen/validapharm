@@ -319,6 +319,18 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     return resultat.blob
   }
 
+  async function renommerDocument(documentId: string, nouveauTitre: string): Promise<void> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    const resultat = await api.renommerDocumentNormatif(authStore.jeton, documentId, nouveauTitre)
+    if (!resultat.ok) throw new Error(`Échec du renommage : ${resultat.erreur}`)
+    const document = wireVersDomaine(resultat.donnees.document)
+    documents.value = documents.value.map((d) => (d.id === documentId ? document : d))
+  }
+
   async function supprimerDocument(documentId: string): Promise<void> {
     const authStore = useAuthStore()
     const api = await authStore.client()
@@ -340,6 +352,7 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     listerFichiersDrive,
     importerDepuisDrive,
     telechargerContenu,
+    renommerDocument,
     supprimerDocument,
   }
 })

@@ -292,3 +292,22 @@ describe('useNormativeDocumentsStore — supprimerDocument', () => {
     expect(await ctx.documentsNormatifsRepo.parId(document.id)).toBeNull()
   })
 })
+
+describe('useNormativeDocumentsStore — renommerDocument', () => {
+  test('met à jour le titre en local et côté Worker, jamais le filename ni le texte extrait', async () => {
+    const store = useNormativeDocumentsStore()
+    const document = await store.importerDepuisFichier(
+      new File(['x'], 'a-renommer.txt', { type: 'text/plain' }),
+      'autre',
+      'qa-1',
+    )
+
+    await store.renommerDocument(document.id, 'Titre plus explicite')
+
+    expect(store.documents[0]?.titre).toBe('Titre plus explicite')
+    expect(store.documents[0]?.filename).toBe('a-renommer.txt')
+
+    const enregistre = await ctx.documentsNormatifsRepo.parId(document.id)
+    expect(enregistre?.titre).toBe('Titre plus explicite')
+  })
+})
