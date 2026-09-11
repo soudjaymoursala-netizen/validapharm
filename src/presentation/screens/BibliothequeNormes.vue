@@ -215,6 +215,52 @@ async function importerToutDrive(): Promise<void> {
   }
 }
 
+/**
+ * Documents dont le contenu binaire manque à tort (voir #35 : jeton Drive
+ * expiré en cours d'un import de masse, contenu vide silencieusement
+ * annoncé comme disponible) — jamais un document Google natif
+ * (Docs/Sheets/Slides), qui n'a par nature aucun fichier d'origine.
+ */
+const documentsAReparer = computed(() =>
+  documentsStore.documents.filter((d) => documentsStore.necessiteReparationContenu(d)),
+)
+const enReparationTout = ref(false)
+const progressionReparation = ref<{ fait: number; total: number } | null>(null)
+const erreurReparation = ref<string | null>(null)
+
+/**
+ * Répare en un seul geste tous les documents identifiés — même patron que
+ * `importerToutDrive` (séquentiel, jamais en parallèle ; un échec
+ * n'interrompt pas les suivants, les erreurs sont accumulées puis
+ * affichées ensemble).
+ */
+async function repararTout(): Promise<void> {
+  const aReparer = documentsAReparer.value
+  if (aReparer.length === 0) return
+  erreurReparation.value = null
+  enReparationTout.value = true
+  progressionReparation.value = { fait: 0, total: aReparer.length }
+  const erreurs: string[] = []
+  try {
+    for (const document of aReparer) {
+      try {
+        await documentsStore.repararContenuDocument(document.id)
+      } catch (e) {
+        erreurs.push(`${document.titre} : ${e instanceof Error ? e.message : 'erreur inconnue'}`)
+      } finally {
+        progressionReparation.value = {
+          fait: (progressionReparation.value?.fait ?? 0) + 1,
+          total: aReparer.length,
+        }
+      }
+    }
+    if (erreurs.length > 0) erreurReparation.value = erreurs.join(' · ')
+  } finally {
+    enReparationTout.value = false
+    progressionReparation.value = null
+  }
+}
+
 const erreurTelechargement = ref<string | null>(null)
 
 // --- Renommage ---
@@ -494,6 +540,27 @@ onMounted(async () => {
       </details>
     </section>
 
+    <section v-if="documentsAReparer.length > 0" class="bloc-import bloc-alerte">
+      <h3>Fichiers d'origine manquants</h3>
+      <p class="rappel">
+        {{ documentsAReparer.length }} document(s) importé(s) depuis Google Drive n'ont jamais reçu
+        leur fichier d'origine (jeton Drive expiré en cours d'un import — le texte extrait reste
+        consultable, seul le fichier original manque). Nécessite la connexion Drive ci-dessus à jour
+        avec un jeton valide.
+      </p>
+      <div class="actions">
+        <button type="button" :disabled="enReparationTout" @click="repararTout">
+          {{
+            enReparationTout ? 'Réparation en cours…' : `Réparer tout (${documentsAReparer.length})`
+          }}
+        </button>
+      </div>
+      <p v-if="progressionReparation" class="rappel">
+        Réparation {{ progressionReparation.fait }} / {{ progressionReparation.total }}…
+      </p>
+      <p v-if="erreurReparation" class="erreur" role="alert">{{ erreurReparation }}</p>
+    </section>
+
     <section class="bloc-documents">
       <h3>Documents importés</h3>
       <div class="filtres-documents">
@@ -700,6 +767,11 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+}
+
+.bloc-alerte {
+  border-color: var(--vp-attention);
+  background: var(--vp-attention-fond-leger);
 }
 
 .formulaire-import {

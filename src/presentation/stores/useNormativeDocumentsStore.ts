@@ -5,6 +5,7 @@ import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
 import { extraireTextePdf } from '../../connecteurs/pdf/PdfNatifAdapter'
 import {
   DriveReaderConnector,
+  MIME_TYPES_GOOGLE_NATIFS,
   type FichierDrive,
 } from '../../connecteurs/drive/DriveReaderConnector'
 import { GitHubConnector, type EntreeArborescence } from '../../connecteurs/github/GitHubConnector'
@@ -331,6 +332,60 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     documents.value = documents.value.map((d) => (d.id === documentId ? document : d))
   }
 
+  /**
+   * Un document Google natif (Docs/Sheets/Slides) n'a jamais de fichier
+   * d'origine — sa `has_binary_content: false` est correcte et attendue,
+   * jamais un candidat de réparation. Seul un document `source: 'drive'`
+   * non natif, sans contenu binaire alors qu'un identifiant Drive est
+   * connu, indique une perte réelle (voir #35 : jeton Drive expiré en
+   * cours d'un import de masse).
+   */
+  function necessiteReparationContenu(document: NormativeDocument): boolean {
+    return (
+      document.source === 'drive' &&
+      document.source_ref !== null &&
+      !document.has_binary_content &&
+      !MIME_TYPES_GOOGLE_NATIFS.has(document.mime_type)
+    )
+  }
+
+  /**
+   * Récupère à nouveau le contenu binaire d'un document depuis Drive et le
+   * dépose côté serveur — jamais une recréation : le titre déjà renommé,
+   * la catégorie déjà choisie restent inchangés, seul le contenu binaire
+   * est remplacé (voir `gererRepararContenuDocumentNormatif`, Worker).
+   */
+  async function repararContenuDocument(documentId: string): Promise<void> {
+    const document = documents.value.find((d) => d.id === documentId)
+    if (!document) throw new Error('Document introuvable.')
+    if (!necessiteReparationContenu(document)) {
+      throw new Error("Ce document n'a jamais eu de fichier d'origine à réparer.")
+    }
+    const sourceRef = document.source_ref as string
+
+    const connexion = await obtenirConnexionDriveNormes()
+    if (connexion === null) {
+      throw new Error('Aucune configuration Drive enregistrée pour la bibliothèque de normes.')
+    }
+    const connecteur = new DriveReaderConnector(connexion)
+    const contenuBinaire = await connecteur.telechargerContenu(sourceRef)
+
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    const resultat = await api.repararContenuDocumentNormatif(
+      authStore.jeton,
+      documentId,
+      new Blob([contenuBinaire], { type: document.mime_type }),
+      document.mime_type,
+    )
+    if (!resultat.ok) throw new Error(`Échec de la réparation : ${resultat.erreur}`)
+    const documentRepare = wireVersDomaine(resultat.donnees.document)
+    documents.value = documents.value.map((d) => (d.id === documentId ? documentRepare : d))
+  }
+
   async function supprimerDocument(documentId: string): Promise<void> {
     const authStore = useAuthStore()
     const api = await authStore.client()
@@ -353,6 +408,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     importerDepuisDrive,
     telechargerContenu,
     renommerDocument,
+    necessiteReparationContenu,
+    repararContenuDocument,
     supprimerDocument,
   }
 })

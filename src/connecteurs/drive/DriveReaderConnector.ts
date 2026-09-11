@@ -15,8 +15,17 @@ export interface FichierDrive {
 }
 
 const DELAI_MAX_PAR_DEFAUT_MS = 15_000
-/** Types natifs Google (Docs/Sheets/Slides/...) — sans équivalent binaire téléchargeable, exportés en texte brut via l'API Drive plutôt que téléchargés. */
-const MIME_TYPES_GOOGLE_NATIFS: ReadonlySet<string> = new Set([
+/**
+ * Types natifs Google (Docs/Sheets/Slides/...) — sans équivalent binaire
+ * téléchargeable, exportés en texte brut via l'API Drive plutôt que
+ * téléchargés. Exporté (plutôt qu'un simple détail privé de la classe) :
+ * `useNormativeDocumentsStore.repararContenuDocument` doit distinguer un
+ * document nativement sans fichier d'origine (`has_binary_content: false`
+ * correct et attendu) d'un document dont le contenu binaire a été perdu
+ * par erreur — sans instancier un connecteur complet pour une simple
+ * vérification de type.
+ */
+export const MIME_TYPES_GOOGLE_NATIFS: ReadonlySet<string> = new Set([
   'application/vnd.google-apps.document',
   'application/vnd.google-apps.spreadsheet',
   'application/vnd.google-apps.presentation',

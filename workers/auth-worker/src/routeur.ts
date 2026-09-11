@@ -262,6 +262,14 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       matchContenuDocumentNormatif[1] as string,
     )
   }
+  if (matchContenuDocumentNormatif && request.method === 'PUT') {
+    return gererRepararContenuDocumentNormatif(
+      request,
+      ctx,
+      entetes,
+      matchContenuDocumentNormatif[1] as string,
+    )
+  }
   const matchDocumentNormatifId = chemin.match(/^\/documents-normatifs\/([^/]+)$/)
   if (matchDocumentNormatifId && request.method === 'PATCH') {
     return gererRenommerDocumentNormatif(
@@ -1016,6 +1024,54 @@ async function gererObtenirContenuDocumentNormatif(
       'Content-Disposition': `attachment; filename="${document.filename.replace(/"/g, '')}"`,
     },
   })
+}
+
+/**
+ * Répare un document dont le contenu binaire s'est révélé vide après coup
+ * (voir docstring de `gererCreerDocumentNormatif` — jeton Drive expiré en
+ * cours d'un import de masse) : remplace uniquement le contenu binaire
+ * d'un document déjà existant, jamais ses métadonnées (titre déjà
+ * renommé, catégorie déjà choisie) — jamais une recréation qui perdrait
+ * ces personnalisations. Corps brut (jamais multipart, contrairement à la
+ * création) : le client connaît déjà tout le reste, seul le contenu
+ * change.
+ */
+async function gererRepararContenuDocumentNormatif(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const document = await ctx.documentsNormatifsRepo.parId(id)
+  if (!document) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+
+  const contenu = await request.arrayBuffer()
+  // Même garde qu'à la création (#35) : jamais annoncer un contenu
+  // disponible pour un corps vide, même reçu avec un statut 200.
+  if (contenu.byteLength === 0) {
+    return reponseJson({ erreur: 'contenu_vide' }, 400, entetes)
+  }
+
+  const typeContenu = request.headers.get('Content-Type') ?? document.mimeType
+  await ctx.stockageBinaireRepo.enregistrer(cleContenuDocument(id), contenu, typeContenu)
+  await ctx.documentsNormatifsRepo.marquerContenuDisponible(id)
+  await consignerAudit(
+    ctx,
+    utilisateur,
+    'reparation_contenu_document_normatif',
+    'document_normatif',
+    id,
+    null,
+  )
+
+  return reponseJson(
+    { document: await assemblerDocumentNormatif(ctx, { ...document, hasBinaryContent: true }) },
+    200,
+    entetes,
+  )
 }
 
 async function gererRenommerDocumentNormatif(
