@@ -59,7 +59,7 @@ export const useConnexionRelaisIAStore = defineStore('connexionRelaisIA', () => 
     const resultat = await api.enregistrerParametreInstallation(
       authStore.jeton,
       CLE_PARAMETRE,
-      valeur,
+      valeur as unknown as Record<string, string>,
     )
     if (!resultat.ok) return { ok: false, erreur: resultat.erreur }
     connexion.value = valeur

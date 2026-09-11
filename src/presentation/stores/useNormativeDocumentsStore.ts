@@ -169,7 +169,7 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     const resultat = await api.enregistrerParametreInstallation(
       authStore.jeton,
       CLE_PARAMETRE_DRIVE_NORMES,
-      valeur,
+      valeur as unknown as Record<string, string>,
     )
     if (!resultat.ok) return { ok: false, erreur: resultat.erreur }
     return { ok: true }
