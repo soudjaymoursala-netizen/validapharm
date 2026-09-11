@@ -249,16 +249,25 @@ async function importerFichier(evenement: Event): Promise<void> {
   }
 }
 
-// --- Import d'un export SAP (rapport ALV arborescent) — lecteur natif
-// (`XlsxNatifAdapter.extraireGrilleXlsx`), profondeur détectée depuis le
-// fichier (jamais aplatie de force) : voir `preparerImportHierarchieSap`
-// pour la convention reconnue.
+// --- Import d'un export SAP (rapport ALV arborescent) — un seul champ,
+// format réel détecté depuis le contenu du fichier (jamais depuis
+// l'extension choisie par l'utilisateur, ni un champ séparé par format) :
+// `XlsxNatifAdapter.extraireGrilleXlsx` pour un vrai classeur .xlsx
+// (signature ZIP), `HtmlSapAdapter.extraireGrilleHtmlSap` sinon (export
+// « Enregistrer comme fichier HTML »). Deux champs distincts par
+// extension (`.xlsx` / `.htm,.html`) bloquaient silencieusement la
+// sélection du fichier dans les deux cas dès que l'export SAP réel du
+// poste de l'utilisateur portait l'extension `.xls` — qui n'est acceptée
+// par aucun des deux — sans le moindre message d'erreur (l'utilisateur ne
+// pouvait même pas choisir son fichier). Même planification pure
+// (`preparerImportHierarchieSap`) que le fichier fourni dans les deux cas.
 const resultatImportSap = ref<ResultatImportHierarchieSap | undefined>(undefined)
 const importSapEnCours = ref(false)
 const champFichierSap = ref<HTMLInputElement | null>(null)
 
 const MESSAGES_ERREUR_IMPORT_SAP: Record<string, string> = {
-  fichier_illisible: "Le fichier fourni n'est pas un .xlsx valide ou n'a pas pu être lu.",
+  fichier_illisible:
+    "Le fichier fourni n'est pas un export SAP reconnu (.xlsx réel ou .htm/.html) ou n'a pas pu être lu.",
   grille_vide: 'Le fichier ne contient aucune ligne de données exploitable (arborescence vide).',
 }
 
@@ -273,8 +282,15 @@ function messageErreurImportSap(
 
 function messageErreurLigneSap(raison: string): string {
   if (raison === 'code_deja_utilise') return 'code déjà utilisé'
-  if (raison === 'ancetre_manquant') return 'ancêtre attendu introuvable à ce stade du fichier'
+  if (raison === 'ancetre_manquant') {
+    return "nœud parent rejeté (voir l'erreur de sa propre ligne, plus haut dans le fichier) — jamais rattaché sans lui"
+  }
   return 'forme de ligne inattendue'
+}
+
+/** Signature ZIP (`PK\x03\x04`) d'un vrai classeur `.xlsx` — jamais une extension de fichier, jamais fiable pour un export SAP (voir commentaire ci-dessus). */
+function estArchiveZip(octets: Uint8Array): boolean {
+  return octets[0] === 0x50 && octets[1] === 0x4b && octets[2] === 0x03 && octets[3] === 0x04
 }
 
 async function importerFichierSap(evenement: Event): Promise<void> {
@@ -285,54 +301,25 @@ async function importerFichierSap(evenement: Event): Promise<void> {
   resultatImportSap.value = undefined
   try {
     const contenu = await fichier.arrayBuffer()
-    resultatImportSap.value = await structureStore.importerHierarchieSapDepuisXlsx(
-      props.clientId,
-      contenu,
-    )
+    if (estArchiveZip(new Uint8Array(contenu.slice(0, 4)))) {
+      resultatImportSap.value = await structureStore.importerHierarchieSapDepuisXlsx(
+        props.clientId,
+        contenu,
+      )
+      return
+    }
+    const texteDecode = new TextDecoder('utf-8').decode(contenu)
+    if (texteDecode.trimStart().startsWith('<')) {
+      resultatImportSap.value = await structureStore.importerHierarchieSapDepuisHtml(
+        props.clientId,
+        texteDecode,
+      )
+      return
+    }
+    resultatImportSap.value = { ok: false, raison: 'fichier_illisible' }
   } finally {
     importSapEnCours.value = false
     if (champFichierSap.value) champFichierSap.value.value = ''
-  }
-}
-
-// --- Import d'un export SAP au format `.htm`/`.html` (« Enregistrer comme
-// fichier HTML » plutôt que « vers feuille de calcul ») — même
-// planification pure (`preparerImportHierarchieSap`) que la variante
-// `.xlsx` ci-dessus, seule la lecture du fichier diffère
-// (`HtmlSapAdapter.extraireGrilleHtmlSap`).
-const resultatImportSapHtml = ref<ResultatImportHierarchieSap | undefined>(undefined)
-const importSapHtmlEnCours = ref(false)
-const champFichierSapHtml = ref<HTMLInputElement | null>(null)
-
-const MESSAGES_ERREUR_IMPORT_SAP_HTML: Record<string, string> = {
-  fichier_illisible: "Le fichier fourni n'est pas un .htm/.html valide ou n'a pas pu être lu.",
-  grille_vide: 'Le fichier ne contient aucune ligne de données exploitable (arborescence vide).',
-}
-
-function messageErreurImportSapHtml(
-  resultat: Extract<ResultatImportHierarchieSap, { ok: false }>,
-): string {
-  if (resultat.raison === 'profondeur_insuffisante') {
-    return `Ce fichier nécessite ${resultat.profondeurRequise} niveau(x) configuré(s) (profondeur maximale détectée dans l'arborescence), seuls ${resultat.profondeurConfiguree} sont définis — créez les niveaux manquants dans la hiérarchie configurable ci-dessus avant de réimporter.`
-  }
-  return MESSAGES_ERREUR_IMPORT_SAP_HTML[resultat.raison] ?? 'Import refusé.'
-}
-
-async function importerFichierSapHtml(evenement: Event): Promise<void> {
-  const fichier = (evenement.target as HTMLInputElement).files?.[0]
-  if (!fichier) return
-
-  importSapHtmlEnCours.value = true
-  resultatImportSapHtml.value = undefined
-  try {
-    const contenu = await fichier.text()
-    resultatImportSapHtml.value = await structureStore.importerHierarchieSapDepuisHtml(
-      props.clientId,
-      contenu,
-    )
-  } finally {
-    importSapHtmlEnCours.value = false
-    if (champFichierSapHtml.value) champFichierSapHtml.value.value = ''
   }
 }
 
@@ -476,10 +463,14 @@ const noeudsAffiches = computed(() =>
     <section class="bloc-import">
       <h2>Importer un export SAP (arborescence)</h2>
       <p class="rappel">
-        Pour un rapport SAP arborescent (ex. IH01/IH03) téléchargé « vers feuille de calcul » —
-        format différent de l'import ci-dessus : la profondeur de chaque nœud est détectée depuis sa
-        position dans le fichier, jamais imposée. Le fichier peut nécessiter plus de niveaux que
-        ceux déjà configurés ci-dessus (chaque branche de l'arborescence SAP peut être plus ou moins
+        Pour un rapport SAP arborescent (ex. IH01/IH03) téléchargé « vers feuille de calcul » ou «
+        Enregistrer comme fichier HTML » — format différent de l'import ci-dessus : la profondeur de
+        chaque nœud est détectée depuis sa position réelle dans le fichier, jamais depuis le rendu
+        visuel de l'arbre ni imposée. Le format réel du fichier (.xlsx ou HTML) est détecté
+        automatiquement à son contenu, quelle que soit son extension — un export SAP « vers feuille
+        de calcul » porte très souvent l'extension <code>.xls</code> quel que soit son contenu réel,
+        déposez le fichier tel que téléchargé. Le fichier peut nécessiter plus de niveaux que ceux
+        déjà configurés ci-dessus (chaque branche de l'arborescence SAP peut être plus ou moins
         profonde) — créez-les tous avant d'importer, l'ordre doit correspondre à la profondeur
         réelle du fichier (du plus générique au plus profond). Les nœuds créés peuvent ensuite être
         réorganisés (reparentage) dans « Nœuds du référentiel » ci-dessous.
@@ -487,7 +478,7 @@ const noeudsAffiches = computed(() =>
       <input
         ref="champFichierSap"
         type="file"
-        accept=".xlsx"
+        accept=".xlsx,.xls,.htm,.html"
         :disabled="importSapEnCours"
         @change="importerFichierSap"
       />
@@ -505,41 +496,6 @@ const noeudsAffiches = computed(() =>
           </span>
         </p>
         <p v-else class="erreur" role="alert">{{ messageErreurImportSap(resultatImportSap) }}</p>
-      </template>
-    </section>
-
-    <section class="bloc-import">
-      <h2>Importer un export SAP (arborescence) — format .htm/.html</h2>
-      <p class="rappel">
-        Même import que ci-dessus, pour un rapport SAP téléchargé « Enregistrer comme fichier HTML »
-        plutôt que « vers feuille de calcul » — la profondeur est détectée depuis la position réelle
-        de chaque nœud dans le fichier, jamais depuis le rendu visuel de l'arbre (non fiable pour la
-        profondeur). Mêmes règles que l'import .xlsx : créez tous les niveaux nécessaires avant
-        d'importer.
-      </p>
-      <input
-        ref="champFichierSapHtml"
-        type="file"
-        accept=".htm,.html"
-        :disabled="importSapHtmlEnCours"
-        @change="importerFichierSapHtml"
-      />
-      <p v-if="importSapHtmlEnCours" class="etat-vide">Import en cours…</p>
-      <template v-else-if="resultatImportSapHtml">
-        <p v-if="resultatImportSapHtml.ok" class="confirmation">
-          {{ resultatImportSapHtml.noeudsCrees }} nœud(s) créé(s).
-          <span v-if="resultatImportSapHtml.erreurs.length > 0">
-            {{ resultatImportSapHtml.erreurs.length }} ligne(s) ignorée(s) —
-            <template v-for="(erreur, i) in resultatImportSapHtml.erreurs" :key="i">
-              ligne {{ erreur.ligne }} ({{ messageErreurLigneSap(erreur.raison) }}){{
-                i < resultatImportSapHtml.erreurs.length - 1 ? ', ' : ''
-              }}
-            </template>
-          </span>
-        </p>
-        <p v-else class="erreur" role="alert">
-          {{ messageErreurImportSapHtml(resultatImportSapHtml) }}
-        </p>
       </template>
     </section>
 
