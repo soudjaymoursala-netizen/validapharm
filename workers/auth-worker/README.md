@@ -46,7 +46,7 @@ IndexedDB + synchronisation GitHub, inchangés par ce lot.
   seul. Depuis un poste avec `wrangler` authentifié :
   `wrangler d1 migrations apply validapharm-auth --remote` (depuis
   `workers/auth-worker/`). Sans cette étape, `GET/PUT
-  /parametres-installation/:cle` échoue en 500 (table inexistante) — le
+/parametres-installation/:cle` échoue en 500 (table inexistante) — le
   dépôt GitHub/Relais IA/Drive normes resteront alors bloqués en erreur
   jusqu'à l'application de cette migration.
 - Une fois la migration appliquée, tout compte existant doit reconfigurer
