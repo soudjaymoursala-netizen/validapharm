@@ -57,15 +57,40 @@ describe('traiterRequeteRelaisIA — CORS et méthodes', () => {
     expect(fournisseur.envoyerMessage).not.toHaveBeenCalled()
   })
 
-  test('méthode GET -> 405, jamais un appel au fournisseur', async () => {
+  test('méthode PUT -> 405, jamais un appel au fournisseur', async () => {
+    const fournisseur = fournisseurMock({ texte: 'x', version_moteur: null })
+    const reponse = await traiterRequeteRelaisIA(
+      new Request('https://relais.workers.dev', { method: 'PUT' }),
+      fournisseur,
+      config(),
+    )
+    expect(reponse.status).toBe(405)
+    expect(fournisseur.envoyerMessage).not.toHaveBeenCalled()
+  })
+
+  test('GET avec jeton valide -> 200 (vérification de connexion), jamais un appel au fournisseur', async () => {
+    const fournisseur = fournisseurMock({ texte: 'x', version_moteur: null })
+    const reponse = await traiterRequeteRelaisIA(
+      new Request('https://relais.workers.dev', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${JETON}` },
+      }),
+      fournisseur,
+      config(),
+    )
+    expect(reponse.status).toBe(200)
+    expect(await reponse.json()).toEqual({ ok: true })
+    expect(fournisseur.envoyerMessage).not.toHaveBeenCalled()
+  })
+
+  test('GET sans jeton (ou jeton invalide) -> 401', async () => {
     const fournisseur = fournisseurMock({ texte: 'x', version_moteur: null })
     const reponse = await traiterRequeteRelaisIA(
       new Request('https://relais.workers.dev', { method: 'GET' }),
       fournisseur,
       config(),
     )
-    expect(reponse.status).toBe(405)
-    expect(fournisseur.envoyerMessage).not.toHaveBeenCalled()
+    expect(reponse.status).toBe(401)
   })
 
   test("l'origine CORS reflétée est exactement celle configurée, jamais '*'", async () => {
