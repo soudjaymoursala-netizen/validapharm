@@ -125,6 +125,8 @@ const testDriveEnCours = ref(false)
 const fichiersDrive = ref<FichierDrive[]>([])
 const enListeDrive = ref(false)
 const erreurDrive = ref<string | null>(null)
+const enImportDriveTout = ref(false)
+const progressionDriveTout = ref<{ fait: number; total: number } | null>(null)
 
 async function enregistrerConnexionDrive(): Promise<void> {
   erreurDrive.value = null
@@ -170,6 +172,41 @@ async function importerDepuisDrive(fichier: FichierDrive): Promise<void> {
     await documentsStore.importerDepuisDrive(fichier, categorieDrive.value, actorCourant())
   } catch (e) {
     erreurDrive.value = e instanceof Error ? e.message : 'Erreur inconnue.'
+  }
+}
+
+/**
+ * Importe en un seul geste tous les fichiers listés du dossier Drive
+ * courant, sous la catégorie choisie — un dossier Drive réel se peuple par
+ * dizaines/centaines de documents (ex. un dossier "ASTM" complet), jamais
+ * un import fichier par fichier dans ce cas. Séquentiel (jamais en
+ * parallèle, même raison que `importerFichier`) ; un fichier en échec
+ * n'interrompt pas les suivants — les erreurs sont accumulées puis
+ * affichées ensemble.
+ */
+async function importerToutDrive(): Promise<void> {
+  if (fichiersDrive.value.length === 0) return
+  erreurDrive.value = null
+  enImportDriveTout.value = true
+  progressionDriveTout.value = { fait: 0, total: fichiersDrive.value.length }
+  const erreurs: string[] = []
+  try {
+    for (const fichier of fichiersDrive.value) {
+      try {
+        await documentsStore.importerDepuisDrive(fichier, categorieDrive.value, actorCourant())
+      } catch (e) {
+        erreurs.push(`${fichier.nom} : ${e instanceof Error ? e.message : 'erreur inconnue'}`)
+      } finally {
+        progressionDriveTout.value = {
+          fait: (progressionDriveTout.value?.fait ?? 0) + 1,
+          total: fichiersDrive.value.length,
+        }
+      }
+    }
+    if (erreurs.length > 0) erreurDrive.value = erreurs.join(' · ')
+  } finally {
+    enImportDriveTout.value = false
+    progressionDriveTout.value = null
   }
 }
 
@@ -327,10 +364,20 @@ onMounted(async () => {
         </button>
       </div>
       <p v-if="erreurDrive" class="erreur" role="alert">{{ erreurDrive }}</p>
+      <div v-if="fichiersDrive.length > 0" class="actions">
+        <button type="button" :disabled="enImportDriveTout" @click="importerToutDrive">
+          {{ enImportDriveTout ? 'Import en cours…' : `Tout importer (${fichiersDrive.length})` }}
+        </button>
+      </div>
+      <p v-if="progressionDriveTout" class="rappel">
+        Import {{ progressionDriveTout.fait }} / {{ progressionDriveTout.total }}…
+      </p>
       <ul v-if="fichiersDrive.length > 0" class="liste-fichiers-externes">
         <li v-for="fichier in fichiersDrive" :key="fichier.id">
           <span>{{ fichier.nom }}</span>
-          <button type="button" @click="importerDepuisDrive(fichier)">Importer</button>
+          <button type="button" :disabled="enImportDriveTout" @click="importerDepuisDrive(fichier)">
+            Importer
+          </button>
         </li>
       </ul>
     </section>
