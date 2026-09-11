@@ -1573,9 +1573,10 @@ Disclaimer permanent : « Aide, pas avis opposable. »
 > ici et consultables par l'assistant contextuel de section. »
 
 Contrairement au bloc précédent, cette bibliothèque est réellement
-alimentable, par trois voies, chacune avec sa **Catégorie** (Norme / Guideline
-/ Méthode / Autre) :
-- **Téléversement direct** : fichier `.docx`, `.pdf`, `.txt` ou `.md`.
+alimentable, par trois voies, chacune avec sa **Catégorie** (ISO / EudraLex /
+PIC/S / ASTM / ISPE / GMP / CQV / CSV / Autre) :
+- **Ajouter des documents** : téléversement direct, fichier(s) `.docx`,
+  `.pdf`, `.txt` ou `.md` (plusieurs à la fois).
 - **Depuis le dépôt GitHub dédié** (celui configuré en [§1.1](#11-dépôt-github-dédié)) :
   Préfixe de chemin (`ex. normes/`) + bouton « Lister » (seuls les fichiers
   `.md`/`.txt` sont importables par cette voie — un fichier binaire lu ainsi
@@ -1588,10 +1589,14 @@ alimentable, par trois voies, chacune avec sa **Catégorie** (Norme / Guideline
   résultat.
 
 Section « Documents importés » : filtre par catégorie (« Toutes » ou une des
-quatre), liste avec source et bouton **« Supprimer »** par document. État vide :
-« Aucun document importé. » Cette bibliothèque est globale à l'installation
-(jamais scopée par client, contrairement aux Documents d'un projet,
-[§6](#6-fiche-projet)) — une norme s'applique indépendamment du client.
+neuf), liste avec source et, par document, boutons **« Consulter »** (ouvre le
+texte extrait dans un nouvel onglet — toujours disponible), **« Télécharger »**
+(fichier d'origine tel qu'importé — uniquement pour un téléversement direct,
+les imports GitHub/Drive ne conservent que le texte extrait) et
+**« Supprimer »**. État vide : « Aucun document importé. » Cette bibliothèque
+est globale à l'installation (jamais scopée par client, contrairement aux
+Documents d'un projet, [§6](#6-fiche-projet)) — une norme s'applique
+indépendamment du client.
 
 ---
 
