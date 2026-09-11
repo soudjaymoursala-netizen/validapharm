@@ -314,12 +314,15 @@ onMounted(async () => {
         </button>
       </div>
       <p v-if="erreurGitHub" class="erreur" role="alert">{{ erreurGitHub }}</p>
-      <ul v-if="fichiersGitHub.length > 0" class="liste-fichiers-externes">
-        <li v-for="entree in fichiersGitHub" :key="entree.sha">
-          <span>{{ entree.chemin }}</span>
-          <button type="button" @click="importerDepuisGitHub(entree.chemin)">Importer</button>
-        </li>
-      </ul>
+      <details v-if="fichiersGitHub.length > 0" class="liste-repliable">
+        <summary>{{ fichiersGitHub.length }} fichier(s) trouvé(s) — cliquer pour afficher</summary>
+        <ul class="liste-fichiers-externes">
+          <li v-for="entree in fichiersGitHub" :key="entree.sha">
+            <span>{{ entree.chemin }}</span>
+            <button type="button" @click="importerDepuisGitHub(entree.chemin)">Importer</button>
+          </li>
+        </ul>
+      </details>
     </section>
 
     <section class="bloc-import">
@@ -372,14 +375,21 @@ onMounted(async () => {
       <p v-if="progressionDriveTout" class="rappel">
         Import {{ progressionDriveTout.fait }} / {{ progressionDriveTout.total }}…
       </p>
-      <ul v-if="fichiersDrive.length > 0" class="liste-fichiers-externes">
-        <li v-for="fichier in fichiersDrive" :key="fichier.id">
-          <span>{{ fichier.nom }}</span>
-          <button type="button" :disabled="enImportDriveTout" @click="importerDepuisDrive(fichier)">
-            Importer
-          </button>
-        </li>
-      </ul>
+      <details v-if="fichiersDrive.length > 0" class="liste-repliable">
+        <summary>{{ fichiersDrive.length }} fichier(s) trouvé(s) — cliquer pour afficher</summary>
+        <ul class="liste-fichiers-externes">
+          <li v-for="fichier in fichiersDrive" :key="fichier.id">
+            <span>{{ fichier.nom }}</span>
+            <button
+              type="button"
+              :disabled="enImportDriveTout"
+              @click="importerDepuisDrive(fichier)"
+            >
+              Importer
+            </button>
+          </li>
+        </ul>
+      </details>
     </section>
 
     <section class="bloc-documents">
@@ -394,29 +404,32 @@ onMounted(async () => {
         </select>
       </label>
       <p v-if="documentsFiltres.length === 0" class="etat-vide">Aucun document importé.</p>
-      <ul v-else class="liste-documents">
-        <li v-for="document in documentsFiltres" :key="document.id">
-          <div>
-            <strong>{{ document.titre }}</strong>
-            <span class="meta">
-              — {{ LIBELLES_CATEGORIE[document.category] }} · source : {{ document.source }}
-            </span>
-          </div>
-          <div class="actions-document">
-            <button type="button" @click="voirTexteExtrait(document)">Consulter</button>
-            <button
-              v-if="document.has_binary_content"
-              type="button"
-              @click="telechargerDocument(document)"
-            >
-              Télécharger
-            </button>
-            <button type="button" @click="documentsStore.supprimerDocument(document.id)">
-              Supprimer
-            </button>
-          </div>
-        </li>
-      </ul>
+      <details v-else class="liste-repliable">
+        <summary>{{ documentsFiltres.length }} document(s) — cliquer pour afficher</summary>
+        <ul class="liste-documents">
+          <li v-for="document in documentsFiltres" :key="document.id">
+            <div>
+              <strong>{{ document.titre }}</strong>
+              <span class="meta">
+                — {{ LIBELLES_CATEGORIE[document.category] }} · source : {{ document.source }}
+              </span>
+            </div>
+            <div class="actions-document">
+              <button type="button" @click="voirTexteExtrait(document)">Consulter</button>
+              <button
+                v-if="document.has_binary_content"
+                type="button"
+                @click="telechargerDocument(document)"
+              >
+                Télécharger
+              </button>
+              <button type="button" @click="documentsStore.supprimerDocument(document.id)">
+                Supprimer
+              </button>
+            </div>
+          </li>
+        </ul>
+      </details>
       <p v-if="erreurTelechargement" class="erreur" role="alert">{{ erreurTelechargement }}</p>
     </section>
   </main>
@@ -454,6 +467,18 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.liste-repliable > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.4rem 0;
+}
+
+.liste-repliable > ul {
+  margin-top: 0.5rem;
+  max-height: 24rem;
+  overflow-y: auto;
 }
 
 .liste-documents li,
