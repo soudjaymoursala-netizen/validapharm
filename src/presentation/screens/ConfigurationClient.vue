@@ -11,7 +11,10 @@ import {
 } from '../stores/useConnexionGitHubStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useConnexionAuthentificationStore } from '../stores/useConnexionAuthentificationStore'
-import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
+import {
+  useConnexionRelaisIAStore,
+  type ResultatTestConnexionRelaisIA,
+} from '../stores/useConnexionRelaisIAStore'
 
 const authStore = useAuthStore()
 
@@ -26,6 +29,8 @@ const relaisStore = useConnexionRelaisIAStore()
 const brouillonRelais = reactive({ relayUrl: '', jeton: '' })
 const vientDEnregistrerRelais = ref(false)
 const erreurEnregistrementRelais = ref<string | null>(null)
+const resultatTestRelais = ref<ResultatTestConnexionRelaisIA | undefined>(undefined)
+const testRelaisEnCours = ref(false)
 
 /** Réservé à un admin côté Worker (paramètre partagé par toute l'installation) — jamais un message technique brut pour ce cas attendu. */
 function messageErreurParametreInstallation(erreur: string): string {
@@ -121,6 +126,7 @@ async function enregistrerRelais(): Promise<void> {
     erreurEnregistrementRelais.value = messageErreurParametreInstallation(resultat.erreur)
     return
   }
+  resultatTestRelais.value = undefined
   signalerEnregistrement(vientDEnregistrerRelais)
 }
 
@@ -128,6 +134,16 @@ async function effacerRelais(): Promise<void> {
   await relaisStore.effacer()
   brouillonRelais.relayUrl = ''
   brouillonRelais.jeton = ''
+  resultatTestRelais.value = undefined
+}
+
+async function testerConnexionRelais(): Promise<void> {
+  testRelaisEnCours.value = true
+  try {
+    resultatTestRelais.value = await relaisStore.testerConnexion()
+  } finally {
+    testRelaisEnCours.value = false
+  }
 }
 
 async function enregistrerAuthentification(): Promise<void> {
@@ -224,6 +240,22 @@ async function enregistrerAuthentification(): Promise<void> {
           {{ erreurEnregistrementRelais }}
         </p>
       </form>
+
+      <div class="test-connexion">
+        <button
+          type="button"
+          :disabled="!relaisStore.connexion || testRelaisEnCours"
+          @click="testerConnexionRelais"
+        >
+          {{ testRelaisEnCours ? 'Test en cours…' : 'Tester la connexion' }}
+        </button>
+        <p v-if="resultatTestRelais?.ok === true" class="test-succes">
+          Connexion réussie — relais joignable, jeton valide.
+        </p>
+        <p v-else-if="resultatTestRelais?.ok === false" class="test-echec" role="alert">
+          Échec de connexion : {{ resultatTestRelais.message }}
+        </p>
+      </div>
     </section>
 
     <section class="bloc-authentification">

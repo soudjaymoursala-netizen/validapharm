@@ -160,3 +160,42 @@ describe('RelayProviderAdapter', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe('RelayProviderAdapter — tester (vérification de connexion)', () => {
+  test('200 -> résout sans erreur, en GET, jamais un envoi de message', async () => {
+    fetchMock.mockResolvedValueOnce(reponseMock({ ok: true }))
+    await expect(adaptateur().tester()).resolves.toBeUndefined()
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://relais.workers.dev')
+    expect(options.method).toBe('GET')
+    expect(options.body).toBeUndefined()
+  })
+
+  test('401 -> ReponseInvalideError explicite (jeton invalide)', async () => {
+    fetchMock.mockResolvedValueOnce(reponseMock({}, { status: 401 }))
+    const erreur = await adaptateur()
+      .tester()
+      .catch((e: unknown) => e)
+    expect(erreur).toBeInstanceOf(ReponseInvalideError)
+    expect((erreur as Error).message).toContain('Jeton invalide')
+  })
+
+  test('5xx -> IndisponibleError', async () => {
+    fetchMock.mockResolvedValueOnce(reponseMock({}, { status: 503 }))
+    await expect(adaptateur().tester()).rejects.toBeInstanceOf(IndisponibleError)
+  })
+
+  test('abandon réseau (timeout) -> TimeoutError', async () => {
+    const erreurAbort = new Error('aborted')
+    erreurAbort.name = 'AbortError'
+    fetchMock.mockRejectedValueOnce(erreurAbort)
+    await expect(adaptateur().tester()).rejects.toBeInstanceOf(TimeoutError)
+  })
+
+  test('relayUrl vide -> ReponseInvalideError explicite, jamais un fetch', async () => {
+    const a = new RelayProviderAdapter({ relayUrl: '', nomAffiche: 'Claude' })
+    const erreur = await a.tester().catch((e: unknown) => e)
+    expect(erreur).toBeInstanceOf(ReponseInvalideError)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})

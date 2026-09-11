@@ -70,12 +70,24 @@ export async function traiterRequeteRelaisIA(
 ): Promise<Response> {
   const entetesCors = {
     'Access-Control-Allow-Origin': config.corsOrigin,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   }
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: entetesCors })
+  }
+
+  // Vérification de connexion (écran Configuration client) : ne fait
+  // jamais qu'authentifier le jeton, sans jamais appeler le fournisseur IA
+  // — un « Tester la connexion » ne doit ni coûter un appel au fournisseur
+  // (facturé), ni dépendre de sa disponibilité pour valider la seule chose
+  // qu'il vérifie réellement, la configuration du relais lui-même.
+  if (request.method === 'GET') {
+    if (!jetonValide(request, config.jetonAcces)) {
+      return reponseJson({ erreur: 'jeton_invalide' }, 401, entetesCors)
+    }
+    return reponseJson({ ok: true }, 200, entetesCors)
   }
 
   if (request.method !== 'POST') {

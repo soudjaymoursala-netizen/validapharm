@@ -42,6 +42,47 @@ export class RelayProviderAdapter implements ProviderAdapter {
     return this.config.nomAffiche
   }
 
+  /**
+   * Vérifie réellement la connexion (jeton valide, relais joignable) — un
+   * `GET` dédié côté relais qui n'appelle jamais le fournisseur IA sous-
+   * jacent (voir `relayHandler.ts`), pour ne jamais facturer un appel
+   * fournisseur au seul geste de « Tester la connexion ».
+   */
+  async tester(): Promise<void> {
+    if (this.config.relayUrl.trim().length === 0) {
+      throw new ReponseInvalideError(
+        'Relais IA non configuré : renseignez son URL avant de tester la connexion.',
+      )
+    }
+
+    const controleur = new AbortController()
+    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
+
+    let reponse: Response
+    try {
+      reponse = await fetch(this.config.relayUrl, {
+        method: 'GET',
+        signal: controleur.signal,
+        headers: {
+          ...(this.config.jeton ? { Authorization: `Bearer ${this.config.jeton}` } : {}),
+        },
+      })
+    } catch (erreur) {
+      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutError()
+      throw new IndisponibleError()
+    } finally {
+      clearTimeout(minuteur)
+    }
+
+    if (reponse.status >= 500) throw new IndisponibleError()
+    if (reponse.status === 401) {
+      throw new ReponseInvalideError('Jeton invalide — vérifiez sa valeur.')
+    }
+    if (!reponse.ok) {
+      throw new ReponseInvalideError(`Test du relais IA échoué (${reponse.status}).`)
+    }
+  }
+
   async envoyerMessage(
     mode: ModeUsageIA,
     contexte: ContexteEnvoi,

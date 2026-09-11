@@ -38,6 +38,14 @@ côté PWA — jamais modifié depuis ce Worker :
   vers le modèle local (Ollama), gérée par `envoyerAvecBascule.ts`.
 - `401` → jeton d'accès manquant/invalide (voir ci-dessous).
 
+**Requête `GET`** : vérification de connexion (bouton « Tester la
+connexion », écran Configuration client → Relais IA) — authentifie le
+jeton exactement comme `POST` mais **n'appelle jamais le fournisseur IA**
+(`{ ok: true }` en `200`, `401` si jeton manquant/invalide) : un test de
+connexion ne doit jamais coûter un appel fournisseur facturé ni dépendre
+de sa disponibilité pour valider la seule chose qu'il vérifie réellement
+(le relais lui-même). Voir `RelayProviderAdapter.tester()` côté PWA.
+
 ## Jeton d'accès
 
 Un jeton partagé (`RELAIS_JETON_ACCES`), vérifié en
@@ -116,8 +124,9 @@ web — aucune n'a nécessité de terminal) :
    jamais `https://<owner>.github.io/<repo>/`, le navigateur n'envoyant
    jamais le chemin dans l'en-tête `Origin`).
 5. Joignabilité vérifiée en ouvrant l'URL `*.workers.dev` directement au
-   navigateur — réponse `405 methode_non_autorisee` obtenue (attendu, ce
-   relais n'accepte que `POST`).
+   navigateur — réponse `405 methode_non_autorisee` obtenue à l'époque
+   (`GET` n'était pas encore géré ; depuis, `GET` sans jeton répond `401`,
+   voir « Contrat requête/réponse » ci-dessus).
 6. URL du Worker + jeton d'accès saisis dans l'écran « Configuration » de
    la PWA → section « Relais IA ».
 7. **Contrat Chat Completions API vérifié en conditions réelles** : une

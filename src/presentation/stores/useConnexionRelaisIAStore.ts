@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { RelayProviderAdapter } from '../../connecteurs/ia/RelayProviderAdapter'
 import { useAuthStore } from './useAuthStore'
 
 export interface SaisieConnexionRelaisIA {
@@ -11,6 +12,8 @@ export type ConnexionRelaisIA = SaisieConnexionRelaisIA
 
 export type ResultatEnregistrementParametreInstallation =
   { ok: true } | { ok: false; erreur: string }
+
+export type ResultatTestConnexionRelaisIA = { ok: true } | { ok: false; message: string }
 
 const CLE_PARAMETRE = 'relais-ia'
 
@@ -75,5 +78,28 @@ export const useConnexionRelaisIAStore = defineStore('connexionRelaisIA', () => 
     connexion.value = null
   }
 
-  return { connexion, enChargement, charger, enregistrer, effacer }
+  /**
+   * Vérifie réellement la connexion (jeton valide, relais joignable) — un
+   * simple `GET` côté relais, jamais un appel au fournisseur IA sous-jacent
+   * (voir `RelayProviderAdapter.tester`), pour ne jamais facturer un appel
+   * fournisseur au seul geste de test.
+   */
+  async function testerConnexion(): Promise<ResultatTestConnexionRelaisIA> {
+    if (connexion.value === null) {
+      return { ok: false, message: 'Aucune configuration enregistrée.' }
+    }
+    const adaptateur = new RelayProviderAdapter({
+      relayUrl: connexion.value.relayUrl,
+      jeton: connexion.value.jeton,
+      nomAffiche: 'relais-ia',
+    })
+    try {
+      await adaptateur.tester()
+      return { ok: true }
+    } catch (erreur) {
+      return { ok: false, message: erreur instanceof Error ? erreur.message : 'Erreur inconnue.' }
+    }
+  }
+
+  return { connexion, enChargement, charger, enregistrer, effacer, testerConnexion }
 })

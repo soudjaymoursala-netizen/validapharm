@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -54,5 +54,56 @@ describe('useConnexionRelaisIAStore', () => {
     const store = useConnexionRelaisIAStore()
     await store.charger()
     expect(store.connexion).toBeNull()
+  })
+
+  test('testerConnexion sans configuration enregistrée -> message clair, jamais de fetch au relais', async () => {
+    const store = useConnexionRelaisIAStore()
+    const resultat = await store.testerConnexion()
+    expect(resultat).toEqual({ ok: false, message: 'Aucune configuration enregistrée.' })
+  })
+
+  test('testerConnexion : relais joignable et jeton valide -> ok (jamais un appel au fournisseur IA)', async () => {
+    const store = useConnexionRelaisIAStore()
+    await store.enregistrer({ relayUrl: 'https://relais-ia-test.workers.dev', jeton: 'jeton-x' })
+
+    const fetchWorkerAuth = globalThis.fetch
+    const fetchRelaisIA = vi.fn(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+        if (url.startsWith('https://relais-ia-test.workers.dev')) return fetchRelaisIA()
+        return fetchWorkerAuth(input, init)
+      }),
+    )
+
+    const resultat = await store.testerConnexion()
+    expect(resultat).toEqual({ ok: true })
+    expect(fetchRelaisIA).toHaveBeenCalledTimes(1)
+  })
+
+  test('testerConnexion : jeton invalide (401) -> message explicite', async () => {
+    const store = useConnexionRelaisIAStore()
+    await store.enregistrer({ relayUrl: 'https://relais-ia-test.workers.dev', jeton: 'mauvais' })
+
+    const fetchWorkerAuth = globalThis.fetch
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+        if (url.startsWith('https://relais-ia-test.workers.dev')) {
+          return new Response(JSON.stringify({ erreur: 'jeton_invalide' }), { status: 401 })
+        }
+        return fetchWorkerAuth(input, init)
+      }),
+    )
+
+    const resultat = await store.testerConnexion()
+    expect(resultat.ok).toBe(false)
+    expect(resultat).toMatchObject({ message: expect.stringContaining('Jeton invalide') })
   })
 })
