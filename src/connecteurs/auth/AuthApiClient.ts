@@ -43,6 +43,31 @@ export interface ParametreInstallationWire {
   updatedBy: string
 }
 
+export interface DocumentNormatifWire {
+  id: string
+  category: string
+  titre: string
+  filename: string
+  source: string
+  sourceRef: string | null
+  extractedText: string
+  mimeType: string
+  hasBinaryContent: boolean
+  uploadedAt: string
+  uploadedBy: string
+}
+
+export interface SaisieCreationDocumentNormatif {
+  category: string
+  titre: string
+  filename: string
+  source: string
+  sourceRef?: string | null
+  mimeType: string
+  texte: string
+  contenu?: Blob
+}
+
 export type ResultatApi<T> =
   { ok: true; donnees: T } | { ok: false; erreur: string; status: number }
 
@@ -64,6 +89,13 @@ export class AuthApiClient {
     private readonly relayUrl: string,
     private readonly delaiMaxMs: number = DELAI_MAX_PAR_DEFAUT_MS,
   ) {}
+
+  // --- Vérification de connexion (« Tester la connexion », avant toute
+  // authentification réelle — voir routeur.ts du Worker) ---
+
+  verifierSante(): Promise<ResultatApi<{ ok: true }>> {
+    return this.requete('GET', '/sante')
+  }
 
   // --- Authentification ---
 
@@ -206,7 +238,121 @@ export class AuthApiClient {
     return this.requete('DELETE', `/parametres-installation/${cle}`, { jeton })
   }
 
+  // --- Documents normatifs (Bibliothèque de normes — global à l'installation) ---
+
+  listerDocumentsNormatifs(
+    jeton: string,
+  ): Promise<ResultatApi<{ documents: DocumentNormatifWire[] }>> {
+    return this.requete('GET', '/documents-normatifs', { jeton })
+  }
+
+  /** Corps `multipart/form-data` (jamais JSON) — le texte extrait et le contenu binaire éventuel peuvent être volumineux, jamais adaptés à un `JSON.stringify`. */
+  creerDocumentNormatif(
+    jeton: string,
+    saisie: SaisieCreationDocumentNormatif,
+  ): Promise<ResultatApi<{ document: DocumentNormatifWire }>> {
+    const formData = new FormData()
+    formData.set(
+      'metadata',
+      JSON.stringify({
+        category: saisie.category,
+        titre: saisie.titre,
+        filename: saisie.filename,
+        source: saisie.source,
+        sourceRef: saisie.sourceRef ?? undefined,
+        mimeType: saisie.mimeType,
+      }),
+    )
+    formData.set('texte', saisie.texte)
+    if (saisie.contenu) formData.set('contenu', saisie.contenu, saisie.filename)
+    return this.requeteFormData('POST', '/documents-normatifs', jeton, formData)
+  }
+
+  supprimerDocumentNormatif(jeton: string, id: string): Promise<ResultatApi<{ ok: true }>> {
+    return this.requete('DELETE', `/documents-normatifs/${id}`, { jeton })
+  }
+
+  /** Contenu binaire brut d'un document — jamais du JSON, contourne `requete()`. */
+  async obtenirContenuDocumentNormatif(
+    jeton: string,
+    id: string,
+  ): Promise<{ ok: true; blob: Blob } | { ok: false; erreur: string }> {
+    const controleur = new AbortController()
+    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
+    let reponse: Response
+    try {
+      reponse = await fetch(`${this.relayUrl}/documents-normatifs/${id}/contenu`, {
+        signal: controleur.signal,
+        headers: { Authorization: `Bearer ${jeton}` },
+      })
+    } catch (erreur) {
+      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
+      throw new IndisponibleAuthError()
+    } finally {
+      clearTimeout(minuteur)
+    }
+    if (reponse.status >= 500) throw new IndisponibleAuthError()
+    if (!reponse.ok) {
+      const corps = await reponse.json().catch(() => null)
+      const erreur =
+        corps && typeof corps === 'object' && 'erreur' in corps && typeof corps.erreur === 'string'
+          ? corps.erreur
+          : 'erreur_inconnue'
+      return { ok: false, erreur }
+    }
+    return { ok: true, blob: await reponse.blob() }
+  }
+
   // --- Aide ---
+
+  private async requeteFormData<T>(
+    methode: string,
+    chemin: string,
+    jeton: string,
+    formData: FormData,
+  ): Promise<ResultatApi<T>> {
+    const controleur = new AbortController()
+    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
+
+    let reponse: Response
+    try {
+      // Jamais de `Content-Type` explicite ici : le navigateur doit poser
+      // lui-même l'en-tête `multipart/form-data; boundary=...` — un
+      // `Content-Type` manuel casserait le découpage des parties.
+      reponse = await fetch(`${this.relayUrl}${chemin}`, {
+        method: methode,
+        signal: controleur.signal,
+        headers: { Authorization: `Bearer ${jeton}` },
+        body: formData,
+      })
+    } catch (erreur) {
+      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
+      throw new IndisponibleAuthError()
+    } finally {
+      clearTimeout(minuteur)
+    }
+
+    if (reponse.status >= 500) throw new IndisponibleAuthError()
+
+    let corps: unknown
+    try {
+      corps = await reponse.json()
+    } catch {
+      throw new ReponseInvalideAuthError()
+    }
+    if (typeof corps !== 'object' || corps === null) {
+      throw new ReponseInvalideAuthError()
+    }
+
+    if (!reponse.ok) {
+      const erreur =
+        'erreur' in corps && typeof (corps as { erreur?: unknown }).erreur === 'string'
+          ? (corps as { erreur: string }).erreur
+          : 'erreur_inconnue'
+      return { ok: false, erreur, status: reponse.status }
+    }
+    return { ok: true, donnees: corps as T }
+  }
 
   private async requete<T>(
     methode: string,

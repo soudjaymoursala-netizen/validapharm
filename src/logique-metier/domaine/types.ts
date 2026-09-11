@@ -258,7 +258,8 @@ export interface NormativeDocument {
   source_ref: string | null
   /** Texte extrait (docx/pdf natif, ou lu tel quel pour du texte brut) — chaîne vide si l'extraction a échoué ou n'a pas été tentée. */
   extracted_text: string
-  content: Blob | null
+  /** Un fichier binaire d'origine existe côté serveur (R2) et peut être téléchargé — jamais chargé eagerly avec la liste, voir `useNormativeDocumentsStore.telechargerContenu`. `false` pour un import GitHub/Drive natif (texte seul). */
+  has_binary_content: boolean
   mime_type: string
   uploaded_at: string
   uploaded_by: string

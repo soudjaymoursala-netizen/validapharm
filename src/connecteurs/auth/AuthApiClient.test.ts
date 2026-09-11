@@ -26,6 +26,19 @@ function client(): AuthApiClient {
   return new AuthApiClient('https://auth.exemple.workers.dev')
 }
 
+describe('AuthApiClient — verifierSante (vérification de connexion)', () => {
+  test('GET /sante, sans jeton -> { ok: true }', async () => {
+    fetchMock.mockResolvedValueOnce(reponseMock({ ok: true }))
+    const resultat = await client().verifierSante()
+    expect(resultat).toEqual({ ok: true, donnees: { ok: true } })
+
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://auth.exemple.workers.dev/sante')
+    expect(options.method).toBe('GET')
+    expect((options.headers as Record<string, string>).Authorization).toBeUndefined()
+  })
+})
+
 describe('AuthApiClient — login', () => {
   test('appel nominal : POST /auth/login, extrait jeton/utilisateur', async () => {
     fetchMock.mockResolvedValueOnce(

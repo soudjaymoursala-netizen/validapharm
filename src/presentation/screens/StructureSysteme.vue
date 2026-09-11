@@ -12,6 +12,8 @@ import {
   type ResultatActionNoeud,
   type ResultatImportHierarchie,
   type ResultatImportHierarchieSap,
+  type ResultatModificationNiveau,
+  type ResultatSuppressionNiveau,
 } from '../stores/useStructureSystemeStore'
 import type {
   AssetNode,
@@ -27,6 +29,62 @@ const structureStore = useStructureSystemeStore()
 const nomClient = ref<string | null>(null)
 const brouillonNiveau = reactive({ key: '', libelleFr: '', numbering_pattern: '' })
 const brouillonNoeud = reactive({ level_key: '', name: '', code: '', parent_id: '' })
+
+// --- Correction d'un niveau créé par erreur (clé mal saisie, libellé à
+// corriger...) — trouvé nécessaire en usage réel : jusqu'ici un niveau
+// ajouté par erreur (ex. clé "ZONE (SITE (SMP))" au lieu de "site") ne
+// pouvait ni être corrigé ni supprimé, forçant à repartir de zéro.
+const niveauEnEdition = ref<string | null>(null)
+const brouillonEditionNiveau = reactive({ key: '', libelleFr: '', numbering_pattern: '' })
+const erreurNiveau = ref<string | null>(null)
+
+function demarrerEditionNiveau(niveau: {
+  key: string
+  label: { fr: string }
+  numbering_pattern: string
+}): void {
+  niveauEnEdition.value = niveau.key
+  brouillonEditionNiveau.key = niveau.key
+  brouillonEditionNiveau.libelleFr = niveau.label.fr
+  brouillonEditionNiveau.numbering_pattern = niveau.numbering_pattern
+  erreurNiveau.value = null
+}
+
+function annulerEditionNiveau(): void {
+  niveauEnEdition.value = null
+  erreurNiveau.value = null
+}
+
+function messageErreurNiveau(
+  resultat: Extract<ResultatModificationNiveau | ResultatSuppressionNiveau, { ok: false }>,
+): string {
+  if (resultat.raison === 'cle_deja_utilisee')
+    return 'Cette clé est déjà utilisée par un autre niveau.'
+  if (resultat.raison === 'niveau_utilise_par_des_noeuds') {
+    return 'Impossible : des nœuds existants utilisent déjà ce niveau — supprimez-les d’abord ou laissez la clé inchangée.'
+  }
+  return 'Niveau introuvable.'
+}
+
+async function enregistrerEditionNiveau(cleActuelle: string): Promise<void> {
+  erreurNiveau.value = null
+  const resultat = await structureStore.modifierNiveau(props.clientId, cleActuelle, {
+    key: brouillonEditionNiveau.key.trim(),
+    libelleFr: brouillonEditionNiveau.libelleFr,
+    numbering_pattern: brouillonEditionNiveau.numbering_pattern,
+  })
+  if (!resultat.ok) {
+    erreurNiveau.value = messageErreurNiveau(resultat)
+    return
+  }
+  niveauEnEdition.value = null
+}
+
+async function supprimerNiveau(key: string): Promise<void> {
+  erreurNiveau.value = null
+  const resultat = await structureStore.supprimerNiveau(props.clientId, key)
+  if (!resultat.ok) erreurNiveau.value = messageErreurNiveau(resultat)
+}
 const resultatCreation = ref<ResultatActionNoeud | undefined>(undefined)
 const reparentageEnErreur = reactive<Record<string, string>>({})
 
@@ -342,9 +400,25 @@ const noeudsAffiches = computed(() =>
       <h2>Hiérarchie configurable</h2>
       <ul class="liste-niveaux">
         <li v-for="niveau in structureStore.schema?.levels ?? []" :key="niveau.key">
-          {{ niveau.label.fr }} ({{ niveau.key }})
+          <template v-if="niveauEnEdition === niveau.key">
+            <input v-model="brouillonEditionNiveau.key" type="text" placeholder="Clé" />
+            <input v-model="brouillonEditionNiveau.libelleFr" type="text" placeholder="Libellé" />
+            <input
+              v-model="brouillonEditionNiveau.numbering_pattern"
+              type="text"
+              placeholder="Motif de numérotation"
+            />
+            <button type="button" @click="enregistrerEditionNiveau(niveau.key)">Enregistrer</button>
+            <button type="button" @click="annulerEditionNiveau">Annuler</button>
+          </template>
+          <template v-else>
+            <span>{{ niveau.label.fr }} ({{ niveau.key }})</span>
+            <button type="button" @click="demarrerEditionNiveau(niveau)">Modifier</button>
+            <button type="button" @click="supprimerNiveau(niveau.key)">Supprimer</button>
+          </template>
         </li>
       </ul>
+      <p v-if="erreurNiveau" class="erreur" role="alert">{{ erreurNiveau }}</p>
       <form class="formulaire" @submit.prevent="ajouterNiveau">
         <label>
           Clé du niveau
@@ -710,6 +784,13 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.liste-niveaux li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .liste-noeuds li {

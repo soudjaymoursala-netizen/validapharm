@@ -10,7 +10,10 @@ import {
   type ResultatTestConnexion,
 } from '../stores/useConnexionGitHubStore'
 import { useAuthStore } from '../stores/useAuthStore'
-import { useConnexionAuthentificationStore } from '../stores/useConnexionAuthentificationStore'
+import {
+  useConnexionAuthentificationStore,
+  type ResultatTestConnexionAuthentification,
+} from '../stores/useConnexionAuthentificationStore'
 import {
   useConnexionRelaisIAStore,
   type ResultatTestConnexionRelaisIA,
@@ -47,6 +50,10 @@ function messageErreurParametreInstallation(erreur: string): string {
 const authentificationStore = useConnexionAuthentificationStore()
 const brouillonAuthentification = reactive({ relayUrl: '' })
 const vientDEnregistrerAuthentification = ref(false)
+const resultatTestAuthentification = ref<ResultatTestConnexionAuthentification | undefined>(
+  undefined,
+)
+const testAuthentificationEnCours = ref(false)
 
 const DUREE_AFFICHAGE_CONFIRMATION_MS = 3000
 
@@ -148,7 +155,17 @@ async function testerConnexionRelais(): Promise<void> {
 
 async function enregistrerAuthentification(): Promise<void> {
   await authentificationStore.enregistrer({ ...brouillonAuthentification })
+  resultatTestAuthentification.value = undefined
   signalerEnregistrement(vientDEnregistrerAuthentification)
+}
+
+async function testerConnexionAuthentification(): Promise<void> {
+  testAuthentificationEnCours.value = true
+  try {
+    resultatTestAuthentification.value = await authentificationStore.testerConnexion()
+  } finally {
+    testAuthentificationEnCours.value = false
+  }
 }
 </script>
 
@@ -287,6 +304,22 @@ async function enregistrerAuthentification(): Promise<void> {
           ✓ Enregistré.
         </p>
       </form>
+
+      <div class="test-connexion">
+        <button
+          type="button"
+          :disabled="!authentificationStore.connexion || testAuthentificationEnCours"
+          @click="testerConnexionAuthentification"
+        >
+          {{ testAuthentificationEnCours ? 'Test en cours…' : 'Tester la connexion' }}
+        </button>
+        <p v-if="resultatTestAuthentification?.ok === true" class="test-succes">
+          Connexion réussie — Worker d'authentification joignable.
+        </p>
+        <p v-else-if="resultatTestAuthentification?.ok === false" class="test-echec" role="alert">
+          Échec de connexion : {{ resultatTestAuthentification.message }}
+        </p>
+      </div>
     </section>
   </main>
 </template>

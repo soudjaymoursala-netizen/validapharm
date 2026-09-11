@@ -173,15 +173,32 @@ async function importerDepuisDrive(fichier: FichierDrive): Promise<void> {
   }
 }
 
-/** Retélécharge le fichier tel qu'importé — jamais une reconstruction à partir du texte extrait (même patron que `FicheProjet.vue`). */
-function telechargerDocument(document: { filename: string; content: Blob | null }): void {
-  if (!document.content) return
-  const url = URL.createObjectURL(document.content)
-  const lien = window.document.createElement('a')
-  lien.href = url
-  lien.download = document.filename
-  lien.click()
-  URL.revokeObjectURL(url)
+const erreurTelechargement = ref<string | null>(null)
+
+/**
+ * Retélécharge le fichier tel qu'importé (récupéré à la demande depuis le
+ * Worker — jamais préchargé avec la liste, voir `has_binary_content`),
+ * jamais une reconstruction à partir du texte extrait (même patron que
+ * `FicheProjet.vue`).
+ */
+async function telechargerDocument(document: {
+  id: string
+  filename: string
+  has_binary_content: boolean
+}): Promise<void> {
+  if (!document.has_binary_content) return
+  erreurTelechargement.value = null
+  try {
+    const contenu = await documentsStore.telechargerContenu(document.id)
+    const url = URL.createObjectURL(contenu)
+    const lien = window.document.createElement('a')
+    lien.href = url
+    lien.download = document.filename
+    lien.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    erreurTelechargement.value = e instanceof Error ? e.message : 'Erreur inconnue.'
+  }
 }
 
 /**
@@ -340,7 +357,11 @@ onMounted(async () => {
           </div>
           <div class="actions-document">
             <button type="button" @click="voirTexteExtrait(document)">Consulter</button>
-            <button v-if="document.content" type="button" @click="telechargerDocument(document)">
+            <button
+              v-if="document.has_binary_content"
+              type="button"
+              @click="telechargerDocument(document)"
+            >
               Télécharger
             </button>
             <button type="button" @click="documentsStore.supprimerDocument(document.id)">
@@ -349,6 +370,7 @@ onMounted(async () => {
           </div>
         </li>
       </ul>
+      <p v-if="erreurTelechargement" class="erreur" role="alert">{{ erreurTelechargement }}</p>
     </section>
   </main>
 </template>

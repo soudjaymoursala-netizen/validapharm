@@ -4,9 +4,14 @@ import type { EnvoyeurEmail } from './notifications/envoyeurEmail'
 import type { AuditRepo } from './repos/auditRepo'
 import type { ClientsRepo } from './repos/clientsRepo'
 import type {
+  DocumentNormatifEnregistre,
+  DocumentsNormatifsRepo,
+} from './repos/documentsNormatifsRepo'
+import type {
   ParametresInstallationRepo,
   ValeurParametreInstallation,
 } from './repos/parametresInstallationRepo'
+import type { StockageBinaireRepo } from './repos/stockageBinaireRepo'
 import type { UtilisateursRepo } from './repos/utilisateursRepo'
 import type { ClientEnregistre, EntreeAudit, Role, UtilisateurEnregistre } from './types'
 import { versUtilisateurPublic } from './types'
@@ -23,12 +28,38 @@ export interface Contexte {
   utilisateursRepo: UtilisateursRepo
   clientsRepo: ClientsRepo
   parametresInstallationRepo: ParametresInstallationRepo
+  documentsNormatifsRepo: DocumentsNormatifsRepo
+  stockageBinaireRepo: StockageBinaireRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
   corsOrigin: string
   envoyeurEmail: EnvoyeurEmail
   urlApplication: string
+}
+
+/** Seules catégories reconnues pour un document normatif — jamais une valeur arbitraire fournie par l'appelant. */
+const CATEGORIES_DOCUMENT_NORMATIF = [
+  'iso',
+  'eudralex',
+  'pics',
+  'astm',
+  'ispe',
+  'gmp',
+  'cqv',
+  'csv',
+  'autre',
+] as const
+
+/** Seules sources reconnues pour un document normatif. */
+const SOURCES_DOCUMENT_NORMATIF = ['televersement', 'github', 'drive'] as const
+
+function cleTexteDocument(id: string): string {
+  return `documents/${id}/texte.txt`
+}
+
+function cleContenuDocument(id: string): string {
+  return `documents/${id}/contenu`
 }
 
 const LONGUEUR_MIN_MOT_DE_PASSE = 8
@@ -117,6 +148,15 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   const url = new URL(request.url)
   const chemin = url.pathname
 
+  // --- Vérification de connexion (écran Configuration, avant toute
+  // connexion réelle) — jamais d'authentification requise ici : à ce
+  // stade l'utilisateur n'a par construction aucun jeton de session, ce
+  // « Tester la connexion » ne vérifie que la joignabilité du Worker à
+  // l'URL saisie. ---
+  if (chemin === '/sante' && request.method === 'GET') {
+    return reponseJson({ ok: true }, 200, entetes)
+  }
+
   // --- Bootstrap (aucune authentification requise, jeton dédié) ---
   if (chemin === '/auth/bootstrap-admin' && request.method === 'POST') {
     return gererBootstrapAdmin(request, ctx, entetes)
@@ -203,6 +243,32 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchParametreInstallation[1] as string,
+    )
+  }
+
+  // --- Documents normatifs (Bibliothèque de normes — global à l'installation) ---
+  if (chemin === '/documents-normatifs' && request.method === 'GET') {
+    return gererListerDocumentsNormatifs(request, ctx, entetes)
+  }
+  if (chemin === '/documents-normatifs' && request.method === 'POST') {
+    return gererCreerDocumentNormatif(request, ctx, entetes)
+  }
+  const matchContenuDocumentNormatif = chemin.match(/^\/documents-normatifs\/([^/]+)\/contenu$/)
+  if (matchContenuDocumentNormatif && request.method === 'GET') {
+    return gererObtenirContenuDocumentNormatif(
+      request,
+      ctx,
+      entetes,
+      matchContenuDocumentNormatif[1] as string,
+    )
+  }
+  const matchDocumentNormatifId = chemin.match(/^\/documents-normatifs\/([^/]+)$/)
+  if (matchDocumentNormatifId && request.method === 'DELETE') {
+    return gererSupprimerDocumentNormatif(
+      request,
+      ctx,
+      entetes,
+      matchDocumentNormatifId[1] as string,
     )
   }
 
@@ -757,6 +823,203 @@ async function gererEffacerParametreInstallation(
 
   await ctx.parametresInstallationRepo.effacer(cle)
   await consignerAudit(ctx, acteur, 'suppression_parametre_installation', 'parametre', cle, null)
+  return reponseJson({ ok: true }, 200, entetes)
+}
+
+// --- Handlers : documents normatifs (Bibliothèque de normes) ---
+
+interface DocumentNormatifWire {
+  id: string
+  category: string
+  titre: string
+  filename: string
+  source: string
+  sourceRef: string | null
+  extractedText: string
+  mimeType: string
+  hasBinaryContent: boolean
+  uploadedAt: string
+  uploadedBy: string
+}
+
+interface CorpsCreationDocumentNormatif {
+  category?: string
+  titre?: string
+  filename?: string
+  source?: string
+  sourceRef?: string
+  mimeType?: string
+}
+
+/** Assemble la réponse complète (métadonnées D1 + texte extrait R2) — jamais le contenu binaire, récupéré séparément via `/contenu` pour ne pas alourdir la liste. */
+async function assemblerDocumentNormatif(
+  ctx: Contexte,
+  d: DocumentNormatifEnregistre,
+): Promise<DocumentNormatifWire> {
+  const texte = await ctx.stockageBinaireRepo.lire(cleTexteDocument(d.id))
+  return {
+    id: d.id,
+    category: d.category,
+    titre: d.titre,
+    filename: d.filename,
+    source: d.source,
+    sourceRef: d.sourceRef,
+    extractedText: texte ? new TextDecoder().decode(texte.contenu) : '',
+    mimeType: d.mimeType,
+    hasBinaryContent: d.hasBinaryContent,
+    uploadedAt: d.uploadedAt,
+    uploadedBy: d.uploadedBy,
+  }
+}
+
+async function gererListerDocumentsNormatifs(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const metadonnees = await ctx.documentsNormatifsRepo.lister()
+  const documents = await Promise.all(metadonnees.map((d) => assemblerDocumentNormatif(ctx, d)))
+  return reponseJson({ documents }, 200, entetes)
+}
+
+async function gererCreerDocumentNormatif(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  let formData: FormData
+  try {
+    formData = await request.formData()
+  } catch {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const metadataBrut = formData.get('metadata')
+  if (typeof metadataBrut !== 'string') {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  let corps: CorpsCreationDocumentNormatif
+  try {
+    corps = JSON.parse(metadataBrut) as CorpsCreationDocumentNormatif
+  } catch {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  if (
+    !corps.category ||
+    !(CATEGORIES_DOCUMENT_NORMATIF as readonly string[]).includes(corps.category)
+  ) {
+    return reponseJson({ erreur: 'categorie_invalide' }, 400, entetes)
+  }
+  if (!corps.titre || corps.titre.trim().length === 0) {
+    return reponseJson({ erreur: 'titre_obligatoire' }, 400, entetes)
+  }
+  if (!corps.filename || corps.filename.trim().length === 0) {
+    return reponseJson({ erreur: 'filename_obligatoire' }, 400, entetes)
+  }
+  if (!corps.source || !(SOURCES_DOCUMENT_NORMATIF as readonly string[]).includes(corps.source)) {
+    return reponseJson({ erreur: 'source_invalide' }, 400, entetes)
+  }
+  const mimeType = corps.mimeType ?? 'application/octet-stream'
+
+  const texteValeur = formData.get('texte')
+  const extractedText = typeof texteValeur === 'string' ? texteValeur : ''
+
+  const contenuValeur = formData.get('contenu')
+  // `instanceof Blob` s'est révélé peu fiable selon l'environnement
+  // d'exécution (jsdom/undici/workerd n'exposent pas nécessairement la
+  // même classe `Blob` d'un realm à l'autre) — vérification structurelle
+  // (présence d'`arrayBuffer()`) plutôt qu'un test de type nominal.
+  const contenuBlob =
+    contenuValeur !== null &&
+    typeof contenuValeur === 'object' &&
+    typeof (contenuValeur as Blob).arrayBuffer === 'function'
+      ? (contenuValeur as Blob)
+      : null
+
+  const id = genererId()
+  await ctx.stockageBinaireRepo.enregistrer(
+    cleTexteDocument(id),
+    new TextEncoder().encode(extractedText).buffer as ArrayBuffer,
+    'text/plain; charset=utf-8',
+  )
+  if (contenuBlob) {
+    await ctx.stockageBinaireRepo.enregistrer(
+      cleContenuDocument(id),
+      await contenuBlob.arrayBuffer(),
+      mimeType,
+    )
+  }
+
+  const document: DocumentNormatifEnregistre = {
+    id,
+    category: corps.category,
+    titre: corps.titre.trim(),
+    filename: corps.filename.trim(),
+    source: corps.source,
+    sourceRef: corps.sourceRef ?? null,
+    mimeType,
+    hasBinaryContent: contenuBlob !== null,
+    uploadedAt: horodatage(),
+    uploadedBy: utilisateur.id,
+  }
+  await ctx.documentsNormatifsRepo.creer(document)
+  await consignerAudit(ctx, utilisateur, 'import_document_normatif', 'document_normatif', id, null)
+
+  return reponseJson({ document: await assemblerDocumentNormatif(ctx, document) }, 201, entetes)
+}
+
+async function gererObtenirContenuDocumentNormatif(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const document = await ctx.documentsNormatifsRepo.parId(id)
+  if (!document || !document.hasBinaryContent) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const contenu = await ctx.stockageBinaireRepo.lire(cleContenuDocument(id))
+  if (!contenu) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+
+  return new Response(contenu.contenu, {
+    status: 200,
+    headers: {
+      ...entetes,
+      'Content-Type': contenu.typeContenu,
+      'Content-Disposition': `attachment; filename="${document.filename.replace(/"/g, '')}"`,
+    },
+  })
+}
+
+async function gererSupprimerDocumentNormatif(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  await ctx.stockageBinaireRepo.supprimer(cleTexteDocument(id))
+  await ctx.stockageBinaireRepo.supprimer(cleContenuDocument(id))
+  await ctx.documentsNormatifsRepo.supprimer(id)
+  await consignerAudit(
+    ctx,
+    utilisateur,
+    'suppression_document_normatif',
+    'document_normatif',
+    id,
+    null,
+  )
   return reponseJson({ ok: true }, 200, entetes)
 }
 

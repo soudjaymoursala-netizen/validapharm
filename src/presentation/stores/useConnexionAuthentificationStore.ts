@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { AuthApiClient } from '../../connecteurs/auth/AuthApiClient'
 import { db, type EnregistrementConnexionAuthentification } from '../../persistance/db'
 
 export interface SaisieConnexionAuthentification {
   relayUrl: string
 }
+
+export type ResultatTestConnexionAuthentification = { ok: true } | { ok: false; message: string }
 
 const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
 
@@ -40,5 +43,26 @@ export const useConnexionAuthentificationStore = defineStore('connexionAuthentif
     connexion.value = enregistrement
   }
 
-  return { connexion, enChargement, charger, enregistrer }
+  /**
+   * Vérifie réellement la joignabilité du Worker à l'URL saisie — jamais
+   * une authentification ici : à ce stade l'utilisateur n'a par
+   * construction aucune session (cet écran sert justement à indiquer où se
+   * connecter avant de se connecter), voir `routeur.ts` du Worker (`GET
+   * /sante`, ouvert à tous).
+   */
+  async function testerConnexion(): Promise<ResultatTestConnexionAuthentification> {
+    if (connexion.value === null) {
+      return { ok: false, message: 'Aucune configuration enregistrée.' }
+    }
+    try {
+      const api = new AuthApiClient(connexion.value.relayUrl)
+      const resultat = await api.verifierSante()
+      if (!resultat.ok) return { ok: false, message: `Échec (${resultat.erreur}).` }
+      return { ok: true }
+    } catch (erreur) {
+      return { ok: false, message: erreur instanceof Error ? erreur.message : 'Erreur inconnue.' }
+    }
+  }
+
+  return { connexion, enChargement, charger, enregistrer, testerConnexion }
 })

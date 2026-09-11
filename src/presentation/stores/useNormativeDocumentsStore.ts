@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { DocumentNormatifWire } from '../../connecteurs/auth/AuthApiClient'
 import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
 import { extraireTextePdf } from '../../connecteurs/pdf/PdfNatifAdapter'
 import {
@@ -10,8 +11,8 @@ import { GitHubConnector, type EntreeArborescence } from '../../connecteurs/gith
 import type {
   CategorieDocumentNormatif,
   NormativeDocument,
+  SourceDocumentNormatif,
 } from '../../logique-metier/domaine/types'
-import { db } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
 import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 
@@ -51,13 +52,34 @@ async function extraireTexteSelonExtension(
   return new TextDecoder('utf-8').decode(contenu)
 }
 
+function wireVersDomaine(wire: DocumentNormatifWire): NormativeDocument {
+  return {
+    id: wire.id,
+    category: wire.category as CategorieDocumentNormatif,
+    titre: wire.titre,
+    filename: wire.filename,
+    source: wire.source as SourceDocumentNormatif,
+    source_ref: wire.sourceRef,
+    extracted_text: wire.extractedText,
+    has_binary_content: wire.hasBinaryContent,
+    mime_type: wire.mimeType,
+    uploaded_at: wire.uploadedAt,
+    uploaded_by: wire.uploadedBy,
+  }
+}
+
 /**
  * Bibliothèque de normes — documents importés (§4.5, chantier "Normes &
  * Guidelines") : téléversement direct, lecture d'un dépôt GitHub (le dépôt
  * unique déjà configuré pour toute l'installation, `useConnexionGitHubStore`
  * — Worker/D1), lecture d'un dossier Google Drive dédié (paramètre
  * d'installation `drive-normes`, également Worker/D1 — une configuration
- * globale distincte du miroir d'écriture par client).
+ * globale distincte du miroir d'écriture par client). Les documents
+ * eux-mêmes (texte extrait + fichier binaire d'origine) vivent désormais
+ * côté Worker (D1 pour les métadonnées, R2 pour le contenu volumineux) —
+ * jamais IndexedDB seule : un stockage local ne survivait jamais à un
+ * changement d'appareil (même correctif que la config GitHub/Relais IA/
+ * Drive plus tôt).
  *
  * **Limite assumée pour la lecture GitHub** : `GitHubConnector.lire` décode
  * son contenu en UTF-8 (conçu pour les fichiers de données texte de
@@ -77,10 +99,39 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
   async function charger(): Promise<void> {
     enChargement.value = true
     try {
-      documents.value = await db.normativeDocuments.toArray()
+      const authStore = useAuthStore()
+      const api = await authStore.client()
+      if (!api || !authStore.jeton) {
+        documents.value = []
+        return
+      }
+      const resultat = await api.listerDocumentsNormatifs(authStore.jeton)
+      documents.value = resultat.ok ? resultat.donnees.documents.map(wireVersDomaine) : []
     } finally {
       enChargement.value = false
     }
+  }
+
+  async function envoyerDocument(saisie: {
+    category: CategorieDocumentNormatif
+    titre: string
+    filename: string
+    source: SourceDocumentNormatif
+    sourceRef?: string | null
+    mimeType: string
+    texte: string
+    contenu?: Blob
+  }): Promise<NormativeDocument> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    const resultat = await api.creerDocumentNormatif(authStore.jeton, saisie)
+    if (!resultat.ok) throw new Error(`Échec de l'import : ${resultat.erreur}`)
+    const document = wireVersDomaine(resultat.donnees.document)
+    documents.value = [...documents.value, document]
+    return document
   }
 
   async function importerDepuisFichier(
@@ -88,24 +139,18 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     category: CategorieDocumentNormatif,
     actor: string,
   ): Promise<NormativeDocument> {
+    void actor // conservé au contrat public (attribution) — l'auteur réel vient désormais du jeton de session côté Worker, jamais d'une valeur fournie par l'appelant.
     const tampon = await fichier.arrayBuffer()
     const texte = await extraireTexteSelonExtension(fichier.name, tampon)
-    const document: NormativeDocument = {
-      id: crypto.randomUUID(),
+    return envoyerDocument({
       category,
       titre: fichier.name,
       filename: fichier.name,
       source: 'televersement',
-      source_ref: null,
-      extracted_text: texte,
-      content: fichier,
-      mime_type: fichier.type,
-      uploaded_at: new Date().toISOString(),
-      uploaded_by: actor,
-    }
-    await db.normativeDocuments.put(document)
-    documents.value = [...documents.value, document]
-    return document
+      mimeType: fichier.type || 'application/octet-stream',
+      texte,
+      contenu: fichier,
+    })
   }
 
   /** Liste les fichiers du dépôt GitHub déjà configuré (`useConnexionGitHubStore`, Worker/D1), sous un préfixe de chemin donné. */
@@ -125,6 +170,7 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     category: CategorieDocumentNormatif,
     actor: string,
   ): Promise<NormativeDocument> {
+    void actor
     const nomFichier = chemin.split('/').pop() ?? chemin
     if (!EXTENSIONS_TEXTE_BRUT.some((extension) => nomFichier.toLowerCase().endsWith(extension))) {
       throw new Error(
@@ -139,22 +185,15 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     const connecteur = new GitHubConnector(githubStore.connexion)
     const { contenu } = await connecteur.lire(chemin)
 
-    const document: NormativeDocument = {
-      id: crypto.randomUUID(),
+    return envoyerDocument({
       category,
       titre: nomFichier,
       filename: nomFichier,
       source: 'github',
-      source_ref: chemin,
-      extracted_text: contenu,
-      content: null,
-      mime_type: 'text/plain',
-      uploaded_at: new Date().toISOString(),
-      uploaded_by: actor,
-    }
-    await db.normativeDocuments.put(document)
-    documents.value = [...documents.value, document]
-    return document
+      sourceRef: chemin,
+      mimeType: 'text/plain',
+      texte: contenu,
+    })
   }
 
   async function configurerConnexionDriveLectureNormes(
@@ -206,39 +245,51 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     category: CategorieDocumentNormatif,
     actor: string,
   ): Promise<NormativeDocument> {
+    void actor
     const connexion = await obtenirConnexionDriveNormes()
     if (connexion === null) {
       throw new Error('Aucune configuration Drive enregistrée pour la bibliothèque de normes.')
     }
     const connecteur = new DriveReaderConnector(connexion)
 
-    const texte = connecteur.estDocumentGoogleNatif(fichier.mimeType)
+    const estNatif = connecteur.estDocumentGoogleNatif(fichier.mimeType)
+    const contenuBinaire = estNatif ? null : await connecteur.telechargerContenu(fichier.id)
+    const texte = estNatif
       ? await connecteur.lireTexteExporte(fichier.id)
-      : await extraireTexteSelonExtension(
-          fichier.nom,
-          await connecteur.telechargerContenu(fichier.id),
-        )
+      : await extraireTexteSelonExtension(fichier.nom, contenuBinaire as ArrayBuffer)
 
-    const document: NormativeDocument = {
-      id: crypto.randomUUID(),
+    return envoyerDocument({
       category,
       titre: fichier.nom,
       filename: fichier.nom,
       source: 'drive',
-      source_ref: fichier.id,
-      extracted_text: texte,
-      content: null,
-      mime_type: fichier.mimeType,
-      uploaded_at: new Date().toISOString(),
-      uploaded_by: actor,
+      sourceRef: fichier.id,
+      mimeType: fichier.mimeType,
+      texte,
+      ...(contenuBinaire
+        ? { contenu: new Blob([contenuBinaire], { type: fichier.mimeType }) }
+        : {}),
+    })
+  }
+
+  /** Récupère le contenu binaire d'origine à la demande — jamais préchargé avec la liste (voir `NormativeDocument.has_binary_content`). */
+  async function telechargerContenu(documentId: string): Promise<Blob> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
     }
-    await db.normativeDocuments.put(document)
-    documents.value = [...documents.value, document]
-    return document
+    const resultat = await api.obtenirContenuDocumentNormatif(authStore.jeton, documentId)
+    if (!resultat.ok) throw new Error(`Échec du téléchargement : ${resultat.erreur}`)
+    return resultat.blob
   }
 
   async function supprimerDocument(documentId: string): Promise<void> {
-    await db.normativeDocuments.delete(documentId)
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (api && authStore.jeton) {
+      await api.supprimerDocumentNormatif(authStore.jeton, documentId)
+    }
     documents.value = documents.value.filter((d) => d.id !== documentId)
   }
 
@@ -253,6 +304,7 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     testerConnexionDriveLectureNormes,
     listerFichiersDrive,
     importerDepuisDrive,
+    telechargerContenu,
     supprimerDocument,
   }
 })

@@ -1,8 +1,16 @@
+// @vitest-environment node
+//
+// Comme `routeur.test.ts` (auth-worker) : ce test exerce un vrai import
+// binaire (`FormData` + `File`/`Blob`) à travers `installerFauxWorkerAuth`
+// → `routerRequete` — sous l'environnement `jsdom` de la config racine, les
+// classes `Blob`/`File`/`FormData` de jsdom sont incompatibles avec le
+// `Request`/`fetch` natif de Node (undici), corrompant silencieusement le
+// contenu binaire transmis. `node` restaure des classes natives cohérentes
+// entre elles ; ce store lui-même n'a aucun besoin du DOM.
 import 'fake-indexeddb/auto'
-import JSZip from 'jszip'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -10,37 +18,6 @@ import {
 } from '../../test-utils/fauxWorkerAuth'
 import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 import { useNormativeDocumentsStore } from './useNormativeDocumentsStore'
-
-/** Même structure OOXML minimale que `DocxNatifAdapter.test.ts` — un `.docx` réellement valide, jamais un fichier texte renommé. */
-async function construireDocxMinimal(texte: string): Promise<ArrayBuffer> {
-  const zip = new JSZip()
-  zip.file(
-    '[Content_Types].xml',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-</Types>`,
-  )
-  zip.file(
-    '_rels/.rels',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>`,
-  )
-  zip.file(
-    'word/document.xml',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    <w:p><w:r><w:t>${texte}</w:t></w:r></w:p>
-  </w:body>
-</w:document>`,
-  )
-  return zip.generateAsync({ type: 'arraybuffer' })
-}
 
 /** `btoa` seul n'encode pas correctement l'UTF-8 (un accent produirait un octet tronqué) — encode d'abord en octets UTF-8 réels, comme le fait l'API GitHub. */
 function encoderBase64Utf8(texte: string): string {
@@ -60,19 +37,19 @@ function reponseMock(corps: unknown, options: { status?: number } = {}): Respons
 // Le dépôt GitHub et la connexion Drive de lecture pour la bibliothèque de
 // normes sont désormais des paramètres d'installation stockés côté
 // Worker/D1 — `fetchMock` ci-dessous ne sert donc plus qu'aux appels réels
-// à l'API GitHub/Drive, jamais à l'authentification/la configuration
-// (interceptées par `installerFauxWorkerAuth`, qui délègue tout le reste à
-// `fetchMock`).
+// à l'API GitHub/Drive, jamais à l'authentification/la configuration ni
+// aux documents normatifs eux-mêmes (interceptés par
+// `installerFauxWorkerAuth`, qui délègue tout le reste à `fetchMock`).
 let fetchMock: ReturnType<typeof vi.fn>
 let demonter: () => void
+let ctx: Contexte
 
 beforeEach(async () => {
   setActivePinia(createPinia())
   await reinitialiserAuthDeTest()
-  await db.normativeDocuments.clear()
   fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
-  demonter = installerFauxWorkerAuth().demonter
+  ;({ ctx, demonter } = installerFauxWorkerAuth())
   await connecterAdminDeTest()
 })
 
@@ -81,7 +58,7 @@ afterEach(() => {
 })
 
 describe('useNormativeDocumentsStore — importerDepuisFichier', () => {
-  test('.txt : extraction en texte brut, source "televersement"', async () => {
+  test('.txt : extraction en texte brut, source "televersement", contenu binaire conservé', async () => {
     const store = useNormativeDocumentsStore()
     const fichier = new File(['Contenu de la norme ICH Q9.'], 'ich-q9.txt', { type: 'text/plain' })
 
@@ -91,21 +68,18 @@ describe('useNormativeDocumentsStore — importerDepuisFichier', () => {
     expect(document.source).toBe('televersement')
     expect(document.category).toBe('iso')
     expect(document.source_ref).toBeNull()
+    expect(document.has_binary_content).toBe(true)
     expect(store.documents).toHaveLength(1)
-    expect(await db.normativeDocuments.get(document.id)).toMatchObject({ filename: 'ich-q9.txt' })
+
+    const metadonnees = await ctx.documentsNormatifsRepo.parId(document.id)
+    expect(metadonnees).toMatchObject({ filename: 'ich-q9.txt' })
   })
 
-  test('.docx réel : dispatch vers extraireTexteDocx', async () => {
-    const store = useNormativeDocumentsStore()
-    const tampon = await construireDocxMinimal('Guideline GAMP 5 — extrait.')
-    const fichier = new File([tampon], 'gamp5.docx', {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    })
-
-    const document = await store.importerDepuisFichier(fichier, 'gmp', 'qa-1')
-
-    expect(document.extracted_text).toBe('Guideline GAMP 5 — extrait.')
-  })
+  // Le cas ".docx réel" (extraction via `extraireTexteDocx`/`DOMParser`)
+  // vit dans `useNormativeDocumentsStore.docx.test.ts`, sous
+  // l'environnement `jsdom` par défaut (seul `DOMParser` en a besoin) — ce
+  // fichier reste sous `node` pour éviter la corruption binaire
+  // Blob/File/FormData décrite en tête de fichier.
 })
 
 describe('useNormativeDocumentsStore — GitHub', () => {
@@ -148,7 +122,7 @@ describe('useNormativeDocumentsStore — GitHub', () => {
     )
   })
 
-  test('importerDepuisGitHub : .md accepté, source_ref = chemin', async () => {
+  test('importerDepuisGitHub : .md accepté, source_ref = chemin, jamais de contenu binaire', async () => {
     await configurerConnexionGitHub()
     fetchMock.mockResolvedValueOnce(
       reponseMock({
@@ -163,7 +137,7 @@ describe('useNormativeDocumentsStore — GitHub', () => {
     expect(document.extracted_text).toBe('Texte de la norme importée depuis GitHub.')
     expect(document.source).toBe('github')
     expect(document.source_ref).toBe('normes/ich-q9.md')
-    expect(document.content).toBeNull()
+    expect(document.has_binary_content).toBe(false)
   })
 
   test('importerDepuisGitHub : .pdf refusé (limite assumée, jamais une conversion approximative)', async () => {
@@ -204,7 +178,7 @@ describe('useNormativeDocumentsStore — Drive', () => {
     )
   })
 
-  test('importerDepuisDrive : document Google natif -> lireTexteExporte', async () => {
+  test('importerDepuisDrive : document Google natif -> lireTexteExporte, jamais de contenu binaire', async () => {
     const store = useNormativeDocumentsStore()
     await store.configurerConnexionDriveLectureNormes('dossier-normes-1', 'jeton-drive')
     fetchMock.mockResolvedValueOnce({
@@ -227,9 +201,10 @@ describe('useNormativeDocumentsStore — Drive', () => {
     expect(document.extracted_text).toBe('Texte exporté du Google Doc normatif.')
     expect(document.source).toBe('drive')
     expect(document.source_ref).toBe('doc-1')
+    expect(document.has_binary_content).toBe(false)
   })
 
-  test('importerDepuisDrive : fichier binaire (.txt) -> telechargerContenu + extraction', async () => {
+  test('importerDepuisDrive : fichier binaire (.txt) -> telechargerContenu + extraction + contenu binaire conservé', async () => {
     const store = useNormativeDocumentsStore()
     await store.configurerConnexionDriveLectureNormes('dossier-normes-1', 'jeton-drive')
     const binaire = new TextEncoder().encode('Contenu texte téléchargé depuis Drive.').buffer
@@ -246,11 +221,25 @@ describe('useNormativeDocumentsStore — Drive', () => {
     )
 
     expect(document.extracted_text).toBe('Contenu texte téléchargé depuis Drive.')
+    expect(document.has_binary_content).toBe(true)
+  })
+})
+
+describe('useNormativeDocumentsStore — telechargerContenu', () => {
+  test('récupère le contenu binaire d’un document importé, octet pour octet', async () => {
+    const store = useNormativeDocumentsStore()
+    const octets = new Uint8Array([10, 20, 30, 40])
+    const fichier = new File([octets], 'donnees.bin', { type: 'application/octet-stream' })
+    const document = await store.importerDepuisFichier(fichier, 'autre', 'qa-1')
+
+    const blob = await store.telechargerContenu(document.id)
+
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(octets)
   })
 })
 
 describe('useNormativeDocumentsStore — supprimerDocument', () => {
-  test('retire le document de la liste et de la base', async () => {
+  test('retire le document de la liste et du Worker', async () => {
     const store = useNormativeDocumentsStore()
     const document = await store.importerDepuisFichier(
       new File(['x'], 'a-supprimer.txt', { type: 'text/plain' }),
@@ -261,6 +250,6 @@ describe('useNormativeDocumentsStore — supprimerDocument', () => {
     await store.supprimerDocument(document.id)
 
     expect(store.documents).toHaveLength(0)
-    expect(await db.normativeDocuments.get(document.id)).toBeUndefined()
+    expect(await ctx.documentsNormatifsRepo.parId(document.id)).toBeNull()
   })
 })
