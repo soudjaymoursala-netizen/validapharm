@@ -300,51 +300,54 @@ async function telechargerDocument(document: {
   }
 }
 
-/**
- * Ouvre le texte extrait dans un nouvel onglet — seul recours pour un
- * document importé depuis GitHub/Drive sans octets bruts conservés
- * (`content: null`, seul `extracted_text` existe). Jamais utilisé si le
- * fichier d'origine est disponible (`telechargerDocument` le préfère).
- */
-function voirTexteExtrait(document: { titre: string; extracted_text: string }): void {
-  const blob = new Blob([document.extracted_text], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  window.open(url, '_blank')
-  setTimeout(() => URL.revokeObjectURL(url), 60_000)
-}
-
 const erreurApercu = ref<string | null>(null)
 
 /**
- * Ouvre le fichier d'origine dans un nouvel onglet (jamais un
- * téléchargement forcé — voir `telechargerDocument`) : le navigateur rend
- * nativement ce qu'il sait afficher (PDF, image...), et télécharge sinon
- * (ex. .docx) — comportement natif du navigateur, jamais simulé ici.
- *
- * `window.open(urlBlob, '_blank')` échoue silencieusement sur Chrome pour
- * un PDF (« Échec de chargement du document PDF ») : le nouvel onglet est
- * une navigation dans un contexte distinct qui ne résout pas toujours une
- * URL `blob:` créée par l'onglet d'origine. Un clic sur un vrai `<a>`
- * (même patron que `telechargerDocument`, sans l'attribut `download`) est
- * la voie fiable documentée pour ce cas — jamais `window.open` pour du
- * contenu blob.
+ * Aperçu affiché dans une fenêtre modale de la page elle-même, jamais un
+ * nouvel onglet : une URL `blob:` n'est fiable que dans le document qui
+ * l'a créée — Chrome refuse silencieusement de la résoudre dans un
+ * nouveau contexte de navigation (« Échec de chargement du document PDF »
+ * constaté en production, quelle que soit la méthode d'ouverture —
+ * `window.open` ou un clic sur `<a target="_blank">`, cloisonnement par
+ * origine oblige). Un `<iframe>` dans la page courante reste dans le même
+ * document, donc toujours valide.
+ */
+const apercu = ref<{ url: string; titre: string } | null>(null)
+
+function fermerApercu(): void {
+  if (apercu.value) URL.revokeObjectURL(apercu.value.url)
+  apercu.value = null
+}
+
+/**
+ * Affiche le texte extrait — seul recours pour un document importé depuis
+ * GitHub/Drive sans octets bruts conservés (`content: null`, seul
+ * `extracted_text` existe). Jamais utilisé si le fichier d'origine est
+ * disponible (`voirDocumentOriginal` le préfère).
+ */
+function voirTexteExtrait(document: { titre: string; extracted_text: string }): void {
+  fermerApercu()
+  const blob = new Blob([document.extracted_text], { type: 'text/plain;charset=utf-8' })
+  apercu.value = { url: URL.createObjectURL(blob), titre: document.titre }
+}
+
+/**
+ * Affiche le fichier d'origine (jamais un téléchargement forcé — voir
+ * `telechargerDocument`) : le navigateur rend nativement ce qu'il sait
+ * afficher (PDF, image...) dans l'iframe, et propose un téléchargement
+ * sinon (ex. .docx) — comportement natif du navigateur, jamais simulé ici.
  */
 async function voirDocumentOriginal(document: {
   id: string
-  filename: string
+  titre: string
   has_binary_content: boolean
 }): Promise<void> {
   if (!document.has_binary_content) return
   erreurApercu.value = null
   try {
     const contenu = await documentsStore.telechargerContenu(document.id)
-    const url = URL.createObjectURL(contenu)
-    const lien = window.document.createElement('a')
-    lien.href = url
-    lien.target = '_blank'
-    lien.rel = 'noopener'
-    lien.click()
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    fermerApercu()
+    apercu.value = { url: URL.createObjectURL(contenu), titre: document.titre }
   } catch (e) {
     erreurApercu.value = e instanceof Error ? e.message : 'Erreur inconnue.'
   }
@@ -578,6 +581,16 @@ onMounted(async () => {
       <p v-if="erreurTelechargement" class="erreur" role="alert">{{ erreurTelechargement }}</p>
     </section>
   </main>
+
+  <div v-if="apercu" class="apercu-overlay" @click.self="fermerApercu">
+    <div class="apercu-panneau">
+      <header class="apercu-entete">
+        <strong>{{ apercu.titre }}</strong>
+        <button type="button" @click="fermerApercu">Fermer</button>
+      </header>
+      <iframe :src="apercu.url" class="apercu-iframe" title="Aperçu du document" />
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -726,5 +739,42 @@ onMounted(async () => {
 
 .test-echec {
   color: var(--vp-danger);
+}
+
+.apercu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.apercu-panneau {
+  background: var(--vp-fond-carte);
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  width: min(92vw, 64rem);
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.apercu-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--vp-bordure);
+}
+
+.apercu-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: white;
 }
 </style>
