@@ -889,6 +889,52 @@ describe('routerRequete — documents normatifs (Bibliothèque de normes)', () =
     expect(corps.erreur).toBe('categorie_invalide')
   })
 
+  test('renommage -> nouveau titre reflété dans la liste, consigné à l’audit', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps } = await creerDocumentNormatif(ctx, admin.jeton)
+
+    const renommage = await requete(ctx, 'PATCH', `/documents-normatifs/${corps.document.id}`, {
+      jeton: admin.jeton,
+      body: { titre: 'ISO 13485:2016 (renommé)' },
+    })
+    expect(renommage.status).toBe(200)
+    expect(renommage.corps.document.titre).toBe('ISO 13485:2016 (renommé)')
+    // Les autres champs (filename, texte extrait...) ne sont jamais touchés par un renommage.
+    expect(renommage.corps.document.filename).toBe('iso-13485.pdf')
+    expect(renommage.corps.document.extractedText).toBe('Texte extrait du document.')
+
+    const liste = await requete(ctx, 'GET', '/documents-normatifs', { jeton: admin.jeton })
+    expect(liste.corps.documents[0]?.titre).toBe('ISO 13485:2016 (renommé)')
+
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(audit.corps.entrees.some((e) => e.action === 'renommage_document_normatif')).toBe(true)
+  })
+
+  test('renommage avec titre vide -> 400, jamais un titre vidé silencieusement', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps } = await creerDocumentNormatif(ctx, admin.jeton)
+
+    const renommage = await requete(ctx, 'PATCH', `/documents-normatifs/${corps.document.id}`, {
+      jeton: admin.jeton,
+      body: { titre: '   ' },
+    })
+    expect(renommage.status).toBe(400)
+    expect(renommage.corps.erreur).toBe('titre_obligatoire')
+  })
+
+  test('renommage d’un document inconnu -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const renommage = await requete(ctx, 'PATCH', '/documents-normatifs/inconnu', {
+      jeton: admin.jeton,
+      body: { titre: 'Nouveau titre' },
+    })
+    expect(renommage.status).toBe(404)
+    expect(renommage.corps.erreur).toBe('introuvable')
+  })
+
   test('sans authentification -> 401 (lecture et écriture)', async () => {
     const ctx = nouveauContexte()
     const liste = await requete(ctx, 'GET', '/documents-normatifs')
@@ -902,5 +948,10 @@ describe('routerRequete — documents normatifs (Bibliothèque de normes)', () =
       ctx,
     )
     expect(creation.status).toBe(401)
+
+    const renommage = await requete(ctx, 'PATCH', '/documents-normatifs/inconnu', {
+      body: { titre: 'x' },
+    })
+    expect(renommage.status).toBe(401)
   })
 })
