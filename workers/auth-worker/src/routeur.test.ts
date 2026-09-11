@@ -129,6 +129,22 @@ describe('routerRequete — CORS', () => {
     expect(reponse.headers.get('Access-Control-Allow-Origin')).toBe(ORIGINE)
   })
 
+  // Régression : PUT (utilisé par /parametres-installation/:cle) absent de
+  // cette liste fait échouer silencieusement le preflight CORS du
+  // navigateur — la requête PUT réelle n'est alors jamais envoyée, sans
+  // aucune erreur visible côté UI (constaté par l'utilisateur : clic sur
+  // « Enregistrer » sans aucune réaction).
+  test('OPTIONS -> Access-Control-Allow-Methods inclut PUT', async () => {
+    const ctx = nouveauContexte()
+    const reponse = await routerRequete(
+      new Request('https://relais.workers.dev/parametres-installation/github', {
+        method: 'OPTIONS',
+      }),
+      ctx,
+    )
+    expect(reponse.headers.get('Access-Control-Allow-Methods')).toContain('PUT')
+  })
+
   test('route inconnue -> 404', async () => {
     const ctx = nouveauContexte()
     const { status } = await requete(ctx, 'GET', '/inconnu')
