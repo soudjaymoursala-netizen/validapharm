@@ -897,6 +897,92 @@ describe('routerRequete — documents normatifs (Bibliothèque de normes)', () =
     expect(liste.corps.documents).toEqual([])
   })
 
+  test('réparation du contenu binaire -> hasBinaryContent passe à true, contenu relu identique, métadonnées inchangées', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps } = await creerDocumentNormatif(ctx, admin.jeton, {
+      metadata: { titre: 'Titre déjà personnalisé' },
+      contenu: { octets: new Uint8Array([]), nomFichier: 'vide.pdf', typeMime: 'application/pdf' },
+    })
+    expect(corps.document.hasBinaryContent).toBe(false)
+
+    const octets = new Uint8Array([9, 8, 7, 6])
+    const reparation = await routerRequete(
+      new Request(`https://relais.workers.dev/documents-normatifs/${corps.document.id}/contenu`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${admin.jeton}`, 'Content-Type': 'application/pdf' },
+        body: octets,
+      }),
+      ctx,
+    )
+    const corpsReparation = (await reparation.json()) as CorpsReponse
+    expect(reparation.status).toBe(200)
+    expect(corpsReparation.document.hasBinaryContent).toBe(true)
+    // Le titre déjà personnalisé (renommage) n'est jamais perdu par une réparation du seul contenu.
+    expect(corpsReparation.document.titre).toBe('Titre déjà personnalisé')
+
+    const reponseContenu = await routerRequete(
+      new Request(`https://relais.workers.dev/documents-normatifs/${corps.document.id}/contenu`, {
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+      }),
+      ctx,
+    )
+    expect(reponseContenu.status).toBe(200)
+    expect(reponseContenu.headers.get('Content-Type')).toBe('application/pdf')
+    expect(new Uint8Array(await reponseContenu.arrayBuffer())).toEqual(octets)
+
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(
+      audit.corps.entrees.some((e) => e.action === 'reparation_contenu_document_normatif'),
+    ).toBe(true)
+  })
+
+  test('réparation avec un corps vide -> 400, jamais un mensonge répété sur la disponibilité du fichier', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps } = await creerDocumentNormatif(ctx, admin.jeton, {
+      contenu: { octets: new Uint8Array([]), nomFichier: 'vide.pdf', typeMime: 'application/pdf' },
+    })
+
+    const reparation = await routerRequete(
+      new Request(`https://relais.workers.dev/documents-normatifs/${corps.document.id}/contenu`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+        body: new Uint8Array([]),
+      }),
+      ctx,
+    )
+    expect(reparation.status).toBe(400)
+    const corpsReparation = (await reparation.json()) as CorpsReponse
+    expect(corpsReparation.erreur).toBe('contenu_vide')
+  })
+
+  test('réparation d’un document inconnu -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const reparation = await routerRequete(
+      new Request('https://relais.workers.dev/documents-normatifs/inconnu/contenu', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+        body: new Uint8Array([1]),
+      }),
+      ctx,
+    )
+    expect(reparation.status).toBe(404)
+  })
+
+  test('réparation sans authentification -> 401', async () => {
+    const ctx = nouveauContexte()
+    const reparation = await routerRequete(
+      new Request('https://relais.workers.dev/documents-normatifs/inconnu/contenu', {
+        method: 'PUT',
+        body: new Uint8Array([1]),
+      }),
+      ctx,
+    )
+    expect(reparation.status).toBe(401)
+  })
+
   test('categorie invalide -> 400', async () => {
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
