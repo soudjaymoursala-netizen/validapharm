@@ -14,7 +14,9 @@ import { vi } from 'vitest'
 import { EnvoyeurEmailMemoire } from '../../workers/auth-worker/src/notifications/envoyeurEmail'
 import { AuditRepoMemoire } from '../../workers/auth-worker/src/repos/auditRepo'
 import { ClientsRepoMemoire } from '../../workers/auth-worker/src/repos/clientsRepo'
+import { DocumentsNormatifsRepoMemoire } from '../../workers/auth-worker/src/repos/documentsNormatifsRepo'
 import { ParametresInstallationRepoMemoire } from '../../workers/auth-worker/src/repos/parametresInstallationRepo'
+import { StockageBinaireRepoMemoire } from '../../workers/auth-worker/src/repos/stockageBinaireRepo'
 import { UtilisateursRepoMemoire } from '../../workers/auth-worker/src/repos/utilisateursRepo'
 import { routerRequete, type Contexte } from '../../workers/auth-worker/src/routeur'
 import { db } from '../persistance/db'
@@ -37,6 +39,8 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     utilisateursRepo: new UtilisateursRepoMemoire(),
     clientsRepo: new ClientsRepoMemoire(),
     parametresInstallationRepo: new ParametresInstallationRepoMemoire(),
+    documentsNormatifsRepo: new DocumentsNormatifsRepoMemoire(),
+    stockageBinaireRepo: new StockageBinaireRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,

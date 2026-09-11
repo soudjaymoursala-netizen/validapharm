@@ -58,7 +58,6 @@ import type {
   Requirement,
   RiskAssessment,
   MethodProfileRiskAssessment,
-  NormativeDocument,
   Section,
   Source,
   SourceLocation,
@@ -199,7 +198,6 @@ export class ValidaPharmDatabase extends Dexie {
   projects!: EntityTable<Project, 'id'>
   sections!: EntityTable<Section, 'id'>
   projectDocuments!: EntityTable<ProjectDocument, 'id'>
-  normativeDocuments!: EntityTable<NormativeDocument, 'id'>
   clientConfigs!: EntityTable<ClientConfig, 'client_id'>
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
   etatSynchronisation!: EntityTable<EnregistrementEtatSynchronisation, 'id'>
@@ -528,6 +526,15 @@ export class ValidaPharmDatabase extends Dexie {
       connexionGitHub: null,
       connexionRelaisIA: null,
       connexionDriveLectureNormes: null,
+    })
+
+    // Documents normatifs (Bibliothèque de normes) : migrés vers le Worker
+    // (D1 pour les métadonnées, R2 pour le texte extrait/contenu binaire)
+    // — même limite déjà corrigée pour la connexion GitHub/Relais IA/Drive
+    // ci-dessus, cette fois sur les documents eux-mêmes (constaté par
+    // l'utilisateur : import fait sur un poste, invisible sur un autre).
+    this.version(33).stores({
+      normativeDocuments: null,
     })
   }
 }

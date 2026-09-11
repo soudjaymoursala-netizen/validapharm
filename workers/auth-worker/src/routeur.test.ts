@@ -1,8 +1,20 @@
+// @vitest-environment node
+//
+// Ce Worker n'a aucun besoin du DOM (pur backend) — le reste du dépôt
+// impose `environment: 'jsdom'` en config racine (pour les tests Vue), ce
+// qui shadow les classes globales `Blob`/`File`/`FormData` par celles de
+// jsdom : incompatibles avec le `Request`/`fetch` natif de Node (undici),
+// constaté ici précisément (contenu binaire d'un document normatif
+// corrompu en "undefined" au lieu des octets réels, une fois passé par un
+// `FormData` construit avec le `File` global de jsdom). `node` restaure
+// les classes natives Node, seules réellement compatibles entre elles.
 import { describe, expect, test } from 'vitest'
 import { EnvoyeurEmailMemoire } from './notifications/envoyeurEmail'
 import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
+import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
+import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
 import { UtilisateursRepoMemoire } from './repos/utilisateursRepo'
 import { routerRequete, type Contexte } from './routeur'
 
@@ -16,6 +28,8 @@ function nouveauContexte(): Contexte {
     utilisateursRepo: new UtilisateursRepoMemoire(),
     clientsRepo: new ClientsRepoMemoire(),
     parametresInstallationRepo: new ParametresInstallationRepoMemoire(),
+    documentsNormatifsRepo: new DocumentsNormatifsRepoMemoire(),
+    stockageBinaireRepo: new StockageBinaireRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -79,6 +93,22 @@ interface CorpsReponse {
     updatedAt: string
     updatedBy: string
   } | null
+  document: DocumentNormatifJson
+  documents: DocumentNormatifJson[]
+}
+
+interface DocumentNormatifJson {
+  id: string
+  category: string
+  titre: string
+  filename: string
+  source: string
+  sourceRef: string | null
+  extractedText: string
+  mimeType: string
+  hasBinaryContent: boolean
+  uploadedAt: string
+  uploadedBy: string
 }
 
 async function requete(
@@ -725,5 +755,152 @@ describe('routerRequete — paramètres d’installation (dépôt GitHub, Relais
     const ctx = nouveauContexte()
     const { status } = await requete(ctx, 'GET', '/parametres-installation/github')
     expect(status).toBe(401)
+  })
+})
+
+async function creerDocumentNormatif(
+  ctx: Contexte,
+  jeton: string,
+  options: {
+    metadata?: Record<string, unknown>
+    texte?: string
+    contenu?: { octets: Uint8Array; nomFichier: string; typeMime: string }
+  } = {},
+): Promise<{ status: number; corps: CorpsReponse }> {
+  const formData = new FormData()
+  formData.set(
+    'metadata',
+    JSON.stringify({
+      category: 'iso',
+      titre: 'ISO 13485',
+      filename: 'iso-13485.pdf',
+      source: 'televersement',
+      mimeType: 'application/pdf',
+      ...options.metadata,
+    }),
+  )
+  formData.set('texte', options.texte ?? 'Texte extrait du document.')
+  if (options.contenu) {
+    formData.set(
+      'contenu',
+      new File([options.contenu.octets.buffer as ArrayBuffer], options.contenu.nomFichier, {
+        type: options.contenu.typeMime,
+      }),
+    )
+  }
+  const reponse = await routerRequete(
+    new Request('https://relais.workers.dev/documents-normatifs', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jeton}` },
+      body: formData,
+    }),
+    ctx,
+  )
+  const corps = await reponse.json().catch(() => null)
+  return { status: reponse.status, corps }
+}
+
+describe('routerRequete — documents normatifs (Bibliothèque de normes)', () => {
+  test('liste vide au départ', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { status, corps } = await requete(ctx, 'GET', '/documents-normatifs', {
+      jeton: admin.jeton,
+    })
+    expect(status).toBe(200)
+    expect(corps.documents).toEqual([])
+  })
+
+  test('création sans contenu binaire (import GitHub/Drive natif) -> hasBinaryContent=false, texte relu tel quel', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { status, corps } = await creerDocumentNormatif(ctx, admin.jeton, {
+      metadata: { category: 'gmp', titre: 'Guide BPF', filename: 'guide.md', source: 'github' },
+      texte: 'Contenu du guide.',
+    })
+    expect(status).toBe(201)
+    expect(corps.document.hasBinaryContent).toBe(false)
+    expect(corps.document.extractedText).toBe('Contenu du guide.')
+    expect(corps.document.category).toBe('gmp')
+    expect(corps.document.source).toBe('github')
+
+    const liste = await requete(ctx, 'GET', '/documents-normatifs', { jeton: admin.jeton })
+    expect(liste.corps.documents).toHaveLength(1)
+    expect(liste.corps.documents[0]?.extractedText).toBe('Contenu du guide.')
+  })
+
+  test('création avec contenu binaire (téléversement) -> contenu relu identique via /contenu', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const octets = new Uint8Array([1, 2, 3, 4, 5])
+    const { status, corps } = await creerDocumentNormatif(ctx, admin.jeton, {
+      contenu: { octets, nomFichier: 'iso-13485.pdf', typeMime: 'application/pdf' },
+    })
+    expect(status).toBe(201)
+    expect(corps.document.hasBinaryContent).toBe(true)
+
+    const reponseContenu = await routerRequete(
+      new Request(`https://relais.workers.dev/documents-normatifs/${corps.document.id}/contenu`, {
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+      }),
+      ctx,
+    )
+    expect(reponseContenu.status).toBe(200)
+    expect(reponseContenu.headers.get('Content-Type')).toBe('application/pdf')
+    expect(new Uint8Array(await reponseContenu.arrayBuffer())).toEqual(octets)
+  })
+
+  test('/contenu sur un document sans contenu binaire -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps } = await creerDocumentNormatif(ctx, admin.jeton, {
+      metadata: { source: 'github' },
+    })
+    const reponseContenu = await routerRequete(
+      new Request(`https://relais.workers.dev/documents-normatifs/${corps.document.id}/contenu`, {
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+      }),
+      ctx,
+    )
+    expect(reponseContenu.status).toBe(404)
+  })
+
+  test('suppression retire le document de la liste', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps } = await creerDocumentNormatif(ctx, admin.jeton)
+
+    const suppression = await requete(ctx, 'DELETE', `/documents-normatifs/${corps.document.id}`, {
+      jeton: admin.jeton,
+    })
+    expect(suppression.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', '/documents-normatifs', { jeton: admin.jeton })
+    expect(liste.corps.documents).toEqual([])
+  })
+
+  test('categorie invalide -> 400', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { status, corps } = await creerDocumentNormatif(ctx, admin.jeton, {
+      metadata: { category: 'inconnue' },
+    })
+    expect(status).toBe(400)
+    expect(corps.erreur).toBe('categorie_invalide')
+  })
+
+  test('sans authentification -> 401 (lecture et écriture)', async () => {
+    const ctx = nouveauContexte()
+    const liste = await requete(ctx, 'GET', '/documents-normatifs')
+    expect(liste.status).toBe(401)
+
+    const creation = await routerRequete(
+      new Request('https://relais.workers.dev/documents-normatifs', {
+        method: 'POST',
+        body: new FormData(),
+      }),
+      ctx,
+    )
+    expect(creation.status).toBe(401)
   })
 })

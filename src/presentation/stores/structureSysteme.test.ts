@@ -62,6 +62,125 @@ describe('useStructureSystemeStore — ajouterNiveau', () => {
   })
 })
 
+describe('useStructureSystemeStore — modifierNiveau (correction d’erreur de saisie)', () => {
+  test('corrige le libellé et le motif de numérotation sans toucher à la clé', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.ajouterNiveau('client-1', {
+      key: 'site',
+      label: { fr: 'Ste', en: 'Ste', de: 'Ste' },
+      numbering_pattern: 'X-{n}',
+    })
+
+    const resultat = await store.modifierNiveau('client-1', 'site', {
+      libelleFr: 'Site',
+      numbering_pattern: 'S-{n}',
+    })
+    expect(resultat).toEqual({ ok: true })
+    expect(store.schema?.levels[0]).toEqual({
+      key: 'site',
+      label: { fr: 'Site', en: 'Site', de: 'Site' },
+      numbering_pattern: 'S-{n}',
+    })
+  })
+
+  test('corrige une clé mal saisie tant qu’aucun nœud ne l’utilise', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.ajouterNiveau('client-1', {
+      key: 'ZONE (SITE (SMP))',
+      label: { fr: 'Site', en: 'Site', de: 'Site' },
+      numbering_pattern: 'S-{n}',
+    })
+
+    const resultat = await store.modifierNiveau('client-1', 'ZONE (SITE (SMP))', {
+      key: 'site',
+    })
+    expect(resultat).toEqual({ ok: true })
+    expect(store.schema?.levels[0]?.key).toBe('site')
+  })
+
+  test('refuse une clé déjà utilisée par un autre niveau', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.ajouterNiveau('client-1', {
+      key: 'site',
+      label: { fr: 'Site', en: 'Site', de: 'Site' },
+      numbering_pattern: 'S-{n}',
+    })
+    await store.ajouterNiveau('client-1', {
+      key: 'zone',
+      label: { fr: 'Zone', en: 'Zone', de: 'Zone' },
+      numbering_pattern: 'Z-{n}',
+    })
+
+    const resultat = await store.modifierNiveau('client-1', 'zone', { key: 'site' })
+    expect(resultat).toEqual({ ok: false, raison: 'cle_deja_utilisee' })
+  })
+
+  test('refuse de changer la clé si des nœuds existants la référencent déjà', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.ajouterNiveau('client-1', {
+      key: 'site',
+      label: { fr: 'Site', en: 'Site', de: 'Site' },
+      numbering_pattern: 'S-{n}',
+    })
+    await store.creerNoeud('client-1', {
+      level_key: 'site',
+      name: 'Site A',
+      code: 'S1',
+      parent_id: null,
+    })
+
+    const resultat = await store.modifierNiveau('client-1', 'site', { key: 'siteRenomme' })
+    expect(resultat).toEqual({ ok: false, raison: 'niveau_utilise_par_des_noeuds' })
+  })
+
+  test('niveau introuvable -> échec typé', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    const resultat = await store.modifierNiveau('client-1', 'inexistant', { libelleFr: 'x' })
+    expect(resultat).toEqual({ ok: false, raison: 'niveau_introuvable' })
+  })
+})
+
+describe('useStructureSystemeStore — supprimerNiveau', () => {
+  test('retire un niveau créé par erreur, jamais utilisé', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.ajouterNiveau('client-1', {
+      key: 'errone',
+      label: { fr: 'Erroné', en: 'Erroné', de: 'Erroné' },
+      numbering_pattern: '',
+    })
+
+    const resultat = await store.supprimerNiveau('client-1', 'errone')
+    expect(resultat).toEqual({ ok: true })
+    expect(store.schema?.levels).toEqual([])
+  })
+
+  test('refuse la suppression si des nœuds existants utilisent ce niveau', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.ajouterNiveau('client-1', {
+      key: 'site',
+      label: { fr: 'Site', en: 'Site', de: 'Site' },
+      numbering_pattern: 'S-{n}',
+    })
+    await store.creerNoeud('client-1', {
+      level_key: 'site',
+      name: 'Site A',
+      code: 'S1',
+      parent_id: null,
+    })
+
+    const resultat = await store.supprimerNiveau('client-1', 'site')
+    expect(resultat).toEqual({ ok: false, raison: 'niveau_utilise_par_des_noeuds' })
+    expect(store.schema?.levels).toHaveLength(1)
+  })
+})
+
 describe('useStructureSystemeStore — creerNoeud', () => {
   test('crée un nœud racine avec audit_log initial', async () => {
     const store = useStructureSystemeStore()

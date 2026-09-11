@@ -15,6 +15,14 @@ binding = "DB"
 database_name = "validapharm-auth"
 database_id = "5fb762ef-fe99-4e68-9086-e57126c5c2aa"
 
+# Bucket R2 créé le 11/09/2026 via le connecteur MCP Cloudflare Developer
+# Platform (`r2_bucket_create`) — contenu volumineux des documents
+# normatifs (texte extrait + fichier binaire d'origine), jamais en D1
+# (voir migration 0003_documents_normatifs.sql).
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "validapharm-normes"
+
 # Variables non secrètes (le secret RESEND_API_KEY se pose via
 # `wrangler secret put`, jamais ici). RESEND_FROM reste sur le domaine
 # partagé de Resend tant qu'aucun domaine propre n'est vérifié — n'envoie

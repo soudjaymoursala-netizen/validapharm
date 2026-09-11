@@ -45,6 +45,15 @@ export interface NouveauNoeudInput {
   workspace_id?: string | null
 }
 
+export type ResultatModificationNiveau =
+  | { ok: true }
+  | { ok: false; raison: 'niveau_introuvable' }
+  | { ok: false; raison: 'cle_deja_utilisee' }
+  | { ok: false; raison: 'niveau_utilise_par_des_noeuds' }
+
+export type ResultatSuppressionNiveau =
+  { ok: true } | { ok: false; raison: 'niveau_utilise_par_des_noeuds' }
+
 export type ResultatActionNoeud =
   | { ok: true }
   | { ok: false; raison: 'code_deja_utilise' }
@@ -118,6 +127,71 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     const misAJour: AssetHierarchySchema = { ...actuel, levels: [...actuel.levels, niveau] }
     await db.assetHierarchySchemas.put(misAJour)
     schema.value = misAJour
+  }
+
+  /**
+   * Corrige un niveau déjà créé (erreur de saisie : clé, libellé ou motif
+   * de numérotation) — la clé n'est modifiable que si aucun nœud existant
+   * ne la référence déjà (`level_key`), pour ne jamais faire pointer un
+   * nœud vers un niveau qui a changé de sens sous ses pieds.
+   */
+  async function modifierNiveau(
+    clientId: string,
+    cleActuelle: string,
+    changements: { key?: string; libelleFr?: string; numbering_pattern?: string },
+  ): Promise<ResultatModificationNiveau> {
+    const actuel = (await db.assetHierarchySchemas.get(clientId)) ?? {
+      client_id: clientId,
+      levels: [],
+    }
+    const index = actuel.levels.findIndex((n) => n.key === cleActuelle)
+    if (index === -1) return { ok: false, raison: 'niveau_introuvable' }
+    const niveauActuel = actuel.levels[index] as AssetHierarchySchema['levels'][number]
+
+    const nouvelleCle = changements.key?.trim()
+    if (nouvelleCle && nouvelleCle !== cleActuelle) {
+      if (actuel.levels.some((n) => n.key === nouvelleCle)) {
+        return { ok: false, raison: 'cle_deja_utilisee' }
+      }
+      if (noeuds.value.some((n) => n.level_key === cleActuelle)) {
+        return { ok: false, raison: 'niveau_utilise_par_des_noeuds' }
+      }
+    }
+
+    const levels = [...actuel.levels]
+    levels[index] = {
+      key: nouvelleCle || cleActuelle,
+      label:
+        changements.libelleFr !== undefined
+          ? { fr: changements.libelleFr, en: changements.libelleFr, de: changements.libelleFr }
+          : niveauActuel.label,
+      numbering_pattern: changements.numbering_pattern ?? niveauActuel.numbering_pattern,
+    }
+    const misAJour: AssetHierarchySchema = { ...actuel, levels }
+    await db.assetHierarchySchemas.put(misAJour)
+    schema.value = misAJour
+    return { ok: true }
+  }
+
+  /** Retire un niveau créé par erreur — refusé si des nœuds existants le référencent déjà (jamais d'orphelins silencieux). */
+  async function supprimerNiveau(
+    clientId: string,
+    key: string,
+  ): Promise<ResultatSuppressionNiveau> {
+    if (noeuds.value.some((n) => n.level_key === key)) {
+      return { ok: false, raison: 'niveau_utilise_par_des_noeuds' }
+    }
+    const actuel = (await db.assetHierarchySchemas.get(clientId)) ?? {
+      client_id: clientId,
+      levels: [],
+    }
+    const misAJour: AssetHierarchySchema = {
+      ...actuel,
+      levels: actuel.levels.filter((n) => n.key !== key),
+    }
+    await db.assetHierarchySchemas.put(misAJour)
+    schema.value = misAJour
+    return { ok: true }
   }
 
   async function creerNoeud(
@@ -462,6 +536,8 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     enChargement,
     charger,
     ajouterNiveau,
+    modifierNiveau,
+    supprimerNiveau,
     creerNoeud,
     importerHierarchieDepuisXlsx,
     importerHierarchieSapDepuisXlsx,
