@@ -117,6 +117,15 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   const url = new URL(request.url)
   const chemin = url.pathname
 
+  // --- Vérification de connexion (écran Configuration, avant toute
+  // connexion réelle) — jamais d'authentification requise ici : à ce
+  // stade l'utilisateur n'a par construction aucun jeton de session, ce
+  // « Tester la connexion » ne vérifie que la joignabilité du Worker à
+  // l'URL saisie. ---
+  if (chemin === '/sante' && request.method === 'GET') {
+    return reponseJson({ ok: true }, 200, entetes)
+  }
+
   // --- Bootstrap (aucune authentification requise, jeton dédié) ---
   if (chemin === '/auth/bootstrap-admin' && request.method === 'POST') {
     return gererBootstrapAdmin(request, ctx, entetes)

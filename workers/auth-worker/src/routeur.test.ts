@@ -118,6 +118,15 @@ async function bootstrapAdmin(
   return corps
 }
 
+describe('routerRequete — vérification de connexion (/sante)', () => {
+  test('GET /sante -> 200 { ok: true }, sans jeton (avant toute connexion)', async () => {
+    const ctx = nouveauContexte()
+    const { status, corps } = await requete(ctx, 'GET', '/sante')
+    expect(status).toBe(200)
+    expect(corps).toEqual({ ok: true })
+  })
+})
+
 describe('routerRequete — CORS', () => {
   test('OPTIONS -> 204 avec en-têtes CORS', async () => {
     const ctx = nouveauContexte()

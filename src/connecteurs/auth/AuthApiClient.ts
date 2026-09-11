@@ -65,6 +65,13 @@ export class AuthApiClient {
     private readonly delaiMaxMs: number = DELAI_MAX_PAR_DEFAUT_MS,
   ) {}
 
+  // --- Vérification de connexion (« Tester la connexion », avant toute
+  // authentification réelle — voir routeur.ts du Worker) ---
+
+  verifierSante(): Promise<ResultatApi<{ ok: true }>> {
+    return this.requete('GET', '/sante')
+  }
+
   // --- Authentification ---
 
   login(
