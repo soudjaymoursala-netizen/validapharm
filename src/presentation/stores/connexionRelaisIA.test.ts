@@ -1,20 +1,35 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useConnexionRelaisIAStore } from './useConnexionRelaisIAStore'
+
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.connexionRelaisIA.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useConnexionRelaisIAStore', () => {
   test('enregistre et relit la configuration', async () => {
     const store = useConnexionRelaisIAStore()
-    await store.enregistrer({ relayUrl: 'https://relais.workers.dev', jeton: 'jeton-x' })
+    const resultat = await store.enregistrer({
+      relayUrl: 'https://relais.workers.dev',
+      jeton: 'jeton-x',
+    })
+    expect(resultat).toEqual({ ok: true })
     expect(store.connexion).toEqual({
-      id: 'unique',
       relayUrl: 'https://relais.workers.dev',
       jeton: 'jeton-x',
     })
@@ -29,7 +44,10 @@ describe('useConnexionRelaisIAStore', () => {
     await store.enregistrer({ relayUrl: 'https://relais.workers.dev', jeton: 'x' })
     await store.effacer()
     expect(store.connexion).toBeNull()
-    expect(await db.connexionRelaisIA.get('unique')).toBeUndefined()
+
+    const autreVue = useConnexionRelaisIAStore()
+    await autreVue.charger()
+    expect(autreVue.connexion).toBeNull()
   })
 
   test('charger sans configuration existante : connexion null', async () => {

@@ -2,6 +2,12 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
+import { useConnexionRelaisIAStore } from './useConnexionRelaisIAStore'
 import { usePanneauChatStore } from './usePanneauChatStore'
 
 function reponseMock(corps: unknown, options: { status?: number } = {}): Response {
@@ -13,24 +19,35 @@ function reponseMock(corps: unknown, options: { status?: number } = {}): Respons
   } as Response
 }
 
+// Le Relais IA est désormais un paramètre d'installation stocké côté
+// Worker/D1 (voir `useConnexionRelaisIAStore`) — `fetchMock` ci-dessous ne
+// sert donc plus qu'aux appels réels du relais IA lui-même
+// (`RelayProviderAdapter`), jamais à l'authentification/la configuration
+// (interceptées par `installerFauxWorkerAuth`, qui délègue tout le reste à
+// `fetchMock`).
 let fetchMock: ReturnType<typeof vi.fn>
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
+  await reinitialiserAuthDeTest()
   await db.clientConfigs.clear()
-  await db.connexionRelaisIA.clear()
   await db.aiChatSessionLogs.clear()
-  await db.connexionRelaisIA.put({
-    id: 'unique',
+
+  fetchMock = vi.fn()
+  vi.stubGlobal('fetch', fetchMock)
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
+
+  const resultat = await useConnexionRelaisIAStore().enregistrer({
     relayUrl: 'https://relais.workers.dev',
     jeton: 'jeton-x',
   })
-  fetchMock = vi.fn()
-  vi.stubGlobal('fetch', fetchMock)
+  if (!resultat.ok) throw new Error(`préparation du Relais IA échouée : ${resultat.erreur}`)
 })
 
 afterEach(() => {
-  vi.unstubAllGlobals()
+  demonter()
 })
 
 describe('usePanneauChatStore — demarrerSession', () => {

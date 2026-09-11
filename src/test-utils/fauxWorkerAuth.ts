@@ -14,6 +14,7 @@ import { vi } from 'vitest'
 import { EnvoyeurEmailMemoire } from '../../workers/auth-worker/src/notifications/envoyeurEmail'
 import { AuditRepoMemoire } from '../../workers/auth-worker/src/repos/auditRepo'
 import { ClientsRepoMemoire } from '../../workers/auth-worker/src/repos/clientsRepo'
+import { ParametresInstallationRepoMemoire } from '../../workers/auth-worker/src/repos/parametresInstallationRepo'
 import { UtilisateursRepoMemoire } from '../../workers/auth-worker/src/repos/utilisateursRepo'
 import { routerRequete, type Contexte } from '../../workers/auth-worker/src/routeur'
 import { db } from '../persistance/db'
@@ -35,6 +36,7 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
   const ctx: Contexte = {
     utilisateursRepo: new UtilisateursRepoMemoire(),
     clientsRepo: new ClientsRepoMemoire(),
+    parametresInstallationRepo: new ParametresInstallationRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,

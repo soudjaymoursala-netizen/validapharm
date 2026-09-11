@@ -151,6 +151,17 @@ GitHub »).
 Cet écran configure **trois connexions globales à toute l'installation** (un seul
 dépôt, un seul relais IA, un seul Worker d'authentification, jamais un par client) :
 
+> Le dépôt GitHub ([§1.1](#11-dépôt-github-dédié)) et le Relais IA
+> ([§1.2](#12-relais-ia)) sont enregistrés **côté serveur** (Worker/D1) —
+> configurés une fois par un admin, ils sont aussitôt disponibles pour
+> tous les comptes de l'organisation, sur n'importe quel appareil/navigateur
+> (corrige un bug signalé : ces réglages n'étaient auparavant sauvegardés
+> que dans le navigateur, retrouvés vides à chaque nouvel appareil). Seul un
+> admin peut les modifier ; tout compte connecté peut les lire et les
+> utiliser. L'URL du Worker d'authentification ([§1.3](#13-authentification-comptes-réels))
+> reste elle seule strictement locale au poste — elle sert justement à
+> indiquer où se connecter, avant même toute session.
+
 ### 1.1 Dépôt GitHub dédié
 
 > Rappel affiché à l'écran : « Utilisez un jeton d'accès personnel (PAT) à portée
@@ -173,6 +184,11 @@ l'appel).
   {7 premiers caractères du SHA}. »
 - Échec : « Échec de connexion : {message} »
 
+Enregistrement réservé à un admin (paramètre partagé par toute
+l'installation) — un compte non-admin qui tente d'enregistrer voit
+« Réservé à un administrateur (paramètre partagé par toute
+l'installation). » à la place de la confirmation.
+
 ### 1.2 Relais IA
 
 > Rappel affiché : « Le navigateur ne contacte jamais un fournisseur d'IA
@@ -185,7 +201,8 @@ l'appel).
 | Jeton d'accès | mot de passe | oui | — |
 
 Mêmes boutons « Effacer » / « Enregistrer » (affiche aussi brièvement
-« ✓ Enregistré. » ; pas de test de connexion sur ce bloc).
+« ✓ Enregistré. » ; pas de test de connexion sur ce bloc) — même
+réservation à un admin que le dépôt GitHub ci-dessus.
 
 C'est ce relais qui est utilisé partout où l'IA intervient (chat expert,
 génération de brouillon, raisonnement de mission, structuration de procédure,
@@ -1586,7 +1603,10 @@ PIC/S / ASTM / ISPE / GMP / CQV / CSV / Autre) :
   Identifiant du dossier Drive + Jeton d'accès → « Enregistrer » / « Tester la
   connexion » (« Connexion réussie — {n} fichier(s) trouvé(s). » ou « Échec de
   connexion : {message} »), puis « Lister les fichiers » et « Importer » par
-  résultat.
+  résultat. Cette connexion Drive est elle aussi globale à l'installation et
+  enregistrée côté serveur (même mécanisme que le dépôt GitHub/Relais IA,
+  [§1](#1-premier-lancement--connexion-au-dépôt-github-au-relais-ia-et-au-worker-dauthentification))
+  — réservé à un admin, disponible ensuite sur tout appareil/navigateur.
 
 Section « Documents importés » : filtre par catégorie (« Toutes » ou une des
 neuf), liste avec source et, par document, boutons **« Consulter »** (ouvre le

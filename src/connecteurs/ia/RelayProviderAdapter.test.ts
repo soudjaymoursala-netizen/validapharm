@@ -141,4 +141,22 @@ describe('RelayProviderAdapter', () => {
       adaptateur().envoyerMessage('chat_normatif', { contenu_joint: false }, 'Q'),
     ).rejects.toBeInstanceOf(IndisponibleError)
   })
+
+  test('relayUrl vide -> ReponseInvalideError explicite, jamais un fetch vers la page courante', async () => {
+    const a = new RelayProviderAdapter({ relayUrl: '', nomAffiche: 'Claude' })
+    const erreur = await a
+      .envoyerMessage('chat_normatif', { contenu_joint: false }, 'Q')
+      .catch((e: unknown) => e)
+    expect(erreur).toBeInstanceOf(ReponseInvalideError)
+    expect((erreur as Error).message).toContain('Relais IA non configuré')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  test('relayUrl composé uniquement d’espaces -> même garde que vide', async () => {
+    const a = new RelayProviderAdapter({ relayUrl: '   ', nomAffiche: 'Claude' })
+    await expect(
+      a.envoyerMessage('chat_normatif', { contenu_joint: false }, 'Q'),
+    ).rejects.toBeInstanceOf(ReponseInvalideError)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })

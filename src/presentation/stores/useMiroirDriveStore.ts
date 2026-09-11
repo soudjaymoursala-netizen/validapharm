@@ -3,10 +3,9 @@ import { ref } from 'vue'
 import { DriveConnector, type FichierAMirroir } from '../../connecteurs/drive/DriveConnector'
 import { GitHubConnector } from '../../connecteurs/github/GitHubConnector'
 import { db } from '../../persistance/db'
+import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 
 export type ResultatMiroir = { ok: true; nbFichiers: number } | { ok: false; message: string }
-
-const IDENTIFIANT_ENREGISTREMENT_UNIQUE = 'unique'
 
 /**
  * Orchestrateur du miroir Drive — relie le connecteur GitHub
@@ -26,8 +25,9 @@ export const useMiroirDriveStore = defineStore('miroirDrive', () => {
   const miroirEnCours = ref(false)
 
   async function miroirVersDrive(clientId: string): Promise<ResultatMiroir> {
-    const connexionGitHub = await db.connexionGitHub.get(IDENTIFIANT_ENREGISTREMENT_UNIQUE)
-    if (connexionGitHub === undefined) {
+    const githubStore = useConnexionGitHubStore()
+    await githubStore.charger()
+    if (githubStore.connexion === null) {
       return {
         ok: false,
         message:
@@ -41,7 +41,7 @@ export const useMiroirDriveStore = defineStore('miroirDrive', () => {
 
     miroirEnCours.value = true
     try {
-      const githubConnecteur = new GitHubConnector(connexionGitHub)
+      const githubConnecteur = new GitHubConnector(githubStore.connexion)
       const arborescence = await githubConnecteur.chargerArborescence()
       const fichiers: FichierAMirroir[] = await Promise.all(
         arborescence.map(async (entree) => ({

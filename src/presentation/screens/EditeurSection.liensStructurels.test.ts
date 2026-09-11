@@ -45,6 +45,22 @@ async function attendreQue(condition: () => boolean): Promise<void> {
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+/**
+ * `EditeurSection.onMounted` enchaîne plusieurs `charger()` (gabarits,
+ * config, Relais IA, reasoning, normes, procédure, structure) après le
+ * texte "Liens structurels" déjà rendu — sans cette pause, le test peut
+ * se terminer (et `afterEach` démonter le faux Worker) alors qu'un de ces
+ * `charger()` est encore en vol, laissant son appel réseau retomber sur
+ * le **vrai** `fetch` restauré entre-temps (constaté : rejet non géré
+ * "Worker d'authentification injoignable").
+ */
+async function laisserSettlerMontageComplet(): Promise<void> {
+  for (let tour = 0; tour < 5; tour++) {
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
 let demonter: () => void
 
 beforeEach(async () => {
@@ -120,6 +136,7 @@ describe('EditeurSection — liens structurels réels (tâche #118)', () => {
 
     expect(wrapper.text()).toContain('PQ-COMPRESSION')
     expect(wrapper.text()).toContain('Presse P-200 (P-200)')
+    await laisserSettlerMontageComplet()
   })
 
   test('lie manuellement une section créée sans procédure/actif, puis délie', async () => {
@@ -184,5 +201,6 @@ describe('EditeurSection — liens structurels réels (tâche #118)', () => {
 
     const sectionApresDelien = await db.sections.get(section.id)
     expect(sectionApresDelien?.procedure_id).toBeNull()
+    await laisserSettlerMontageComplet()
   })
 })

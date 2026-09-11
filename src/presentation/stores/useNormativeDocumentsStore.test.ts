@@ -3,6 +3,12 @@ import JSZip from 'jszip'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
+import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 import { useNormativeDocumentsStore } from './useNormativeDocumentsStore'
 
 /** Même structure OOXML minimale que `DocxNatifAdapter.test.ts` — un `.docx` réellement valide, jamais un fichier texte renommé. */
@@ -51,19 +57,27 @@ function reponseMock(corps: unknown, options: { status?: number } = {}): Respons
   } as Response
 }
 
+// Le dépôt GitHub et la connexion Drive de lecture pour la bibliothèque de
+// normes sont désormais des paramètres d'installation stockés côté
+// Worker/D1 — `fetchMock` ci-dessous ne sert donc plus qu'aux appels réels
+// à l'API GitHub/Drive, jamais à l'authentification/la configuration
+// (interceptées par `installerFauxWorkerAuth`, qui délègue tout le reste à
+// `fetchMock`).
 let fetchMock: ReturnType<typeof vi.fn>
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
+  await reinitialiserAuthDeTest()
   await db.normativeDocuments.clear()
-  await db.connexionGitHub.clear()
-  await db.connexionDriveLectureNormes.clear()
   fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
 })
 
 afterEach(() => {
-  vi.unstubAllGlobals()
+  demonter()
 })
 
 describe('useNormativeDocumentsStore — importerDepuisFichier', () => {
@@ -95,14 +109,15 @@ describe('useNormativeDocumentsStore — importerDepuisFichier', () => {
 })
 
 describe('useNormativeDocumentsStore — GitHub', () => {
-  function configurerConnexionGitHub() {
-    return db.connexionGitHub.put({
-      id: 'unique',
+  async function configurerConnexionGitHub(): Promise<void> {
+    const resultat = await useConnexionGitHubStore().enregistrer({
       owner: 'client-x',
       repo: 'normes',
       branche: 'main',
       jeton: 'jeton-test',
     })
+    if (!resultat.ok)
+      throw new Error(`préparation de la connexion GitHub échouée : ${resultat.erreur}`)
   }
 
   test('listerFichiersGitHub : filtre par préfixe de chemin', async () => {

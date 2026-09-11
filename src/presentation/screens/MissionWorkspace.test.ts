@@ -116,7 +116,6 @@ beforeEach(async () => {
   await db.workspaces.clear()
   await db.assetNodes.clear()
   await db.clientConfigs.clear()
-  await db.connexionRelaisIA.clear()
   await db.requirements.clear()
   await db.couvertures.clear()
   await db.tests.clear()
