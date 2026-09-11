@@ -31,11 +31,16 @@ const LIBELLES_CATEGORIE: Record<CategorieDocumentNormatif, string> = {
 }
 
 const filtreCategorie = ref<CategorieDocumentNormatif | 'toutes'>('toutes')
-const documentsFiltres = computed(() =>
-  filtreCategorie.value === 'toutes'
-    ? documentsStore.documents
-    : documentsStore.documents.filter((d) => d.category === filtreCategorie.value),
-)
+const filtreRecherche = ref('')
+const documentsFiltres = computed(() => {
+  const parCategorie =
+    filtreCategorie.value === 'toutes'
+      ? documentsStore.documents
+      : documentsStore.documents.filter((d) => d.category === filtreCategorie.value)
+  const recherche = filtreRecherche.value.trim().toLowerCase()
+  if (recherche === '') return parCategorie
+  return parCategorie.filter((d) => d.titre.toLowerCase().includes(recherche))
+})
 
 function actorCourant(): string {
   return authStore.utilisateur?.email ?? 'utilisateur-local-phase1'
@@ -219,6 +224,7 @@ const enRenommage = ref(false)
 const erreurRenommage = ref<string | null>(null)
 
 function ouvrirRenommage(document: { id: string; titre: string }): void {
+  documentIdASupprimer.value = null
   documentIdEnRenommage.value = document.id
   brouillonRenommage.value = document.titre
   erreurRenommage.value = null
@@ -240,6 +246,31 @@ async function confirmerRenommage(documentId: string): Promise<void> {
     erreurRenommage.value = e instanceof Error ? e.message : 'Erreur inconnue.'
   } finally {
     enRenommage.value = false
+  }
+}
+
+// --- Suppression (jamais immédiate au premier clic — un document
+// réimporté à la main coûte cher, un clic accidentel sur "Supprimer" ne
+// doit jamais suffire) ---
+const documentIdASupprimer = ref<string | null>(null)
+const enSuppression = ref(false)
+
+function demanderSuppression(document: { id: string }): void {
+  documentIdEnRenommage.value = null
+  documentIdASupprimer.value = document.id
+}
+
+function annulerSuppression(): void {
+  documentIdASupprimer.value = null
+}
+
+async function confirmerSuppression(documentId: string): Promise<void> {
+  enSuppression.value = true
+  try {
+    await documentsStore.supprimerDocument(documentId)
+    documentIdASupprimer.value = null
+  } finally {
+    enSuppression.value = false
   }
 }
 
@@ -462,15 +493,21 @@ onMounted(async () => {
 
     <section class="bloc-documents">
       <h3>Documents importés</h3>
-      <label class="champ-filtre">
-        Filtrer par catégorie
-        <select v-model="filtreCategorie">
-          <option value="toutes">Toutes</option>
-          <option v-for="(libelle, valeur) in LIBELLES_CATEGORIE" :key="valeur" :value="valeur">
-            {{ libelle }}
-          </option>
-        </select>
-      </label>
+      <div class="filtres-documents">
+        <label class="champ-filtre">
+          Filtrer par catégorie
+          <select v-model="filtreCategorie">
+            <option value="toutes">Toutes</option>
+            <option v-for="(libelle, valeur) in LIBELLES_CATEGORIE" :key="valeur" :value="valeur">
+              {{ libelle }}
+            </option>
+          </select>
+        </label>
+        <label class="champ-filtre">
+          Rechercher par nom
+          <input v-model="filtreRecherche" type="search" placeholder="ex. ISO 13485" />
+        </label>
+      </div>
       <p v-if="documentsFiltres.length === 0" class="etat-vide">Aucun document importé.</p>
       <details v-else class="liste-repliable">
         <summary>{{ documentsFiltres.length }} document(s) — cliquer pour afficher</summary>
@@ -518,9 +555,20 @@ onMounted(async () => {
                 Télécharger
               </button>
               <button type="button" @click="ouvrirRenommage(document)">Renommer</button>
-              <button type="button" @click="documentsStore.supprimerDocument(document.id)">
-                Supprimer
-              </button>
+              <template v-if="documentIdASupprimer === document.id">
+                <button
+                  type="button"
+                  class="bouton-danger"
+                  :disabled="enSuppression"
+                  @click="confirmerSuppression(document.id)"
+                >
+                  {{ enSuppression ? 'Suppression…' : 'Confirmer la suppression' }}
+                </button>
+                <button type="button" :disabled="enSuppression" @click="annulerSuppression">
+                  Annuler
+                </button>
+              </template>
+              <button v-else type="button" @click="demanderSuppression(document)">Supprimer</button>
             </div>
           </li>
         </ul>
@@ -549,10 +597,24 @@ onMounted(async () => {
   margin: 0;
 }
 
+.filtres-documents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
 .champ-filtre {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.champ-filtre input,
+.champ-filtre select {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.5rem;
+  font-family: inherit;
 }
 
 .etat-vide {
@@ -610,6 +672,11 @@ onMounted(async () => {
   border-radius: var(--vp-rayon);
   padding: 0.4rem 0.6rem;
   font-family: inherit;
+}
+
+.bouton-danger {
+  border-color: var(--vp-danger);
+  color: var(--vp-danger);
 }
 
 .bloc-import,
