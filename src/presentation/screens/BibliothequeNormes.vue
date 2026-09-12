@@ -6,6 +6,7 @@
 // normes agrégée depuis le catalogue de gabarits (sans contenu réel,
 // jamais consultable) a été retirée à la demande de l'utilisateur.
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import type { EntreeArborescence } from '../../connecteurs/github/GitHubConnector'
 import type { FichierDrive } from '../../connecteurs/drive/DriveReaderConnector'
 import type { CategorieDocumentNormatif } from '../../logique-metier/domaine/types'
@@ -17,6 +18,8 @@ import {
 
 const authStore = useAuthStore()
 const documentsStore = useNormativeDocumentsStore()
+const route = useRoute()
+const router = useRouter()
 
 const LIBELLES_CATEGORIE: Record<CategorieDocumentNormatif, string> = {
   iso: 'ISO',
@@ -132,6 +135,41 @@ const enListeDrive = ref(false)
 const erreurDrive = ref<string | null>(null)
 const enImportDriveTout = ref(false)
 const progressionDriveTout = ref<{ fait: number; total: number } | null>(null)
+const enConnexionGoogleDrive = ref(false)
+const messageOAuthDrive = ref<string | null>(null)
+
+/** Remplace la copie manuelle du jeton d'accès (OAuth Playground, 1h — cause du #35/#36/#37) par un jeton de rafraîchissement longue durée, renouvelé automatiquement à chaque usage. */
+async function connecterGoogleDrive(): Promise<void> {
+  erreurDrive.value = null
+  enConnexionGoogleDrive.value = true
+  try {
+    const resultat = await documentsStore.connecterDriveAvecGoogle()
+    if (!resultat.ok) {
+      erreurDrive.value = `Échec de la connexion Google : ${resultat.erreur}`
+      return
+    }
+    window.location.href = resultat.urlAutorisation
+  } finally {
+    enConnexionGoogleDrive.value = false
+  }
+}
+
+/** Retour de `GET /drive-oauth/callback` (redirection Google puis Worker) — jamais un appel API, juste la lecture des paramètres déposés dans l'URL par le Worker, puis leur nettoyage pour ne pas les rejouer à un rechargement de page. */
+async function traiterRetourOAuthDrive(): Promise<void> {
+  const statut = route.query.drive_oauth
+  if (statut !== 'ok' && statut !== 'erreur') return
+  if (statut === 'ok') {
+    messageOAuthDrive.value =
+      'Connexion Google Drive établie — le jeton se renouvelle désormais automatiquement, plus besoin de le recopier à la main.'
+  } else {
+    const raison = typeof route.query.raison === 'string' ? route.query.raison : 'inconnue'
+    erreurDrive.value = `Échec de la connexion Google Drive : ${raison}`
+  }
+  const resteRequete = { ...route.query }
+  delete resteRequete.drive_oauth
+  delete resteRequete.raison
+  await router.replace({ query: resteRequete })
+}
 
 async function enregistrerConnexionDrive(): Promise<void> {
   erreurDrive.value = null
@@ -432,6 +470,7 @@ async function voirDocumentOriginal(document: {
 
 onMounted(async () => {
   await documentsStore.charger()
+  await traiterRetourOAuthDrive()
 })
 </script>
 
@@ -509,22 +548,38 @@ onMounted(async () => {
       <p class="rappel">
         Configuration dédiée à la bibliothèque de normes — distincte du miroir Drive par client.
       </p>
-      <form class="formulaire-import" @submit.prevent="enregistrerConnexionDrive">
-        <label>
-          Identifiant du dossier Drive
-          <input v-model="brouillonDrive.dossierId" type="text" required />
-        </label>
-        <label>
-          Jeton d'accès
-          <input v-model="brouillonDrive.jeton" type="password" required autocomplete="off" />
-        </label>
-        <div class="actions">
-          <button type="submit">Enregistrer</button>
-          <button type="button" :disabled="testDriveEnCours" @click="testerConnexionDrive">
-            {{ testDriveEnCours ? 'Test en cours…' : 'Tester la connexion' }}
-          </button>
-        </div>
-      </form>
+      <p v-if="messageOAuthDrive" class="test-succes">{{ messageOAuthDrive }}</p>
+
+      <div class="actions">
+        <button type="button" :disabled="enConnexionGoogleDrive" @click="connecterGoogleDrive">
+          {{ enConnexionGoogleDrive ? 'Redirection…' : 'Connecter avec Google' }}
+        </button>
+      </div>
+      <p class="rappel">
+        Recommandé — le jeton se renouvelle automatiquement, plus jamais besoin de le recopier à la
+        main. Nécessite qu'un identifiant OAuth Google ait été configuré pour cette installation
+        (Configuration client).
+      </p>
+
+      <details class="liste-repliable">
+        <summary>Configuration manuelle (jeton d'accès à recopier soi-même, valable 1h)</summary>
+        <form class="formulaire-import" @submit.prevent="enregistrerConnexionDrive">
+          <label>
+            Identifiant du dossier Drive
+            <input v-model="brouillonDrive.dossierId" type="text" required />
+          </label>
+          <label>
+            Jeton d'accès
+            <input v-model="brouillonDrive.jeton" type="password" required autocomplete="off" />
+          </label>
+          <div class="actions">
+            <button type="submit">Enregistrer</button>
+            <button type="button" :disabled="testDriveEnCours" @click="testerConnexionDrive">
+              {{ testDriveEnCours ? 'Test en cours…' : 'Tester la connexion' }}
+            </button>
+          </div>
+        </form>
+      </details>
       <p v-if="resultatTestDrive?.ok === true" class="test-succes">
         Connexion réussie — {{ resultatTestDrive.nbFichiers }} fichier(s) trouvé(s).
       </p>
