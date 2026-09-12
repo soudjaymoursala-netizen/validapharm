@@ -280,6 +280,16 @@ export class AuthApiClient {
     return this.requete('DELETE', `/documents-normatifs/${id}`, { jeton })
   }
 
+  /** Recale `hasBinaryContent` sur le contenu réellement présent côté serveur pour ce lot de documents (voir #35/#36 : un ancien import de masse a pu marquer un fichier disponible à tort). */
+  diagnostiquerContenuDocumentsNormatifs(
+    jeton: string,
+    ids: string[],
+  ): Promise<
+    ResultatApi<{ resultats: { id: string; hasBinaryContent: boolean; corrige: boolean }[] }>
+  > {
+    return this.requete('POST', '/documents-normatifs/diagnostiquer', { jeton, body: { ids } })
+  }
+
   /** Contenu binaire brut d'un document — jamais du JSON, contourne `requete()`. */
   async obtenirContenuDocumentNormatif(
     jeton: string,
