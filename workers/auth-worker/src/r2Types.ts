@@ -12,8 +12,13 @@ export interface R2PutOptions {
   customMetadata?: Record<string, string>
 }
 
+export interface R2HeadResult {
+  size: number
+}
+
 export interface R2Bucket {
   put(key: string, value: ArrayBuffer, options?: R2PutOptions): Promise<unknown>
   get(key: string): Promise<R2Object | null>
+  head(key: string): Promise<R2HeadResult | null>
   delete(key: string): Promise<void>
 }

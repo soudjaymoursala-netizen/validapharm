@@ -95,6 +95,7 @@ interface CorpsReponse {
   } | null
   document: DocumentNormatifJson
   documents: DocumentNormatifJson[]
+  resultats: { id: string; hasBinaryContent: boolean; corrige: boolean }[]
 }
 
 interface DocumentNormatifJson {
@@ -981,6 +982,101 @@ describe('routerRequete — documents normatifs (Bibliothèque de normes)', () =
       ctx,
     )
     expect(reparation.status).toBe(401)
+  })
+
+  test('diagnostic : corrige hasBinaryContent=true -> false quand le contenu R2 est absent (ancien import de masse, #35/#36)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    // Reproduit l'état des 177 documents historiques : le drapeau D1 ment
+    // (`true`) alors qu'aucun octet n'a jamais été écrit en R2 — jamais
+    // atteignable via `creerDocumentNormatif`, qui refuse déjà ce cas
+    // depuis #35 ; seule une manipulation directe du dépôt le reproduit.
+    await ctx.documentsNormatifsRepo.creer({
+      id: 'legacy-1',
+      category: 'gmp',
+      titre: 'Norme historique mal importée',
+      filename: 'norme-historique.pdf',
+      source: 'drive',
+      sourceRef: 'drive-id-legacy-1',
+      mimeType: 'application/pdf',
+      hasBinaryContent: true,
+      uploadedAt: '2026-01-01T00:00:00.000Z',
+      uploadedBy: admin.utilisateur.id,
+    })
+
+    const { status, corps } = await requete(ctx, 'POST', '/documents-normatifs/diagnostiquer', {
+      jeton: admin.jeton,
+      body: { ids: ['legacy-1'] },
+    })
+
+    expect(status).toBe(200)
+    expect(corps.resultats).toEqual([{ id: 'legacy-1', hasBinaryContent: false, corrige: true }])
+
+    const liste = await requete(ctx, 'GET', '/documents-normatifs', { jeton: admin.jeton })
+    expect(liste.corps.documents[0]?.hasBinaryContent).toBe(false)
+
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(
+      audit.corps.entrees.some(
+        (e) => e.action === 'correction_has_binary_content_document_normatif',
+      ),
+    ).toBe(true)
+  })
+
+  test('diagnostic : ne touche pas un document dont le contenu R2 est réellement présent', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps: creation } = await creerDocumentNormatif(ctx, admin.jeton, {
+      contenu: {
+        octets: new Uint8Array([1, 2, 3]),
+        nomFichier: 'reel.pdf',
+        typeMime: 'application/pdf',
+      },
+    })
+
+    const { status, corps } = await requete(ctx, 'POST', '/documents-normatifs/diagnostiquer', {
+      jeton: admin.jeton,
+      body: { ids: [creation.document.id] },
+    })
+
+    expect(status).toBe(200)
+    expect(corps.resultats).toEqual([
+      { id: creation.document.id, hasBinaryContent: true, corrige: false },
+    ])
+  })
+
+  test('diagnostic : document inconnu -> non corrigé, jamais une erreur qui bloquerait le reste du lot', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+
+    const { status, corps } = await requete(ctx, 'POST', '/documents-normatifs/diagnostiquer', {
+      jeton: admin.jeton,
+      body: { ids: ['inconnu'] },
+    })
+
+    expect(status).toBe(200)
+    expect(corps.resultats).toEqual([{ id: 'inconnu', hasBinaryContent: false, corrige: false }])
+  })
+
+  test('diagnostic : corps sans ids -> 400', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+
+    const { status, corps } = await requete(ctx, 'POST', '/documents-normatifs/diagnostiquer', {
+      jeton: admin.jeton,
+      body: {},
+    })
+
+    expect(status).toBe(400)
+    expect(corps.erreur).toBe('corps_invalide')
+  })
+
+  test('diagnostic sans authentification -> 401', async () => {
+    const ctx = nouveauContexte()
+    const { status } = await requete(ctx, 'POST', '/documents-normatifs/diagnostiquer', {
+      body: { ids: ['x'] },
+    })
+    expect(status).toBe(401)
   })
 
   test('categorie invalide -> 400', async () => {
