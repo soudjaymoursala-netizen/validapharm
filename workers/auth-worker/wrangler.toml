@@ -31,4 +31,4 @@ bucket_name = "validapharm-normes"
 # adresse @votredomaine.com dès qu'un domaine est vérifié dans Resend.
 [vars]
 RESEND_FROM = "onboarding@resend.dev"
-APP_URL = "https://validapharm.pages.dev"
+APP_URL = "https://soudjaymoursala-netizen.github.io/validapharm"
