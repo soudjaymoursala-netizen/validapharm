@@ -28,6 +28,14 @@ interface ConnexionDriveLectureNormes {
   jeton: string
 }
 
+/**
+ * `refreshToken` n'apparaît que pour une connexion établie via
+ * `connecterDriveAvecGoogle` (OAuth, #37 bis) — jamais pour l'ancienne
+ * configuration manuelle (jeton d'accès recopié depuis l'OAuth Playground,
+ * valable 1h, cause du #35/#36/#37). Sa présence déclenche un
+ * renouvellement systématique du jeton avant tout usage : jamais de risque
+ * de jeton expiré en cours d'un import/réparation de masse.
+ */
 async function obtenirConnexionDriveNormes(): Promise<ConnexionDriveLectureNormes | null> {
   const authStore = useAuthStore()
   const api = await authStore.client()
@@ -36,9 +44,36 @@ async function obtenirConnexionDriveNormes(): Promise<ConnexionDriveLectureNorme
     authStore.jeton,
     CLE_PARAMETRE_DRIVE_NORMES,
   )
-  return resultat.ok && resultat.donnees.parametre
-    ? (resultat.donnees.parametre.valeur as unknown as ConnexionDriveLectureNormes)
-    : null
+  if (!resultat.ok || !resultat.donnees.parametre) return null
+  const valeur = resultat.donnees.parametre.valeur as unknown as ConnexionDriveLectureNormes & {
+    refreshToken?: string
+  }
+  if (!valeur.refreshToken) return valeur
+
+  const frais = await api.rafraichirJetonOAuthDrive(authStore.jeton)
+  if (!frais.ok) throw new Error(`Échec du renouvellement du jeton Drive : ${frais.erreur}`)
+  return { dossierId: valeur.dossierId, jeton: frais.donnees.jeton }
+}
+
+export type ResultatConnexionOAuthDrive =
+  { ok: true; urlAutorisation: string } | { ok: false; erreur: string }
+
+/**
+ * Démarre la connexion Google Drive par OAuth (jeton de rafraîchissement
+ * longue durée) — l'appelant doit naviguer le navigateur vers
+ * `urlAutorisation` (`window.location.href = ...`), jamais un `fetch` : la
+ * suite se passe entièrement sur les domaines Google puis le Worker
+ * (`/drive-oauth/callback`), hors de la SPA.
+ */
+async function connecterDriveAvecGoogle(): Promise<ResultatConnexionOAuthDrive> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) {
+    return { ok: false, erreur: "Relais d'authentification non configuré (Configuration client)." }
+  }
+  const resultat = await api.demarrerConnexionOAuthDrive(authStore.jeton)
+  if (!resultat.ok) return { ok: false, erreur: resultat.erreur }
+  return { ok: true, urlAutorisation: resultat.donnees.urlAutorisation }
 }
 
 export type ResultatConnexionDriveNormes =
@@ -232,6 +267,13 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     })
   }
 
+  /**
+   * Préserve un éventuel `refreshToken` déjà connecté via
+   * `connecterDriveAvecGoogle` (OAuth) — jamais un remplacement complet de
+   * la valeur stockée : ce formulaire ne sert plus qu'à ajuster
+   * `dossierId` une fois l'OAuth en place, la réécriture complète
+   * effacerait silencieusement la connexion Google déjà établie.
+   */
   async function configurerConnexionDriveLectureNormes(
     dossierId: string,
     jeton: string,
@@ -240,18 +282,32 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     const api = await authStore.client()
     if (!api || !authStore.jeton) return { ok: false, erreur: 'relais_non_configure' }
 
-    const valeur: ConnexionDriveLectureNormes = { dossierId: dossierId.trim(), jeton: jeton.trim() }
+    const existant = await api.obtenirParametreInstallation(
+      authStore.jeton,
+      CLE_PARAMETRE_DRIVE_NORMES,
+    )
+    const refreshToken = existant.ok ? existant.donnees.parametre?.valeur.refreshToken : undefined
+    const valeur: Record<string, string> = {
+      dossierId: dossierId.trim(),
+      jeton: jeton.trim(),
+      ...(refreshToken ? { refreshToken } : {}),
+    }
     const resultat = await api.enregistrerParametreInstallation(
       authStore.jeton,
       CLE_PARAMETRE_DRIVE_NORMES,
-      valeur as unknown as Record<string, string>,
+      valeur,
     )
     if (!resultat.ok) return { ok: false, erreur: resultat.erreur }
     return { ok: true }
   }
 
   async function testerConnexionDriveLectureNormes(): Promise<ResultatConnexionDriveNormes> {
-    const connexion = await obtenirConnexionDriveNormes()
+    let connexion: ConnexionDriveLectureNormes | null
+    try {
+      connexion = await obtenirConnexionDriveNormes()
+    } catch (erreur) {
+      return { ok: false, message: erreur instanceof Error ? erreur.message : 'Erreur inconnue.' }
+    }
     if (connexion === null) {
       return {
         ok: false,
@@ -452,6 +508,7 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     listerFichiersGitHub,
     importerDepuisGitHub,
     configurerConnexionDriveLectureNormes,
+    connecterDriveAvecGoogle,
     testerConnexionDriveLectureNormes,
     listerFichiersDrive,
     importerDepuisDrive,

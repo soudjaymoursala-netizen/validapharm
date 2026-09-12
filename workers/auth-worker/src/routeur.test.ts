@@ -8,7 +8,7 @@
 // corrompu en "undefined" au lieu des octets réels, une fois passé par un
 // `FormData` construit avec le `File` global de jsdom). `node` restaure
 // les classes natives Node, seules réellement compatibles entre elles.
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { EnvoyeurEmailMemoire } from './notifications/envoyeurEmail'
 import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
@@ -22,8 +22,10 @@ const ORIGINE = 'https://validapharm.example'
 const JETON_BOOTSTRAP = 'jeton-bootstrap-test'
 const SECRET_JWT = 'secret-jwt-test'
 const URL_APPLICATION = 'https://validapharm.pages.dev'
+const GOOGLE_OAUTH_CLIENT_ID = 'client-oauth-test.apps.googleusercontent.com'
+const GOOGLE_OAUTH_CLIENT_SECRET = 'secret-oauth-test'
 
-function nouveauContexte(): Contexte {
+function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte {
   return {
     utilisateursRepo: new UtilisateursRepoMemoire(),
     clientsRepo: new ClientsRepoMemoire(),
@@ -36,6 +38,8 @@ function nouveauContexte(): Contexte {
     corsOrigin: ORIGINE,
     envoyeurEmail: new EnvoyeurEmailMemoire(),
     urlApplication: URL_APPLICATION,
+    googleOAuthClientId: options.sansOAuthGoogle ? '' : GOOGLE_OAUTH_CLIENT_ID,
+    googleOAuthClientSecret: options.sansOAuthGoogle ? '' : GOOGLE_OAUTH_CLIENT_SECRET,
   }
 }
 
@@ -96,6 +100,8 @@ interface CorpsReponse {
   document: DocumentNormatifJson
   documents: DocumentNormatifJson[]
   resultats: { id: string; hasBinaryContent: boolean; corrige: boolean }[]
+  urlAutorisation: string
+  expiresIn: number
 }
 
 interface DocumentNormatifJson {
@@ -1153,5 +1159,249 @@ describe('routerRequete — documents normatifs (Bibliothèque de normes)', () =
       body: { titre: 'x' },
     })
     expect(renommage.status).toBe(401)
+  })
+})
+
+describe('routerRequete — OAuth Google (Drive normes)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function creerUtilisateurEtLogin(
+    ctx: Contexte,
+    adminJeton: string,
+    email: string,
+  ): Promise<string> {
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: adminJeton,
+      body: { email, motDePasse: 'MotDePasse!1', nom: 'N', prenom: 'P', role: 'utilisateur' },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email, motDePasse: 'MotDePasse!1' },
+    })
+    return login.corps.jeton
+  }
+
+  test('demarrer : admin -> urlAutorisation Google valide, jamais le secret dans l’URL', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+
+    const { status, corps } = await requete(ctx, 'GET', '/drive-oauth/demarrer', {
+      jeton: admin.jeton,
+    })
+
+    expect(status).toBe(200)
+    const url = new URL(corps.urlAutorisation)
+    expect(url.origin).toBe('https://accounts.google.com')
+    expect(url.searchParams.get('client_id')).toBe(GOOGLE_OAUTH_CLIENT_ID)
+    expect(url.searchParams.get('redirect_uri')).toBe(
+      'https://relais.workers.dev/drive-oauth/callback',
+    )
+    expect(url.searchParams.get('access_type')).toBe('offline')
+    expect(url.searchParams.get('prompt')).toBe('consent')
+    expect(url.searchParams.get('scope')).toBe('https://www.googleapis.com/auth/drive.readonly')
+    expect(url.toString()).not.toContain(GOOGLE_OAUTH_CLIENT_SECRET)
+    expect(url.searchParams.get('state')).toBeTruthy()
+  })
+
+  test('demarrer : non-admin -> 403', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const jetonUtilisateur = await creerUtilisateurEtLogin(ctx, admin.jeton, 'u@pharmatech.example')
+
+    const { status } = await requete(ctx, 'GET', '/drive-oauth/demarrer', {
+      jeton: jetonUtilisateur,
+    })
+    expect(status).toBe(403)
+  })
+
+  test('demarrer : sans authentification -> 401', async () => {
+    const ctx = nouveauContexte()
+    const { status } = await requete(ctx, 'GET', '/drive-oauth/demarrer')
+    expect(status).toBe(401)
+  })
+
+  test('demarrer : OAuth Google non configuré côté serveur -> 501', async () => {
+    const ctx = nouveauContexte({ sansOAuthGoogle: true })
+    const admin = await bootstrapAdmin(ctx)
+
+    const { status, corps } = await requete(ctx, 'GET', '/drive-oauth/demarrer', {
+      jeton: admin.jeton,
+    })
+    expect(status).toBe(501)
+    expect(corps.erreur).toBe('oauth_google_non_configure')
+  })
+
+  test('callback : succès -> refreshToken stocké sans perdre dossierId, redirection ok, audit consigné', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    // Un dossierId déjà configuré manuellement ne doit jamais être perdu par la connexion OAuth.
+    await requete(ctx, 'PUT', '/parametres-installation/drive-normes', {
+      jeton: admin.jeton,
+      body: { valeur: { dossierId: 'dossier-existant-1', jeton: 'ancien-jeton-manuel' } },
+    })
+    const { corps: demarrage } = await requete(ctx, 'GET', '/drive-oauth/demarrer', {
+      jeton: admin.jeton,
+    })
+    const etat = new URL(demarrage.urlAutorisation).searchParams.get('state') as string
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        access_token: 'jeton-frais',
+        refresh_token: 'jeton-refresh-1',
+        expires_in: 3599,
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const reponse = await routerRequete(
+      new Request(`https://relais.workers.dev/drive-oauth/callback?code=code-1&state=${etat}`),
+      ctx,
+    )
+
+    expect(reponse.status).toBe(302)
+    expect(reponse.headers.get('Location')).toBe(
+      'https://validapharm.pages.dev/normes?drive_oauth=ok',
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://oauth2.googleapis.com/token',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    const parametre = await requete(ctx, 'GET', '/parametres-installation/drive-normes', {
+      jeton: admin.jeton,
+    })
+    expect(parametre.corps.parametre?.valeur).toMatchObject({
+      dossierId: 'dossier-existant-1',
+      refreshToken: 'jeton-refresh-1',
+    })
+
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(audit.corps.entrees.some((e) => e.action === 'connexion_oauth_drive')).toBe(true)
+  })
+
+  test('callback : état inconnu/absent -> redirection erreur, jamais un plantage', async () => {
+    const ctx = nouveauContexte()
+
+    const reponse = await routerRequete(
+      new Request('https://relais.workers.dev/drive-oauth/callback?code=x&state=etat-inconnu'),
+      ctx,
+    )
+
+    expect(reponse.status).toBe(302)
+    expect(reponse.headers.get('Location')).toBe(
+      'https://validapharm.pages.dev/normes?drive_oauth=erreur&raison=etat_invalide_ou_expire',
+    )
+  })
+
+  test('callback : paramètres manquants -> redirection erreur', async () => {
+    const ctx = nouveauContexte()
+
+    const reponse = await routerRequete(
+      new Request('https://relais.workers.dev/drive-oauth/callback'),
+      ctx,
+    )
+
+    expect(reponse.status).toBe(302)
+    expect(reponse.headers.get('Location')).toBe(
+      'https://validapharm.pages.dev/normes?drive_oauth=erreur&raison=parametres_manquants',
+    )
+  })
+
+  test('callback : échange de code refusé par Google -> redirection erreur, état tout de même consommé (jamais réutilisable)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps: demarrage } = await requete(ctx, 'GET', '/drive-oauth/demarrer', {
+      jeton: admin.jeton,
+    })
+    const etat = new URL(demarrage.urlAutorisation).searchParams.get('state') as string
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+
+    const reponse = await routerRequete(
+      new Request(`https://relais.workers.dev/drive-oauth/callback?code=code-1&state=${etat}`),
+      ctx,
+    )
+    expect(reponse.status).toBe(302)
+    expect(reponse.headers.get('Location')).toBe(
+      'https://validapharm.pages.dev/normes?drive_oauth=erreur&raison=echange_jeton_echoue',
+    )
+
+    const rejeu = await routerRequete(
+      new Request(`https://relais.workers.dev/drive-oauth/callback?code=code-1&state=${etat}`),
+      ctx,
+    )
+    expect(rejeu.headers.get('Location')).toBe(
+      'https://validapharm.pages.dev/normes?drive_oauth=erreur&raison=etat_invalide_ou_expire',
+    )
+  })
+
+  test('rafraichir-jeton : sans authentification -> 401', async () => {
+    const ctx = nouveauContexte()
+    const { status } = await requete(ctx, 'POST', '/drive-oauth/rafraichir-jeton')
+    expect(status).toBe(401)
+  })
+
+  test('rafraichir-jeton : aucune connexion OAuth -> 404 oauth_non_connecte', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+
+    const { status, corps } = await requete(ctx, 'POST', '/drive-oauth/rafraichir-jeton', {
+      jeton: admin.jeton,
+    })
+    expect(status).toBe(404)
+    expect(corps.erreur).toBe('oauth_non_connecte')
+  })
+
+  test('rafraichir-jeton : succès -> jeton frais renvoyé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    await requete(ctx, 'PUT', '/parametres-installation/drive-normes', {
+      jeton: admin.jeton,
+      body: { valeur: { dossierId: 'd1', refreshToken: 'jeton-refresh-1' } },
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: 'jeton-frais-2', expires_in: 3599 }),
+      }),
+    )
+
+    const { status, corps } = await requete(ctx, 'POST', '/drive-oauth/rafraichir-jeton', {
+      jeton: admin.jeton,
+    })
+
+    expect(status).toBe(200)
+    expect(corps.jeton).toBe('jeton-frais-2')
+    expect(corps.expiresIn).toBe(3599)
+  })
+
+  test('rafraichir-jeton : Google refuse (jeton de rafraîchissement révoqué) -> 400, jamais 5xx (AuthApiClient traite tout 5xx comme relais injoignable)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    await requete(ctx, 'PUT', '/parametres-installation/drive-normes', {
+      jeton: admin.jeton,
+      body: { valeur: { refreshToken: 'jeton-refresh-revoque' } },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+
+    const { status, corps } = await requete(ctx, 'POST', '/drive-oauth/rafraichir-jeton', {
+      jeton: admin.jeton,
+    })
+
+    expect(status).toBe(400)
+    expect(corps.erreur).toBe('rafraichissement_echoue')
+  })
+
+  test('rafraichir-jeton : OAuth Google non configuré côté serveur -> 501', async () => {
+    const ctx = nouveauContexte({ sansOAuthGoogle: true })
+    const admin = await bootstrapAdmin(ctx)
+
+    const { status, corps } = await requete(ctx, 'POST', '/drive-oauth/rafraichir-jeton', {
+      jeton: admin.jeton,
+    })
+    expect(status).toBe(501)
+    expect(corps.erreur).toBe('oauth_google_non_configure')
   })
 })

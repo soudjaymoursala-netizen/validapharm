@@ -67,6 +67,52 @@ IndexedDB + synchronisation GitHub, inchangés par ce lot.
   TXT/CNAME fournis par Resend), puis changer `RESEND_FROM` pour une
   adresse sur ce domaine (ex. `invitations@votredomaine.com`).
 
+### Configuration requise pour la connexion Google Drive par OAuth (jeton auto-renouvelé)
+
+Remplace la copie manuelle d'un jeton d'accès depuis l'OAuth Playground
+(valable 1h, cause des incidents #35/#36/#37 — jeton expiré en cours d'un
+import/réparation de masse) par un vrai jeton de rafraîchissement, connecté
+une fois pour toutes (bouton « Connecter avec Google », Guides & normes).
+Tant que les secrets ci-dessous ne sont pas posés, ce bouton répond
+`oauth_google_non_configure` (501) — l'ancien champ « Jeton d'accès » manuel
+reste utilisable en attendant (section repliée « Configuration manuelle »).
+
+**Ce qui reste à la charge de l'utilisateur** (aucun outil MCP disponible
+pour créer des identifiants OAuth dans un projet Google Cloud, ni pour
+poser un secret Cloudflare Workers) :
+
+1. Dans [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   sur le projet de votre choix (nouveau ou existant) :
+   - **APIs & Services → Bibliothèque** : activer « Google Drive API ».
+   - **APIs & Services → Écran de consentement OAuth** : type « Externe »
+     (ou « Interne » si Google Workspace) suffit, aucune validation Google
+     requise pour un usage interne à l'organisation (mode « Test » avec les
+     comptes utilisateurs de l'installation ajoutés comme testeurs).
+   - **APIs & Services → Identifiants → Créer des identifiants → ID client
+     OAuth**, type « Application Web ».
+   - **URI de redirection autorisée**, à saisir exactement (l'origine réelle
+     du Worker déployé) :
+     `https://validapharm-auth-worker.soudjaymoursala.workers.dev/drive-oauth/callback`
+   - Noter l'**ID client** et le **code secret du client** générés.
+2. Poser les deux secrets (`wrangler secret put ...`, jamais commités,
+   depuis `workers/auth-worker/`) :
+   - `wrangler secret put GOOGLE_OAUTH_CLIENT_ID`
+   - `wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET`
+3. Dans l'application (compte admin), Guides & normes → Depuis Google
+   Drive → **Connecter avec Google** — sélectionner le compte, autoriser
+   l'accès en lecture seule à Drive. Le jeton de rafraîchissement obtenu est
+   stocké côté serveur (D1, paramètre d'installation `drive-normes`) ; le
+   jeton d'accès réel n'est jamais persisté, renouvelé à la demande
+   (`POST /drive-oauth/rafraichir-jeton`) avant chaque usage.
+
+**Détail d'implémentation** (`routeur.ts`) : `GET /drive-oauth/demarrer`
+(admin, pose un état CSRF à usage unique) → redirection Google
+(`access_type=offline&prompt=consent`, seul moyen d'obtenir un jeton de
+rafraîchissement) → `GET /drive-oauth/callback` (jamais authentifiable,
+navigation top-level du navigateur — la protection passe par l'état
+posé à l'étape précédente) → jeton de rafraîchissement stocké,
+fusionné avec un `dossierId` déjà configuré (jamais écrasé).
+
 ## Déploiement — historique et état réel
 
 Initialement écrit en supposant aucun accès Cloudflare — le 04/09/2026,

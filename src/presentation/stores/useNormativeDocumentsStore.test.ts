@@ -16,6 +16,7 @@ import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
+  RELAY_URL_TEST,
 } from '../../test-utils/fauxWorkerAuth'
 import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 import { useNormativeDocumentsStore } from './useNormativeDocumentsStore'
@@ -171,6 +172,80 @@ describe('useNormativeDocumentsStore — Drive', () => {
       ok: false,
       message: 'Aucune configuration Drive enregistrée pour la bibliothèque de normes.',
     })
+  })
+
+  test('connecterDriveAvecGoogle : renvoie une URL d’autorisation Google valide', async () => {
+    const store = useNormativeDocumentsStore()
+
+    const resultat = await store.connecterDriveAvecGoogle()
+
+    expect(resultat.ok).toBe(true)
+    if (!resultat.ok) throw new Error('résultat inattendu')
+    const url = new URL(resultat.urlAutorisation)
+    expect(url.origin).toBe('https://accounts.google.com')
+    expect(url.searchParams.get('access_type')).toBe('offline')
+    expect(url.searchParams.get('state')).toBeTruthy()
+  })
+
+  test('connexion OAuth (jeton de rafraîchissement) : jeton renouvelé automatiquement avant chaque usage Drive, jamais recopié à la main', async () => {
+    const store = useNormativeDocumentsStore()
+    const demarrage = await store.connecterDriveAvecGoogle()
+    if (!demarrage.ok) throw new Error('démarrage OAuth inattendu en échec')
+    const etat = new URL(demarrage.urlAutorisation).searchParams.get('state')
+
+    // Callback Google : échange code -> jeton de rafraîchissement (jamais rejoué par la SPA elle-même, simule la redirection navigateur).
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        access_token: 'jeton-initial',
+        refresh_token: 'jeton-refresh-1',
+        expires_in: 3599,
+      }),
+    })
+    const reponseCallback = await fetch(
+      `${RELAY_URL_TEST}/drive-oauth/callback?code=code-1&state=${etat}`,
+    )
+    expect(reponseCallback.status).toBe(302)
+
+    // Renouvellement automatique (déclenché par obtenirConnexionDriveNormes) puis l'appel Drive lui-même.
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'jeton-frais', expires_in: 3599 }),
+      })
+      .mockResolvedValueOnce(reponseMock({ files: [{ id: 'f1' }] }))
+
+    const resultat = await store.testerConnexionDriveLectureNormes()
+
+    expect(resultat).toEqual({ ok: true, nbFichiers: 1 })
+  })
+
+  test('connexion OAuth : jeton de rafraîchissement révoqué -> message d’erreur clair, jamais un rejet non attrapé', async () => {
+    const store = useNormativeDocumentsStore()
+    const demarrage = await store.connecterDriveAvecGoogle()
+    if (!demarrage.ok) throw new Error('démarrage OAuth inattendu en échec')
+    const etat = new URL(demarrage.urlAutorisation).searchParams.get('state')
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        access_token: 'x',
+        refresh_token: 'jeton-refresh-revoque',
+        expires_in: 3599,
+      }),
+    })
+    await fetch(`${RELAY_URL_TEST}/drive-oauth/callback?code=code-1&state=${etat}`)
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({}) })
+
+    const resultat = await store.testerConnexionDriveLectureNormes()
+
+    expect(resultat.ok).toBe(false)
+    if (resultat.ok) throw new Error('résultat inattendu')
+    expect(resultat.message).toContain('renouvellement')
   })
 
   test('listerFichiersDrive : erreur explicite si aucune configuration', async () => {

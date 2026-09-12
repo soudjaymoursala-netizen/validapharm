@@ -238,6 +238,20 @@ export class AuthApiClient {
     return this.requete('DELETE', `/parametres-installation/${cle}`, { jeton })
   }
 
+  // --- OAuth Google (Drive normes) — jeton de rafraîchissement longue durée, remplace la copie manuelle depuis l'OAuth Playground (voir #35/#36/#37) ---
+
+  /** Réservé à un admin (même exigence que `enregistrerParametreInstallation`, dont cette connexion tient lieu) — l'appelant doit rediriger `window.location.href` vers l'URL renvoyée, jamais la charger en `fetch`. */
+  demarrerConnexionOAuthDrive(jeton: string): Promise<ResultatApi<{ urlAutorisation: string }>> {
+    return this.requete('GET', '/drive-oauth/demarrer', { jeton })
+  }
+
+  /** Jeton d'accès frais (jamais persisté par l'appelant, valable ~1h) à partir du jeton de rafraîchissement déjà connecté — `oauth_non_connecte` si `connecterDriveAvecGoogle` n'a jamais été fait. */
+  rafraichirJetonOAuthDrive(
+    jeton: string,
+  ): Promise<ResultatApi<{ jeton: string; expiresIn: number }>> {
+    return this.requete('POST', '/drive-oauth/rafraichir-jeton', { jeton })
+  }
+
   // --- Documents normatifs (Bibliothèque de normes — global à l'installation) ---
 
   listerDocumentsNormatifs(
