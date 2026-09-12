@@ -298,6 +298,17 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
   transform: translateY(-1px);
 }
 
+.accueil__reprise:focus-visible {
+  /* Halo blanc translucide, pas la teinte de marque habituelle
+     (`--vp-marque-fond-leger`) : ce bloc est déjà sur fond violet plein,
+     un halo de la même famille de couleur y serait quasi invisible — même
+     logique que `.accueil__reprise-icone` (rgba(255,255,255,0.18)). */
+  outline: none;
+  box-shadow:
+    var(--vp-ombre-lg),
+    0 0 0 3px rgba(255, 255, 255, 0.55);
+}
+
 .accueil__reprise-icone {
   display: flex;
   align-items: center;
@@ -394,6 +405,12 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
   color: var(--vp-marque);
 }
 
+a.accueil__ligne-stat:focus-visible {
+  outline: none;
+  border-radius: var(--vp-rayon-sm);
+  box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
+}
+
 .accueil__ligne-projet {
   display: flex;
   flex-direction: column;
@@ -405,6 +422,12 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
 
 .accueil__ligne-projet:first-of-type {
   border-top: none;
+}
+
+.accueil__ligne-projet:focus-visible {
+  outline: none;
+  border-radius: var(--vp-rayon-sm);
+  box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
 }
 
 .accueil__ligne-projet-nom {
@@ -421,6 +444,12 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
   margin-top: 0.3rem;
   font-size: 0.82rem;
   color: var(--vp-marque);
+}
+
+.accueil__voir-tout:focus-visible {
+  outline: none;
+  border-radius: var(--vp-rayon-sm);
+  box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
 }
 
 .accueil__ligne-epingle {
@@ -444,6 +473,12 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.accueil__ligne-epingle a:focus-visible {
+  outline: none;
+  border-radius: var(--vp-rayon-sm);
+  box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
 }
 
 .accueil__bouton-desepingler {
@@ -487,6 +522,14 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
   border-color: var(--vp-marque);
   box-shadow: var(--vp-ombre-md);
   transform: translateY(-2px);
+}
+
+.accueil__carte:focus-visible {
+  outline: none;
+  border-color: var(--vp-marque);
+  box-shadow:
+    var(--vp-ombre-md),
+    0 0 0 3px var(--vp-marque-fond-leger);
 }
 
 .accueil__carte-icone {
