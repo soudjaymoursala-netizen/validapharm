@@ -70,6 +70,13 @@ export class D1DocumentsNormatifsRepo implements DocumentsNormatifsRepo {
       .run()
   }
 
+  async corrigerHasBinaryContent(id: string, valeur: boolean): Promise<void> {
+    await this.db
+      .prepare('UPDATE documents_normatifs SET has_binary_content = ? WHERE id = ?')
+      .bind(valeur ? 1 : 0, id)
+      .run()
+  }
+
   async supprimer(id: string): Promise<void> {
     await this.db.prepare('DELETE FROM documents_normatifs WHERE id = ?').bind(id).run()
   }
