@@ -72,7 +72,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 |---|---|---|
 | `Login.vue` | ✅ | ✅ |
 | `AccueilQueVoulezVousFaire.vue` | ✅ | ✅ |
-| `GestionClients.vue` | ⬜ | ⬜ |
+| `GestionClients.vue` | ✅ | ✅ |
 | `FicheClient.vue` | ⬜ | ⬜ |
 | `ConfigurationClient.vue` | ⬜ | ⬜ |
 | `StructureSysteme.vue` | ⬜ | ⬜ |
@@ -113,6 +113,41 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **12/09/2026** — `GestionClients.vue` **terminé** (fonctionnel + UI), 3
+  commits sur `main` (le 3e touche un fichier partagé), CI verte sur les
+  trois :
+  - Fonctionnel (`505b336`) : les 4 actions serveur de l'écran (créer,
+    archiver, désarchiver, supprimer définitivement un client) ignoraient
+    totalement le résultat retourné par `useClientsStore` (union
+    `Client | {erreur}`) et ne capturaient jamais les exceptions de
+    connectivité levées par `AuthApiClient` — même défaut que `Login.vue`,
+    mais ici sur des actions plus sensibles. Le cas le plus net : un échec
+    de création (ex. conflit serveur) fermait quand même le formulaire et
+    effaçait le brouillon saisi, exactement comme un succès. Corrigé avec
+    des messages d'erreur (bandeau formulaire pour la création, bandeau de
+    page pour les 3 autres) et des libellés humains pour les codes métier
+    connus du Worker (`deja_archive`/`deja_actif`/etc.). 3 tests ajoutés
+    (5/5 passent).
+  - UI (`58f2f70` + `7204c81`) : trouvé en testant réellement le survol/focus
+    dans le navigateur, pas seulement en relisant le code —
+    1. `tokens.css` (partagé, `7204c81`) : la Phase 41 déjà en place ne
+       couvrait que `input`/`select`/`textarea`, jamais `button`/`a` — ajout
+       d'une base globale `button:focus-visible, a:focus-visible`
+       (sélecteurs nus, toujours dominés par une règle scoped plus
+       spécifique déjà écrite ailleurs). Corrige d'un coup tous les
+       boutons/liens de **toute l'app** qui n'avaient encore aucun style de
+       focus propre, pas seulement cet écran — donc les futurs écrans du
+       chantier n'auront normalement plus ce problème à corriger un par un.
+    2. `GestionClients.vue` (`58f2f70`) : « Archiver » (fond rouge) et
+       « Supprimer définitivement » (contour rouge) passaient en texte/
+       bordure violet de marque au survol (règle globale `button:hover`) —
+       perdait le sens d'action dangereuse juste avant le clic. Corrigé +
+       contraste texte/fond fixé au repos pour « Archiver ». Ombre/élévation
+       au survol des lignes clients ajoutée, cohérente avec
+       `.accueil__carte`/`.accueil__bloc`.
+  - Suite complète revalidée après le changement partagé (`tokens.css`) :
+    157/158 fichiers, seul l'échec `.docx` préexistant (indépendant de ce
+    chantier, déjà connu) subsiste.
 - **12/09/2026** — `AccueilQueVoulezVousFaire.vue` **terminé** (fonctionnel
   + UI), 2 commits sur `main`, CI verte sur les deux :
   - Fonctionnel (`e06620f`) : la ligne « Conflit(s) non résolu(s) » restait
@@ -161,12 +196,18 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `GestionClients.vue` — chantier fonctionnel puis UI (créer/archiver un
-   client réel via le client de test QA, vérifier les cas limites :
-   nom vide, doublon, désarchivage).
-2. Puis `FicheClient.vue`, dans l'ordre de la liste en §3.
+1. `FicheClient.vue` — chantier fonctionnel puis UI, avec le client de
+   test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`).
+2. Puis `ConfigurationClient.vue`, dans l'ordre de la liste en §3.
 3. Mettre à jour ce fichier après **chaque** chantier terminé (pas
    seulement en fin de session) — voir la règle en §1.
+4. **Piste ouverte, à surveiller sur les écrans suivants** : la Phase 41 et
+   son extension `button:focus-visible, a:focus-visible` (`tokens.css`,
+   commit `7204c81`) couvrent déjà tous les boutons/liens nus — sur les
+   prochains écrans, vérifier d'abord si le focus clavier est déjà correct
+   grâce à cette base globale avant de chercher un correctif UI à faire
+   soi-même (peut réduire, voire annuler, le chantier UI de certains
+   écrans simples).
 
 **Méthodologie validée sur les 2 premiers écrans, à reproduire** : lire le
 code de l'écran et de ses stores/dépendances en entier avant de juger s'il
