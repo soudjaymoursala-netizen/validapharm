@@ -27,6 +27,23 @@ const brouillon = ref({
   secteur: '' as SecteurClient | '',
   details: '',
 })
+const erreurEnregistrement = ref<string | null>(null)
+
+// Codes métier renvoyés par le Worker pour PATCH /clients/:id
+// (`gererModifierClient`, routeur.ts) — un repli générique couvre tout
+// autre code, ou une panne de connectivité réelle (`IndisponibleAuthError`
+// etc., levée par `AuthApiClient` plutôt que renvoyée, d'où le `catch`).
+const LIBELLES_ERREUR: Record<string, string> = {
+  introuvable: "Ce client n'existe plus (probablement supprimé entre-temps).",
+  non_autorise: "Vous n'avez pas les droits nécessaires pour modifier ce client.",
+}
+
+function libelleErreur(e: unknown): string {
+  if (e && typeof e === 'object' && 'erreur' in e && typeof e.erreur === 'string') {
+    return LIBELLES_ERREUR[e.erreur] ?? `Échec (${e.erreur}).`
+  }
+  return e instanceof Error ? e.message : 'Erreur inconnue.'
+}
 
 const LIBELLES_SECTEUR: Record<SecteurClient, string> = {
   pharmaceutique: 'Pharmaceutique',
@@ -62,17 +79,32 @@ watch(() => props.clientId, charger)
 
 async function enregistrer(): Promise<void> {
   if (brouillon.value.name.trim().length === 0) return
-  await clientsStore.modifierClient(props.clientId, {
-    name: brouillon.value.name.trim(),
-    adresse: brouillon.value.adresse.trim() || null,
-    secteur: brouillon.value.secteur || null,
-    details: brouillon.value.details.trim() || null,
-  })
-  modeEdition.value = false
+  erreurEnregistrement.value = null
+  try {
+    const resultat = await clientsStore.modifierClient(props.clientId, {
+      name: brouillon.value.name.trim(),
+      adresse: brouillon.value.adresse.trim() || null,
+      secteur: brouillon.value.secteur || null,
+      details: brouillon.value.details.trim() || null,
+    })
+    // Avant ce correctif, ce résultat n'était jamais vérifié : un échec
+    // (client supprimé entre-temps, droits insuffisants...) refermait quand
+    // même le formulaire d'édition, comme un succès, en perdant les
+    // modifications saisies sans aucun message — même défaut déjà corrigé
+    // dans GestionClients.vue (voir docs/CHANTIER-PAGES-RECAP.md).
+    if ('erreur' in resultat) {
+      erreurEnregistrement.value = libelleErreur(resultat)
+      return
+    }
+    modeEdition.value = false
+  } catch (e) {
+    erreurEnregistrement.value = libelleErreur(e)
+  }
 }
 
 function ouvrirEdition(): void {
   reinitialiserBrouillon()
+  erreurEnregistrement.value = null
   modeEdition.value = true
 }
 
@@ -159,6 +191,9 @@ const projetsDuClient = computed(() =>
         Détails (produits fabriqués, contexte industriel…)
         <textarea v-model="brouillon.details" rows="3" />
       </label>
+      <p v-if="erreurEnregistrement" class="bandeau-erreur" role="alert">
+        {{ erreurEnregistrement }}
+      </p>
       <button type="submit" class="bouton-principal">Enregistrer</button>
     </form>
 
@@ -264,6 +299,12 @@ const projetsDuClient = computed(() =>
   padding: 0.5rem;
   font-family: inherit;
   color: var(--vp-texte-principal);
+}
+
+.bandeau-erreur {
+  margin: 0;
+  color: var(--vp-danger);
+  font-size: 0.85rem;
 }
 
 .details-client {

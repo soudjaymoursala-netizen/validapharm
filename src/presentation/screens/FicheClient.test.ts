@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
 import {
@@ -180,5 +180,64 @@ describe('FicheClient — page d’entrée d’un client (§13-15 du prompt maî
 
     expect(wrapper.text()).toContain('Projet de Client A')
     expect(wrapper.text()).not.toContain('Projet de Client B')
+  })
+
+  test('un échec à l’enregistrement laisse le formulaire ouvert, la saisie intacte, avec un message', async () => {
+    const clientsStore = useClientsStore()
+    const client = await clientsStore.creerClient({ name: 'Client Initial' })
+    if ('erreur' in client) throw client
+
+    const router = routeurDeTest()
+    await router.push({ name: 'fiche-client', params: { clientId: client.id } })
+    const wrapper = mount(FicheClient, {
+      props: { clientId: client.id },
+      global: { plugins: [router] },
+    })
+    await attendreQue(() => wrapper.text().includes('Client Initial'))
+
+    clientsStore.modifierClient = vi.fn().mockResolvedValue({ erreur: 'non_autorise' })
+
+    await wrapper.find('.bouton-secondaire').trigger('click')
+    const formulaire = wrapper.find('.formulaire-edition')
+    await formulaire.find('input[type="text"]').setValue('Client Renommé (non sauvegardé)')
+    await formulaire.trigger('submit.prevent')
+    await flushPromises()
+
+    // Avant ce correctif, ce résultat n'était jamais vérifié : le
+    // formulaire se fermait quand même, comme en cas de succès, perdant la
+    // saisie sans le moindre indice que l'enregistrement avait échoué.
+    expect(wrapper.find('.formulaire-edition').exists()).toBe(true)
+    expect(
+      wrapper.find<HTMLInputElement>('.formulaire-edition input[type="text"]').element.value,
+    ).toBe('Client Renommé (non sauvegardé)')
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('droits nécessaires')
+    expect(wrapper.find('h1').text()).toBe('Client Initial')
+  })
+
+  test('un Worker injoignable pendant l’enregistrement affiche un message plutôt que d’échouer en silence', async () => {
+    const clientsStore = useClientsStore()
+    const client = await clientsStore.creerClient({ name: 'Client Initial' })
+    if ('erreur' in client) throw client
+
+    const router = routeurDeTest()
+    await router.push({ name: 'fiche-client', params: { clientId: client.id } })
+    const wrapper = mount(FicheClient, {
+      props: { clientId: client.id },
+      global: { plugins: [router] },
+    })
+    await attendreQue(() => wrapper.text().includes('Client Initial'))
+
+    clientsStore.modifierClient = vi
+      .fn()
+      .mockRejectedValue(new Error("Worker d'authentification injoignable."))
+
+    await wrapper.find('.bouton-secondaire').trigger('click')
+    const formulaire = wrapper.find('.formulaire-edition')
+    await formulaire.find('input[type="text"]').setValue('Client Renommé (non sauvegardé)')
+    await formulaire.trigger('submit.prevent')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('injoignable')
+    expect(wrapper.find('.formulaire-edition').exists()).toBe(true)
   })
 })
