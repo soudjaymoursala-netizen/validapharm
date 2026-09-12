@@ -47,6 +47,8 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     corsOrigin: '*',
     envoyeurEmail: new EnvoyeurEmailMemoire(),
     urlApplication: 'https://validapharm-test.pages.dev',
+    googleOAuthClientId: 'client-oauth-test.apps.googleusercontent.com',
+    googleOAuthClientSecret: 'secret-oauth-test',
   }
 
   const fetchReel = globalThis.fetch?.bind(globalThis)
