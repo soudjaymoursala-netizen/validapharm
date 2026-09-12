@@ -280,6 +280,22 @@ textarea:focus-visible {
   box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
 }
 
+/* Même constat que Phase 41 ci-dessus, mais pour `<button>`/`<a>` — la
+   Phase 41 ne couvrait que les champs de saisie, jamais les boutons ni les
+   liens : trouvé en révisant `GestionClients.vue` (chantier pages, voir
+   docs/CHANTIER-PAGES-RECAP.md), qui n'a aucun style de focus propre sur
+   ses boutons/liens et retombait donc sur l'anneau bleu par défaut du
+   navigateur. Sélecteurs nus, comme la règle ci-dessus : toujours dominés
+   par une règle scoped plus spécifique déjà écrite localement (ex.
+   `.lien-retour:focus-visible`, `.accueil__carte:focus-visible`), cette
+   base ne comble que les boutons/liens oubliés — jamais un remplacement
+   voulu. */
+button:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
+}
+
 /* Base par défaut des champs et boutons (Phase 41) : plusieurs écrans plus
    anciens (`SourceIntelligence.vue`, `ProfilLocal.vue`, `MissionWorkspace.vue`…)
    n'habillent jamais leurs `<button>`/`<select>`/`<textarea>` — ils héritent
