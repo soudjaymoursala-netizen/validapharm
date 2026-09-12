@@ -73,7 +73,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `Login.vue` | ✅ | ✅ |
 | `AccueilQueVoulezVousFaire.vue` | ✅ | ✅ |
 | `GestionClients.vue` | ✅ | ✅ |
-| `FicheClient.vue` | ⬜ | ⬜ |
+| `FicheClient.vue` | ✅ | ✅ |
 | `ConfigurationClient.vue` | ⬜ | ⬜ |
 | `StructureSysteme.vue` | ⬜ | ⬜ |
 | `SuiviPeriodicite.vue` | ⬜ | ⬜ |
@@ -113,6 +113,19 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **12/09/2026** — `FicheClient.vue` **terminé** (fonctionnel + UI), 2
+  commits sur `main`, CI verte sur les deux :
+  - Fonctionnel (`2325909`) : même défaut exact que `GestionClients.vue` —
+    `enregistrer()` (édition des infos client) ignorait le résultat de
+    `modifierClient` et ne capturait jamais les exceptions de connectivité ;
+    un échec refermait quand même le formulaire, perdant la saisie sans
+    message. Corrigé avec le même motif (bandeau d'erreur, libellés
+    métier). 2 tests ajoutés (5/5 passent).
+  - UI (`f5173ff`) : écran déjà bien conçu (cartes/ombres/hover cohérents
+    avec l'Accueil), bénéficie aussi automatiquement du correctif de focus
+    global. Seul écart trouvé : le secteur s'affichait en texte brut ici
+    contre un badge coloré dans `GestionClients.vue` pour le même concept
+    — aligné.
 - **12/09/2026** — `GestionClients.vue` **terminé** (fonctionnel + UI), 3
   commits sur `main` (le 3e touche un fichier partagé), CI verte sur les
   trois :
@@ -196,12 +209,19 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `FicheClient.vue` — chantier fonctionnel puis UI, avec le client de
-   test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`).
-2. Puis `ConfigurationClient.vue`, dans l'ordre de la liste en §3.
+1. `ConfigurationClient.vue` — chantier fonctionnel puis UI, avec le
+   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`).
+2. Puis `StructureSysteme.vue`, dans l'ordre de la liste en §3.
 3. Mettre à jour ce fichier après **chaque** chantier terminé (pas
    seulement en fin de session) — voir la règle en §1.
-4. **Piste ouverte, à surveiller sur les écrans suivants** : la Phase 41 et
+4. **Piste ouverte, à surveiller sur les écrans suivants** : le même bug
+   fonctionnel trouvé deux fois de suite (`GestionClients.vue`,
+   `FicheClient.vue`) — un appel à une méthode de store qui renvoie
+   `Entité | {erreur}` (ou peut lever une exception de connectivité) dont
+   le résultat n'est jamais vérifié — vaut la peine d'être cherché
+   systématiquement (`grep` du nom de la méthode de store appelée) sur
+   chaque nouvel écran plutôt que redécouvert au cas par cas.
+5. **Piste ouverte, à surveiller sur les écrans suivants** : la Phase 41 et
    son extension `button:focus-visible, a:focus-visible` (`tokens.css`,
    commit `7204c81`) couvrent déjà tous les boutons/liens nus — sur les
    prochains écrans, vérifier d'abord si le focus clavier est déjà correct
