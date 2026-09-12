@@ -48,13 +48,12 @@ ne pas re-choisir un ordre différent sans dire pourquoi.
 
 ## 2. Client de test
 
-**Pas encore créé** à la date de rédaction de ce fichier (12/09/2026,
-première version). Prochaine étape immédiate : créer un client dédié
-(ex. nom « QA — Chantier Pages », secteur quelconque, données bidon
-clairement identifiables comme telles) pour exercer les écrans qui
-dépendent d'un client sélectionné (Architecture, Process, Projets, etc.)
-sans toucher aux données réelles de FERRING PHARMACEUTICAL. Une fois créé,
-noter ici son nom exact et son `clientId` (UUID visible dans l'URL).
+**Créé le 12/09/2026** : nom exact `QA — Chantier Pages (test, à
+supprimer)`, secteur non renseigné, `clientId` =
+`a25ae104-6117-451c-b80d-7ca9cf13f2d1`. Aucun projet ni structure système
+encore créés dessus à ce stade — à faire dès qu'un écran testé en a besoin
+(ex. `FicheProjet.vue`, `StructureSysteme.vue`). Ne jamais toucher aux
+données de FERRING PHARMACEUTICAL pour ces tests.
 
 ---
 
@@ -71,8 +70,8 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 | Écran | Fonctionnel | UI |
 |---|---|---|
-| `Login.vue` | ⬜ | ⬜ |
-| `AccueilQueVoulezVousFaire.vue` | ⬜ | ⬜ |
+| `Login.vue` | ✅ | ✅ |
+| `AccueilQueVoulezVousFaire.vue` | ✅ | ✅ |
 | `GestionClients.vue` | ⬜ | ⬜ |
 | `FicheClient.vue` | ⬜ | ⬜ |
 | `ConfigurationClient.vue` | ⬜ | ⬜ |
@@ -114,19 +113,70 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
-- **12/09/2026** — Création de ce fichier de suivi, à la demande explicite
-  de l'utilisateur, avant tout travail sur les écrans. Chantier OAuth Drive
-  (refresh token) clos et vérifié juste avant (voir
+- **12/09/2026** — `AccueilQueVoulezVousFaire.vue` **terminé** (fonctionnel
+  + UI), 2 commits sur `main`, CI verte sur les deux :
+  - Fonctionnel (`e06620f`) : la ligne « Conflit(s) non résolu(s) » restait
+    un texte statique alors que sa voisine « Information(s) non
+    validée(s) » est un lien vers Source Intelligence du client actif —
+    même écran, même action possible (`resoudreConflit`) — incohérence
+    corrigée, même motif appliqué aux deux lignes. 2 tests ajoutés (9/9
+    passent).
+  - UI (`0950568`) : les 6 liens/cartes de l'écran (reprise de travail,
+    stats clients, à vérifier, projets récents, raccourcis épinglés,
+    cartes d'action) n'avaient aucun `:focus-visible` propre — anneau bleu
+    par défaut du navigateur au clavier au lieu du halo violet de marque
+    utilisé partout ailleurs. Corrigé pour les 6.
+  - **Point noté mais volontairement non corrigé** (à trancher par
+    l'utilisateur si jugé utile un jour, pas un bug au sens strict) : les
+    compteurs « Information(s) non validée(s) »/« Conflit(s) non
+    résolu(s) » sont agrégés **globalement, tous clients confondus**
+    (`db.knowledgeItems`/`db.conflicts` sans filtre `client_id`), alors que
+    le lien n'ouvre que le client actif — sur un compte gérant plusieurs
+    clients, le nombre affiché peut ne pas correspondre à ce qu'on voit
+    après avoir cliqué. Comportement délibéré d'origine (un test existant,
+    `agrège les informations non validées et les conflits ouverts réels`,
+    l'encode explicitement sans client actif défini) — pas retouché pour
+    ne pas relitiger un choix produit au passage d'un chantier UI/bugs.
+- **12/09/2026** — `Login.vue` **terminé** (fonctionnel + UI), 2 commits
+  sur `main`, CI verte sur les deux :
+  - Fonctionnel (`bd779d1`) : seul écran de l'app à appeler une méthode du
+    client API sans capturer les erreurs de connectivité
+    (`IndisponibleAuthError`/`TimeoutAuthError`/`ReponseInvalideAuthError`,
+    levées par `AuthApiClient` plutôt que renvoyées) — un Worker
+    injoignable pendant une tentative de connexion échouait donc en
+    silence total. Ajout aussi d'une redirection immédiate si une session
+    est déjà active. 2 tests ajoutés (6/6 passent).
+  - UI (`4ca50e5`) : le lien « Configurer » du bandeau d'info retombait sur
+    le bleu par défaut du navigateur (`#0000EE`, seul lien de toute l'app
+    dans ce cas) — corrigé avec la couleur de marque, cohérent avec
+    `.lien-retour` (tokens.css) qui documente déjà ce même problème résolu
+    ailleurs.
+- **12/09/2026** — Client de test QA créé (§2). Fichier de suivi créé, à la
+  demande explicite de l'utilisateur, avant tout travail sur les écrans.
+  Chantier OAuth Drive (refresh token) clos et vérifié juste avant (voir
   `docs/CONTEXTE-REPRISE-SESSION.md` et PR #38 + commit de correction
-  `APP_URL`). Rien d'autre fait sur ce chantier « pages » à ce stade.
+  `APP_URL`).
 
 ---
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. Créer le client de test QA (§2).
-2. `Login.vue` — chantier fonctionnel : se connecter/déconnecter réellement,
-   tester les cas d'erreur (mauvais mot de passe, champ vide, Worker
-   d'authentification non configuré), vérifier la gestion de session.
-3. `Login.vue` — chantier UI : refonte visuelle propre et moderne.
-4. Mettre à jour ce fichier, puis passer à `AccueilQueVoulezVousFaire.vue`.
+1. `GestionClients.vue` — chantier fonctionnel puis UI (créer/archiver un
+   client réel via le client de test QA, vérifier les cas limites :
+   nom vide, doublon, désarchivage).
+2. Puis `FicheClient.vue`, dans l'ordre de la liste en §3.
+3. Mettre à jour ce fichier après **chaque** chantier terminé (pas
+   seulement en fin de session) — voir la règle en §1.
+
+**Méthodologie validée sur les 2 premiers écrans, à reproduire** : lire le
+code de l'écran et de ses stores/dépendances en entier avant de juger s'il
+y a un bug (ne pas se fier à une simple lecture superficielle) ; comparer
+au reste du code base pour repérer les incohérences (grep les conventions
+établies — ex. `.lien-retour`, `catch (e) { erreur.value = ... }`) plutôt
+que d'inventer une préférence esthétique personnelle ; écrire un test avant
+de considérer un correctif fonctionnel terminé ; vérifier
+`prettier --check`/`eslint`/`vue-tsc --noEmit`/`vitest run` sur les
+fichiers touchés avant de committer ; un commit par chantier (jamais
+fonctionnel + UI mélangés dans le même commit) ; pousser via l'upload
+GitHub (édition CLI bloquée dans ce sandbox), attendre la CI verte avant de
+passer à l'écran suivant.
