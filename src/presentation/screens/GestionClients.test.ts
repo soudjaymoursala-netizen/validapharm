@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import {
   connecterAdminDeTest,
@@ -176,5 +176,87 @@ describe('GestionClients — archivage (§4.31 — vraie session)', () => {
 
     await attendreQue(() => clientsStore.clientsArchives.length === 0)
     expect(clientsStore.clients).toHaveLength(0)
+  })
+})
+
+describe('GestionClients — échecs serveur/réseau non silencieux', () => {
+  test('un échec métier à la création laisse le formulaire ouvert, le brouillon intact, avec un message', async () => {
+    const clientsStore = useClientsStore()
+    clientsStore.creerClient = vi.fn().mockResolvedValue({ erreur: 'nom_deja_utilise' })
+
+    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
+    await flushPromises()
+
+    await wrapper.find('header button').trigger('click')
+    await wrapper.find('.formulaire-client input[type="text"]').setValue('Doublon SA')
+    await wrapper.find('.formulaire-client').trigger('submit.prevent')
+    await flushPromises()
+
+    // Avant ce correctif, ce résultat n'était jamais vérifié : le
+    // formulaire se fermait et le brouillon était effacé exactement comme
+    // en cas de succès, sans aucun indice que la création avait échoué.
+    expect(wrapper.find('.formulaire-client').exists()).toBe(true)
+    expect(
+      wrapper.find<HTMLInputElement>('.formulaire-client input[type="text"]').element.value,
+    ).toBe('Doublon SA')
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('Échec (nom_deja_utilise)')
+  })
+
+  test('un Worker injoignable pendant un archivage affiche un message, ne déplace pas le client', async () => {
+    const clientsStore = useClientsStore()
+    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
+    await flushPromises()
+
+    await wrapper.find('header button').trigger('click')
+    await wrapper.find('.formulaire-client input[type="text"]').setValue('Client réel')
+    await wrapper.find('.formulaire-client').trigger('submit.prevent')
+    await attendreQue(() => clientsStore.clients.length > 0)
+
+    clientsStore.archiverClient = vi
+      .fn()
+      .mockRejectedValue(new Error("Worker d'authentification injoignable."))
+
+    await wrapper.find('.bouton-archiver').trigger('click')
+    const modale = wrapper.find('.modale')
+    const inputs = modale.findAll('input')
+    await inputs[0]?.setValue('Client réel')
+    await inputs[1]?.setValue('CoffreFort!2026')
+    await modale.find('form').trigger('submit.prevent')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('injoignable')
+    expect(clientsStore.clients[0]?.statut).toBe('actif')
+    expect(wrapper.find('.modale').exists()).toBe(false)
+  })
+
+  test('un conflit "déjà désarchivé entre-temps" affiche un message clair plutôt que de rester muet', async () => {
+    const clientsStore = useClientsStore()
+    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
+    await flushPromises()
+
+    await wrapper.find('header button').trigger('click')
+    await wrapper.find('.formulaire-client input[type="text"]').setValue('Client archivé')
+    await wrapper.find('.formulaire-client').trigger('submit.prevent')
+    await attendreQue(() => clientsStore.clients.length > 0)
+
+    await wrapper.find('.bouton-archiver').trigger('click')
+    const modale = wrapper.find('.modale')
+    const inputs = modale.findAll('input')
+    await inputs[0]?.setValue('Client archivé')
+    await inputs[1]?.setValue('CoffreFort!2026')
+    await modale.find('form').trigger('submit.prevent')
+    await attendreQue(() => clientsStore.clientsArchives.length > 0)
+
+    clientsStore.desarchiverClient = vi.fn().mockResolvedValue({ erreur: 'deja_actif' })
+
+    await wrapper.find('.lien-archives').trigger('click')
+    await flushPromises()
+    const boutonDesarchiver = wrapper
+      .findAll('.liste-clients--archives button')
+      .find((b) => b.text() === 'Désarchiver')
+    await boutonDesarchiver?.trigger('click')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('déjà été désarchivé entre-temps')
   })
 })

@@ -25,11 +25,34 @@ const brouillon = ref({ name: '', adresse: '', secteur: '' as SecteurClient | ''
 const afficherArchives = ref(false)
 const clientAArchiver = ref<Client | null>(null)
 const clientASupprimer = ref<Client | null>(null)
+const erreurCreation = ref<string | null>(null)
+const erreurAction = ref<string | null>(null)
 
 const LIBELLES_SECTEUR: Record<SecteurClient, string> = {
   pharmaceutique: 'Pharmaceutique',
   dispositif_medical: 'Dispositif médical',
   autre: 'Autre',
+}
+
+// Codes métier renvoyés par le Worker (`routeur.ts`, gererCreerClient/
+// gererModifierClient/gererSupprimerClientDefinitivement) — un message par
+// défaut couvre tout code inconnu ou une panne de connectivité réelle
+// (`IndisponibleAuthError`/`TimeoutAuthError`/`ReponseInvalideAuthError`,
+// levées par `AuthApiClient` plutôt que renvoyées, d'où le `catch` sur
+// chaque action ci-dessous).
+const LIBELLES_ERREUR: Record<string, string> = {
+  nom_obligatoire: "Le nom de l'entreprise est obligatoire.",
+  deja_archive: 'Ce client a déjà été archivé entre-temps (probablement depuis un autre onglet).',
+  deja_actif: 'Ce client a déjà été désarchivé entre-temps (probablement depuis un autre onglet).',
+  non_autorise: "Vous n'avez pas les droits nécessaires pour cette action.",
+  introuvable: "Ce client n'existe plus (probablement supprimé entre-temps).",
+}
+
+function libelleErreur(e: unknown): string {
+  if (e && typeof e === 'object' && 'erreur' in e && typeof e.erreur === 'string') {
+    return LIBELLES_ERREUR[e.erreur] ?? `Échec (${e.erreur}).`
+  }
+  return e instanceof Error ? e.message : 'Erreur inconnue.'
 }
 
 onMounted(async () => {
@@ -38,30 +61,63 @@ onMounted(async () => {
 
 async function creerClient(): Promise<void> {
   if (brouillon.value.name.trim().length === 0) return
-  await store.creerClient({
-    name: brouillon.value.name.trim(),
-    adresse: brouillon.value.adresse.trim() || null,
-    secteur: brouillon.value.secteur || null,
-    details: brouillon.value.details.trim() || null,
-  })
-  formulaireOuvert.value = false
-  brouillon.value = { name: '', adresse: '', secteur: '', details: '' }
+  erreurCreation.value = null
+  try {
+    const resultat = await store.creerClient({
+      name: brouillon.value.name.trim(),
+      adresse: brouillon.value.adresse.trim() || null,
+      secteur: brouillon.value.secteur || null,
+      details: brouillon.value.details.trim() || null,
+    })
+    // Avant ce correctif, ce résultat n'était jamais vérifié : un échec
+    // métier (ex. nom vide côté serveur) fermait quand même le formulaire
+    // et effaçait le brouillon saisi, exactement comme un succès — aucun
+    // moyen de savoir que la création avait échoué.
+    if ('erreur' in resultat) {
+      erreurCreation.value = libelleErreur(resultat)
+      return
+    }
+    formulaireOuvert.value = false
+    brouillon.value = { name: '', adresse: '', secteur: '', details: '' }
+  } catch (e) {
+    erreurCreation.value = libelleErreur(e)
+  }
 }
 
 async function confirmerArchivage(): Promise<void> {
   if (!clientAArchiver.value) return
-  await store.archiverClient(clientAArchiver.value.id)
-  clientAArchiver.value = null
+  erreurAction.value = null
+  try {
+    const resultat = await store.archiverClient(clientAArchiver.value.id)
+    if ('erreur' in resultat) erreurAction.value = libelleErreur(resultat)
+  } catch (e) {
+    erreurAction.value = libelleErreur(e)
+  } finally {
+    clientAArchiver.value = null
+  }
 }
 
 async function desarchiver(client: Client): Promise<void> {
-  await store.desarchiverClient(client.id)
+  erreurAction.value = null
+  try {
+    const resultat = await store.desarchiverClient(client.id)
+    if ('erreur' in resultat) erreurAction.value = libelleErreur(resultat)
+  } catch (e) {
+    erreurAction.value = libelleErreur(e)
+  }
 }
 
 async function confirmerSuppressionDefinitive(justification: string): Promise<void> {
   if (!clientASupprimer.value) return
-  await store.supprimerDefinitivement(clientASupprimer.value.id, justification)
-  clientASupprimer.value = null
+  erreurAction.value = null
+  try {
+    const resultat = await store.supprimerDefinitivement(clientASupprimer.value.id, justification)
+    if ('erreur' in resultat) erreurAction.value = libelleErreur(resultat)
+  } catch (e) {
+    erreurAction.value = libelleErreur(e)
+  } finally {
+    clientASupprimer.value = null
+  }
 }
 </script>
 
@@ -97,11 +153,14 @@ async function confirmerSuppressionDefinitive(justification: string): Promise<vo
         Détails (produits fabriqués, contexte industriel…)
         <textarea v-model="brouillon.details" rows="2" />
       </label>
+      <p v-if="erreurCreation" class="bandeau-erreur" role="alert">{{ erreurCreation }}</p>
       <div class="actions">
         <button type="button" @click="formulaireOuvert = false">Annuler</button>
         <button type="submit" class="bouton-principal">Créer le client</button>
       </div>
     </form>
+
+    <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
 
     <p v-if="!store.enChargement && store.clientsActifs.length === 0" class="etat-vide">
       Aucun client actif pour l'instant — créez le premier avec le bouton ci-dessus.
@@ -316,5 +375,11 @@ header {
 
 .etat-vide {
   color: var(--vp-texte-secondaire);
+}
+
+.bandeau-erreur {
+  margin: 0 0 0.75rem;
+  color: var(--vp-danger);
+  font-size: 0.85rem;
 }
 </style>
