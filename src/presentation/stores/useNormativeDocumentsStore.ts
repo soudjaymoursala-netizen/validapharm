@@ -386,6 +386,55 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     documents.value = documents.value.map((d) => (d.id === documentId ? documentRepare : d))
   }
 
+  /**
+   * Un document Drive non natif actuellement marqué disponible (`has_
+   * binary_content: true`) est un candidat au diagnostic — le drapeau peut
+   * mentir pour un document importé avant #35/#36 (voir `diagnostiquerContenu`).
+   * Un document déjà marqué indisponible n'a pas besoin d'être revérifié :
+   * il est déjà détecté par `necessiteReparationContenu`.
+   */
+  function necessiteDiagnosticContenu(document: NormativeDocument): boolean {
+    return (
+      document.source === 'drive' &&
+      document.source_ref !== null &&
+      document.has_binary_content &&
+      !MIME_TYPES_GOOGLE_NATIFS.has(document.mime_type)
+    )
+  }
+
+  /** Nombre de documents envoyés par appel de diagnostic — jamais toute l'installation en un lot : le nombre de sous-requêtes R2 par invocation Worker est limité, voir `gererDiagnostiquerContenuDocumentsNormatifs`. */
+  const TAILLE_LOT_DIAGNOSTIC = 30
+
+  /**
+   * Recale `has_binary_content` sur le contenu réellement présent côté
+   * serveur (R2) pour tous les documents Drive non natifs actuellement
+   * marqués disponibles — nécessaire une fois pour les documents importés
+   * avant #35/#36, dont le drapeau mentait déjà en base et que la
+   * réparation elle-même ne peut pas détecter (`necessiteReparationContenu`
+   * exige justement `has_binary_content: false`). Recharge la liste après
+   * coup pour que la détection de réparation voie l'état corrigé.
+   */
+  async function diagnostiquerContenu(): Promise<{ nbCorriges: number }> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    const candidats = documents.value.filter((d) => necessiteDiagnosticContenu(d))
+    let nbCorriges = 0
+    for (let i = 0; i < candidats.length; i += TAILLE_LOT_DIAGNOSTIC) {
+      const lot = candidats.slice(i, i + TAILLE_LOT_DIAGNOSTIC)
+      const resultat = await api.diagnostiquerContenuDocumentsNormatifs(
+        authStore.jeton,
+        lot.map((d) => d.id),
+      )
+      if (!resultat.ok) throw new Error(`Échec du diagnostic : ${resultat.erreur}`)
+      nbCorriges += resultat.donnees.resultats.filter((r) => r.corrige).length
+    }
+    if (nbCorriges > 0) await charger()
+    return { nbCorriges }
+  }
+
   async function supprimerDocument(documentId: string): Promise<void> {
     const authStore = useAuthStore()
     const api = await authStore.client()
@@ -410,6 +459,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     renommerDocument,
     necessiteReparationContenu,
     repararContenuDocument,
+    necessiteDiagnosticContenu,
+    diagnostiquerContenu,
     supprimerDocument,
   }
 })
