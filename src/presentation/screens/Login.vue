@@ -229,6 +229,26 @@ h1 {
   font-size: 0.82rem;
 }
 
+/* Sans classe, ce lien inline retombait sur le bleu par défaut du
+   navigateur (#0000EE) — seul lien de l'app dans ce cas, tous les autres
+   passent soit par `.lien-retour` (tokens.css), soit par une couleur de
+   marque explicite. Peu lisible sur le fond sombre de `.bandeau-info`. */
+.bandeau-info a {
+  color: var(--vp-marque);
+  font-weight: var(--vp-poids-medium);
+  text-decoration: underline;
+}
+
+.bandeau-info a:hover {
+  color: var(--vp-marque-survol);
+}
+
+.bandeau-info a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
+  border-radius: 2px;
+}
+
 .rappel {
   margin: 0;
   color: var(--vp-texte-secondaire);
