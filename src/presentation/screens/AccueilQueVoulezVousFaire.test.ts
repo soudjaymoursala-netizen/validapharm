@@ -9,6 +9,7 @@ import {
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import { db } from '../../persistance/db'
+import { useClientActifStore } from '../stores/useClientActifStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useEpinglageStore } from '../stores/useEpinglageStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
@@ -177,6 +178,30 @@ describe('AccueilQueVoulezVousFaire — À vérifier', () => {
     await attendreQue(() => wrapper.text().includes('Conflit(s) non résolu(s)'))
 
     expect(wrapper.text()).toContain('Information(s) extraite(s) non validée(s)')
+  })
+
+  test('avec un client actif, les deux lignes mènent vers Source Intelligence de ce client', async () => {
+    useClientActifStore().definirClientActif('client-1')
+    await db.knowledgeItems.add(knowledgeItemMinimal('ki1', 'a_valider'))
+    await db.conflicts.add(conflitMinimal('c1', 'ouvert'))
+
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(AccueilQueVoulezVousFaire, { global: { plugins: [router] } })
+    await attendreQue(() => wrapper.text().includes('Conflit(s) non résolu(s)'))
+
+    // Avant ce correctif, seule la ligne "informations non validées" était
+    // un lien — "conflits non résolus" restait un texte statique alors que
+    // le même écran (Source Intelligence du client actif) permet de
+    // résoudre les deux, incohérence corrigée ici.
+    const lignes = wrapper.findAll('.accueil__ligne-stat')
+    const ligneInfos = lignes.find((l) => l.text().includes('Information(s)'))
+    const ligneConflits = lignes.find((l) => l.text().includes('Conflit(s)'))
+
+    expect(ligneInfos?.element.tagName).toBe('A')
+    expect(ligneInfos?.attributes('href')).toBe('/clients/client-1/ingestion-documentaire')
+    expect(ligneConflits?.element.tagName).toBe('A')
+    expect(ligneConflits?.attributes('href')).toBe('/clients/client-1/ingestion-documentaire')
   })
 })
 

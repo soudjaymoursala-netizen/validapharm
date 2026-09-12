@@ -179,7 +179,18 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
             <span>Information(s) extraite(s) non validée(s)</span>
             <strong>{{ nbInformationsAValider }}</strong>
           </p>
-          <p v-if="nbConflitsOuverts > 0" class="accueil__ligne-stat">
+          <RouterLink
+            v-if="nbConflitsOuverts > 0 && clientActifStore.clientActifId"
+            :to="{
+              name: 'source-intelligence',
+              params: { clientId: clientActifStore.clientActifId },
+            }"
+            class="accueil__ligne-stat"
+          >
+            <span>Conflit(s) non résolu(s)</span>
+            <strong>{{ nbConflitsOuverts }}</strong>
+          </RouterLink>
+          <p v-else-if="nbConflitsOuverts > 0" class="accueil__ligne-stat">
             <span>Conflit(s) non résolu(s)</span>
             <strong>{{ nbConflitsOuverts }}</strong>
           </p>
