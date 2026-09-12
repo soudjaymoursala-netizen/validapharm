@@ -42,6 +42,11 @@ function messageErreurParametreInstallation(erreur: string): string {
     : `Échec de l'enregistrement : ${erreur}`
 }
 
+/** Panne de connectivité réelle (Worker injoignable, délai dépassé, 5xx) — `AuthApiClient` lève dans ce cas plutôt que de renvoyer `{ ok: false }` (voir erreurs.ts). */
+function messageErreurConnectivite(e: unknown): string {
+  return e instanceof Error ? e.message : 'Erreur inconnue.'
+}
+
 // Worker d'authentification — volontairement séparé du relais IA
 // ci-dessous : sans jeton fixe (le jeton de session s'obtient dynamiquement
 // via /auth/login), et accessible AVANT toute connexion (cet écran entier
@@ -77,44 +82,74 @@ onMounted(async () => {
   // de configuration.
   if (!authStore.sessionInitialisee) await authStore.charger()
 
-  await store.charger()
-  if (store.connexion) {
-    brouillon.owner = store.connexion.owner
-    brouillon.repo = store.connexion.repo
-    brouillon.branche = store.connexion.branche
-    brouillon.jeton = store.connexion.jeton
+  // Chaque chargement est isolé dans son propre `try/catch` : les stores
+  // sous-jacents ne devraient plus jamais laisser fuir d'exception
+  // (`useConnexionGitHubStore`/`useConnexionRelaisIAStore.charger()`
+  // capturent désormais eux-mêmes une panne réseau), mais un échec
+  // inattendu ici ne doit dans tous les cas jamais empêcher les deux
+  // autres sections de se charger — sans cette isolation, un `await`
+  // qui lève interromprait tout le reste de ce `onMounted`, donnant
+  // l'impression que toute la configuration a disparu alors qu'une seule
+  // section a un problème.
+  try {
+    await store.charger()
+    if (store.connexion) {
+      brouillon.owner = store.connexion.owner
+      brouillon.repo = store.connexion.repo
+      brouillon.branche = store.connexion.branche
+      brouillon.jeton = store.connexion.jeton
+    }
+  } catch {
+    // Ignoré délibérément : voir le commentaire ci-dessus.
   }
 
-  await relaisStore.charger()
-  if (relaisStore.connexion) {
-    brouillonRelais.relayUrl = relaisStore.connexion.relayUrl
-    brouillonRelais.jeton = relaisStore.connexion.jeton
+  try {
+    await relaisStore.charger()
+    if (relaisStore.connexion) {
+      brouillonRelais.relayUrl = relaisStore.connexion.relayUrl
+      brouillonRelais.jeton = relaisStore.connexion.jeton
+    }
+  } catch {
+    // Ignoré délibérément : voir le commentaire ci-dessus.
   }
 
-  await authentificationStore.charger()
-  if (authentificationStore.connexion) {
-    brouillonAuthentification.relayUrl = authentificationStore.connexion.relayUrl
+  try {
+    await authentificationStore.charger()
+    if (authentificationStore.connexion) {
+      brouillonAuthentification.relayUrl = authentificationStore.connexion.relayUrl
+    }
+  } catch {
+    // Ignoré délibérément : voir le commentaire ci-dessus.
   }
 })
 
 async function enregistrer(): Promise<void> {
   erreurEnregistrement.value = null
-  const resultat = await store.enregistrer({ ...brouillon })
-  if (!resultat.ok) {
-    erreurEnregistrement.value = messageErreurParametreInstallation(resultat.erreur)
-    return
+  try {
+    const resultat = await store.enregistrer({ ...brouillon })
+    if (!resultat.ok) {
+      erreurEnregistrement.value = messageErreurParametreInstallation(resultat.erreur)
+      return
+    }
+    resultatTest.value = undefined
+    signalerEnregistrement(vientDEnregistrer)
+  } catch (e) {
+    erreurEnregistrement.value = messageErreurConnectivite(e)
   }
-  resultatTest.value = undefined
-  signalerEnregistrement(vientDEnregistrer)
 }
 
 async function effacer(): Promise<void> {
-  await store.effacer()
-  brouillon.owner = ''
-  brouillon.repo = ''
-  brouillon.branche = 'main'
-  brouillon.jeton = ''
-  resultatTest.value = undefined
+  erreurEnregistrement.value = null
+  try {
+    await store.effacer()
+    brouillon.owner = ''
+    brouillon.repo = ''
+    brouillon.branche = 'main'
+    brouillon.jeton = ''
+    resultatTest.value = undefined
+  } catch (e) {
+    erreurEnregistrement.value = messageErreurConnectivite(e)
+  }
 }
 
 async function testerConnexion(): Promise<void> {
@@ -128,20 +163,29 @@ async function testerConnexion(): Promise<void> {
 
 async function enregistrerRelais(): Promise<void> {
   erreurEnregistrementRelais.value = null
-  const resultat = await relaisStore.enregistrer({ ...brouillonRelais })
-  if (!resultat.ok) {
-    erreurEnregistrementRelais.value = messageErreurParametreInstallation(resultat.erreur)
-    return
+  try {
+    const resultat = await relaisStore.enregistrer({ ...brouillonRelais })
+    if (!resultat.ok) {
+      erreurEnregistrementRelais.value = messageErreurParametreInstallation(resultat.erreur)
+      return
+    }
+    resultatTestRelais.value = undefined
+    signalerEnregistrement(vientDEnregistrerRelais)
+  } catch (e) {
+    erreurEnregistrementRelais.value = messageErreurConnectivite(e)
   }
-  resultatTestRelais.value = undefined
-  signalerEnregistrement(vientDEnregistrerRelais)
 }
 
 async function effacerRelais(): Promise<void> {
-  await relaisStore.effacer()
-  brouillonRelais.relayUrl = ''
-  brouillonRelais.jeton = ''
-  resultatTestRelais.value = undefined
+  erreurEnregistrementRelais.value = null
+  try {
+    await relaisStore.effacer()
+    brouillonRelais.relayUrl = ''
+    brouillonRelais.jeton = ''
+    resultatTestRelais.value = undefined
+  } catch (e) {
+    erreurEnregistrementRelais.value = messageErreurConnectivite(e)
+  }
 }
 
 async function testerConnexionRelais(): Promise<void> {
