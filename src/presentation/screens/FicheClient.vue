@@ -207,7 +207,9 @@ const projetsDuClient = computed(() =>
       </template>
       <template v-if="clientCourant?.secteur">
         <dt>Secteur</dt>
-        <dd>{{ LIBELLES_SECTEUR[clientCourant.secteur] }}</dd>
+        <dd>
+          <span class="badge-secteur">{{ LIBELLES_SECTEUR[clientCourant.secteur] }}</span>
+        </dd>
       </template>
       <template v-if="clientCourant?.details">
         <dt>Détails</dt>
@@ -321,6 +323,18 @@ const projetsDuClient = computed(() =>
 
 .details-client dd {
   margin: 0;
+}
+
+/* Même présentation que `.badge-secteur` de GestionClients.vue — le
+   secteur s'affichait ici en texte brut, seul écran à représenter ce même
+   concept différemment du reste de l'app. */
+.badge-secteur {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background-color: var(--vp-marque-fond-leger);
+  color: var(--vp-marque);
 }
 
 .bouton-principal,
