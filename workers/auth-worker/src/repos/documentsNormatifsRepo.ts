@@ -22,6 +22,8 @@ export interface DocumentsNormatifsRepo {
   creer(document: DocumentNormatifEnregistre): Promise<void>
   renommer(id: string, titre: string): Promise<void>
   marquerContenuDisponible(id: string): Promise<void>
+  /** Corrige `hasBinaryContent` d'après un constat réel (voir diagnostic R2) — jamais une déclaration a priori comme `marquerContenuDisponible`, qui suit toujours un envoi de contenu effectif. */
+  corrigerHasBinaryContent(id: string, valeur: boolean): Promise<void>
   supprimer(id: string): Promise<void>
 }
 
@@ -48,6 +50,11 @@ export class DocumentsNormatifsRepoMemoire implements DocumentsNormatifsRepo {
   async marquerContenuDisponible(id: string): Promise<void> {
     const document = this.parId_.get(id)
     if (document) this.parId_.set(id, { ...document, hasBinaryContent: true })
+  }
+
+  async corrigerHasBinaryContent(id: string, valeur: boolean): Promise<void> {
+    const document = this.parId_.get(id)
+    if (document) this.parId_.set(id, { ...document, hasBinaryContent: valeur })
   }
 
   async supprimer(id: string): Promise<void> {
