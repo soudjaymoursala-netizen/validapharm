@@ -300,10 +300,18 @@ header {
 .liste-clients li {
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon);
+  background-color: var(--vp-fond-carte);
+  box-shadow: var(--vp-ombre-sm);
   padding: 0.75rem 1rem;
   display: flex;
   align-items: center;
   gap: 1rem;
+  transition: var(--vp-transition);
+}
+
+.liste-clients:not(.liste-clients--archives) li:hover {
+  border-color: var(--vp-marque);
+  box-shadow: var(--vp-ombre-md);
 }
 
 .lien-client {
@@ -331,9 +339,27 @@ header {
   color: var(--vp-marque);
 }
 
+/* `color`/`border` explicites, indispensables : sans eux, ce bouton
+   n'hérite que `background-color` ici et retombe pour le reste sur la base
+   globale (`tokens.css`) — `color: var(--vp-texte-principal)` (encre
+   quasi noire) au repos sur fond rouge plein (contraste limite), puis
+   `color: var(--vp-marque)` (violet) + `border-color: var(--vp-marque)`
+   au survol (`button:hover`) : texte violet sur fond rouge, incohérent
+   trouvé en testant réellement le survol dans le navigateur. `--vp-danger`
+   ne change pas entre thèmes clair/sombre (contrairement à `--vp-marque`),
+   d'où le blanc fixe plutôt qu'un token de thème. */
 .bouton-archiver {
   background-color: var(--vp-danger);
+  color: white;
+  border: none;
   flex-shrink: 0;
+}
+
+.bouton-archiver:hover:not(:disabled) {
+  background-color: var(--vp-danger);
+  color: white;
+  border-color: transparent;
+  filter: brightness(0.9);
 }
 
 .actions-archive {
@@ -346,6 +372,16 @@ header {
   background-color: transparent;
   color: var(--vp-danger);
   border: 1px solid var(--vp-danger);
+}
+
+/* Même défaut que `.bouton-archiver` ci-dessus : sans ce survol propre, ce
+   bouton de suppression définitive passait en violet de marque au survol
+   (`button:hover` global) — perd tout son sens de "action dangereuse"
+   juste au moment où l'utilisateur s'apprête à cliquer dessus. */
+.bouton-danger:hover:not(:disabled) {
+  background-color: var(--vp-danger);
+  color: white;
+  border-color: var(--vp-danger);
 }
 
 .bloc-archives {
