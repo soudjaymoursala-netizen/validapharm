@@ -29,6 +29,15 @@ const LIBELLES_ERREUR: Record<string, string> = {
 
 onMounted(async () => {
   await connexionStore.charger()
+  // Une session déjà active (retour arrière du navigateur, onglet resté
+  // ouvert après connexion) ne doit pas ré-afficher le formulaire — sans
+  // ce garde, rien dans le routeur ne redirige un utilisateur déjà
+  // connecté qui revient sur « /connexion » (route volontairement exclue
+  // de la garde globale, voir `router/index.ts`).
+  if (authStore.estConnecte) {
+    const destination = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    await router.replace(destination)
+  }
 })
 
 async function seConnecter(): Promise<void> {
@@ -42,6 +51,13 @@ async function seConnecter(): Promise<void> {
     }
     const destination = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
     await router.push(destination)
+  } catch (e) {
+    // Panne de connectivité réelle (Worker injoignable, délai dépassé,
+    // 5xx, réponse illisible) — `authStore.login` lève dans ce cas plutôt
+    // que de renvoyer `{ ok: false }` (voir `AuthApiClient`/`erreurs.ts`).
+    // Sans ce `catch`, l'échec était totalement silencieux : le bouton se
+    // réactivait sans aucun message, comme si rien ne s'était passé.
+    erreur.value = e instanceof Error ? e.message : 'Une erreur inattendue est survenue.'
   } finally {
     enCours.value = false
   }

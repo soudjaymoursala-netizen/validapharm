@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import {
   RELAY_URL_TEST,
@@ -113,6 +113,38 @@ describe('Login — écran de connexion', () => {
 
     expect(wrapper.text()).toContain('Email ou mot de passe incorrect')
     expect(useAuthStore().estConnecte).toBe(false)
+  })
+
+  test('Worker injoignable pendant la connexion affiche un message, ne bloque pas silencieusement', async () => {
+    await useConnexionAuthentificationStore().enregistrer({ relayUrl: RELAY_URL_TEST })
+    // Remplace le faux Worker par un fetch qui échoue réellement (panne
+    // réseau simulée) — `AuthApiClient` transforme ce rejet en
+    // `IndisponibleAuthError`, message "... injoignable." (voir erreurs.ts).
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    const router = routeurDeTest()
+    await router.push('/connexion')
+    const wrapper = mount(Login, { global: { plugins: [router] } })
+    await flushPromises()
+
+    await wrapper.find('input[type="email"]').setValue('admin@pharmatech.example')
+    await wrapper.find('input[type="password"]').setValue('CoffreFort!2026')
+    await wrapper.find('form').trigger('submit.prevent')
+    await attendreQue(() => wrapper.text().includes('injoignable'))
+
+    expect(wrapper.text()).toContain('injoignable')
+    expect(useAuthStore().estConnecte).toBe(false)
+  })
+
+  test('une session déjà active redirige loin du formulaire plutôt que de le réafficher', async () => {
+    await connecterAdminDeTest('admin@pharmatech.example', 'CoffreFort!2026')
+
+    const router = routeurDeTest()
+    await router.push('/connexion')
+    mount(Login, { global: { plugins: [router] } })
+    await attendreQue(() => router.currentRoute.value.path === '/')
+
+    expect(router.currentRoute.value.path).toBe('/')
   })
 
   test('redirige vers la query "redirect" après connexion, si présente', async () => {
