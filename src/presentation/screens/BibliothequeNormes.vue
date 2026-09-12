@@ -261,6 +261,37 @@ async function repararTout(): Promise<void> {
   }
 }
 
+/**
+ * Documents dont le drapeau `has_binary_content` mérite d'être revérifié
+ * côté serveur (voir `necessiteDiagnosticContenu`) — un ancien import de
+ * masse a pu l'annoncer disponible à tort (#35/#36), auquel cas
+ * `documentsAReparer` ne peut jamais les détecter tant que ce drapeau n'a
+ * pas été corrigé.
+ */
+const documentsADiagnostiquer = computed(() =>
+  documentsStore.documents.filter((d) => documentsStore.necessiteDiagnosticContenu(d)),
+)
+const enDiagnostic = ref(false)
+const resultatDiagnostic = ref<string | null>(null)
+const erreurDiagnostic = ref<string | null>(null)
+
+async function lancerDiagnostic(): Promise<void> {
+  erreurDiagnostic.value = null
+  resultatDiagnostic.value = null
+  enDiagnostic.value = true
+  try {
+    const { nbCorriges } = await documentsStore.diagnostiquerContenu()
+    resultatDiagnostic.value =
+      nbCorriges > 0
+        ? `${nbCorriges} document(s) corrigé(s) — voir "Fichiers d'origine manquants" ci-dessous.`
+        : 'Aucune anomalie trouvée : tous les fichiers annoncés disponibles le sont réellement.'
+  } catch (e) {
+    erreurDiagnostic.value = e instanceof Error ? e.message : 'Erreur inconnue.'
+  } finally {
+    enDiagnostic.value = false
+  }
+}
+
 const erreurTelechargement = ref<string | null>(null)
 
 // --- Renommage ---
@@ -538,6 +569,22 @@ onMounted(async () => {
           </li>
         </ul>
       </details>
+    </section>
+
+    <section v-if="documentsADiagnostiquer.length > 0" class="bloc-import bloc-alerte">
+      <h3>Vérification des fichiers importés depuis Drive</h3>
+      <p class="rappel">
+        {{ documentsADiagnostiquer.length }} document(s) Drive sont annoncés disponibles — vérifie
+        que leur fichier d'origine existe réellement côté serveur (ne contacte jamais Google Drive,
+        se contente de vérifier la taille déjà stockée chez nous).
+      </p>
+      <div class="actions">
+        <button type="button" :disabled="enDiagnostic" @click="lancerDiagnostic">
+          {{ enDiagnostic ? 'Vérification en cours…' : 'Vérifier les fichiers' }}
+        </button>
+      </div>
+      <p v-if="resultatDiagnostic" class="rappel">{{ resultatDiagnostic }}</p>
+      <p v-if="erreurDiagnostic" class="erreur" role="alert">{{ erreurDiagnostic }}</p>
     </section>
 
     <section v-if="documentsAReparer.length > 0" class="bloc-import bloc-alerte">

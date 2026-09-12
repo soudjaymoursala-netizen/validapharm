@@ -23,6 +23,11 @@ export class R2StockageBinaireRepo implements StockageBinaireRepo {
     }
   }
 
+  async taille(cle: string): Promise<number | null> {
+    const objet = await this.bucket.head(cle)
+    return objet ? objet.size : null
+  }
+
   async supprimer(cle: string): Promise<void> {
     await this.bucket.delete(cle)
   }

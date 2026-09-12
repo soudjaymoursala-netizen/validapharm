@@ -253,6 +253,9 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   if (chemin === '/documents-normatifs' && request.method === 'POST') {
     return gererCreerDocumentNormatif(request, ctx, entetes)
   }
+  if (chemin === '/documents-normatifs/diagnostiquer' && request.method === 'POST') {
+    return gererDiagnostiquerContenuDocumentsNormatifs(request, ctx, entetes)
+  }
   const matchContenuDocumentNormatif = chemin.match(/^\/documents-normatifs\/([^/]+)\/contenu$/)
   if (matchContenuDocumentNormatif && request.method === 'GET') {
     return gererObtenirContenuDocumentNormatif(
@@ -998,6 +1001,55 @@ async function gererCreerDocumentNormatif(
   await consignerAudit(ctx, utilisateur, 'import_document_normatif', 'document_normatif', id, null)
 
   return reponseJson({ document: await assemblerDocumentNormatif(ctx, document) }, 201, entetes)
+}
+
+/**
+ * Recale `hasBinaryContent` sur la réalité observée dans R2 (via `taille`,
+ * sans télécharger le contenu) pour un lot de documents donné — jamais un
+ * balayage de toute l'installation en un seul appel : le nombre de
+ * sous-requêtes R2 par invocation est limité côté Workers, donc le client
+ * découpe en lots (voir `diagnostiquerContenu`, store). Corrige le champ
+ * dans un sens comme dans l'autre : un ancien import de masse a pu
+ * annoncer un contenu inexistant (#35/#36) tout comme, en théorie, l'
+ * inverse — jamais une simple remise à `false`.
+ */
+async function gererDiagnostiquerContenuDocumentsNormatifs(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const corps = await lireCorpsJson<{ ids?: string[] }>(request)
+  if (!corps || !Array.isArray(corps.ids) || corps.ids.length === 0) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const resultats = await Promise.all(
+    corps.ids.map(async (id) => {
+      const document = await ctx.documentsNormatifsRepo.parId(id)
+      if (!document) return { id, hasBinaryContent: false, corrige: false }
+
+      const taille = await ctx.stockageBinaireRepo.taille(cleContenuDocument(id))
+      const disponibleReel = taille !== null && taille > 0
+      const corrige = disponibleReel !== document.hasBinaryContent
+      if (corrige) {
+        await ctx.documentsNormatifsRepo.corrigerHasBinaryContent(id, disponibleReel)
+        await consignerAudit(
+          ctx,
+          utilisateur,
+          'correction_has_binary_content_document_normatif',
+          'document_normatif',
+          id,
+          null,
+        )
+      }
+      return { id, hasBinaryContent: disponibleReel, corrige }
+    }),
+  )
+
+  return reponseJson({ resultats }, 200, entetes)
 }
 
 async function gererObtenirContenuDocumentNormatif(

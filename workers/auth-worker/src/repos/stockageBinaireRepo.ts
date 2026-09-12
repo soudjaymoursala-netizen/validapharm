@@ -7,6 +7,8 @@
 export interface StockageBinaireRepo {
   enregistrer(cle: string, contenu: ArrayBuffer, typeContenu: string): Promise<void>
   lire(cle: string): Promise<{ contenu: ArrayBuffer; typeContenu: string } | null>
+  /** Taille en octets sans lire le contenu (`null` si absent) — sert à vérifier qu'un fichier annoncé disponible existe réellement, sans le télécharger en entier. */
+  taille(cle: string): Promise<number | null>
   supprimer(cle: string): Promise<void>
 }
 
@@ -19,6 +21,11 @@ export class StockageBinaireRepoMemoire implements StockageBinaireRepo {
 
   async lire(cle: string): Promise<{ contenu: ArrayBuffer; typeContenu: string } | null> {
     return this.parCle.get(cle) ?? null
+  }
+
+  async taille(cle: string): Promise<number | null> {
+    const objet = this.parCle.get(cle)
+    return objet ? objet.contenu.byteLength : null
   }
 
   async supprimer(cle: string): Promise<void> {

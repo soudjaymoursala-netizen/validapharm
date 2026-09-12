@@ -296,6 +296,66 @@ describe('useNormativeDocumentsStore — Drive', () => {
     expect(await blob.text()).toBe('Vrai contenu récupéré depuis Drive.')
   })
 
+  test('diagnostiquerContenu : corrige has_binary_content -> false pour un document Drive historique dont le contenu R2 est absent (#35/#36)', async () => {
+    // Reproduit l'état des 177 documents historiques : le drapeau ment
+    // (`true`) alors qu'aucun contenu n'a jamais été écrit côté serveur —
+    // jamais atteignable via le store, qui refuse déjà ce cas depuis #35 ;
+    // seule une manipulation directe du dépôt (ctx) le reproduit.
+    await ctx.documentsNormatifsRepo.creer({
+      id: 'legacy-1',
+      category: 'gmp',
+      titre: 'Norme historique mal importée',
+      filename: 'norme-historique.pdf',
+      source: 'drive',
+      sourceRef: 'drive-id-legacy-1',
+      mimeType: 'application/pdf',
+      hasBinaryContent: true,
+      uploadedAt: '2026-01-01T00:00:00.000Z',
+      uploadedBy: 'qa-1',
+    })
+    const store = useNormativeDocumentsStore()
+    await store.charger()
+    const document = store.documents.find((d) => d.id === 'legacy-1')
+    if (!document) throw new Error('document introuvable après charger()')
+    expect(store.necessiteDiagnosticContenu(document)).toBe(true)
+    expect(store.necessiteReparationContenu(document)).toBe(false)
+
+    const { nbCorriges } = await store.diagnostiquerContenu()
+
+    expect(nbCorriges).toBe(1)
+    const documentCorrige = store.documents.find((d) => d.id === 'legacy-1')
+    if (!documentCorrige) throw new Error('document introuvable après diagnostiquerContenu()')
+    expect(documentCorrige.has_binary_content).toBe(false)
+    expect(store.necessiteReparationContenu(documentCorrige)).toBe(true)
+  })
+
+  test('diagnostiquerContenu : ne corrige rien pour un document Drive dont le contenu R2 est réellement présent', async () => {
+    const store = useNormativeDocumentsStore()
+    await store.configurerConnexionDriveLectureNormes('dossier-normes-1', 'jeton-drive')
+    const binaire = new TextEncoder().encode('Contenu réel présent côté serveur.').buffer
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => binaire,
+    } as Response)
+    const document = await store.importerDepuisDrive(
+      {
+        id: 'fichier-reel-1',
+        nom: 'guideline-reelle.txt',
+        mimeType: 'text/plain',
+        modifiedTime: '',
+      },
+      'gmp',
+      'qa-1',
+    )
+    expect(document.has_binary_content).toBe(true)
+
+    const { nbCorriges } = await store.diagnostiquerContenu()
+
+    expect(nbCorriges).toBe(0)
+    expect(store.documents.find((d) => d.id === document.id)?.has_binary_content).toBe(true)
+  })
+
   test('repararContenuDocument : refuse un document qui n’a jamais eu de fichier d’origine (Google natif)', async () => {
     const store = useNormativeDocumentsStore()
     await store.configurerConnexionDriveLectureNormes('dossier-normes-1', 'jeton-drive')
