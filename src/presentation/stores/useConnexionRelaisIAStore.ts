@@ -29,6 +29,16 @@ export const useConnexionRelaisIAStore = defineStore('connexionRelaisIA', () => 
   const connexion = ref<ConnexionRelaisIA | null>(null)
   const enChargement = ref(false)
 
+  /**
+   * `ConfigurationClient.vue` (et `MissionWorkspace.vue`/
+   * `RevueStructureProcedure.vue`/`EditeurSection.vue`) appellent ceci —
+   * sans ce `catch`, une panne réseau transitoire (Worker injoignable,
+   * délai dépassé) levait une exception non rattrapée. Sur
+   * `ConfigurationClient.vue` en particulier, ça interrompait aussi le
+   * chargement de la section suivante (`onMounted` enchaîne les trois
+   * chargers), laissant croire que toute la configuration avait disparu.
+   * Même principe que `useClientsStore.chargerClients()`.
+   */
   async function charger(): Promise<void> {
     enChargement.value = true
     try {
@@ -43,6 +53,9 @@ export const useConnexionRelaisIAStore = defineStore('connexionRelaisIA', () => 
         resultat.ok && resultat.donnees.parametre
           ? (resultat.donnees.parametre.valeur as unknown as ConnexionRelaisIA)
           : null
+    } catch {
+      // Panne réseau transitoire : la configuration déjà chargée (le cas
+      // échéant) reste affichée, jamais effacée sur un simple incident.
     } finally {
       enChargement.value = false
     }

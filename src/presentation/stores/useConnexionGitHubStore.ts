@@ -36,6 +36,15 @@ export const useConnexionGitHubStore = defineStore('connexionGitHub', () => {
   const connexion = ref<ConnexionGitHub | null>(null)
   const enChargement = ref(false)
 
+  /**
+   * `ConfigurationClient.vue` enchaîne cet appel avec `useConnexionRelaisIAStore.
+   * charger()`/`useConnexionAuthentificationStore.charger()` dans un même
+   * `onMounted` — sans ce `catch`, une panne réseau transitoire ici
+   * (Worker injoignable, délai dépassé) levait une exception non rattrapée
+   * qui interrompait aussi le chargement des deux sections suivantes,
+   * laissant croire que toute la configuration (GitHub + Relais IA) avait
+   * disparu. Même principe que `useClientsStore.chargerClients()`.
+   */
   async function charger(): Promise<void> {
     enChargement.value = true
     try {
@@ -50,6 +59,9 @@ export const useConnexionGitHubStore = defineStore('connexionGitHub', () => {
         resultat.ok && resultat.donnees.parametre
           ? (resultat.donnees.parametre.valeur as unknown as ConnexionGitHub)
           : null
+    } catch {
+      // Panne réseau transitoire : la configuration déjà chargée (le cas
+      // échéant) reste affichée, jamais effacée sur un simple incident.
     } finally {
       enChargement.value = false
     }
