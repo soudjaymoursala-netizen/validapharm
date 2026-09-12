@@ -36,6 +36,9 @@ export interface Contexte {
   corsOrigin: string
   envoyeurEmail: EnvoyeurEmail
   urlApplication: string
+  /** Identifiants OAuth Google (Drive normes) — vides tant que l'utilisateur n'a pas créé son propre client OAuth dans Google Cloud Console ; `gererDemarrerOAuthDrive`/`gererRafraichirJetonDrive` répondent alors `oauth_google_non_configure` plutôt que d'échouer silencieusement. */
+  googleOAuthClientId: string
+  googleOAuthClientSecret: string
 }
 
 /** Seules catégories reconnues pour un document normatif — jamais une valeur arbitraire fournie par l'appelant. */
@@ -244,6 +247,19 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       entetes,
       matchParametreInstallation[1] as string,
     )
+  }
+
+  // --- OAuth Google (Drive normes) — jeton de rafraîchissement longue
+  // durée, jamais plus le jeton d'accès (1h) recopié à la main depuis
+  // l'OAuth Playground ---
+  if (chemin === '/drive-oauth/demarrer' && request.method === 'GET') {
+    return gererDemarrerOAuthDrive(request, ctx, entetes)
+  }
+  if (chemin === '/drive-oauth/callback' && request.method === 'GET') {
+    return gererCallbackOAuthDrive(request, ctx)
+  }
+  if (chemin === '/drive-oauth/rafraichir-jeton' && request.method === 'POST') {
+    return gererRafraichirJetonDrive(request, ctx, entetes)
   }
 
   // --- Documents normatifs (Bibliothèque de normes — global à l'installation) ---
@@ -843,6 +859,189 @@ async function gererEffacerParametreInstallation(
   await ctx.parametresInstallationRepo.effacer(cle)
   await consignerAudit(ctx, acteur, 'suppression_parametre_installation', 'parametre', cle, null)
   return reponseJson({ ok: true }, 200, entetes)
+}
+
+// --- Handlers : OAuth Google (Drive normes) ---
+
+const CLE_PARAMETRE_DRIVE_NORMES = 'drive-normes'
+/** Clé technique interne (jamais dans `CLES_PARAMETRES_INSTALLATION` — sans intérêt pour le client, jamais exposée via `GET /parametres-installation/:cle`) : état CSRF à usage unique entre `gererDemarrerOAuthDrive` et `gererCallbackOAuthDrive`. */
+const CLE_ETAT_OAUTH_DRIVE = 'drive-oauth-etat'
+const DUREE_VALIDITE_ETAT_OAUTH_MS = 10 * 60 * 1000
+const PORTEE_OAUTH_DRIVE = 'https://www.googleapis.com/auth/drive.readonly'
+
+function urlRedirectionOAuthDrive(request: Request): string {
+  return `${new URL(request.url).origin}/drive-oauth/callback`
+}
+
+interface JetonsGoogleOAuth {
+  access_token: string
+  refresh_token?: string
+  expires_in: number
+}
+
+/** Un seul point d'appel à `oauth2.googleapis.com/token` — échange initial (`authorization_code`) et renouvellement (`refresh_token`) partagent le même format de requête/réponse. `null` sur tout échec (jamais une exception : un jeton expiré/révoqué côté Google est un cas attendu, pas une panne). */
+async function echangerAvecGoogleOAuth(
+  corps: Record<string, string>,
+): Promise<JetonsGoogleOAuth | null> {
+  const reponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(corps).toString(),
+  })
+  if (!reponse.ok) return null
+  return (await reponse.json()) as JetonsGoogleOAuth
+}
+
+/**
+ * Démarre l'autorisation Google (Drive normes) — remplace le jeton d'accès
+ * recopié à la main depuis l'OAuth Playground (valable 1h, cause du #35/
+ * #36/#37) par un jeton de rafraîchissement longue durée, renouvelé
+ * automatiquement (`gererRafraichirJetonDrive`) à chaque usage. Réservé à
+ * un admin (même exigence que `gererEnregistrerParametreInstallation`,
+ * dont cette connexion tient lieu).
+ */
+async function gererDemarrerOAuthDrive(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const acteur = await exigerAdmin(request, ctx, entetes)
+  if (acteur instanceof Response) return acteur
+  if (!ctx.googleOAuthClientId || !ctx.googleOAuthClientSecret) {
+    return reponseJson({ erreur: 'oauth_google_non_configure' }, 501, entetes)
+  }
+
+  const etat = genererId()
+  await ctx.parametresInstallationRepo.enregistrer(
+    CLE_ETAT_OAUTH_DRIVE,
+    {
+      etat,
+      utilisateurId: acteur.id,
+      expireA: new Date(Date.now() + DUREE_VALIDITE_ETAT_OAUTH_MS).toISOString(),
+    },
+    acteur.id,
+  )
+
+  const parametres = new URLSearchParams({
+    client_id: ctx.googleOAuthClientId,
+    redirect_uri: urlRedirectionOAuthDrive(request),
+    response_type: 'code',
+    scope: PORTEE_OAUTH_DRIVE,
+    access_type: 'offline',
+    prompt: 'consent',
+    state: etat,
+  })
+  return reponseJson(
+    { urlAutorisation: `https://accounts.google.com/o/oauth2/v2/auth?${parametres.toString()}` },
+    200,
+    entetes,
+  )
+}
+
+/**
+ * Réception de la redirection Google — jamais authentifiée par construction
+ * (navigation top-level du navigateur, aucun jeton de session envoyable) :
+ * la protection CSRF passe par `state`, comparé à l'état à usage unique
+ * posé par `gererDemarrerOAuthDrive` (qui y attache aussi l'utilisateur
+ * d'origine, nécessaire pour `updated_by` — colonne `REFERENCES users(id)`,
+ * voir migration 0002 — qu'un flux non authentifié ne peut jamais fournir
+ * autrement). Ne renvoie jamais de JSON : toujours une redirection vers
+ * l'application, succès ou échec.
+ */
+async function gererCallbackOAuthDrive(request: Request, ctx: Contexte): Promise<Response> {
+  const urlBase = ctx.urlApplication.replace(/\/+$/, '')
+  const echec = (raison: string): Response =>
+    Response.redirect(`${urlBase}/normes?drive_oauth=erreur&raison=${raison}`, 302)
+
+  const url = new URL(request.url)
+  const code = url.searchParams.get('code')
+  const etatRecu = url.searchParams.get('state')
+  if (!code || !etatRecu) return echec('parametres_manquants')
+  if (!ctx.googleOAuthClientId || !ctx.googleOAuthClientSecret) {
+    return echec('oauth_google_non_configure')
+  }
+
+  const etatEnregistre = await ctx.parametresInstallationRepo.obtenir(CLE_ETAT_OAUTH_DRIVE)
+  if (
+    !etatEnregistre ||
+    etatEnregistre.valeur.etat !== etatRecu ||
+    new Date(etatEnregistre.valeur.expireA ?? 0) < new Date()
+  ) {
+    return echec('etat_invalide_ou_expire')
+  }
+  const utilisateurId = etatEnregistre.valeur.utilisateurId
+  await ctx.parametresInstallationRepo.effacer(CLE_ETAT_OAUTH_DRIVE)
+  if (!utilisateurId) return echec('etat_invalide_ou_expire')
+
+  const utilisateur = await ctx.utilisateursRepo.parId(utilisateurId)
+  if (!utilisateur) return echec('utilisateur_introuvable')
+
+  const jetons = await echangerAvecGoogleOAuth({
+    code,
+    client_id: ctx.googleOAuthClientId,
+    client_secret: ctx.googleOAuthClientSecret,
+    redirect_uri: urlRedirectionOAuthDrive(request),
+    grant_type: 'authorization_code',
+  })
+  if (!jetons?.refresh_token) return echec('echange_jeton_echoue')
+
+  const existant = await ctx.parametresInstallationRepo.obtenir(CLE_PARAMETRE_DRIVE_NORMES)
+  await ctx.parametresInstallationRepo.enregistrer(
+    CLE_PARAMETRE_DRIVE_NORMES,
+    { ...existant?.valeur, refreshToken: jetons.refresh_token },
+    utilisateurId,
+  )
+  await consignerAudit(
+    ctx,
+    utilisateur,
+    'connexion_oauth_drive',
+    'parametre',
+    CLE_PARAMETRE_DRIVE_NORMES,
+    null,
+  )
+
+  return Response.redirect(`${urlBase}/normes?drive_oauth=ok`, 302)
+}
+
+/**
+ * Renouvelle le jeton d'accès Drive à la demande à partir du jeton de
+ * rafraîchissement stocké — jamais persisté (durée de vie ~1h, sans
+ * intérêt à conserver) : chaque appelant en réclame un frais. Même
+ * exigence d'authentification que la lecture du paramètre lui-même
+ * (`gererObtenirParametreInstallation`) : tout compte de l'organisation, ce
+ * jeton devant être directement utilisable depuis son navigateur.
+ */
+async function gererRafraichirJetonDrive(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+  if (!ctx.googleOAuthClientId || !ctx.googleOAuthClientSecret) {
+    return reponseJson({ erreur: 'oauth_google_non_configure' }, 501, entetes)
+  }
+
+  const parametre = await ctx.parametresInstallationRepo.obtenir(CLE_PARAMETRE_DRIVE_NORMES)
+  const refreshToken = parametre?.valeur.refreshToken
+  if (!refreshToken) return reponseJson({ erreur: 'oauth_non_connecte' }, 404, entetes)
+
+  const jetons = await echangerAvecGoogleOAuth({
+    refresh_token: refreshToken,
+    client_id: ctx.googleOAuthClientId,
+    client_secret: ctx.googleOAuthClientSecret,
+    grant_type: 'refresh_token',
+  })
+  if (!jetons?.access_token) {
+    // 400, jamais 5xx : un jeton de rafraîchissement révoqué/expiré est un
+    // échec métier attendu (l'utilisateur doit reconnecter Google), pas une
+    // panne du Worker — `AuthApiClient.requete` traite tout 5xx comme
+    // « relais injoignable » (`IndisponibleAuthError`), masquerait le vrai
+    // message ici.
+    return reponseJson({ erreur: 'rafraichissement_echoue' }, 400, entetes)
+  }
+
+  return reponseJson({ jeton: jetons.access_token, expiresIn: jetons.expires_in }, 200, entetes)
 }
 
 // --- Handlers : documents normatifs (Bibliothèque de normes) ---

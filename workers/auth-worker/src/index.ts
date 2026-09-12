@@ -27,6 +27,9 @@ export interface Env {
   RESEND_API_KEY: string
   RESEND_FROM: string
   APP_URL: string
+  /** Identifiants OAuth Google (Drive normes, jeton de rafraîchissement — voir README.md) — vides tant que non posés, `Contexte` gère alors une fonctionnalité désactivée plutôt qu'une erreur. */
+  GOOGLE_OAUTH_CLIENT_ID: string
+  GOOGLE_OAUTH_CLIENT_SECRET: string
 }
 
 export default {
@@ -43,6 +46,8 @@ export default {
       corsOrigin: env.CORS_ORIGIN_AUTORISE,
       envoyeurEmail: new ResendEnvoyeurEmail(env.RESEND_API_KEY, env.RESEND_FROM),
       urlApplication: env.APP_URL,
+      googleOAuthClientId: env.GOOGLE_OAUTH_CLIENT_ID,
+      googleOAuthClientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET,
     })
   },
 }
