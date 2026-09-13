@@ -83,7 +83,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `TableauDeBord.vue` | ✅ *(aucun bug trouvé)* | ✅ *(aucun bug trouvé — déjà conforme)* |
 | `FicheProjet.vue` | ✅ | ✅ *(aucun bug trouvé — déjà conforme)* |
 | `ListeMissions.vue` | ✅ *(aucun bug trouvé)* | ✅ |
-| `MissionWorkspace.vue` | ⬜ | ⬜ |
+| `MissionWorkspace.vue` | ✅ | ✅ |
 | `AssistantStrategieQualification.vue` | ⬜ | ⬜ |
 | `AssistantCreationLivrable.vue` | ⬜ | ⬜ |
 | `EditeurSection.vue` | ⬜ | ⬜ |
@@ -113,6 +113,55 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `MissionWorkspace.vue` **terminé** (fonctionnel + UI dans
+  un seul commit `34b59fe`, CI verte) :
+  - Fonctionnel :
+    1. **Lien-retour/nom du client manquants** (piste ouverte notée lors du
+       chantier `ListeMissions.vue`, confirmée présente ici) — ajout de
+       `clientsStore.obtenirClient` + `<RouterLink class="lien-retour">`
+       vers `liste-missions` (son parent direct dans la hiérarchie de
+       navigation, pas `fiche-client` directement — même convention que
+       `SuiviPeriodicite.vue`/`DossierVivantActif.vue`, qui pointent vers
+       leur écran parent immédiat avec un libellé statique, pas le nom du
+       client). Nom du client affiché dans le `<h1>` (`{{ mission.titre }}
+       — {{ nomClient ?? props.clientId }}`), comme partout ailleurs.
+    2. **Mutations de statut non vérifiées** (même motif que `FicheProjet.vue`,
+       commit `6e4513e`, mais avec `Entité | null` plutôt que
+       `Entité | {erreur}`) : `changerStatutMission`/`changerStatutActivity`
+       renvoient `null` si l'entité a été modifiée/supprimée entre-temps
+       (race concurrentielle, double clic) — le composant ignorait
+       totalement ce cas. Ajout d'un `erreurStatut` affiché dans un
+       `.bandeau-erreur role="alert"` sur les deux sites d'appel.
+  - UI :
+    1. **`.badge-confiance` en couleurs hex fixes** (piste ouverte notée lors
+       du chantier `RevueStructureProcedure.vue`, qui référençait déjà «
+       même style que `MissionWorkspace.vue` ») — migré vers
+       `--vp-succes`/`--vp-info`/`--vp-danger`/`--vp-attention` (+
+       `-fond-leger`), même mapping que `RevueStructureProcedure.vue`.
+       Attention : ce badge reste volontairement un style dédié, jamais les
+       jetons `--vp-statut-*` de `qualification_status` (avertissement
+       explicite dans le code du composant — deux concepts différents, n'ont
+       jamais été confondus).
+    2. `.bandeau-erreur` utilisait `--vp-statut-requalification-en-retard`
+       (un jeton de `qualification_status`, valeur identique à
+       `--vp-danger` aujourd'hui mais sémantiquement le mauvais jeton pour
+       un message d'erreur générique réseau/raisonnement) — remplacé par
+       `--vp-danger`, cohérent avec `FicheProjet.vue`.
+  - **Bug de test découvert et corrigé en cours de route (pas un bug
+    applicatif)** : l'ajout d'un `await clientsStore.obtenirClient(...)`
+    séquentiel avant le `Promise.all` de `onMounted` a suffi à inverser
+    l'ordre de complétion entre `missionStore.charger` et
+    `qualityEventStore.charger` dans les tests (fake-indexeddb, résolution
+    par macrotâche) — le test `associe un QualityEvent existant à la
+    Mission` interagissait avec le `<select>` des événements qualité dès que
+    le titre de la Mission apparaissait, sans attendre que ses propres
+    options soient chargées. Corrigé en attendant explicitement
+    `option[value="qe-1"]` avant d'interagir, plutôt que de se fier au
+    signal générique de `monter()` — à garder en tête sur les prochains
+    écrans qui ajoutent un `await` séquentiel avant un `Promise.all`
+    existant dans `onMounted`.
+  - Non revalidé visuellement en direct (session de test toujours expirée,
+    voir §5).
 - **13/09/2026** — `ListeMissions.vue` **terminé** (1 commit, aucun
   chantier fonctionnel distinct — voir ci-dessous), CI verte :
   - Fonctionnel : écran relu en entier avec `useMissionStore`/
@@ -130,9 +179,9 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
     `FicheProjet.vue` (voir piste ouverte ci-dessous).
   - **Piste ouverte** (trouvée en marge, pas corrigée ici) :
     `RevueStructureProcedure.vue` (déjà traité, §4 plus bas) et
-    `MissionWorkspace.vue` (pas encore traité) partagent la même absence
-    de lien-retour/nom de client — à vérifier explicitement quand
-    `MissionWorkspace.vue` sera traité ; `RevueStructureProcedure.vue`
+    `MissionWorkspace.vue` (pas encore traité à l'époque) partagent la même
+    absence de lien-retour/nom de client — **`MissionWorkspace.vue` est
+    corrigé** (voir plus bas, commit `34b59fe`) ; `RevueStructureProcedure.vue`
     a été manqué lors de son propre chantier (déjà poussé, pas rouvert
     pour l'instant faute de temps — à corriger si l'occasion se présente).
     Séparément : plusieurs écrans (dont `FicheProjet.vue`) redéfinissent
@@ -218,8 +267,8 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
   - **Piste ouverte identifiée** : `MissionWorkspace.vue` (plus loin dans
     la liste, §3) partage l'exact même motif `.badge-confiance` en hex
     fixe (son propre commentaire dans `RevueStructureProcedure.vue`
-    disait déjà « même style que `MissionWorkspace.vue` ») — à corriger
-    explicitement à son tour, pas par surprise.
+    disait déjà « même style que `MissionWorkspace.vue` ») — **corrigé**
+    (voir plus bas, commit `34b59fe`), même mapping de jetons.
   - Non revalidé visuellement en direct (session de test toujours
     expirée, voir §5).
 - **13/09/2026** — `Process.vue` **terminé** (fonctionnel + UI), 2 commits
@@ -451,21 +500,15 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `MissionWorkspace.vue` — chantier fonctionnel puis UI, avec le
-   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) et une mission
-   créée dessus depuis `ListeMissions.vue` si besoin, dans l'ordre de la
-   liste en §3.
-   **Vérifier explicitement** (piste ouverte notée lors du chantier
-   `ListeMissions.vue`) : cet écran manque peut-être aussi du lien-retour/
-   nom du client (motif déjà trouvé sur `ListeMissions.vue` et
-   `RevueStructureProcedure.vue`, non corrigé sur ce dernier faute de
-   temps).
+1. `AssistantStrategieQualification.vue` — chantier fonctionnel puis UI,
+   avec le client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans
+   l'ordre de la liste en §3.
    **Piste à vérifier en priorité** : le motif « mutations de statut
-   ignorées » trouvé sur `FicheProjet.vue` (8 sites, commit `6e4513e`)
-   n'est probablement pas isolé à cet écran — `grep` les autres écrans qui
-   appellent des méthodes de `useProjectsStore`/stores similaires
-   retournant une union `Entité | {erreur}` (suspendre/reprendre/archiver/
-   changer de statut) sans vérifier `if ('erreur' in resultat)`.
+   ignorées » trouvé sur `FicheProjet.vue` (8 sites, commit `6e4513e`) et
+   `MissionWorkspace.vue` (2 sites, commit `34b59fe`) n'est probablement pas
+   isolé à ces deux écrans — `grep` les autres écrans qui appellent des
+   méthodes de store retournant une union `Entité | {erreur}` **ou**
+   `Entité | null` sans vérifier le résultat.
    **Balayage exhaustif fait le 13/09/2026** (`grep` sur tout
    `src/presentation/screens/*.vue`) pour les deux motifs de bugs
    récurrents de ce chantier — plus la peine de les redécouvrir un par un :
@@ -475,8 +518,11 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
      écrans qui avaient ce motif sont déjà corrigés (`Process.vue`,
      `RevueStructureProcedure.vue`, `TemplatesFormulaires.vue`).
    - `.badge-confiance--connu { background-color: #dcfce7; ... }` (couleurs
-     hex fixes non adaptées au thème sombre) : reste uniquement dans
-     `MissionWorkspace.vue` (plus loin dans la liste, §3).
+     hex fixes non adaptées au thème sombre) : corrigé partout où ce
+     `grep` l'avait trouvé (`RevueStructureProcedure.vue`,
+     `MissionWorkspace.vue`) — refaire ce `grep` sur les écrans suivants
+     avant de conclure qu'il n'y en a plus, cette liste datant du
+     13/09/2026.
    - Refaire ce `grep` sur le fichier de l'écran en cours avant de
      conclure qu'« aucun bug trouvé » plutôt que de se fier seulement à
      cette liste, qui date du 13/09/2026 et peut devenir obsolète si
