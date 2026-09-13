@@ -94,7 +94,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `ComputerSystemAssessment.vue` | ✅ *(aucun bug trouvé)* | ✅ *(aucun bug trouvé)* |
 | `JournalAnomalies.vue` | ✅ | ✅ *(aucun bug trouvé)* |
 | `ResolutionConflit.vue` | ✅ | ✅ *(vue "aucun conflit" vérifiée en direct ; vue "conflit" non revalidée visuellement en direct — voir §4)* |
-| `DossierVivantActif.vue` | ⬜ | ⬜ |
+| `DossierVivantActif.vue` | ✅ | ✅ *(aucun bug trouvé)* |
 | `BlocageIncompatibilite.vue` | ⬜ | ⬜ |
 | `SourceIntelligence.vue` | ⬜ | ⬜ |
 | `ContentPlan.vue` | ⬜ | ⬜ |
@@ -112,6 +112,30 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 ---
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
+
+- **13/09/2026** — `DossierVivantActif.vue` **terminé** (fonctionnel
+  `1b3df56`, CI verte, UI vérifiée en direct sans nouveau correctif) :
+  - Fonctionnel : **absence d'état de chargement**, plus trompeur
+    qu'ailleurs — `noeud` (computed dérivé de `structureStore.noeuds`,
+    vide avant chargement) valait `null` pendant tout le chargement, donc
+    l'écran affichait à tort « Nœud introuvable. » même pour un actif
+    existant. Fait notable : le commentaire du fichier de test
+    documentait déjà cette course exacte ("texte encore 'Nœud
+    introuvable' au moment de l'assertion") mais l'avait traitée comme
+    une simple contrainte de timing de test à contourner avec
+    `attendreQue`, pas comme un bug de l'écran à corriger — corrigé
+    maintenant avec un `chargementInitial` classique. Écran en lecture
+    seule (aucune mutation), donc motif « mutation non vérifiée » sans
+    objet ici. `onMounted` charge 7 stores en `Promise.all` — `afterEach`
+    préventif ajouté au fichier de test (même profil de risque que
+    `MissionWorkspace.vue`). 1 test ajouté (chargement), 2 tests
+    existants déjà corrects (utilisaient déjà `attendreQue`).
+  - UI : testé en direct avec le client QA — un nœud a dû être injecté
+    directement en IndexedDB (le client QA n'avait aucune hiérarchie
+    Structure Système configurée) pour atteindre l'écran avec de vraies
+    données. Rendu et espacement conformes sur toutes les sections
+    (identité, chaîne technique, évaluations, missions, anomalies,
+    livrables, périmètre non couvert) — aucun défaut trouvé.
 
 - **13/09/2026** — `ResolutionConflit.vue` **terminé** (fonctionnel
   `7b8eb22`, CI verte, **aucun fichier de test n'existait avant ce
@@ -943,20 +967,27 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `DossierVivantActif.vue` — chantier fonctionnel puis UI, avec le
+1. `BlocageIncompatibilite.vue` — chantier fonctionnel puis UI, avec le
    client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) si l'écran
    est bien client-scopé (vérifier sa route dans `router/index.ts` avant
    de supposer un `clientId` — `ResolutionConflit.vue` n'en avait pas,
    contrairement à la quasi-totalité des écrans précédents), dans
    l'ordre de la liste en §3.
+   **Si le client QA n'a pas les données nécessaires pour atteindre
+   l'écran** (ex. hiérarchie Structure Système vide) : injecter les
+   enregistrements directement en IndexedDB via `javascript_tool` plutôt
+   que de reconstruire tout le parcours UI — fait sur `DossierVivantActif.vue`
+   (`1b3df56`, un `assetNode` créé directement pour le client QA, qui
+   n'avait aucun nœud configuré) après un hard reload pour charger le
+   code déployé à jour.
    **Vérifier d'abord si un fichier de test existe** — `ResolutionConflit.vue`
-   n'en avait aucun avant ce chantier (`ResolutionConflit.test.ts` créé de
-   toutes pièces, 5 tests), contrairement à tous les écrans précédents de
-   cette liste qui avaient déjà une suite existante à corriger/étendre.
-   Ne pas supposer qu'un fichier `<Écran>.test.ts` existe sans `find`/`ls`
-   préalable.
+   n'en avait aucun avant son chantier (`ResolutionConflit.test.ts` créé de
+   toutes pièces, 5 tests), contrairement à la plupart des écrans
+   précédents de cette liste qui avaient déjà une suite existante à
+   corriger/étendre. Ne pas supposer qu'un fichier `<Écran>.test.ts`
+   existe sans `find`/`ls` préalable.
    **Avant d'écrire de nouveaux tests** : vérifier si
-   `DossierVivantActif.test.ts` a un `afterEach` global laissant le
+   `BlocageIncompatibilite.test.ts` a un `afterEach` global laissant le
    temps aux promesses résiduelles de se résoudre entre les tests — son
    absence a fait échouer `MissionWorkspace.test.ts` en CI à trois
    reprises (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge
@@ -999,13 +1030,17 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    `creerNouvelleVersion` ne retourne jamais d'union d'erreur) **et**
    `ComputerSystemAssessment.vue` (`creerEvaluation` ne retourne jamais
    d'union d'erreur non plus — pas de `MethodProfile` du tout sur cet
-   écran) sont les trois exceptions confirmées — ce motif reste la piste
-   par défaut à vérifier sur chaque nouvel écran, en particulier tout
-   garde-fou d'immutabilité/verrouillage explicitement documenté dans
-   l'écran (rechercher spécifiquement les codes d'erreur liés à un statut
+   écran) **et** `DossierVivantActif.vue` (écran en lecture seule,
+   aucune mutation du tout — motif structurellement sans objet) sont les
+   quatre exceptions confirmées — ce motif reste la piste par défaut à
+   vérifier sur chaque nouvel écran, en particulier tout garde-fou
+   d'immutabilité/verrouillage explicitement documenté dans l'écran
+   (rechercher spécifiquement les codes d'erreur liés à un statut
    "clôturé"/"verrouillé"/"validé"/"introuvable" dans le store) — mais
    vérifier aussi la signature de retour réelle de chaque fonction du
-   store avant de supposer le bug présent.
+   store avant de supposer le bug présent, et si l'écran effectue une
+   quelconque mutation (un écran d'agrégation/lecture seule n'a
+   simplement rien à vérifier ici).
    **Piste à vérifier aussi** : un `<select>`/`<input>` avec `v-model`
    lié DIRECTEMENT à un champ d'un objet venant du store (ex.
    `v-model="e.statut"` où `e` est un élément de `store.evenements`)
@@ -1020,17 +1055,28 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    sur `AssistantStrategieQualification.vue` (`c9e743a`), `EditeurSection.vue`
    (`8b1b244`, une section), `DefinitionTests.vue` (`126b71f`, **tout
    l'écran** : aucune garde du tout avant ce correctif),
-   `RiskAssessmentAmdec.vue` et `ImpactAssessment.vue` (`d68de27`/`f47f926`,
+   `RiskAssessmentAmdec.vue`, `ImpactAssessment.vue` (`d68de27`/`f47f926`,
    un `computed` dérivé d'un store qui vaut `null`/faux avant chargement,
    donc un flash de message négatif trompeur même avec un seul store en
-   apparence) — un écran qui charge des données async dans `onMounted`
-   avant de décider quel bloc afficher est un candidat direct à vérifier,
-   même s'il n'a qu'un seul store à charger, et même si l'état vide
-   semble découler d'un simple `computed` plutôt que d'un `ref` chargé
-   directement. **Ne s'applique pas** aux écrans sans notion de
-   `MethodProfile`/profil actif configurable — `ComputerSystemAssessment.vue`
-   affiche toujours son formulaire directement (grille GAMP5 fixe), donc
-   aucun risque de flash de faux message "non configuré".
+   apparence) et `DossierVivantActif.vue` (`1b3df56`, même motif —
+   `noeud` vaut `null` avant chargement, message "Nœud introuvable."
+   pendant la course, plus trompeur qu'ailleurs car formulé comme un
+   fait définitif plutôt qu'un état vide). **Fait notable sur ce dernier** :
+   le fichier de test documentait déjà cette course exacte dans un
+   commentaire, mais l'avait traitée comme une contrainte de timing de
+   test à contourner (`attendreQue`) plutôt que comme un bug de l'écran
+   à corriger — un commentaire de test qui explique pourquoi un
+   `attendreQue`/délai est nécessaire mérite de se demander si le
+   comportement observé pendant la course est lui-même correct, pas
+   seulement de fiabiliser le test autour. Un écran qui charge des
+   données async dans `onMounted` avant de décider quel bloc afficher
+   est un candidat direct à vérifier, même s'il n'a qu'un seul store à
+   charger, et même si l'état vide semble découler d'un simple `computed`
+   plutôt que d'un `ref` chargé directement. **Ne s'applique pas** aux
+   écrans sans notion de `MethodProfile`/profil actif configurable —
+   `ComputerSystemAssessment.vue` affiche toujours son formulaire
+   directement (grille GAMP5 fixe), donc aucun risque de flash de faux
+   message "non configuré".
    **Piste à vérifier aussi** : un commentaire en tête de fichier qui
    décrit une garantie précise ("aucun choix par défaut silencieux",
    "le bouton reste désactivé tant que…") mérite une vérification directe
