@@ -76,7 +76,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `FicheClient.vue` | ✅ | ✅ |
 | `ConfigurationClient.vue` | ✅ | ✅ |
 | `StructureSysteme.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
-| `SuiviPeriodicite.vue` | ⬜ | ⬜ |
+| `SuiviPeriodicite.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `Process.vue` | ⬜ | ⬜ |
 | `RevueStructureProcedure.vue` | ⬜ | ⬜ |
 | `TemplatesFormulaires.vue` | ⬜ | ⬜ |
@@ -113,6 +113,24 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `SuiviPeriodicite.vue` **terminé** (fonctionnel + UI),
+  2 commits sur `main`, CI verte sur les deux :
+  - Fonctionnel (`1bc0682`) : écran en **lecture seule**, aucune mutation
+    propre — aucun nouveau bug fonctionnel trouvé au-delà du bug
+    systémique déjà corrigé au niveau du store lors du chantier précédent
+    (`useClientsStore.obtenirClient`, commit `fb4e529`). Comme cet écran
+    enchaîne exactement le même `onMounted` (nom du client, puis
+    hiérarchie locale via `useStructureSystemeStore.charger`), un test a
+    été ajouté pour **confirmer explicitement** que le correctif du store
+    profite aussi ici, sans qu'il faille le refaire écran par écran.
+  - UI (`89a29f1`) : même écart que celui trouvé sur `StructureSysteme.vue`
+    — `.lien-dossier-vivant` (classe locale, redéfinie indépendamment sur
+    chaque écran à cause du scoping Vue) n'avait ni `text-decoration:
+    none` ni état de survol. Corrigé à l'identique.
+  - **Même écart méthodologique que `StructureSysteme.vue`** : session de
+    test sur l'app déployée toujours indisponible (voir §5) — correctif UI
+    appliqué par comparaison de code à un motif déjà confirmé, non
+    revérifié par un rendu réel de cet écran.
 - **13/09/2026** — `StructureSysteme.vue` **terminé** (fonctionnel + UI),
   3 commits sur `main`, CI verte sur les trois :
   - Fonctionnel (`fb4e529` + `37ac9b2`) : **bug systémique découvert**, pas
@@ -295,7 +313,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `SuiviPeriodicite.vue` — chantier fonctionnel puis UI, avec le
+1. `Process.vue` — chantier fonctionnel puis UI, avec le
    client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre
    de la liste en §3.
 2. Mettre à jour ce fichier après **chaque** chantier terminé (pas
