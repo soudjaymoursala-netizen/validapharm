@@ -1,11 +1,17 @@
-// Fichier séparé de `useNormativeDocumentsStore.test.ts` : ce cas a besoin
-// de `DOMParser` (extraction .docx réelle, `DocxNatifAdapter`), donc de
-// l'environnement `jsdom` par défaut — incompatible avec `node`, utilisé
-// par le reste des tests de ce store pour éviter la corruption binaire
-// Blob/File/FormData entre jsdom et le `Request`/`fetch` natif de Node
-// (voir l'en-tête de `useNormativeDocumentsStore.test.ts`). Ce test
-// n'exerce que l'extraction de texte (une chaîne, jamais affectée par
-// cette corruption qui ne touche que le contenu binaire transmis).
+// @vitest-environment node
+//
+// Fichier séparé de `useNormativeDocumentsStore.test.ts` : ce cas a besoin à
+// la fois de `DOMParser` (extraction .docx réelle, `DocxNatifAdapter`) et
+// d'un vrai import binaire (`FormData`/`File`) à travers
+// `installerFauxWorkerAuth` → `routerRequete`. Le second besoin impose
+// `node` (voir l'en-tête de `useNormativeDocumentsStore.test.ts` : sous
+// `jsdom`, les classes `Blob`/`File`/`FormData` de jsdom sont incompatibles
+// avec le `Request`/`fetch` natif de Node/undici, qui échoue à reparser le
+// corps ⇒ `corps_invalide` — jamais un simple problème de contenu
+// corrompu). On satisfait le premier besoin en empruntant uniquement la
+// classe `DOMParser` de `jsdom` (sans activer tout l'environnement DOM, qui
+// réintroduirait le conflit ci-dessus).
+import { JSDOM } from 'jsdom'
 import 'fake-indexeddb/auto'
 import JSZip from 'jszip'
 import { createPinia, setActivePinia } from 'pinia'
@@ -16,6 +22,8 @@ import {
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import { useNormativeDocumentsStore } from './useNormativeDocumentsStore'
+
+globalThis.DOMParser = new JSDOM().window.DOMParser
 
 /** Même structure OOXML minimale que `DocxNatifAdapter.test.ts` — un `.docx` réellement valide, jamais un fichier texte renommé. */
 async function construireDocxMinimal(texte: string): Promise<ArrayBuffer> {
