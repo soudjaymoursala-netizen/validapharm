@@ -71,7 +71,10 @@ const sectionCibleLienId = ref('')
 const procedureLienId = ref('')
 const noeudLienId = ref('')
 const dernierResultat = ref<ResultatActionSection | undefined>(undefined)
+const erreurLienSection = ref<string | null>(null)
+const chargementInitial = ref(true)
 let minuteurSauvegarde: ReturnType<typeof setTimeout> | undefined
+let rechargementEnCours = false
 
 // Génération de brouillon par adaptation (§4.1bis).
 const modeReference = ref<'coller' | 'uploader'>('coller')
@@ -156,7 +159,17 @@ async function recharger(): Promise<void> {
     (s) => s.id === props.sectionId,
   )
   section.value = trouvee
+  // Réassignation programmatique, jamais une frappe utilisateur — le
+  // `watch(contenu, ...)` ci-dessous ne doit surtout pas la réinterpréter
+  // comme une modification à sauvegarder (bug réel trouvé le 13/09/2026 :
+  // une valeur rechargée depuis un autre onglet planifiait une écriture
+  // `mettreAJourValeurs` 400ms plus tard, ajoutant une entrée d'audit
+  // "modification" fantôme et pouvant écraser une modification concurrente
+  // plus récente par cette copie locale obsolète).
+  rechargementEnCours = true
   contenu.value = typeof trouvee?.values.contenu === 'string' ? trouvee.values.contenu : ''
+  await nextTick()
+  rechargementEnCours = false
 
   if (trouvee?.generation_source.source_document_id) {
     documentReferenceUtilise.value = await sectionsStore.obtenirDocumentReference(
@@ -203,14 +216,26 @@ const sectionsLiablesRestantes = computed(() => {
  */
 async function lierSectionSelectionnee(): Promise<void> {
   if (!sectionCibleLienId.value) return
-  await projetsStore.ajouterLien(props.projectId, props.sectionId, sectionCibleLienId.value)
-  projet.value = await projetsStore.obtenirProjet(props.projectId)
-  sectionCibleLienId.value = ''
+  erreurLienSection.value = null
+  try {
+    await projetsStore.ajouterLien(props.projectId, props.sectionId, sectionCibleLienId.value)
+    projet.value = await projetsStore.obtenirProjet(props.projectId)
+    sectionCibleLienId.value = ''
+  } catch (e) {
+    erreurLienSection.value =
+      e instanceof Error ? e.message : 'Erreur inconnue lors de la création du lien.'
+  }
 }
 
 async function delierSection(autreSectionId: string): Promise<void> {
-  await projetsStore.retirerLien(props.projectId, props.sectionId, autreSectionId)
-  projet.value = await projetsStore.obtenirProjet(props.projectId)
+  erreurLienSection.value = null
+  try {
+    await projetsStore.retirerLien(props.projectId, props.sectionId, autreSectionId)
+    projet.value = await projetsStore.obtenirProjet(props.projectId)
+  } catch (e) {
+    erreurLienSection.value =
+      e instanceof Error ? e.message : 'Erreur inconnue lors du retrait du lien.'
+  }
 }
 
 /**
@@ -253,26 +278,30 @@ async function delierAssetNode(): Promise<void> {
 }
 
 onMounted(async () => {
-  await recharger()
-  projet.value = await projetsStore.obtenirProjet(props.projectId)
-  if (projet.value?.client_id) {
-    await gabaritExportStore.charger(projet.value.client_id)
-    await configStore.charger(projet.value.client_id)
-    await relaisStore.charger()
-    await reasoningStore.charger(projet.value.client_id)
-    await normativeDocumentsStore.charger()
-    await procedureStore.charger(projet.value.client_id)
-    await structureStore.charger(projet.value.client_id)
-  }
-  // Arrivée depuis "À partir d'un document" (Fiche Projet) — porte
-  // directement l'attention sur le panneau §4.1bis déjà construit,
-  // jamais un nouveau mécanisme : simple confort de découverte.
-  if (route.query.demarrage === 'adaptation') {
-    modeReference.value = 'uploader'
-    await nextTick()
-    document
-      .querySelector('.generation-brouillon')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  try {
+    await recharger()
+    projet.value = await projetsStore.obtenirProjet(props.projectId)
+    if (projet.value?.client_id) {
+      await gabaritExportStore.charger(projet.value.client_id)
+      await configStore.charger(projet.value.client_id)
+      await relaisStore.charger()
+      await reasoningStore.charger(projet.value.client_id)
+      await normativeDocumentsStore.charger()
+      await procedureStore.charger(projet.value.client_id)
+      await structureStore.charger(projet.value.client_id)
+    }
+    // Arrivée depuis "À partir d'un document" (Fiche Projet) — porte
+    // directement l'attention sur le panneau §4.1bis déjà construit,
+    // jamais un nouveau mécanisme : simple confort de découverte.
+    if (route.query.demarrage === 'adaptation') {
+      modeReference.value = 'uploader'
+      await nextTick()
+      document
+        .querySelector('.generation-brouillon')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  } finally {
+    chargementInitial.value = false
   }
 })
 
@@ -281,6 +310,7 @@ onMounted(async () => {
 // RenduGabarit gère son propre debounce par champ pour un gabarit défini.
 watch(contenu, (valeur) => {
   if (definitionGabarit.value) return
+  if (rechargementEnCours) return
   if (minuteurSauvegarde) clearTimeout(minuteurSauvegarde)
   minuteurSauvegarde = setTimeout(() => {
     void sectionsStore.mettreAJourValeurs(props.sectionId, { contenu: valeur })
@@ -397,7 +427,13 @@ async function exporterWordGabaritClient(): Promise<void> {
   erreurGabaritExport.value = null
   if (!section.value) return
   const gabarit = gabaritExportStore.gabarits.find((g) => g.id === gabaritSelectionneId.value)
-  if (!gabarit) return
+  if (!gabarit) {
+    // Le gabarit a pu être supprimé entre-temps (autre onglet) — sans ce
+    // message, le clic ne faisait strictement rien, sans la moindre
+    // explication (bug réel trouvé le 13/09/2026).
+    erreurGabaritExport.value = 'Ce gabarit a été supprimé — choisissez-en un autre.'
+    return
+  }
 
   try {
     const donnees = construireDonneesExportGabarit(
@@ -490,6 +526,7 @@ async function forcerEngagerVerification(): Promise<void> {
     props.sectionId,
     motifForcage.value,
   )
+  if (dernierResultat.value.ok) motifForcage.value = ''
   await recharger()
 }
 
@@ -505,19 +542,28 @@ async function approuver(): Promise<void> {
 
 async function forcerApprouver(): Promise<void> {
   dernierResultat.value = await sectionsStore.approuver(props.sectionId, motifForcage.value)
+  if (dernierResultat.value.ok) motifForcage.value = ''
   await recharger()
 }
 
 async function rejeter(): Promise<void> {
   if (motifRejet.value.trim().length === 0) return
   dernierResultat.value = await sectionsStore.rejeter(props.sectionId, motifRejet.value)
-  motifRejet.value = ''
+  // Un rejet bloqué (garde-fou de transition) ne doit jamais effacer le
+  // motif que l'utilisateur vient de saisir — bug réel trouvé le
+  // 13/09/2026 : le champ était vidé même en cas d'échec, sans que rien
+  // n'indique qu'il fallait le ressaisir pour retenter.
+  if (dernierResultat.value.ok) motifRejet.value = ''
   await recharger()
 }
 
 async function validerSectionIA(): Promise<void> {
   dernierResultat.value = await sectionsStore.validerSectionIA(props.sectionId)
-  sousSectionsRevues.value = new Set()
+  // Même motif que `rejeter` — un échec de la transition ne doit jamais
+  // effacer la checklist de relecture déjà cochée (bug réel trouvé le
+  // 13/09/2026), sans quoi l'utilisateur devrait tout re-cocher pour rien
+  // alors que rien n'a été validé.
+  if (dernierResultat.value.ok) sousSectionsRevues.value = new Set()
   await recharger()
 }
 
@@ -569,10 +615,17 @@ async function genererBrouillon(): Promise<void> {
       adaptateurAvecBascule(principal, local),
     )
     if (!resultat.ok) {
+      // Les trois motifs d'échec ont des causes distinctes — les confondre
+      // (bug réel trouvé le 13/09/2026 : `statut_incompatible` affichait à
+      // tort "confirmation du droit d'usage requise") induit l'utilisateur
+      // en erreur sur l'action à corriger, en particulier dans le cas
+      // réaliste où la section a changé de statut entre-temps (autre onglet).
       erreurGeneration.value =
         resultat.motif === 'gabarit_introuvable'
           ? 'Aucun gabarit défini pour ce type de section — génération impossible.'
-          : "Confirmation du droit d'usage requise avant de générer."
+          : resultat.motif === 'statut_incompatible'
+            ? 'Cette section ne peut plus recevoir de brouillon généré (statut modifié entre-temps) — rechargez la page.'
+            : "Confirmation du droit d'usage requise avant de générer."
       return
     }
     texteDocumentReference.value = ''
@@ -844,6 +897,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
         l'IQ) est la façon normale de satisfaire un garde-fou de finalisation — « Forcer » reste
         réservé aux exceptions justifiées.
       </p>
+      <p v-if="erreurLienSection" class="bandeau-erreur" role="alert">{{ erreurLienSection }}</p>
       <ul v-if="sectionsLiees.length > 0" class="liste-liens">
         <li v-for="s in sectionsLiees" :key="s.id">
           {{ s.meta.titre }} ({{ s.template_type }})
@@ -879,75 +933,84 @@ async function ajouterAvisRelecteur(): Promise<void> {
         Liens réels (tâche #118), retrouvables depuis la fiche procédure ou le dossier vivant de
         l'actif — jamais un simple texte d'audit.
       </p>
-      <div class="lien-structurel">
-        <template v-if="procedureLiee">
-          <span
-            >Procédure :
-            <strong>{{ procedureLiee.reference }} — {{ procedureLiee.titre }}</strong></span
-          >
-          <button
-            v-if="section.status !== 'valide_en_interne'"
-            type="button"
-            @click="delierProcedure"
-          >
-            Délier
-          </button>
-        </template>
-        <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
-          <label>
-            Lier à une procédure
-            <select v-model="procedureLienId">
-              <option value="">— choisir —</option>
-              <option v-for="p in procedureStore.procedures" :key="p.id" :value="p.id">
-                {{ p.reference }} — {{ p.titre }}
-              </option>
-            </select>
-          </label>
-          <button type="button" :disabled="!procedureLienId" @click="lierProcedureSelectionnee">
-            Lier
-          </button>
-        </div>
-        <p v-else>Aucune procédure liée.</p>
-      </div>
-      <div class="lien-structurel">
-        <template v-if="noeudLie">
-          <span
-            >Actif :
-            <RouterLink
-              v-if="projet?.client_id"
-              :to="{
-                name: 'dossier-vivant-actif',
-                params: { clientId: projet.client_id, noeudId: noeudLie.id },
-              }"
+      <!-- `procedureStore`/`structureStore` se chargent en fin de chaîne
+           séquentielle dans `onMounted` — sans cette garde, un lien
+           structurel bel et bien enregistré s'affichait comme absent
+           pendant ce court instant (`procedureLiee`/`noeudLie` restent
+           `null` tant que ces stores n'ont pas fini de charger), un vrai
+           flash de contenu trompeur (bug réel trouvé le 13/09/2026). -->
+      <p v-if="chargementInitial" class="etat-vide">Chargement…</p>
+      <template v-else>
+        <div class="lien-structurel">
+          <template v-if="procedureLiee">
+            <span
+              >Procédure :
+              <strong>{{ procedureLiee.reference }} — {{ procedureLiee.titre }}</strong></span
             >
-              {{ noeudLie.name }} ({{ noeudLie.code }})
-            </RouterLink>
-            <template v-else>{{ noeudLie.name }} ({{ noeudLie.code }})</template></span
-          >
-          <button
-            v-if="section.status !== 'valide_en_interne'"
-            type="button"
-            @click="delierAssetNode"
-          >
-            Délier
-          </button>
-        </template>
-        <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
-          <label>
-            Lier à un nœud Structure Système
-            <select v-model="noeudLienId">
-              <option value="">— choisir —</option>
-              <option v-for="n in structureStore.noeuds" :key="n.id" :value="n.id">
-                {{ n.name }} ({{ n.code }})
-              </option>
-            </select>
-          </label>
-          <button type="button" :disabled="!noeudLienId" @click="lierAssetNodeSelectionne">
-            Lier
-          </button>
+            <button
+              v-if="section.status !== 'valide_en_interne'"
+              type="button"
+              @click="delierProcedure"
+            >
+              Délier
+            </button>
+          </template>
+          <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+            <label>
+              Lier à une procédure
+              <select v-model="procedureLienId">
+                <option value="">— choisir —</option>
+                <option v-for="p in procedureStore.procedures" :key="p.id" :value="p.id">
+                  {{ p.reference }} — {{ p.titre }}
+                </option>
+              </select>
+            </label>
+            <button type="button" :disabled="!procedureLienId" @click="lierProcedureSelectionnee">
+              Lier
+            </button>
+          </div>
+          <p v-else>Aucune procédure liée.</p>
         </div>
-        <p v-else>Aucun actif lié.</p>
-      </div>
+        <div class="lien-structurel">
+          <template v-if="noeudLie">
+            <span
+              >Actif :
+              <RouterLink
+                v-if="projet?.client_id"
+                :to="{
+                  name: 'dossier-vivant-actif',
+                  params: { clientId: projet.client_id, noeudId: noeudLie.id },
+                }"
+              >
+                {{ noeudLie.name }} ({{ noeudLie.code }})
+              </RouterLink>
+              <template v-else>{{ noeudLie.name }} ({{ noeudLie.code }})</template></span
+            >
+            <button
+              v-if="section.status !== 'valide_en_interne'"
+              type="button"
+              @click="delierAssetNode"
+            >
+              Délier
+            </button>
+          </template>
+          <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+            <label>
+              Lier à un nœud Structure Système
+              <select v-model="noeudLienId">
+                <option value="">— choisir —</option>
+                <option v-for="n in structureStore.noeuds" :key="n.id" :value="n.id">
+                  {{ n.name }} ({{ n.code }})
+                </option>
+              </select>
+            </label>
+            <button type="button" :disabled="!noeudLienId" @click="lierAssetNodeSelectionne">
+              Lier
+            </button>
+          </div>
+          <p v-else>Aucun actif lié.</p>
+        </div>
+      </template>
     </section>
 
     <section v-if="section.status !== 'valide_en_interne'" class="workflow no-print">
@@ -1105,7 +1168,8 @@ async function ajouterAvisRelecteur(): Promise<void> {
       </div>
     </section>
   </main>
-  <p v-else>Chargement…</p>
+  <p v-else-if="chargementInitial">Chargement…</p>
+  <p v-else>Section introuvable.</p>
 </template>
 
 <style scoped>
@@ -1282,8 +1346,8 @@ button {
 }
 
 .blocage {
-  border: 1px solid var(--vp-statut-requalification-en-retard);
-  background-color: var(--vp-marque-fond-leger);
+  border: 1px solid var(--vp-danger);
+  background-color: var(--vp-danger-fond-leger);
   border-radius: var(--vp-rayon);
   padding: 1rem;
   display: flex;
@@ -1326,6 +1390,8 @@ button {
 }
 
 .bouton-fichier {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -1337,14 +1403,24 @@ button {
 
 /* Le contrôle natif du fichier (« Choisir un fichier » + nom, largeur
    fixée par le navigateur) débordait sur mobile — seul le libellé stylé
-   doit être visible, le `<label>` englobant continue de déclencher le
-   sélecteur de fichier natif au clic. */
+   doit être visible. `display: none` retirait l'input de l'ordre de
+   tabulation clavier (bug réel trouvé le 13/09/2026, même motif déjà
+   corrigé sur Process.vue/RevueStructureProcedure.vue/
+   TemplatesFormulaires.vue) — masqué visuellement mais toujours focusable/
+   activable au clavier. */
 .bouton-fichier input[type='file'] {
-  display: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .bandeau-erreur {
-  color: var(--vp-statut-requalification-en-retard);
+  color: var(--vp-danger);
+}
+
+.etat-vide {
+  color: var(--vp-texte-secondaire);
 }
 
 /* Impression / export PDF : uniquement le contenu du livrable,

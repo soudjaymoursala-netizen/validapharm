@@ -132,7 +132,13 @@ describe('EditeurSection — liens structurels réels (tâche #118)', () => {
       props: { projectId: projet.id, sectionId: section.id },
       global: { plugins: [router] },
     })
-    await attendreQue(() => wrapper.text().includes('Liens structurels'))
+    // `procedureStore`/`structureStore` se chargent en fin de chaîne dans
+    // `onMounted`, après le titre "Liens structurels" — cette section
+    // affiche désormais un état de chargement tant qu'ils ne sont pas
+    // prêts (bug de flash de contenu trompeur corrigé le 13/09/2026),
+    // donc attendre le titre seul ne suffit plus : on attend le contenu
+    // réel attendu.
+    await attendreQue(() => wrapper.text().includes('PQ-COMPRESSION'))
 
     expect(wrapper.text()).toContain('PQ-COMPRESSION')
     expect(wrapper.text()).toContain('Presse P-200 (P-200)')
@@ -181,7 +187,9 @@ describe('EditeurSection — liens structurels réels (tâche #118)', () => {
       props: { projectId: projet.id, sectionId: section.id },
       global: { plugins: [router] },
     })
-    await attendreQue(() => wrapper.text().includes('Liens structurels'))
+    // Même remarque que le test précédent : attendre le contenu réel,
+    // pas seulement le titre de la section (état de chargement possible).
+    await attendreQue(() => wrapper.text().includes('Lier à une procédure'))
     expect(wrapper.text()).toContain('Lier à une procédure')
 
     const selects = wrapper.findAll('.liens-structurels select')
