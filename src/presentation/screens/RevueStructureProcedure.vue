@@ -430,6 +430,8 @@ section {
 
 .bouton-fichier {
   display: inline-block;
+  position: relative;
+  overflow: hidden;
   padding: 0.5rem 0.9rem;
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon);
@@ -437,8 +439,16 @@ section {
   width: fit-content;
 }
 
+/* `display: none` (comme trouvé initialement ici) retire l'input du
+   parcours clavier — un utilisateur clavier ne peut ni l'atteindre ni
+   l'activer. Même correctif que Process.vue, même motif déjà établi
+   ailleurs (FicheProjet.vue, AssistantStrategieQualification.vue) :
+   superposition invisible mais toujours focusable/activable. */
 .bouton-fichier input {
-  display: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .nom-fichier {
@@ -545,17 +555,22 @@ textarea {
 }
 
 .badge-source--deterministe {
-  background-color: #dcfce7;
-  color: #166534;
+  background-color: var(--vp-succes-fond-leger);
+  color: var(--vp-succes);
 }
 
 .badge-source--ia {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: var(--vp-info-fond-leger);
+  color: var(--vp-info);
 }
 
 /* Badge de confiance : même style que MissionWorkspace.vue —
-   jamais les jetons --vp-statut-* de qualification_status. */
+   jamais les jetons --vp-statut-* de qualification_status (un concept
+   différent : statut de qualification d'un actif, pas fiabilité d'une
+   extraction IA). Couleurs migrées des valeurs hex fixes d'origine vers
+   les jetons sémantiques génériques de tokens.css — les valeurs fixes ne
+   s'adaptaient jamais au thème sombre (Phase 40), contrairement à tout le
+   reste de l'application. */
 .badge-confiance {
   display: inline-block;
   padding: 0.2rem 0.6rem;
@@ -565,28 +580,28 @@ textarea {
 }
 
 .badge-confiance--connu {
-  background-color: #dcfce7;
-  color: #166534;
+  background-color: var(--vp-succes-fond-leger);
+  color: var(--vp-succes);
 }
 
 .badge-confiance--infere {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: var(--vp-info-fond-leger);
+  color: var(--vp-info);
 }
 
 .badge-confiance--inconnu {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--vp-fond-page);
+  color: var(--vp-texte-secondaire);
 }
 
 .badge-confiance--conflit {
-  background-color: #fee2e2;
-  color: #991b1b;
+  background-color: var(--vp-danger-fond-leger);
+  color: var(--vp-danger);
 }
 
 .badge-confiance--a_verifier {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: var(--vp-attention-fond-leger);
+  color: var(--vp-attention);
 }
 
 ol {
