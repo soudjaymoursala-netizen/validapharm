@@ -1,10 +1,11 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
+import { useExecutionStore } from '../stores/useExecutionStore'
 import ExecutionTests from './ExecutionTests.vue'
 
 function routeurDeTest() {
@@ -163,5 +164,74 @@ describe('ExecutionTests', () => {
       .findAll('option')
       .map((o) => o.text())
     expect(options).not.toContain('Test brouillon')
+  })
+})
+
+describe('ExecutionTests — mutations non vérifiées', () => {
+  async function demarrerExecutionDeTest(): Promise<{
+    wrapper: ReturnType<typeof mount>
+    executionId: string
+  }> {
+    const testId = await creerTestApprouve()
+    const wrapper = mount(ExecutionTests, {
+      props: { clientId: 'client-1' },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await attendreQue(() =>
+      wrapper
+        .find('.bloc-demarrage select')
+        .findAll('option')
+        .some((o) => o.attributes('value') === testId),
+    )
+
+    const formDemarrage = wrapper.find('.bloc-demarrage form')
+    await formDemarrage.find('select').setValue(testId)
+    await formDemarrage.trigger('submit.prevent')
+    await attendreQue(
+      async () => (await db.executions.where('client_id').equals('client-1').count()) > 0,
+    )
+    const executionId = (await db.executions.toArray())[0]?.id
+    if (!executionId) throw new Error('exécution non créée')
+    return { wrapper, executionId }
+  }
+
+  test('une clôture bloquée (déjà clôturée entre-temps) affiche un message, ne casse pas silencieusement', async () => {
+    const { wrapper } = await demarrerExecutionDeTest()
+
+    const zoneCloture = wrapper.find('.carte-execution').findAll('.ligne-formulaire').at(-1)
+    await zoneCloture?.find('select').setValue('conforme')
+
+    // Reproduit une clôture déjà effectuée depuis un autre poste (garde-fou
+    // d'immutabilité post-clôture, explicitement annoncé à l'utilisateur
+    // dans le rappel de l'écran) — avant ce correctif, le clic échouait en
+    // silence total.
+    const executionStore = useExecutionStore()
+    executionStore.cloturerExecution = vi
+      .fn()
+      .mockResolvedValue({ erreur: 'execution_deja_cloturee' })
+
+    await zoneCloture?.find('button').trigger('click')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('déjà clôturée')
+    expect((await db.executions.toArray())[0]?.statut).toBe('en_cours')
+  })
+
+  test('un enregistrement de résultat bloqué (exécution déjà clôturée entre-temps) affiche un message', async () => {
+    const { wrapper, executionId } = await demarrerExecutionDeTest()
+
+    const premiereEtape = wrapper.find('.liste-etapes > li')
+    await premiereEtape.find('select').setValue('conforme')
+
+    const executionStore = useExecutionStore()
+    executionStore.enregistrerResultatEtape = vi
+      .fn()
+      .mockResolvedValue({ erreur: 'execution_deja_cloturee' })
+
+    await premiereEtape.find('button').trigger('click')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('déjà clôturée')
+    expect(await db.executionSteps.where('execution_id').equals(executionId).count()).toBe(0)
   })
 })

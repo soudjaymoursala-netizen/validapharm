@@ -29,6 +29,22 @@ const executionStore = useExecutionStore()
 const evidenceStore = useEvidenceStore()
 
 const nomClient = ref<string | null>(null)
+const erreurParExecution = ref<Record<string, string>>({})
+
+const LIBELLES_ERREUR_EXECUTION: Record<string, string> = {
+  execution_introuvable: 'Exécution introuvable — elle a peut-être été supprimée entre-temps.',
+  execution_deja_cloturee:
+    'Cette exécution est déjà clôturée — plus aucune modification possible (immutabilité post-clôture).',
+  etape_inconnue: 'Étape inconnue pour ce test.',
+  etape_execution_introuvable:
+    "Étape d'exécution introuvable — elle a peut-être été supprimée entre-temps.",
+  evidence_introuvable: 'Preuve introuvable — elle a peut-être été supprimée entre-temps.',
+  type_non_document: 'Cette preuve ne peut pas recevoir de localisation (pas de type document).',
+}
+
+function libelleErreurExecution(code: string): string {
+  return LIBELLES_ERREUR_EXECUTION[code] ?? "Une erreur inattendue s'est produite."
+}
 
 onMounted(async () => {
   const client = await clientsStore.obtenirClient(props.clientId)
@@ -88,11 +104,19 @@ async function enregistrerResultat(executionId: string, testStepId: string): Pro
   const cle = cleEtape(executionId, testStepId)
   const resultat = resultatsBrouillon.value[cle]
   if (!resultat) return
-  await executionStore.enregistrerResultatEtape(props.clientId, executionId, {
-    testStepId,
-    resultat,
-    observation: observationsBrouillon.value[cle]?.trim() ?? '',
-  })
+  erreurParExecution.value[executionId] = ''
+  const resultatMutation = await executionStore.enregistrerResultatEtape(
+    props.clientId,
+    executionId,
+    {
+      testStepId,
+      resultat,
+      observation: observationsBrouillon.value[cle]?.trim() ?? '',
+    },
+  )
+  if ('erreur' in resultatMutation) {
+    erreurParExecution.value[executionId] = libelleErreurExecution(resultatMutation.erreur)
+  }
 }
 
 // --- Mesures ---
@@ -110,15 +134,20 @@ function mesureBrouillon(executionStepId: string): {
   return nouvelle
 }
 
-async function ajouterMesure(executionStepId: string): Promise<void> {
+async function ajouterMesure(executionId: string, executionStepId: string): Promise<void> {
   const brouillon = mesuresBrouillon.value[executionStepId]
   if (!brouillon || brouillon.libelle.trim().length === 0 || brouillon.valeur.trim().length === 0)
     return
-  await executionStore.ajouterMesure(props.clientId, executionStepId, {
+  erreurParExecution.value[executionId] = ''
+  const resultat = await executionStore.ajouterMesure(props.clientId, executionStepId, {
     libelle: brouillon.libelle.trim(),
     valeur: brouillon.valeur.trim(),
     unite: brouillon.unite.trim() || null,
   })
+  if ('erreur' in resultat) {
+    erreurParExecution.value[executionId] = libelleErreurExecution(resultat.erreur)
+    return
+  }
   mesuresBrouillon.value[executionStepId] = { libelle: '', valeur: '', unite: '' }
 }
 
@@ -130,11 +159,16 @@ async function consignerEvenement(executionId: string): Promise<void> {
   const type = typeEvenementBrouillon.value[executionId] ?? 'commentaire'
   const description = descriptionEvenementBrouillon.value[executionId]?.trim()
   if (!description) return
-  await executionStore.consignerEvenement(props.clientId, executionId, {
+  erreurParExecution.value[executionId] = ''
+  const resultat = await executionStore.consignerEvenement(props.clientId, executionId, {
     type,
     description,
     qualityEventId: null,
   })
+  if ('erreur' in resultat) {
+    erreurParExecution.value[executionId] = libelleErreurExecution(resultat.erreur)
+    return
+  }
   descriptionEvenementBrouillon.value[executionId] = ''
 }
 
@@ -148,20 +182,32 @@ async function enregistrerPreuve(executionId: string): Promise<void> {
   const type = typePreuveBrouillon.value[executionId] ?? 'native'
   const titre = titrePreuveBrouillon.value[executionId]?.trim()
   if (!titre) return
+  erreurParExecution.value[executionId] = ''
   const resultat = await evidenceStore.enregistrerPreuve(props.clientId, executionId, {
     executionStepId: null,
     type,
     titre,
     description: descriptionPreuveBrouillon.value[executionId]?.trim() ?? '',
   })
-  if ('erreur' in resultat) return
+  if ('erreur' in resultat) {
+    erreurParExecution.value[executionId] = libelleErreurExecution(resultat.erreur)
+    return
+  }
   if (type === 'document') {
     const reference = referenceLocalisationBrouillon.value[executionId]?.trim()
     if (reference) {
-      await evidenceStore.ajouterLocalisation(props.clientId, resultat.id, {
-        systeme: 'github',
-        reference,
-      })
+      const resultatLocalisation = await evidenceStore.ajouterLocalisation(
+        props.clientId,
+        resultat.id,
+        { systeme: 'github', reference },
+      )
+      if ('erreur' in resultatLocalisation) {
+        // La preuve elle-même est déjà enregistrée à ce stade — seule la
+        // localisation associée a échoué, ne pas ré-effacer le brouillon
+        // pour permettre de retenter juste la référence.
+        erreurParExecution.value[executionId] = libelleErreurExecution(resultatLocalisation.erreur)
+        return
+      }
     }
   }
   titrePreuveBrouillon.value[executionId] = ''
@@ -175,7 +221,11 @@ const verdictBrouillon = ref<Record<string, VerdictExecution>>({})
 async function cloturer(executionId: string): Promise<void> {
   const verdict = verdictBrouillon.value[executionId]
   if (!verdict) return
-  await executionStore.cloturerExecution(props.clientId, executionId, verdict)
+  erreurParExecution.value[executionId] = ''
+  const resultat = await executionStore.cloturerExecution(props.clientId, executionId, verdict)
+  if ('erreur' in resultat) {
+    erreurParExecution.value[executionId] = libelleErreurExecution(resultat.erreur)
+  }
 }
 </script>
 
@@ -218,6 +268,9 @@ async function cloturer(executionId: string): Promise<void> {
         <h3>{{ testDe(execution.id)?.titre ?? execution.test_id }}</h3>
         <p class="meta">
           Démarrée le {{ execution.date_debut }}, exécutant {{ execution.executant }}
+        </p>
+        <p v-if="erreurParExecution[execution.id]" class="bandeau-erreur" role="alert">
+          {{ erreurParExecution[execution.id] }}
         </p>
 
         <h4>Étapes</h4>
@@ -272,7 +325,9 @@ async function cloturer(executionId: string): Promise<void> {
                   />
                   <input v-model="mesureBrouillon(es.id).valeur" type="text" placeholder="Valeur" />
                   <input v-model="mesureBrouillon(es.id).unite" type="text" placeholder="Unité" />
-                  <button type="button" @click="ajouterMesure(es.id)">+ Mesure</button>
+                  <button type="button" @click="ajouterMesure(execution.id, es.id)">
+                    + Mesure
+                  </button>
                 </span>
               </p>
             </template>
