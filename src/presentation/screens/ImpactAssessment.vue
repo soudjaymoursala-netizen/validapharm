@@ -25,13 +25,18 @@ const structureStore = useStructureSystemeStore()
 
 const nomClient = ref<string | null>(null)
 const formulaireConfigOuvert = ref(false)
+const chargementInitial = ref(true)
 
 onMounted(async () => {
-  const client = await clientsStore.obtenirClient(props.clientId)
-  nomClient.value = client?.name ?? null
-  await methodeStore.charger(props.clientId)
-  await structureStore.charger(props.clientId)
-  if (!methodeStore.profilActif) formulaireConfigOuvert.value = true
+  try {
+    const client = await clientsStore.obtenirClient(props.clientId)
+    nomClient.value = client?.name ?? null
+    await methodeStore.charger(props.clientId)
+    await structureStore.charger(props.clientId)
+    if (!methodeStore.profilActif) formulaireConfigOuvert.value = true
+  } finally {
+    chargementInitial.value = false
+  }
 })
 
 // --- Configuration de la méthode (création d'une nouvelle version) ---
@@ -112,114 +117,123 @@ function nouvelleEvaluation(): void {
     <h1>Impact Assessment / System Classification — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">Aide à la décision, non une décision de classification.</p>
 
-    <section v-if="!methodeStore.profilActif || formulaireConfigOuvert" class="bloc-config">
-      <h2>Configuration de la méthode</h2>
-      <p v-if="!methodeStore.profilActif" class="rappel" role="alert">
-        Aucune méthode Impact Assessment n'est configurée pour ce client. Aucune question n'est
-        proposée par défaut — saisissez les questions réelles de la procédure du client, mot pour
-        mot.
-      </p>
-      <form class="formulaire" @submit.prevent="enregistrerNouvelleVersion">
-        <label
-          >Source (ex. "Procédure interne QD-00098219", "Défini avec le client le ...")
-          <input v-model="brouillonSource" type="text" required />
-        </label>
-        <label>
-          Origine
-          <select v-model="brouillonOrigin">
-            <option value="procedure_client">Procédure client</option>
-            <option value="defini_utilisateur">Défini avec l'utilisateur</option>
-            <option value="baseline_validapharm">Baseline ValidaPharm</option>
-          </select>
-        </label>
-        <fieldset class="questions-config">
-          <legend>Questions (une par ligne, mot pour mot)</legend>
-          <div v-for="(_, index) in brouillonQuestions" :key="index" class="ligne-question-config">
-            <input
-              v-model="brouillonQuestions[index]"
-              type="text"
-              :placeholder="`Question ${index + 1}`"
-            />
-            <button
-              type="button"
-              :disabled="brouillonQuestions.length <= 1"
-              @click="retirerLigneQuestion(index)"
-            >
-              Retirer
-            </button>
-          </div>
-          <button type="button" @click="ajouterLigneQuestion">+ Ajouter une question</button>
-        </fieldset>
-        <div class="actions">
-          <button
-            v-if="methodeStore.profilActif"
-            type="button"
-            @click="formulaireConfigOuvert = false"
-          >
-            Annuler
-          </button>
-          <button type="submit">Enregistrer cette version</button>
-        </div>
-      </form>
-    </section>
-
+    <p v-if="chargementInitial" class="etat-vide">Chargement…</p>
     <template v-else>
-      <section class="bloc-evaluation">
-        <h2>
-          Évaluation — {{ methodeStore.profilActif.source }} ({{
-            methodeStore.profilActif.version
-          }})
-        </h2>
-        <button type="button" class="lien-config" @click="formulaireConfigOuvert = true">
-          Configurer une nouvelle version des questions
-        </button>
-        <label class="nom-element">
-          Système évalué
-          <input
-            v-model="nomElement"
-            type="text"
-            required
-            placeholder="ex. Isolateur de remplissage STICK002"
-          />
-        </label>
-        <label class="nom-element">
-          Nœud Structure Système (optionnel)
-          <select v-model="assetNodeIdSelectionne">
-            <option value="">— aucun —</option>
-            <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
-              {{ noeud.name }} ({{ noeud.code }})
-            </option>
-          </select>
-        </label>
-        <ul class="liste-questions">
-          <li v-for="question in methodeStore.profilActif.questions" :key="question.id">
-            <p class="texte-question">{{ question.texte.fr }}</p>
-            <div class="reponses-question">
-              <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet']" :key="opt">
-                <input v-model="reponses[question.id]" type="radio" :value="opt" />
-                {{ opt }}
-              </label>
+      <section v-if="!methodeStore.profilActif || formulaireConfigOuvert" class="bloc-config">
+        <h2>Configuration de la méthode</h2>
+        <p v-if="!methodeStore.profilActif" class="rappel" role="alert">
+          Aucune méthode Impact Assessment n'est configurée pour ce client. Aucune question n'est
+          proposée par défaut — saisissez les questions réelles de la procédure du client, mot pour
+          mot.
+        </p>
+        <form class="formulaire" @submit.prevent="enregistrerNouvelleVersion">
+          <label
+            >Source (ex. "Procédure interne QD-00098219", "Défini avec le client le ...")
+            <input v-model="brouillonSource" type="text" required />
+          </label>
+          <label>
+            Origine
+            <select v-model="brouillonOrigin">
+              <option value="procedure_client">Procédure client</option>
+              <option value="defini_utilisateur">Défini avec l'utilisateur</option>
+              <option value="baseline_validapharm">Baseline ValidaPharm</option>
+            </select>
+          </label>
+          <fieldset class="questions-config">
+            <legend>Questions (une par ligne, mot pour mot)</legend>
+            <div
+              v-for="(_, index) in brouillonQuestions"
+              :key="index"
+              class="ligne-question-config"
+            >
+              <input
+                v-model="brouillonQuestions[index]"
+                type="text"
+                :placeholder="`Question ${index + 1}`"
+              />
+              <button
+                type="button"
+                :disabled="brouillonQuestions.length <= 1"
+                @click="retirerLigneQuestion(index)"
+              >
+                Retirer
+              </button>
             </div>
-          </li>
-        </ul>
-        <p v-if="verdict" class="resultat-partiel" role="status">
-          Verdict :
-          <strong>{{ verdict === 'impact_direct' ? 'Direct Impact' : 'Not Direct Impact' }}</strong>
-        </p>
-        <button
-          v-if="verdict && !evaluationEnregistree"
-          type="button"
-          @click="enregistrerEvaluation"
-        >
-          Enregistrer cette évaluation
-        </button>
-        <p v-if="evaluationEnregistree" class="confirmation" role="status">
-          Évaluation enregistrée.
-        </p>
-        <button v-if="evaluationEnregistree" type="button" @click="nouvelleEvaluation">
-          Nouvelle évaluation
-        </button>
+            <button type="button" @click="ajouterLigneQuestion">+ Ajouter une question</button>
+          </fieldset>
+          <div class="actions">
+            <button
+              v-if="methodeStore.profilActif"
+              type="button"
+              @click="formulaireConfigOuvert = false"
+            >
+              Annuler
+            </button>
+            <button type="submit">Enregistrer cette version</button>
+          </div>
+        </form>
       </section>
+
+      <template v-else>
+        <section class="bloc-evaluation">
+          <h2>
+            Évaluation — {{ methodeStore.profilActif.source }} ({{
+              methodeStore.profilActif.version
+            }})
+          </h2>
+          <button type="button" class="lien-config" @click="formulaireConfigOuvert = true">
+            Configurer une nouvelle version des questions
+          </button>
+          <label class="nom-element">
+            Système évalué
+            <input
+              v-model="nomElement"
+              type="text"
+              required
+              placeholder="ex. Isolateur de remplissage STICK002"
+            />
+          </label>
+          <label class="nom-element">
+            Nœud Structure Système (optionnel)
+            <select v-model="assetNodeIdSelectionne">
+              <option value="">— aucun —</option>
+              <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
+                {{ noeud.name }} ({{ noeud.code }})
+              </option>
+            </select>
+          </label>
+          <ul class="liste-questions">
+            <li v-for="question in methodeStore.profilActif.questions" :key="question.id">
+              <p class="texte-question">{{ question.texte.fr }}</p>
+              <div class="reponses-question">
+                <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet']" :key="opt">
+                  <input v-model="reponses[question.id]" type="radio" :value="opt" />
+                  {{ opt }}
+                </label>
+              </div>
+            </li>
+          </ul>
+          <p v-if="verdict" class="resultat-partiel" role="status">
+            Verdict :
+            <strong>{{
+              verdict === 'impact_direct' ? 'Direct Impact' : 'Not Direct Impact'
+            }}</strong>
+          </p>
+          <button
+            v-if="verdict && !evaluationEnregistree"
+            type="button"
+            @click="enregistrerEvaluation"
+          >
+            Enregistrer cette évaluation
+          </button>
+          <p v-if="evaluationEnregistree" class="confirmation" role="status">
+            Évaluation enregistrée.
+          </p>
+          <button v-if="evaluationEnregistree" type="button" @click="nouvelleEvaluation">
+            Nouvelle évaluation
+          </button>
+        </section>
+      </template>
     </template>
 
     <section v-if="methodeStore.evaluations.length > 0" class="bloc-historique">
@@ -253,6 +267,10 @@ function nouvelleEvaluation(): void {
 .rappel {
   color: var(--vp-texte-secondaire);
   font-size: 0.9em;
+}
+
+.etat-vide {
+  color: var(--vp-texte-secondaire);
 }
 
 .formulaire {

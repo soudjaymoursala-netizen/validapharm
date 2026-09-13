@@ -41,9 +41,41 @@ describe('ImpactAssessment', () => {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },
     })
-    await flushPromises()
+    await attendreQue(() => wrapper.find('.bloc-config').exists())
 
     expect(wrapper.text()).toContain("Aucune méthode Impact Assessment n'est configurée")
+  })
+
+  test('affiche un état de chargement avant que le profil ne soit résolu', async () => {
+    // Reproduit un profil déjà configuré, chargé de manière asynchrone —
+    // avant ce correctif, l'écran affichait à tort « Aucune méthode Impact
+    // Assessment n'est configurée » tant que le onMounted n'avait pas
+    // terminé (même motif que RiskAssessmentAmdec.vue, `d68de27`).
+    const maintenant = new Date().toISOString()
+    await db.methodProfilesImpactAssessment.put({
+      id: crypto.randomUUID(),
+      client_id: 'client-1',
+      version: 'v1',
+      effective_date: maintenant,
+      source: 'Procédure interne QD-001',
+      origin: 'procedure_client',
+      questions: [
+        { id: crypto.randomUUID(), texte: { fr: 'Le système touche-t-il le produit ?' } },
+      ],
+      decision_rule: 'au_moins_un_oui_impact_direct',
+      created_at: maintenant,
+    })
+
+    const wrapper = mount(ImpactAssessment, {
+      props: { clientId: 'client-1' },
+      global: { plugins: [routeurDeTest()] },
+    })
+
+    expect(wrapper.find('.etat-vide').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain("Aucune méthode Impact Assessment n'est configurée")
+
+    await attendreQue(() => wrapper.find('.bloc-evaluation').exists())
+    expect(wrapper.find('.etat-vide').exists()).toBe(false)
   })
 
   test('configure une méthode puis calcule le verdict Direct Impact sur une réponse "oui"', async () => {
@@ -51,7 +83,7 @@ describe('ImpactAssessment', () => {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },
     })
-    await flushPromises()
+    await attendreQue(() => wrapper.find('.bloc-config').exists())
 
     await wrapper.find('input[type="text"]').setValue('Procédure interne QD-001')
     const questionInputs = wrapper.findAll('.ligne-question-config input[type="text"]')
