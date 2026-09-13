@@ -75,7 +75,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `GestionClients.vue` | ✅ | ✅ |
 | `FicheClient.vue` | ✅ | ✅ |
 | `ConfigurationClient.vue` | ✅ | ✅ |
-| `StructureSysteme.vue` | ⬜ | ⬜ |
+| `StructureSysteme.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `SuiviPeriodicite.vue` | ⬜ | ⬜ |
 | `Process.vue` | ⬜ | ⬜ |
 | `RevueStructureProcedure.vue` | ⬜ | ⬜ |
@@ -113,6 +113,54 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `StructureSysteme.vue` **terminé** (fonctionnel + UI),
+  3 commits sur `main`, CI verte sur les trois :
+  - Fonctionnel (`fb4e529` + `37ac9b2`) : **bug systémique découvert**, pas
+    spécifique à cet écran — `useClientsStore.obtenirClient()` (appelée au
+    `onMounted` d'une **vingtaine d'écrans**, dont beaucoup pas encore
+    couverts par ce chantier) ne capturait aucune exception de
+    connectivité (`IndisponibleAuthError` etc., levée par
+    `AuthApiClient.requete()` plutôt que renvoyée). Sur `StructureSysteme.
+    vue` en particulier : cet appel sert uniquement à afficher le nom du
+    client en en-tête, mais précède dans le même `onMounted` un appel à
+    `useStructureSystemeStore.charger()` — **purement local (IndexedDB),
+    sans aucun rapport avec le réseau**. Une simple panne réseau
+    transitoire pour le nom du client bloquait donc l'affichage de toute
+    la hiérarchie d'actifs déjà persistée. Corrigé **au niveau du store**
+    (`useClientsStore.obtenirClient`, même discipline que
+    `chargerClients`) plutôt qu'écran par écran : dégrade désormais (nom
+    de client absent) au lieu de bloquer — bénéficie immédiatement aux
+    ~19 écrans utilisant ce même appel (`SuiviPeriodicite.vue`,
+    `Process.vue`, `RiskAssessmentAmdec.vue`, `ImpactAssessment.vue`,
+    `ComputerSystemAssessment.vue`, `ConfigurationDrive.vue`,
+    `ConfigurationIA.vue`, `ExecutionTests.vue`, `DefinitionTests.vue`,
+    `TemplatesFormulaires.vue`, `JournalAnomalies.vue`,
+    `ParametresCritiques.vue`, `DossierVivantActif.vue`, `ContentPlan.vue`,
+    `SourceIntelligence.vue`, `RechercheGlobale.vue`,
+    `ConfigurationConnecteursQMS.vue`,
+    `AssistantStrategieQualification.vue`,
+    `AssistantCreationLivrable.vue` — la plupart hors périmètre de ce
+    chantier pour l'instant). Test ajouté (`StructureSysteme.test.ts`,
+    nouveau fichier) : préremplit IndexedDB directement (simule un
+    rechargement de page réel), coupe totalement le réseau, vérifie que la
+    hiérarchie déjà persistée s'affiche quand même — confirmé en échec
+    sans le correctif (`git stash` du fichier store, re-test, `unhandled
+    rejection` observée).
+  - UI (`6ae41f5`) : même bug de hiérarchie de boutons que
+    `ConfigurationClient.vue` (règle `button {}` locale écrasant le violet
+    réservé à `type="submit"`) — corrigé à l'identique par suppression.
+    Ajouté aussi : affordance de survol manquante (`text-decoration`) sur
+    `.lien-suivi-periodicite`/`.lien-dossier-vivant`, alignée sur la
+    convention déjà établie ailleurs (`FicheClient.vue
+    .apercu-projets a`). **Écart à la méthodologie, à noter honnêtement** :
+    la session de test sur l'app déployée a expiré (JWT, limite 12h)
+    pendant ce chantier, sans identifiants disponibles pour se
+    reconnecter — ces deux correctifs UI s'appuient sur un motif déjà
+    confirmé par capture d'écran réelle à deux reprises sur
+    `ConfigurationClient.vue`/le même type de règle CSS, jamais
+    revérifiés par un rendu réel de `StructureSysteme.vue` lui-même. À
+    revalider visuellement dès qu'une session authentifiée est disponible
+    (noté aussi en §3).
 - **13/09/2026** — `ConfigurationClient.vue` **terminé** (fonctionnel + UI),
   3 commits sur `main` (2 fonctionnel dont 1 sur des stores partagés, 1
   esthétique), CI verte sur les trois :
@@ -247,13 +295,21 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `StructureSysteme.vue` — chantier fonctionnel puis UI, avec le
-   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) ; probable
-   besoin de créer une structure système dessus si aucune n'existe encore
-   (voir §2 — rien créé sur ce client pour l'instant).
-2. Puis `SuiviPeriodicite.vue`, dans l'ordre de la liste en §3.
-3. Mettre à jour ce fichier après **chaque** chantier terminé (pas
+1. `SuiviPeriodicite.vue` — chantier fonctionnel puis UI, avec le
+   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre
+   de la liste en §3.
+2. Mettre à jour ce fichier après **chaque** chantier terminé (pas
    seulement en fin de session) — voir la règle en §1.
+3. **Action de suivi issue de `StructureSysteme.vue`** : revalider
+   visuellement en direct (capture d'écran réelle) la hiérarchie des
+   boutons et le survol des liens sur `StructureSysteme.vue` dès qu'une
+   session authentifiée est disponible sur l'app déployée — les deux
+   correctifs UI de cet écran (commit `6ae41f5`) ont été appliqués par
+   comparaison de code à un motif déjà confirmé ailleurs, jamais revérifiés
+   par un rendu réel de cet écran précis (session de test expirée en cours
+   de chantier, JWT 12h, sans identifiants disponibles pour se
+   reconnecter). Si une divergence apparaît, corriger et mettre à jour ce
+   journal.
 4. **Piste ouverte, à surveiller sur les écrans suivants** : le même bug
    fonctionnel trouvé deux fois de suite (`GestionClients.vue`,
    `FicheClient.vue`) — un appel à une méthode de store qui renvoie
@@ -268,6 +324,27 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    grâce à cette base globale avant de chercher un correctif UI à faire
    soi-même (peut réduire, voire annuler, le chantier UI de certains
    écrans simples).
+6. **Piste ouverte, corrigée au niveau store mais à garder en tête** :
+   `useClientsStore.obtenirClient()` est corrigée (13/09/2026, commit
+   `fb4e529`) pour ne plus jamais lever d'exception de connectivité non
+   rattrapée — mais si un futur écran de la liste appelle un **autre**
+   endpoint du Worker sans `try/catch` (`grep` les appels `authStore.
+   client()`/`api.` dans le fichier de l'écran et repérer ceux qui ne sont
+   ni dans un `try` ni suivis d'une vérification `.ok`), le même type de
+   bug reste possible ailleurs — ne pas supposer que tout est déjà corrigé
+   uniquement parce que `obtenirClient` l'est.
+7. **Contrainte opérationnelle à résoudre avant le prochain chantier UI** :
+   la session de test sur l'app déployée (admin, via navigateur) a expiré
+   pendant le chantier `StructureSysteme.vue` (JWT, limite 12h) et aucun
+   identifiant n'était disponible pour se reconnecter — les deux
+   correctifs UI de cet écran n'ont donc pas pu être revalidés par un
+   rendu réel (voir §4). Avant de démarrer le chantier UI de
+   `SuiviPeriodicite.vue`, vérifier qu'une session valide existe (se
+   reconnecter sur `https://soudjaymoursala-netizen.github.io/validapharm/`
+   avec le compte admin) ; si l'utilisateur n'est pas disponible pour
+   fournir les identifiants, envisager de configurer le serveur de dev
+   local (`.claude/launch.json`, config `dev`) avec un Worker de test
+   dédié pour ne plus dépendre de la session déployée.
 
 **Méthodologie validée sur les 2 premiers écrans, à reproduire** : lire le
 code de l'écran et de ses stores/dépendances en entier avant de juger s'il
