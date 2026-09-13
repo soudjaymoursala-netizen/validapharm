@@ -85,7 +85,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `ListeMissions.vue` | ✅ *(aucun bug trouvé)* | ✅ |
 | `MissionWorkspace.vue` | ✅ | ✅ |
 | `AssistantStrategieQualification.vue` | ✅ | ✅ |
-| `AssistantCreationLivrable.vue` | ⬜ | ⬜ |
+| `AssistantCreationLivrable.vue` | ✅ *(aucun bug trouvé)* | ✅ |
 | `EditeurSection.vue` | ⬜ | ⬜ |
 | `DefinitionTests.vue` | ⬜ | ⬜ |
 | `ExecutionTests.vue` | ⬜ | ⬜ |
@@ -113,6 +113,44 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — **Test instable corrigé** (`91fd8f6`), hors chantier
+  écran-par-écran mais bloquant la CI : le test `MissionWorkspace.test.ts`
+  « un échec de changement de statut d'activité... » (ajouté au commit
+  `34b59fe`) interagissait avec le `<select>` d'une `Activity` fraîchement
+  créée dès que `db.activities.count() === 1` + un seul `$nextTick()`,
+  sans garantir que Vue ait déjà rendu ce `<select>` — passait de façon
+  fiable en local (8 répétitions) mais a échoué une fois en CI (constaté
+  sur le commit `9c938b7`, qui a bloqué la CI de tous les commits suivants
+  jusqu'à ce correctif). Corrigé en attendant explicitement l'élément
+  avant d'interagir, même discipline que le correctif équivalent déjà fait
+  sur le test `associe un QualityEvent existant à la Mission` du même
+  fichier. **Vérifier ce motif** (une interaction juste après un
+  `attendreQue` sur un compteur Dexie, sans attendre le rendu réel de
+  l'élément ciblé) dans les futurs tests de ce chantier.
+- **13/09/2026** — `AssistantCreationLivrable.vue` **terminé** (1 commit
+  UI `7f92405`, aucun commit fonctionnel — écran déjà conforme, CI verte) :
+  - Fonctionnel : écran relu en entier (les 9 étapes, tous les stores
+    impliqués) — `obtenirProjet`/`creerSection` ne renvoient jamais
+    d'union `Entité | {erreur}`, `journaliserContexteAssemble` ne peut
+    lever que sur une section qui vient d'être créée dans la même chaîne
+    synchrone (pas de fenêtre de concurrence réaliste, contrairement aux
+    cas `FicheProjet.vue`/`MissionWorkspace.vue`/
+    `AssistantStrategieQualification.vue` qui impliquaient un aller-retour
+    réseau). **Aucun bug trouvé** — le test de bout en bout déjà existant
+    (9 étapes, données réelles) couvrait déjà correctement le parcours.
+  - UI : `.lien-retour` redéfini localement (même motif que
+    `FicheProjet.vue`, piste ouverte notée depuis `ListeMissions.vue`) —
+    mais ici les valeurs locales (`color`, `text-decoration`, `font-size`)
+    étaient **identiques** aux valeurs globales de `tokens.css`, donc sans
+    régression visuelle actuelle (contrairement à `FicheProjet.vue`, dont
+    le `:hover` local dégrade réellement le retour visuel). Supprimé pour
+    prévenir une divergence future si le style global change, et pour se
+    rapprocher de la convention établie (aucune règle `.lien-retour`
+    locale). Ne pas présenter ceci comme la correction d'un bug visuel
+    constaté — c'est un nettoyage préventif, à noter précisément pour ne
+    pas fausser l'historique.
+  - Non revalidé visuellement en direct (session de test toujours expirée,
+    voir §5).
 - **13/09/2026** — `AssistantStrategieQualification.vue` **terminé**
   (fonctionnel + UI dans un seul commit `c9e743a`, CI verte) :
   - Fonctionnel : **évaluation ACFC non vérifiée** (même motif que
@@ -527,22 +565,35 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `AssistantCreationLivrable.vue` — chantier fonctionnel puis UI, avec le
-   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre
-   de la liste en §3.
-   **Piste à vérifier en priorité** : le motif « mutation non vérifiée »
-   trouvé sur `FicheProjet.vue` (8 sites, `6e4513e`),
-   `MissionWorkspace.vue` (2 sites, `34b59fe`) et
-   `AssistantStrategieQualification.vue` (1 site, `c9e743a`) — trois écrans
-   d'affilée — n'est probablement pas isolé à ceux-ci — `grep` les autres
-   écrans qui appellent des méthodes de store retournant une union
-   `Entité | {erreur}` **ou** `Entité | null` sans vérifier le résultat.
+1. `EditeurSection.vue` — chantier fonctionnel puis UI, avec le client de
+   test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre de la
+   liste en §3.
+   **Vérifier en priorité** (déjà confirmé présent le 13/09/2026 par le
+   balayage exhaustif ci-dessous, à corriger explicitement) : le motif
+   `.bouton-fichier input[type='file'] { display: none; }`
+   (inaccessibilité clavier) — dernier écran connu à l'avoir, tous les
+   autres étant déjà corrigés.
+   **Piste à vérifier aussi** : le motif « mutation non vérifiée » trouvé
+   sur `FicheProjet.vue` (8 sites, `6e4513e`), `MissionWorkspace.vue`
+   (2 sites, `34b59fe`) et `AssistantStrategieQualification.vue` (1 site,
+   `c9e743a`) — `grep` les méthodes de store appelées ici qui retournent
+   une union `Entité | {erreur}` **ou** `Entité | null` sans vérifier le
+   résultat. `AssistantCreationLivrable.vue` (chantier précédent) en était
+   exempt — ne pas supposer que c'est systématique, mais rester vigilant.
    **Piste à vérifier aussi** : l'absence d'état de chargement trouvée sur
    `AssistantStrategieQualification.vue` (commit `c9e743a`) — un écran dont
    `onMounted` charge des données async avant de décider quel bloc afficher
    peut souffrir du même flash de contenu trompeur si rien ne masque le
    rendu pendant le chargement initial (motif déjà établi ailleurs :
    `AdminUtilisateurs.vue`, `ResolutionConflit.vue`, classe `.etat-vide`).
+   **Piste à vérifier aussi** : le motif « interaction avec un élément
+   avant que Vue n'ait fini de le rendre, juste après un `attendreQue` sur
+   un compteur Dexie » trouvé dans un test de `MissionWorkspace.test.ts`
+   (corrigé le 13/09/2026, commit `91fd8f6`, découvert seulement en CI —
+   jamais reproduit en local malgré 8 répétitions) — si un nouveau test
+   pour `EditeurSection.vue` interagit avec un élément fraîchement rendu
+   après une écriture Dexie, attendre explicitement l'élément lui-même
+   plutôt qu'un seul `$nextTick()`.
    **Balayage exhaustif fait le 13/09/2026** (`grep` sur tout
    `src/presentation/screens/*.vue`) pour les deux motifs de bugs
    récurrents de ce chantier — plus la peine de les redécouvrir un par un :
