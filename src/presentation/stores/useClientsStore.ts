@@ -128,15 +128,30 @@ export const useClientsStore = defineStore('clients', () => {
     return client
   }
 
+  /**
+   * Appelé au `onMounted` d'une vingtaine d'écrans (juste pour le nom du
+   * client affiché en en-tête), presque toujours suivi d'autres appels
+   * indépendants (souvent purement locaux, ex. `useStructureSystemeStore.
+   * charger`) dans la même chaîne séquentielle. Avant ce correctif, une
+   * panne réseau transitoire ici (Worker injoignable, délai dépassé)
+   * levait une exception non rattrapée qui interrompait toute la chaîne —
+   * empêchant même le chargement de données n'ayant aucun rapport avec le
+   * réseau. Même principe que `chargerClients` : une panne de connectivité
+   * dégrade (nom de client absent), jamais ne bloque le reste.
+   */
   async function obtenirClient(clientId: string): Promise<Client | undefined> {
     const existant = clients.value.find((c) => c.id === clientId)
     if (existant) return existant
 
-    const authStore = useAuthStore()
-    const api = await authStore.client()
-    if (!api || !authStore.jeton) return undefined
-    const resultat = await api.obtenirClient(authStore.jeton, clientId)
-    return resultat.ok ? wireVersClient(resultat.donnees.client) : undefined
+    try {
+      const authStore = useAuthStore()
+      const api = await authStore.client()
+      if (!api || !authStore.jeton) return undefined
+      const resultat = await api.obtenirClient(authStore.jeton, clientId)
+      return resultat.ok ? wireVersClient(resultat.donnees.client) : undefined
+    } catch {
+      return undefined
+    }
   }
 
   /**
