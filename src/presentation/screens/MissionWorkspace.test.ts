@@ -365,19 +365,23 @@ describe('MissionWorkspace — changements de statut non vérifiés', () => {
     await formulaireActivite.find('input[type="text"]').setValue('Préparer protocole')
     await formulaireActivite.trigger('submit.prevent')
     await attendreQue(async () => (await db.activities.count()) === 1)
-    // Le rendu de la nouvelle `Activity` (et de son <select>) n'est pas
-    // garanti après un seul `$nextTick()` sur un environnement plus lent
-    // (constaté en CI, jamais reproduit en local malgré plusieurs
-    // répétitions) — on attend explicitement l'élément avant d'interagir,
-    // même discipline que pour le <select> des événements qualité plus
-    // haut dans ce fichier.
     await attendreQue(() => wrapper.find('section.activites li select').exists())
 
     const missionStore = useMissionStore()
     missionStore.changerStatutActivity = vi.fn().mockResolvedValue(null)
 
-    await wrapper.find('section.activites li select').setValue('terminee')
-    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+    // Un seul déclenchement de `setValue` suivi d'un `attendreQue` séparé
+    // s'est révélé intermittent en CI (jamais reproduit en local malgré
+    // plusieurs répétitions — cause exacte non identifiée avec certitude,
+    // probablement une re-création du nœud `<select>` par Vue entre la
+    // récupération de la référence et l'événement `change`). Re-déclencher
+    // `setValue` à chaque itération est sans risque ici (le mock est
+    // idempotent) et élimine la fenêtre de course plutôt que de la
+    // rétrécir davantage.
+    await attendreQue(async () => {
+      await wrapper.find('section.activites li select').setValue('terminee')
+      return wrapper.find('.bandeau-erreur').exists()
+    })
 
     expect(wrapper.find('.bandeau-erreur').text()).toContain(
       "Impossible de changer le statut de l'activité",
