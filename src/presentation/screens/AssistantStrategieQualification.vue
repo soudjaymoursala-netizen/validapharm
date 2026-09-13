@@ -35,13 +35,18 @@ const structureStore = useStructureSystemeStore()
 
 const nomClient = ref<string | null>(null)
 const formulaireConfigOuvert = ref(false)
+const enChargement = ref(true)
 
 onMounted(async () => {
-  const client = await clientsStore.obtenirClient(props.clientId)
-  nomClient.value = client?.name ?? null
-  await methodeStore.charger(props.clientId)
-  await structureStore.charger(props.clientId)
-  if (!methodeStore.profilActif) formulaireConfigOuvert.value = true
+  try {
+    const client = await clientsStore.obtenirClient(props.clientId)
+    nomClient.value = client?.name ?? null
+    await methodeStore.charger(props.clientId)
+    await structureStore.charger(props.clientId)
+    if (!methodeStore.profilActif) formulaireConfigOuvert.value = true
+  } finally {
+    enChargement.value = false
+  }
 })
 
 // --- Configuration de la méthode (création d'une nouvelle version) ---
@@ -103,6 +108,7 @@ const nomElement = ref('')
 const assetNodeIdSelectionne = ref('')
 const reponses = reactive<Record<string, ReponseQuestionACFC>>({})
 const evaluationEnregistree = ref(false)
+const erreurEvaluation = ref<string | null>(null)
 
 const complet = computed(() =>
   methodeStore.profilActif
@@ -121,11 +127,17 @@ const verdict = computed(() => {
 
 async function enregistrerEvaluation(): Promise<void> {
   if (!verdict.value || nomElement.value.trim().length === 0) return
-  await methodeStore.creerEvaluation(props.clientId, {
+  erreurEvaluation.value = null
+  const resultat = await methodeStore.creerEvaluation(props.clientId, {
     nomElement: nomElement.value.trim(),
     assetNodeId: assetNodeIdSelectionne.value || null,
     reponses: { ...reponses },
   })
+  if ('erreur' in resultat) {
+    erreurEvaluation.value =
+      "Impossible d'enregistrer l'évaluation — aucune méthode ACFC n'est configurée pour ce client."
+    return
+  }
   evaluationEnregistree.value = true
 }
 
@@ -143,136 +155,145 @@ const conclusion = computed(() =>
     <h1>Stratégie de qualification — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">Aide à la décision, non une décision de qualification.</p>
 
-    <section v-if="!methodeStore.profilActif || formulaireConfigOuvert" class="bloc-config">
-      <h2>Configuration de la méthode ACFC</h2>
-      <p v-if="!methodeStore.profilActif" class="rappel" role="alert">
-        Aucune méthode ACFC n'est configurée pour ce client. Aucune question n'est proposée par
-        défaut — saisissez les questions réelles de la procédure du client, mot pour mot.
-      </p>
-      <form class="formulaire" @submit.prevent="enregistrerNouvelleVersion">
-        <label
-          >Source (ex. "Procédure interne QD-00098219", "Défini avec le client le ...")
-          <input v-model="brouillonSource" type="text" required />
-        </label>
-        <label>
-          Origine
-          <select v-model="brouillonOrigin">
-            <option value="procedure_client">Procédure client</option>
-            <option value="defini_utilisateur">Défini avec l'utilisateur</option>
-            <option value="baseline_validapharm">Baseline ValidaPharm</option>
-          </select>
-        </label>
-        <fieldset class="questions-config">
-          <legend>Questions (une par ligne, mot pour mot)</legend>
-          <div class="choix-demarrage">
-            <label class="bouton-fichier">
-              Importer un fichier texte (une question par ligne)
-              <input type="file" accept="text/plain,.txt" @change="importerQuestionsTexte" />
-            </label>
-            <span class="choix-demarrage__ou">ou saisissez-les manuellement ci-dessous</span>
-          </div>
-          <div v-for="(_, index) in brouillonQuestions" :key="index" class="ligne-question-config">
-            <input
-              v-model="brouillonQuestions[index]"
-              type="text"
-              :placeholder="`Question ${index + 1}`"
-            />
-            <button
-              type="button"
-              :disabled="brouillonQuestions.length <= 1"
-              @click="retirerLigneQuestion(index)"
-            >
-              Retirer
-            </button>
-          </div>
-          <button type="button" @click="ajouterLigneQuestion">+ Ajouter une question</button>
-        </fieldset>
-        <div class="actions">
-          <button
-            v-if="methodeStore.profilActif"
-            type="button"
-            @click="formulaireConfigOuvert = false"
-          >
-            Annuler
-          </button>
-          <button type="submit">Enregistrer cette version</button>
-        </div>
-      </form>
-    </section>
-
+    <p v-if="enChargement" class="etat-vide">Chargement…</p>
     <template v-else>
-      <section class="bloc-criticite">
-        <h2>
-          1. Évaluation ACFC — {{ methodeStore.profilActif.source }} ({{
-            methodeStore.profilActif.version
-          }})
-        </h2>
-        <button type="button" class="lien-config" @click="formulaireConfigOuvert = true">
-          Configurer une nouvelle version des questions
-        </button>
-        <label class="nom-element">
-          Composant/fonction évalué
-          <input
-            v-model="nomElement"
-            type="text"
-            required
-            placeholder="ex. Vanne de régulation V-101"
-          />
-        </label>
-        <label class="nom-element">
-          Nœud Structure Système (optionnel)
-          <select v-model="assetNodeIdSelectionne">
-            <option value="">— aucun —</option>
-            <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
-              {{ noeud.name }} ({{ noeud.code }})
-            </option>
-          </select>
-        </label>
-        <ul class="liste-questions">
-          <li v-for="question in methodeStore.profilActif.questions" :key="question.id">
-            <p class="texte-question">{{ question.texte.fr }}</p>
-            <div class="reponses-question">
-              <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet']" :key="opt">
-                <input v-model="reponses[question.id]" type="radio" :value="opt" />
-                {{ opt }}
+      <section v-if="!methodeStore.profilActif || formulaireConfigOuvert" class="bloc-config">
+        <h2>Configuration de la méthode ACFC</h2>
+        <p v-if="!methodeStore.profilActif" class="rappel" role="alert">
+          Aucune méthode ACFC n'est configurée pour ce client. Aucune question n'est proposée par
+          défaut — saisissez les questions réelles de la procédure du client, mot pour mot.
+        </p>
+        <form class="formulaire" @submit.prevent="enregistrerNouvelleVersion">
+          <label
+            >Source (ex. "Procédure interne QD-00098219", "Défini avec le client le ...")
+            <input v-model="brouillonSource" type="text" required />
+          </label>
+          <label>
+            Origine
+            <select v-model="brouillonOrigin">
+              <option value="procedure_client">Procédure client</option>
+              <option value="defini_utilisateur">Défini avec l'utilisateur</option>
+              <option value="baseline_validapharm">Baseline ValidaPharm</option>
+            </select>
+          </label>
+          <fieldset class="questions-config">
+            <legend>Questions (une par ligne, mot pour mot)</legend>
+            <div class="choix-demarrage">
+              <label class="bouton-fichier">
+                Importer un fichier texte (une question par ligne)
+                <input type="file" accept="text/plain,.txt" @change="importerQuestionsTexte" />
               </label>
+              <span class="choix-demarrage__ou">ou saisissez-les manuellement ci-dessous</span>
             </div>
-          </li>
-        </ul>
-        <p v-if="verdict" class="resultat-partiel" role="status">
-          Verdict ACFC : <strong>{{ verdict === 'critique' ? 'Critique' : 'Non critique' }}</strong>
-        </p>
-        <button
-          v-if="verdict && !evaluationEnregistree"
-          type="button"
-          @click="enregistrerEvaluation"
-        >
-          Enregistrer cette évaluation
-        </button>
-        <p v-if="evaluationEnregistree" class="confirmation" role="status">
-          Évaluation enregistrée.
-        </p>
+            <div
+              v-for="(_, index) in brouillonQuestions"
+              :key="index"
+              class="ligne-question-config"
+            >
+              <input
+                v-model="brouillonQuestions[index]"
+                type="text"
+                :placeholder="`Question ${index + 1}`"
+              />
+              <button
+                type="button"
+                :disabled="brouillonQuestions.length <= 1"
+                @click="retirerLigneQuestion(index)"
+              >
+                Retirer
+              </button>
+            </div>
+            <button type="button" @click="ajouterLigneQuestion">+ Ajouter une question</button>
+          </fieldset>
+          <div class="actions">
+            <button
+              v-if="methodeStore.profilActif"
+              type="button"
+              @click="formulaireConfigOuvert = false"
+            >
+              Annuler
+            </button>
+            <button type="submit">Enregistrer cette version</button>
+          </div>
+        </form>
       </section>
 
-      <section v-if="verdict" class="bloc-complexite">
-        <h2>2. Évaluation de la complexité</h2>
-        <label>
-          <input v-model="complexite" type="radio" value="catalogue" />
-          Catalogue — système sans adaptation particulière du fournisseur
-        </label>
-        <label>
-          <input v-model="complexite" type="radio" value="specifique" />
-          Spécifique — système fait à façon ou hautement configuré
-        </label>
-      </section>
+      <template v-else>
+        <section class="bloc-criticite">
+          <h2>
+            1. Évaluation ACFC — {{ methodeStore.profilActif.source }} ({{
+              methodeStore.profilActif.version
+            }})
+          </h2>
+          <button type="button" class="lien-config" @click="formulaireConfigOuvert = true">
+            Configurer une nouvelle version des questions
+          </button>
+          <label class="nom-element">
+            Composant/fonction évalué
+            <input
+              v-model="nomElement"
+              type="text"
+              required
+              placeholder="ex. Vanne de régulation V-101"
+            />
+          </label>
+          <label class="nom-element">
+            Nœud Structure Système (optionnel)
+            <select v-model="assetNodeIdSelectionne">
+              <option value="">— aucun —</option>
+              <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
+                {{ noeud.name }} ({{ noeud.code }})
+              </option>
+            </select>
+          </label>
+          <ul class="liste-questions">
+            <li v-for="question in methodeStore.profilActif.questions" :key="question.id">
+              <p class="texte-question">{{ question.texte.fr }}</p>
+              <div class="reponses-question">
+                <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet']" :key="opt">
+                  <input v-model="reponses[question.id]" type="radio" :value="opt" />
+                  {{ opt }}
+                </label>
+              </div>
+            </li>
+          </ul>
+          <p v-if="verdict" class="resultat-partiel" role="status">
+            Verdict ACFC :
+            <strong>{{ verdict === 'critique' ? 'Critique' : 'Non critique' }}</strong>
+          </p>
+          <button
+            v-if="verdict && !evaluationEnregistree"
+            type="button"
+            @click="enregistrerEvaluation"
+          >
+            Enregistrer cette évaluation
+          </button>
+          <p v-if="evaluationEnregistree" class="confirmation" role="status">
+            Évaluation enregistrée.
+          </p>
+          <p v-if="erreurEvaluation" class="bandeau-erreur" role="alert">{{ erreurEvaluation }}</p>
+        </section>
 
-      <section v-if="conclusion" class="bloc-conclusion">
-        <h2>Conclusion</h2>
-        <p class="conclusion" role="status">{{ LIBELLES_CONCLUSION[conclusion] }}</p>
-        <p class="version-grille">
-          Version de la table de décision : {{ VERSION_GRILLE_STRATEGIE_QUALIFICATION }}
-        </p>
-      </section>
+        <section v-if="verdict" class="bloc-complexite">
+          <h2>2. Évaluation de la complexité</h2>
+          <label>
+            <input v-model="complexite" type="radio" value="catalogue" />
+            Catalogue — système sans adaptation particulière du fournisseur
+          </label>
+          <label>
+            <input v-model="complexite" type="radio" value="specifique" />
+            Spécifique — système fait à façon ou hautement configuré
+          </label>
+        </section>
+
+        <section v-if="conclusion" class="bloc-conclusion">
+          <h2>Conclusion</h2>
+          <p class="conclusion" role="status">{{ LIBELLES_CONCLUSION[conclusion] }}</p>
+          <p class="version-grille">
+            Version de la table de décision : {{ VERSION_GRILLE_STRATEGIE_QUALIFICATION }}
+          </p>
+        </section>
+      </template>
     </template>
   </main>
 </template>
@@ -295,6 +316,15 @@ const conclusion = computed(() =>
 
 .rappel {
   color: var(--vp-texte-secondaire);
+  font-size: 0.9em;
+}
+
+.etat-vide {
+  color: var(--vp-texte-secondaire);
+}
+
+.bandeau-erreur {
+  color: var(--vp-danger);
   font-size: 0.9em;
 }
 
