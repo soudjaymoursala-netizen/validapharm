@@ -1,9 +1,15 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
+import { useClientsStore } from '../stores/useClientsStore'
 import ListeMissions from './ListeMissions.vue'
 
 function routeurDeTest() {
@@ -18,6 +24,11 @@ function routeurDeTest() {
       {
         path: '/clients/:clientId/missions/:missionId',
         name: 'mission-workspace',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/clients/:clientId',
+        name: 'fiche-client',
         component: { template: '<div />' },
       },
     ],
@@ -72,5 +83,38 @@ describe('ListeMissions', () => {
 
     await attendreQue(() => router.currentRoute.value.name === 'mission-workspace')
     expect(router.currentRoute.value.name).toBe('mission-workspace')
+  })
+})
+
+describe('ListeMissions — navigation retour vers la fiche client', () => {
+  let demonter: () => void
+
+  beforeEach(async () => {
+    await reinitialiserAuthDeTest()
+    demonter = installerFauxWorkerAuth().demonter
+    await connecterAdminDeTest()
+  })
+
+  afterEach(() => {
+    demonter()
+  })
+
+  test('affiche un lien retour vers la fiche client, avec son nom une fois chargé', async () => {
+    const clientsStore = useClientsStore()
+    const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })
+    if ('erreur' in client) throw client
+
+    const router = routeurDeTest()
+    await router.push(`/clients/${client.id}/missions`)
+    const wrapper = mount(ListeMissions, {
+      props: { clientId: client.id },
+      global: { plugins: [router] },
+    })
+    await attendreQue(() => wrapper.text().includes('PharmaTech Solutions'))
+
+    const lien = wrapper.find('.lien-retour')
+    expect(lien.exists()).toBe(true)
+    expect(lien.text()).toBe('PharmaTech Solutions')
+    expect(wrapper.find('h1').text()).toContain('PharmaTech Solutions')
   })
 })

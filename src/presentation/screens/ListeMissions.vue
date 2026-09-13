@@ -2,12 +2,14 @@
 // Liste des Mission d'un client + création.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useClientsStore } from '../stores/useClientsStore'
 import { useMissionStore, type NouvelleMissionInput } from '../stores/useMissionStore'
 import { useOrganizationStore } from '../stores/useOrganizationStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 
 const props = defineProps<{ clientId: string }>()
 
+const clientsStore = useClientsStore()
 const missionStore = useMissionStore()
 const organizationStore = useOrganizationStore()
 const structureStore = useStructureSystemeStore()
@@ -15,10 +17,13 @@ const router = useRouter()
 
 const formulaireOuvert = ref(false)
 const brouillon = reactive({ titre: '', description: '', workspaceId: '', assetNodeId: '' })
+const nomClient = ref<string | null>(null)
 
 const workspacesClient = computed(() => organizationStore.workspacesOrganization(props.clientId))
 
 onMounted(async () => {
+  const client = await clientsStore.obtenirClient(props.clientId)
+  nomClient.value = client?.name ?? null
   await Promise.all([
     missionStore.charger(props.clientId),
     organizationStore.charger(),
@@ -49,8 +54,14 @@ async function creerMission(): Promise<void> {
 
 <template>
   <main class="liste-missions">
+    <RouterLink
+      class="lien-retour"
+      :to="{ name: 'fiche-client', params: { clientId: props.clientId } }"
+    >
+      {{ nomClient ?? props.clientId }}
+    </RouterLink>
     <header>
-      <h1>Missions</h1>
+      <h1>Missions — {{ nomClient ?? props.clientId }}</h1>
       <button type="button" @click="formulaireOuvert = true">Nouvelle mission</button>
     </header>
 
@@ -102,13 +113,16 @@ async function creerMission(): Promise<void> {
 <style scoped>
 .liste-missions {
   padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .formulaire-mission {
