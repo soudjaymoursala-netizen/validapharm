@@ -1,9 +1,14 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import SuiviPeriodicite from './SuiviPeriodicite.vue'
 
 async function attendreQue(condition: () => boolean): Promise<void> {
@@ -122,5 +127,40 @@ describe('SuiviPeriodicite', () => {
     await attendreQue(() => wrapper.text().includes("n'est soumis à requalification périodique"))
 
     expect(wrapper.text()).toContain("n'est soumis à requalification périodique")
+  })
+})
+
+describe('SuiviPeriodicite — panne de connectivité pendant le chargement du nom du client', () => {
+  let demonter: () => void
+
+  beforeEach(async () => {
+    await reinitialiserAuthDeTest()
+    demonter = installerFauxWorkerAuth().demonter
+    await connecterAdminDeTest()
+  })
+
+  afterEach(() => {
+    demonter()
+  })
+
+  test("un Worker injoignable pour le nom du client n'empêche pas l'affichage du suivi (purement local)", async () => {
+    const hier = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    await db.assetNodes.put(noeudDeTest('en-retard', { name: 'Autoclave AUT-042', deadline: hier }))
+
+    // Même bug que celui corrigé au niveau de `useClientsStore.obtenirClient`
+    // (voir StructureSysteme.test.ts) : cet écran appelle exactement le même
+    // enchaînement dans son `onMounted` (nom du client, puis hiérarchie
+    // locale) — vérifie que le correctif au niveau store profite aussi à cet
+    // écran, sans avoir à le corriger une seconde fois ici.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    const wrapper = mount(SuiviPeriodicite, {
+      props: { clientId: 'client-1' },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await attendreQue(() => wrapper.text().includes('Autoclave AUT-042'))
+
+    expect(wrapper.text()).toContain('Autoclave AUT-042')
+    expect(wrapper.find('h1').text()).toContain('client-1')
   })
 })
