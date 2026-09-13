@@ -402,19 +402,12 @@ input {
   font-family: inherit;
 }
 
-button {
-  background-color: var(--vp-marque);
-  color: var(--vp-marque-bouton-texte);
-  border: none;
-  border-radius: var(--vp-rayon);
-  padding: 0.5rem 1rem;
-  cursor: pointer;
-}
-
-button:disabled {
-  background-color: var(--vp-bordure);
-  cursor: not-allowed;
-}
+/* Ni `button {...}` ni `button:disabled {...}` ici, délibérément : la base
+   globale (`tokens.css`, Phase 41) distingue déjà `button[type="submit"]`
+   (violet, action primaire) des autres `<button>` (neutre, bordure) —
+   avant ce correctif, cette règle locale écrasait cette hiérarchie pour
+   TOUS les boutons de cet écran (« Effacer », « Tester la connexion » et
+   « Enregistrer » rendus identiques, visuellement indiscernables). */
 
 .actions {
   display: flex;
