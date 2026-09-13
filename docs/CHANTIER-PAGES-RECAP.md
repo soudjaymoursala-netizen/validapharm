@@ -89,7 +89,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `EditeurSection.vue` | ✅ | ✅ |
 | `DefinitionTests.vue` | ✅ | ✅ |
 | `ExecutionTests.vue` | ✅ | ✅ *(aucun bug trouvé)* |
-| `RiskAssessmentAmdec.vue` | ⬜ | ⬜ |
+| `RiskAssessmentAmdec.vue` | ✅ | ✅ |
 | `ImpactAssessment.vue` | ⬜ | ⬜ |
 | `ComputerSystemAssessment.vue` | ⬜ | ⬜ |
 | `JournalAnomalies.vue` | ⬜ | ⬜ |
@@ -112,6 +112,44 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 ---
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
+
+- **13/09/2026** — `RiskAssessmentAmdec.vue` **terminé** (fonctionnel
+  `d68de27`, UI `4a44484`, CI verte sur les deux) :
+  - Fonctionnel : (1) **absence d'état de chargement** — `profilActif` est
+    un `computed` qui vaut `null` tant que `riskStore.charger()` (précédé
+    de 3 autres `await` séquentiels dans `onMounted` : client, structure,
+    paramètres) n'a pas terminé ; l'écran affichait donc à tort « Aucun
+    profil AMDEC n'est configuré pour ce client » même quand un profil
+    existait déjà, le temps du chargement — même motif que
+    `DefinitionTests.vue`/`AssistantStrategieQualification.vue`/
+    `EditeurSection.vue`. Un `chargementInitial` local (le store expose
+    bien un `enChargement`, mais seulement autour de son propre
+    `charger()`, pas autour des 3 autres `await` d'`onMounted` — un
+    booléen local reste donc nécessaire) gate tout le contenu métier sous
+    un « Chargement… », header/titre restant visibles. (2) **mutation non
+    vérifiée** — `enregistrerAction()` (bouton "Enregistrer l'action
+    résiduelle") ignorait le retour `RiskAssessment |
+    ErreurEcritureRiskAssessment` de `enregistrerActionResiduelle` (cas
+    `{erreur: 'introuvable'}` si la ligne AMDEC a été supprimée
+    entre-temps) — septième écran sur les huit derniers à présenter ce
+    motif. 3 tests ajoutés (état de chargement avec profil pré-existant en
+    base, mutation bloquée avec mock direct du store, plus mise à jour des
+    2 tests existants pour attendre le contenu réel post-garde au lieu
+    d'un `flushPromises()` immédiat après `mount()`).
+  - UI : testé en direct sur le site déployé avec le client QA — deux
+    défauts trouvés en exerçant l'écran (pas de simple lecture de code) :
+    (1) quand une ligne AMDEC n'a pas de nœud Structure Système associé,
+    l'affichage produisait un tiret orphelin en fin de ligne ("Sous-charge
+    thermique — Cycle de stérilisation — —") — `libelleAssetNode` renvoie
+    désormais `null` plutôt que `'—'`, et le séparateur n'est rendu que si
+    un nœud existe réellement. (2) la recommandation et le responsable
+    saisis pour l'action résiduelle disparaissaient intégralement de
+    l'affichage une fois enregistrés (bien persistés en base, mais
+    invisibles pour l'utilisateur sans aller consulter la base) — ajout
+    d'une ligne « Action : … — Responsable : … » sous le verdict résiduel.
+    Une assertion de test verrouille cet affichage. Pas de couleur hex
+    fixe, pas d'input fichier, `.lien-retour` correctement non redéfini
+    localement (déjà couvert par le style global de `tokens.css`).
 
 - **13/09/2026** — `ExecutionTests.vue` **terminé** (fonctionnel dans un
   seul commit `6c44ee6`, CI verte, 2 nouveaux tests ; **aucun bug UI
@@ -761,17 +799,21 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `RiskAssessmentAmdec.vue` — chantier fonctionnel puis UI, avec le
+1. `ImpactAssessment.vue` — chantier fonctionnel puis UI, avec le
    client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans
    l'ordre de la liste en §3.
    **Avant d'écrire de nouveaux tests** : vérifier si
-   `RiskAssessmentAmdec.test.ts` a un `afterEach` global laissant le temps
+   `ImpactAssessment.test.ts` a un `afterEach` global laissant le temps
    aux promesses résiduelles de se résoudre entre les tests — son absence
    a fait échouer `MissionWorkspace.test.ts` en CI à trois reprises
    (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge plusieurs
    stores en `Promise.all` sans jamais démonter son wrapper d'un test à
-   l'autre. Si le fichier de l'écran en cours a le même profil (plusieurs
-   stores chargés dans `onMounted`, pas d'`afterEach` de "settle"),
+   l'autre. Le risque ne concerne que les `onMounted` en `Promise.all`
+   concurrent (plusieurs stores lancés en parallèle) — un `onMounted` à
+   `await` séquentiels comme celui de `RiskAssessmentAmdec.vue` n'a pas ce
+   profil de risque et n'a pas eu besoin de ce filet. Si le fichier de
+   l'écran en cours a le même profil que `MissionWorkspace.vue`
+   (plusieurs stores chargés en parallèle, pas d'`afterEach` de "settle"),
    ajouter ce filet préventivement plutôt que d'attendre un nouvel
    incident CI.
    **Piste à vérifier en priorité** : le motif « mutation non vérifiée »
@@ -780,22 +822,27 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    `FicheProjet.vue` (8 sites, `6e4513e`), `MissionWorkspace.vue` (2 sites,
    `34b59fe`), `AssistantStrategieQualification.vue` (1 site, `c9e743a`),
    `EditeurSection.vue` (6 sites, `8b1b244`), `DefinitionTests.vue`
-   (4 sites, `126b71f`) et `ExecutionTests.vue` (5 sites, `6c44ee6`) — six
-   écrans sur les sept derniers, avec des conséquences de plus en plus
-   sérieuses (le dernier touchait directement un garde-fou d'immutabilité
-   annoncé à l'utilisateur). `AssistantCreationLivrable.vue` reste la
-   seule exception — ce motif est désormais la piste par défaut à
-   vérifier sur chaque nouvel écran, en particulier tout garde-fou
+   (4 sites, `126b71f`), `ExecutionTests.vue` (5 sites, `6c44ee6`) et
+   `RiskAssessmentAmdec.vue` (1 site, `d68de27`) — sept écrans sur les huit
+   derniers, avec des conséquences parfois sérieuses (un garde-fou
+   d'immutabilité explicitement annoncé à l'utilisateur, sur
+   `ExecutionTests.vue`). `AssistantCreationLivrable.vue` reste la seule
+   exception — ce motif est désormais la piste par défaut à vérifier sur
+   chaque nouvel écran, en particulier tout garde-fou
    d'immutabilité/verrouillage explicitement documenté dans l'écran
    (rechercher spécifiquement les codes d'erreur liés à un statut
-   "clôturé"/"verrouillé"/"validé" dans le store).
+   "clôturé"/"verrouillé"/"validé"/"introuvable" dans le store).
    **Piste à vérifier aussi** : l'absence d'état de chargement — trouvée
    sur `AssistantStrategieQualification.vue` (`c9e743a`), `EditeurSection.vue`
-   (`8b1b244`, une section) et `DefinitionTests.vue` (`126b71f`, **tout
-   l'écran** : aucune garde du tout avant ce correctif) — un écran qui
-   charge des données async dans `onMounted` avant de décider quel bloc
-   afficher est un candidat direct à vérifier, même s'il n'a qu'un seul
-   store à charger.
+   (`8b1b244`, une section), `DefinitionTests.vue` (`126b71f`, **tout
+   l'écran** : aucune garde du tout avant ce correctif) et
+   `RiskAssessmentAmdec.vue` (`d68de27`, un `computed` dérivé d'un store
+   qui vaut `null`/faux avant chargement, donc un flash de message négatif
+   trompeur même avec un seul store en apparence) — un écran qui charge
+   des données async dans `onMounted` avant de décider quel bloc afficher
+   est un candidat direct à vérifier, même s'il n'a qu'un seul store à
+   charger, et même si l'état vide semble découler d'un simple `computed`
+   plutôt que d'un `ref` chargé directement.
    **Piste à vérifier aussi** : sur `EditeurSection.vue`, un cas non
    corrigé faute de solution correcte — `imprimer()` journalise l'export
    avant que `window.print()` ne soit confirmé (aucune API navigateur ne
