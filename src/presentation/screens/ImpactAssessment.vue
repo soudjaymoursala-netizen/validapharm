@@ -78,6 +78,13 @@ const assetNodeIdSelectionne = ref('')
 const reponses = reactive<Record<string, ReponseQuestionOuiNon>>({})
 const evaluationEnregistree = ref(false)
 
+const LIBELLES_REPONSE: Record<ReponseQuestionOuiNon, string> = {
+  oui: 'Oui',
+  non: 'Non',
+  inconnu: 'Inconnu',
+  sans_objet: 'Sans objet',
+}
+
 const complet = computed(() =>
   methodeStore.profilActif
     ? methodeCompletementRepondue(methodeStore.profilActif.questions, reponses)
@@ -206,9 +213,9 @@ function nouvelleEvaluation(): void {
             <li v-for="question in methodeStore.profilActif.questions" :key="question.id">
               <p class="texte-question">{{ question.texte.fr }}</p>
               <div class="reponses-question">
-                <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet']" :key="opt">
+                <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet'] as const" :key="opt">
                   <input v-model="reponses[question.id]" type="radio" :value="opt" />
-                  {{ opt }}
+                  {{ LIBELLES_REPONSE[opt] }}
                 </label>
               </div>
             </li>
@@ -262,6 +269,13 @@ function nouvelleEvaluation(): void {
   font-style: italic;
   color: var(--vp-texte-secondaire);
   margin: 0;
+}
+
+.bloc-config,
+.bloc-evaluation {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .rappel {
@@ -369,7 +383,6 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  text-transform: capitalize;
 }
 
 .resultat-partiel {

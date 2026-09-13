@@ -98,6 +98,11 @@ describe('ImpactAssessment', () => {
 
     expect(wrapper.text()).not.toContain("Aucune méthode Impact Assessment n'est configurée")
 
+    // Les libellés de réponse doivent être lisibles, pas les valeurs brutes
+    // de l'union (« sans_objet » plutôt que « Sans objet »).
+    expect(wrapper.text()).toContain('Sans objet')
+    expect(wrapper.text()).not.toContain('sans_objet')
+
     await wrapper.find('.nom-element input').setValue('Isolateur STICK002')
     const radioOui = wrapper.find('.liste-questions li input[type="radio"][value="oui"]')
     await radioOui.setValue(true)
