@@ -77,7 +77,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `ConfigurationClient.vue` | ✅ | ✅ |
 | `StructureSysteme.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `SuiviPeriodicite.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
-| `Process.vue` | ⬜ | ⬜ |
+| `Process.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `RevueStructureProcedure.vue` | ⬜ | ⬜ |
 | `TemplatesFormulaires.vue` | ⬜ | ⬜ |
 | `TableauDeBord.vue` | ⬜ | ⬜ |
@@ -113,6 +113,35 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `Process.vue` **terminé** (fonctionnel + UI), 2 commits
+  sur `main`, CI verte sur les deux :
+  - Fonctionnel (`49d13ff`) : écran relu en entier avec ses deux stores
+    (`useProcessContextStore`, `useSourceIntelligenceStore`) — entièrement
+    local (Dexie), aucune mutation ne renvoie d'union `Entité | {erreur}`
+    non vérifiée, les associations Fonction↔Process/Actif sont idempotentes
+    par conception. Aucun nouveau bug trouvé au-delà du correctif déjà
+    appliqué au store `useClientsStore.obtenirClient` — test ajouté pour
+    confirmer explicitement ce bénéfice (même motif que
+    `SuiviPeriodicite.test.ts`/`StructureSysteme.test.ts`).
+  - UI/**accessibilité** (`115f386`) : `.bouton-fichier input[type="file"]
+    { display: none; }` retire l'input du parcours clavier — un
+    utilisateur clavier ne peut ni l'atteindre ni l'activer pour importer
+    un document. **Trouvé par comparaison de code base**, pas par un rendu
+    réel : le même composant `.bouton-fichier` existe déjà, correctement
+    implémenté (`position: absolute; inset: 0; opacity: 0` — invisible
+    mais toujours focusable), dans `FicheProjet.vue` et
+    `AssistantStrategieQualification.vue`. Aligné sur ce motif déjà établi
+    et fonctionnel ailleurs dans le même dépôt plutôt que d'inventer une
+    solution.
+  - **Piste ouverte identifiée en marge de ce chantier** : le même bug
+    (`display: none` sur l'input) existe aussi dans `EditeurSection.vue`
+    et `TemplatesFormulaires.vue` — tous deux plus loin dans la liste de ce
+    chantier (§3). Les corriger explicitement quand leur tour viendra
+    plutôt que par surprise (`grep "input\[type='file'\] {"` sur le
+    fichier avant de commencer, pour confirmer si le bug y est toujours
+    présent au moment venu).
+  - Même écart méthodologique que les deux écrans précédents (session de
+    test expirée, voir §5) : non revalidé au clavier en direct.
 - **13/09/2026** — `SuiviPeriodicite.vue` **terminé** (fonctionnel + UI),
   2 commits sur `main`, CI verte sur les deux :
   - Fonctionnel (`1bc0682`) : écran en **lecture seule**, aucune mutation
@@ -313,7 +342,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `Process.vue` — chantier fonctionnel puis UI, avec le
+1. `RevueStructureProcedure.vue` — chantier fonctionnel puis UI, avec le
    client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre
    de la liste en §3.
 2. Mettre à jour ce fichier après **chaque** chantier terminé (pas
