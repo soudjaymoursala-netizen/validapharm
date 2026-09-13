@@ -1,9 +1,10 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
+import { useTestDefinitionStore } from '../stores/useTestDefinitionStore'
 import DefinitionTests from './DefinitionTests.vue'
 
 function routeurDeTest() {
@@ -44,7 +45,7 @@ describe('DefinitionTests', () => {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },
     })
-    await flushPromises()
+    await attendreQue(() => wrapper.find('.bloc-requirements form').exists())
 
     // Exigence
     const formRequirement = wrapper.find('.bloc-requirements form')
@@ -119,7 +120,7 @@ describe('DefinitionTests', () => {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },
     })
-    await flushPromises()
+    await attendreQue(() => wrapper.find('.bloc-requirements form').exists())
 
     const formRequirement = wrapper.find('.bloc-requirements form')
     const inputsRequirement = formRequirement.findAll('input[type="text"]')
@@ -154,5 +155,112 @@ describe('DefinitionTests', () => {
       .map((o) => o.text())
     expect(optionsTest).not.toContain('Candidat non traité')
     expect(await db.tests.count()).toBe(0)
+  })
+})
+
+describe('DefinitionTests — mutations de statut non vérifiées', () => {
+  test('un échec d’acceptation de candidat affiche un message, ne casse pas silencieusement', async () => {
+    const wrapper = mount(DefinitionTests, {
+      props: { clientId: 'client-1' },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await attendreQue(() => wrapper.find('.bloc-requirements form').exists())
+
+    const formRequirement = wrapper.find('.bloc-requirements form')
+    const inputsRequirement = formRequirement.findAll('input[type="text"]')
+    await inputsRequirement[0]?.setValue('URS-003')
+    await inputsRequirement[1]?.setValue('Exigence test')
+    await formRequirement.trigger('submit.prevent')
+    await attendreQue(
+      async () => (await db.requirements.where('client_id').equals('client-1').count()) > 0,
+    )
+
+    const formObjectif = wrapper.find('.bloc-objectifs form')
+    await formObjectif.find('select').setValue((await db.requirements.toArray())[0]?.id)
+    await formObjectif.find('input[type="text"]').setValue('Objectif test')
+    await formObjectif.trigger('submit.prevent')
+    await attendreQue(
+      async () => (await db.testObjectives.where('client_id').equals('client-1').count()) > 0,
+    )
+
+    const formCandidat = wrapper.find('.bloc-candidats form')
+    await formCandidat.find('select').setValue((await db.testObjectives.toArray())[0]?.id)
+    await formCandidat.find('input[type="text"]').setValue('Candidat à accepter')
+    await formCandidat.trigger('submit.prevent')
+    await attendreQue(
+      async () => (await db.testCandidates.where('client_id').equals('client-1').count()) > 0,
+    )
+
+    // Reproduit une réponse métier réelle (candidat supprimé/modifié
+    // entre-temps sur un autre poste) — avant ce correctif, le clic sur
+    // "Accepter" échouait en silence total, sans le moindre message.
+    const testStore = useTestDefinitionStore()
+    testStore.accepterTestCandidate = vi.fn().mockResolvedValue(null)
+
+    await wrapper.find('.liste-candidats button').trigger('click')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain("Impossible d'accepter ce candidat")
+    expect((await db.testCandidates.toArray())[0]?.statut).toBe('propose')
+  })
+
+  test('un échec d’approbation de test affiche un message, ne casse pas silencieusement', async () => {
+    const wrapper = mount(DefinitionTests, {
+      props: { clientId: 'client-1' },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await attendreQue(() => wrapper.find('.bloc-requirements form').exists())
+
+    const formRequirement = wrapper.find('.bloc-requirements form')
+    const inputsRequirement = formRequirement.findAll('input[type="text"]')
+    await inputsRequirement[0]?.setValue('URS-004')
+    await inputsRequirement[1]?.setValue('Exigence test')
+    await formRequirement.trigger('submit.prevent')
+    await attendreQue(
+      async () => (await db.requirements.where('client_id').equals('client-1').count()) > 0,
+    )
+
+    const formObjectif = wrapper.find('.bloc-objectifs form')
+    await formObjectif.find('select').setValue((await db.requirements.toArray())[0]?.id)
+    await formObjectif.find('input[type="text"]').setValue('Objectif test')
+    await formObjectif.trigger('submit.prevent')
+    await attendreQue(
+      async () => (await db.testObjectives.where('client_id').equals('client-1').count()) > 0,
+    )
+
+    const formCandidat = wrapper.find('.bloc-candidats form')
+    await formCandidat.find('select').setValue((await db.testObjectives.toArray())[0]?.id)
+    await formCandidat.find('input[type="text"]').setValue('Candidat à tester')
+    await formCandidat.trigger('submit.prevent')
+    await attendreQue(
+      async () => (await db.testCandidates.where('client_id').equals('client-1').count()) > 0,
+    )
+
+    await wrapper.find('.liste-candidats button').trigger('click')
+    await attendreQue(async () => (await db.testCandidates.toArray())[0]?.statut === 'accepte')
+
+    const formTest = wrapper.find('.bloc-tests form')
+    await formTest.find('select').setValue((await db.testCandidates.toArray())[0]?.id)
+    await formTest.findAll('input[type="text"]')[0]?.setValue('OQ-TEST-02')
+    const ligneEtape = formTest.find('.ligne-etape')
+    const inputsEtape = ligneEtape.findAll('input')
+    await inputsEtape[0]?.setValue('Lancer le cycle')
+    await inputsEtape[1]?.setValue('Cycle démarre sans alarme')
+    await formTest.trigger('submit.prevent')
+    await attendreQue(
+      async () => (await db.tests.where('client_id').equals('client-1').count()) > 0,
+    )
+
+    // Reproduit un test supprimé/modifié entre-temps sur un autre poste —
+    // avant ce correctif, le clic sur "Approuver" échouait en silence
+    // total, sans le moindre message.
+    const testStore = useTestDefinitionStore()
+    testStore.approuverTest = vi.fn().mockResolvedValue(null)
+
+    await wrapper.find('.liste-tests button').trigger('click')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('Impossible d’approuver ce test')
+    expect((await db.tests.toArray())[0]?.statut).toBe('brouillon')
   })
 })

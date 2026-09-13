@@ -18,12 +18,18 @@ const structureStore = useStructureSystemeStore()
 const testStore = useTestDefinitionStore()
 
 const nomClient = ref<string | null>(null)
+const enChargement = ref(true)
+const erreurAction = ref<string | null>(null)
 
 onMounted(async () => {
-  const client = await clientsStore.obtenirClient(props.clientId)
-  nomClient.value = client?.name ?? null
-  await structureStore.charger(props.clientId)
-  await testStore.charger(props.clientId)
+  try {
+    const client = await clientsStore.obtenirClient(props.clientId)
+    nomClient.value = client?.name ?? null
+    await structureStore.charger(props.clientId)
+    await testStore.charger(props.clientId)
+  } finally {
+    enChargement.value = false
+  }
 })
 
 const LIBELLES_STATUT_CANDIDATE: Record<StatutTestCandidate, string> = {
@@ -124,19 +130,34 @@ async function creerCandidat(): Promise<void> {
 }
 
 async function accepter(candidatId: string): Promise<void> {
-  await testStore.accepterTestCandidate(props.clientId, candidatId)
+  erreurAction.value = null
+  const resultat = await testStore.accepterTestCandidate(props.clientId, candidatId)
+  if (!resultat) {
+    erreurAction.value =
+      "Impossible d'accepter ce candidat — il a peut-être été modifié ou supprimé entre-temps."
+  }
 }
 
 async function rejeter(candidatId: string): Promise<void> {
   const motif = motifsParCandidat.value[candidatId]?.trim()
   if (!motif) return
-  await testStore.rejeterTestCandidate(props.clientId, candidatId, motif)
+  erreurAction.value = null
+  const resultat = await testStore.rejeterTestCandidate(props.clientId, candidatId, motif)
+  if (!resultat) {
+    erreurAction.value =
+      'Impossible de rejeter ce candidat — il a peut-être été modifié ou supprimé entre-temps.'
+  }
 }
 
 async function besoinInformation(candidatId: string): Promise<void> {
   const motif = motifsParCandidat.value[candidatId]?.trim()
   if (!motif) return
-  await testStore.marquerBesoinInformation(props.clientId, candidatId, motif)
+  erreurAction.value = null
+  const resultat = await testStore.marquerBesoinInformation(props.clientId, candidatId, motif)
+  if (!resultat) {
+    erreurAction.value =
+      'Impossible de marquer ce candidat comme nécessitant des informations — il a peut-être été modifié ou supprimé entre-temps.'
+  }
 }
 
 const candidatsAcceptes = computed(() =>
@@ -188,7 +209,12 @@ async function creerTest(): Promise<void> {
 }
 
 async function approuverTest(testId: string): Promise<void> {
-  await testStore.approuverTest(props.clientId, testId)
+  erreurAction.value = null
+  const resultat = await testStore.approuverTest(props.clientId, testId)
+  if (!resultat) {
+    erreurAction.value =
+      'Impossible d’approuver ce test — il a peut-être été modifié ou supprimé entre-temps.'
+  }
 }
 
 // --- Couverture ---
@@ -216,215 +242,221 @@ async function declarerCouverture(): Promise<void> {
       Chaîne de définition Requirement → Objectif de test → Candidat → Test, avec couverture
       explicite — jamais déduite automatiquement.
     </p>
+    <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
 
-    <section class="bloc-requirements">
-      <h2>Exigences</h2>
-      <form class="formulaire" @submit.prevent="creerRequirement">
-        <label>
-          Référence
-          <input v-model="refRequirement" type="text" required placeholder="ex. URS-001" />
-        </label>
-        <label>
-          Titre
-          <input v-model="titreRequirement" type="text" required />
-        </label>
-        <label>
-          Description
-          <textarea v-model="descriptionRequirement" rows="2" />
-        </label>
-        <label>
-          Nœud Structure Système (optionnel)
-          <select v-model="assetNodeRequirement">
-            <option value="">— aucun —</option>
-            <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
-              {{ noeud.name }} ({{ noeud.code }})
-            </option>
-          </select>
-        </label>
-        <button type="submit">Créer l'exigence</button>
-      </form>
-      <ul v-if="testStore.requirements.length > 0">
-        <li v-for="r in testStore.requirements" :key="r.id">
-          <strong>{{ r.reference }}</strong> — {{ r.titre }}
-          <ul v-if="couvertureRisques(r.id).length > 0" class="liste-couverture-risques">
-            <li
-              v-for="risque in couvertureRisques(r.id)"
-              :key="risque.risk_assessment_id"
-              :class="risque.statut === 'non_couvert' ? 'risque-non-couvert' : 'risque-couvert'"
+    <p v-if="enChargement" class="etat-vide">Chargement…</p>
+    <template v-else>
+      <section class="bloc-requirements">
+        <h2>Exigences</h2>
+        <form class="formulaire" @submit.prevent="creerRequirement">
+          <label>
+            Référence
+            <input v-model="refRequirement" type="text" required placeholder="ex. URS-001" />
+          </label>
+          <label>
+            Titre
+            <input v-model="titreRequirement" type="text" required />
+          </label>
+          <label>
+            Description
+            <textarea v-model="descriptionRequirement" rows="2" />
+          </label>
+          <label>
+            Nœud Structure Système (optionnel)
+            <select v-model="assetNodeRequirement">
+              <option value="">— aucun —</option>
+              <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
+                {{ noeud.name }} ({{ noeud.code }})
+              </option>
+            </select>
+          </label>
+          <button type="submit">Créer l'exigence</button>
+        </form>
+        <ul v-if="testStore.requirements.length > 0">
+          <li v-for="r in testStore.requirements" :key="r.id">
+            <strong>{{ r.reference }}</strong> — {{ r.titre }}
+            <ul v-if="couvertureRisques(r.id).length > 0" class="liste-couverture-risques">
+              <li
+                v-for="risque in couvertureRisques(r.id)"
+                :key="risque.risk_assessment_id"
+                :class="risque.statut === 'non_couvert' ? 'risque-non-couvert' : 'risque-couvert'"
+              >
+                {{ risque.statut === 'non_couvert' ? '⚠' : '✓' }} {{ risque.mode_defaillance }} —
+                {{ risque.statut === 'non_couvert' ? 'non couvert par un test' : 'couvert' }}
+              </li>
+            </ul>
+          </li>
+        </ul>
+        <p v-else>Aucune exigence pour l'instant.</p>
+      </section>
+
+      <section class="bloc-objectifs">
+        <h2>Objectifs de test</h2>
+        <form class="formulaire" @submit.prevent="creerObjectif">
+          <label>
+            Exigence
+            <select v-model="requirementSelectionne" required>
+              <option value="">— choisir —</option>
+              <option v-for="r in testStore.requirements" :key="r.id" :value="r.id">
+                {{ r.reference }} — {{ r.titre }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Titre de l'objectif
+            <input v-model="titreObjectif" type="text" required />
+          </label>
+          <label>
+            Description
+            <textarea v-model="descriptionObjectif" rows="2" />
+          </label>
+          <button type="submit">Ajouter l'objectif</button>
+        </form>
+        <ul v-if="testStore.testObjectives.length > 0">
+          <li v-for="o in testStore.testObjectives" :key="o.id">
+            {{ o.titre }} <span class="meta">({{ libelleRequirement(o.requirement_id) }})</span>
+            <button type="button" class="bouton-secondaire" @click="genererDepuisRisques(o.id)">
+              Proposer des candidats depuis les risques
+            </button>
+            <p v-if="messageGenerationParObjectif[o.id]" class="message-generation">
+              {{ messageGenerationParObjectif[o.id] }}
+            </p>
+          </li>
+        </ul>
+        <p v-else>Aucun objectif pour l'instant.</p>
+      </section>
+
+      <section class="bloc-candidats">
+        <h2>Candidats de test</h2>
+        <form class="formulaire" @submit.prevent="creerCandidat">
+          <label>
+            Objectif de test
+            <select v-model="objectifSelectionne" required>
+              <option value="">— choisir —</option>
+              <option v-for="o in testStore.testObjectives" :key="o.id" :value="o.id">
+                {{ o.titre }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Titre du candidat
+            <input v-model="titreCandidat" type="text" required />
+          </label>
+          <label>
+            Description
+            <textarea v-model="descriptionCandidat" rows="2" />
+          </label>
+          <button type="submit">Proposer le candidat</button>
+        </form>
+        <ul v-if="testStore.testCandidates.length > 0" class="liste-candidats">
+          <li v-for="c in testStore.testCandidates" :key="c.id">
+            <p>
+              {{ c.titre }} <span class="meta">({{ libelleObjectif(c.test_objective_id) }})</span> —
+              <strong>{{ LIBELLES_STATUT_CANDIDATE[c.statut] }}</strong>
+              <span v-if="c.risk_assessment_id" class="badge-origine-risque"
+                >proposé depuis l'analyse de risque</span
+              >
+            </p>
+            <template
+              v-if="
+                c.statut === 'propose' ||
+                c.statut === 'besoin_information' ||
+                c.statut === 'besoin_revue'
+              "
             >
-              {{ risque.statut === 'non_couvert' ? '⚠' : '✓' }} {{ risque.mode_defaillance }} —
-              {{ risque.statut === 'non_couvert' ? 'non couvert par un test' : 'couvert' }}
-            </li>
-          </ul>
-        </li>
-      </ul>
-      <p v-else>Aucune exigence pour l'instant.</p>
-    </section>
+              <button type="button" @click="accepter(c.id)">Accepter</button>
+              <input
+                v-model="motifsParCandidat[c.id]"
+                type="text"
+                placeholder="Motif (rejet / besoin d'information)"
+              />
+              <button type="button" @click="rejeter(c.id)">Rejeter</button>
+              <button type="button" @click="besoinInformation(c.id)">Besoin d'information</button>
+            </template>
+          </li>
+        </ul>
+        <p v-else>Aucun candidat pour l'instant.</p>
+      </section>
 
-    <section class="bloc-objectifs">
-      <h2>Objectifs de test</h2>
-      <form class="formulaire" @submit.prevent="creerObjectif">
-        <label>
-          Exigence
-          <select v-model="requirementSelectionne" required>
-            <option value="">— choisir —</option>
-            <option v-for="r in testStore.requirements" :key="r.id" :value="r.id">
-              {{ r.reference }} — {{ r.titre }}
-            </option>
-          </select>
-        </label>
-        <label>
-          Titre de l'objectif
-          <input v-model="titreObjectif" type="text" required />
-        </label>
-        <label>
-          Description
-          <textarea v-model="descriptionObjectif" rows="2" />
-        </label>
-        <button type="submit">Ajouter l'objectif</button>
-      </form>
-      <ul v-if="testStore.testObjectives.length > 0">
-        <li v-for="o in testStore.testObjectives" :key="o.id">
-          {{ o.titre }} <span class="meta">({{ libelleRequirement(o.requirement_id) }})</span>
-          <button type="button" class="bouton-secondaire" @click="genererDepuisRisques(o.id)">
-            Proposer des candidats depuis les risques
-          </button>
-          <p v-if="messageGenerationParObjectif[o.id]" class="message-generation">
-            {{ messageGenerationParObjectif[o.id] }}
+      <section class="bloc-tests">
+        <h2>Tests</h2>
+        <form class="formulaire" @submit.prevent="creerTest">
+          <label>
+            Candidat accepté
+            <select v-model="candidatSelectionne" required>
+              <option value="">— choisir —</option>
+              <option v-for="c in candidatsAcceptes" :key="c.id" :value="c.id">
+                {{ c.titre }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Titre du test
+            <input v-model="titreTest" type="text" required />
+          </label>
+          <label>
+            Description
+            <textarea v-model="descriptionTest" rows="2" />
+          </label>
+          <fieldset class="etapes">
+            <legend>Étapes</legend>
+            <div v-for="(etape, index) in etapesBrouillon" :key="index" class="ligne-etape">
+              <input v-model="etape.action" type="text" placeholder="Action" />
+              <input v-model="etape.resultatAttendu" type="text" placeholder="Résultat attendu" />
+              <button type="button" @click="retirerEtape(index)">Retirer</button>
+            </div>
+            <button type="button" @click="ajouterEtape">+ Ajouter une étape</button>
+          </fieldset>
+          <p v-if="erreurCreationTest" class="bandeau-erreur" role="alert">
+            {{ erreurCreationTest }}
           </p>
-        </li>
-      </ul>
-      <p v-else>Aucun objectif pour l'instant.</p>
-    </section>
+          <button type="submit">Créer le test</button>
+        </form>
+        <ul v-if="testStore.tests.length > 0" class="liste-tests">
+          <li v-for="t in testStore.tests" :key="t.id">
+            {{ t.titre }} —
+            <strong>{{ t.statut === 'approuve' ? 'Approuvé' : 'Brouillon' }}</strong> ({{
+              t.etapes.length
+            }}
+            étape(s))
+            <button v-if="t.statut === 'brouillon'" type="button" @click="approuverTest(t.id)">
+              Approuver
+            </button>
+          </li>
+        </ul>
+        <p v-else>Aucun test pour l'instant.</p>
+      </section>
 
-    <section class="bloc-candidats">
-      <h2>Candidats de test</h2>
-      <form class="formulaire" @submit.prevent="creerCandidat">
-        <label>
-          Objectif de test
-          <select v-model="objectifSelectionne" required>
-            <option value="">— choisir —</option>
-            <option v-for="o in testStore.testObjectives" :key="o.id" :value="o.id">
-              {{ o.titre }}
-            </option>
-          </select>
-        </label>
-        <label>
-          Titre du candidat
-          <input v-model="titreCandidat" type="text" required />
-        </label>
-        <label>
-          Description
-          <textarea v-model="descriptionCandidat" rows="2" />
-        </label>
-        <button type="submit">Proposer le candidat</button>
-      </form>
-      <ul v-if="testStore.testCandidates.length > 0" class="liste-candidats">
-        <li v-for="c in testStore.testCandidates" :key="c.id">
-          <p>
-            {{ c.titre }} <span class="meta">({{ libelleObjectif(c.test_objective_id) }})</span> —
-            <strong>{{ LIBELLES_STATUT_CANDIDATE[c.statut] }}</strong>
-            <span v-if="c.risk_assessment_id" class="badge-origine-risque"
-              >proposé depuis l'analyse de risque</span
-            >
-          </p>
-          <template
-            v-if="
-              c.statut === 'propose' ||
-              c.statut === 'besoin_information' ||
-              c.statut === 'besoin_revue'
-            "
-          >
-            <button type="button" @click="accepter(c.id)">Accepter</button>
-            <input
-              v-model="motifsParCandidat[c.id]"
-              type="text"
-              placeholder="Motif (rejet / besoin d'information)"
-            />
-            <button type="button" @click="rejeter(c.id)">Rejeter</button>
-            <button type="button" @click="besoinInformation(c.id)">Besoin d'information</button>
-          </template>
-        </li>
-      </ul>
-      <p v-else>Aucun candidat pour l'instant.</p>
-    </section>
-
-    <section class="bloc-tests">
-      <h2>Tests</h2>
-      <form class="formulaire" @submit.prevent="creerTest">
-        <label>
-          Candidat accepté
-          <select v-model="candidatSelectionne" required>
-            <option value="">— choisir —</option>
-            <option v-for="c in candidatsAcceptes" :key="c.id" :value="c.id">{{ c.titre }}</option>
-          </select>
-        </label>
-        <label>
-          Titre du test
-          <input v-model="titreTest" type="text" required />
-        </label>
-        <label>
-          Description
-          <textarea v-model="descriptionTest" rows="2" />
-        </label>
-        <fieldset class="etapes">
-          <legend>Étapes</legend>
-          <div v-for="(etape, index) in etapesBrouillon" :key="index" class="ligne-etape">
-            <input v-model="etape.action" type="text" placeholder="Action" />
-            <input v-model="etape.resultatAttendu" type="text" placeholder="Résultat attendu" />
-            <button type="button" @click="retirerEtape(index)">Retirer</button>
-          </div>
-          <button type="button" @click="ajouterEtape">+ Ajouter une étape</button>
-        </fieldset>
-        <p v-if="erreurCreationTest" class="bandeau-erreur" role="alert">
-          {{ erreurCreationTest }}
-        </p>
-        <button type="submit">Créer le test</button>
-      </form>
-      <ul v-if="testStore.tests.length > 0" class="liste-tests">
-        <li v-for="t in testStore.tests" :key="t.id">
-          {{ t.titre }} —
-          <strong>{{ t.statut === 'approuve' ? 'Approuvé' : 'Brouillon' }}</strong> ({{
-            t.etapes.length
-          }}
-          étape(s))
-          <button v-if="t.statut === 'brouillon'" type="button" @click="approuverTest(t.id)">
-            Approuver
-          </button>
-        </li>
-      </ul>
-      <p v-else>Aucun test pour l'instant.</p>
-    </section>
-
-    <section class="bloc-couverture">
-      <h2>Couverture (traçabilité)</h2>
-      <form class="formulaire" @submit.prevent="declarerCouverture">
-        <label>
-          Exigence
-          <select v-model="requirementCouverture" required>
-            <option value="">— choisir —</option>
-            <option v-for="r in testStore.requirements" :key="r.id" :value="r.id">
-              {{ r.reference }} — {{ r.titre }}
-            </option>
-          </select>
-        </label>
-        <label>
-          Test approuvé
-          <select v-model="testCouverture" required>
-            <option value="">— choisir —</option>
-            <option v-for="t in testsApprouves" :key="t.id" :value="t.id">{{ t.titre }}</option>
-          </select>
-        </label>
-        <button type="submit">Déclarer la couverture</button>
-      </form>
-      <ul v-if="testStore.couvertures.length > 0">
-        <li v-for="c in testStore.couvertures" :key="c.id">
-          {{ libelleRequirement(c.requirement_id) }} couvert par «
-          {{ testStore.tests.find((t) => t.id === c.test_id)?.titre ?? c.test_id }} »
-        </li>
-      </ul>
-      <p v-else>Aucune couverture déclarée.</p>
-    </section>
+      <section class="bloc-couverture">
+        <h2>Couverture (traçabilité)</h2>
+        <form class="formulaire" @submit.prevent="declarerCouverture">
+          <label>
+            Exigence
+            <select v-model="requirementCouverture" required>
+              <option value="">— choisir —</option>
+              <option v-for="r in testStore.requirements" :key="r.id" :value="r.id">
+                {{ r.reference }} — {{ r.titre }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Test approuvé
+            <select v-model="testCouverture" required>
+              <option value="">— choisir —</option>
+              <option v-for="t in testsApprouves" :key="t.id" :value="t.id">{{ t.titre }}</option>
+            </select>
+          </label>
+          <button type="submit">Déclarer la couverture</button>
+        </form>
+        <ul v-if="testStore.couvertures.length > 0">
+          <li v-for="c in testStore.couvertures" :key="c.id">
+            {{ libelleRequirement(c.requirement_id) }} couvert par «
+            {{ testStore.tests.find((t) => t.id === c.test_id)?.titre ?? c.test_id }} »
+          </li>
+        </ul>
+        <p v-else>Aucune couverture déclarée.</p>
+      </section>
+    </template>
   </main>
 </template>
 
@@ -496,6 +528,10 @@ textarea {
 
 .bandeau-erreur {
   color: var(--vp-danger);
+}
+
+.etat-vide {
+  color: var(--vp-texte-secondaire);
 }
 
 button {
