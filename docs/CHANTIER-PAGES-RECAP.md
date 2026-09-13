@@ -82,7 +82,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `TemplatesFormulaires.vue` | ✅ *(aucun bug trouvé)* | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `TableauDeBord.vue` | ✅ *(aucun bug trouvé)* | ✅ *(aucun bug trouvé — déjà conforme)* |
 | `FicheProjet.vue` | ✅ | ✅ *(aucun bug trouvé — déjà conforme)* |
-| `ListeMissions.vue` | ⬜ | ⬜ |
+| `ListeMissions.vue` | ✅ *(aucun bug trouvé)* | ✅ |
 | `MissionWorkspace.vue` | ⬜ | ⬜ |
 | `AssistantStrategieQualification.vue` | ⬜ | ⬜ |
 | `AssistantCreationLivrable.vue` | ⬜ | ⬜ |
@@ -113,6 +113,33 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `ListeMissions.vue` **terminé** (1 commit, aucun
+  chantier fonctionnel distinct — voir ci-dessous), CI verte :
+  - Fonctionnel : écran relu en entier avec `useMissionStore`/
+    `useOrganizationStore`/`useStructureSystemeStore` — tout Dexie-only,
+    `creerMission` retourne toujours une entité concrète. **Aucun bug
+    trouvé.**
+  - UI/**cohérence de navigation** (`4828326`) : seul écran lié à un
+    client (prop `clientId`) sans lien-retour ni nom du client affiché
+    dans son en-tête, alors que c'est la convention établie partout
+    ailleurs dans l'app. Corrigé à l'identique — ajout de
+    `clientsStore.obtenirClient` + `.lien-retour` vers `fiche-client`,
+    laissé sans CSS locale pour bénéficier du style riche déjà défini
+    globalement dans `tokens.css` (pilule + flèche + focus-visible),
+    plutôt que de dupliquer une version appauvrie comme le fait
+    `FicheProjet.vue` (voir piste ouverte ci-dessous).
+  - **Piste ouverte** (trouvée en marge, pas corrigée ici) :
+    `RevueStructureProcedure.vue` (déjà traité, §4 plus bas) et
+    `MissionWorkspace.vue` (pas encore traité) partagent la même absence
+    de lien-retour/nom de client — à vérifier explicitement quand
+    `MissionWorkspace.vue` sera traité ; `RevueStructureProcedure.vue`
+    a été manqué lors de son propre chantier (déjà poussé, pas rouvert
+    pour l'instant faute de temps — à corriger si l'occasion se présente).
+    Séparément : plusieurs écrans (dont `FicheProjet.vue`) redéfinissent
+    une version locale simplifiée de `.lien-retour` qui écrase par
+    spécificité Vue le style riche global de `tokens.css` (pilule + flèche
+    + ombre) — pas nécessairement un bug, mais une incohérence visuelle
+    entre écrans à garder en tête.
 - **13/09/2026** — `FicheProjet.vue` **terminé** (1 commit fonctionnel,
   aucun commit UI — déjà conforme), CI verte :
   - Fonctionnel (`6e4513e`) : **8 sites d'appel** (partage, suspendre/
@@ -424,10 +451,15 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `ListeMissions.vue` — chantier fonctionnel puis UI, avec le
-   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) et un projet
-   créé dessus depuis `TableauDeBord.vue` si besoin, dans l'ordre de la
+1. `MissionWorkspace.vue` — chantier fonctionnel puis UI, avec le
+   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) et une mission
+   créée dessus depuis `ListeMissions.vue` si besoin, dans l'ordre de la
    liste en §3.
+   **Vérifier explicitement** (piste ouverte notée lors du chantier
+   `ListeMissions.vue`) : cet écran manque peut-être aussi du lien-retour/
+   nom du client (motif déjà trouvé sur `ListeMissions.vue` et
+   `RevueStructureProcedure.vue`, non corrigé sur ce dernier faute de
+   temps).
    **Piste à vérifier en priorité** : le motif « mutations de statut
    ignorées » trouvé sur `FicheProjet.vue` (8 sites, commit `6e4513e`)
    n'est probablement pas isolé à cet écran — `grep` les autres écrans qui
