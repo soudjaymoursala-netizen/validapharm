@@ -80,7 +80,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `Process.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `RevueStructureProcedure.vue` | ✅ *(aucun bug trouvé)* | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `TemplatesFormulaires.vue` | ✅ *(aucun bug trouvé)* | ✅ *(non revalidé visuellement en direct — voir §4)* |
-| `TableauDeBord.vue` | ⬜ | ⬜ |
+| `TableauDeBord.vue` | ✅ *(aucun bug trouvé)* | ✅ *(aucun bug trouvé — déjà conforme)* |
 | `FicheProjet.vue` | ⬜ | ⬜ |
 | `ListeMissions.vue` | ⬜ | ⬜ |
 | `MissionWorkspace.vue` | ⬜ | ⬜ |
@@ -113,6 +113,19 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `TableauDeBord.vue` **terminé, aucun commit** (aucun
+  bug trouvé sur aucun des deux chantiers) : écran relu en entier avec
+  `useProjectsStore`/`useClientsStore`/`useSynchronisationStore` —
+  `chargerProjets`/`creerProjet` purement locaux et toujours réussis,
+  `synchroniser`/`recupererDepuisGitHub` déjà entièrement gardés (toute
+  exception convertie en résultat typé, jamais propagée), `messageSync`
+  vérifie bien `ok`/`conflit`. Côté UI : boutons/cartes/hover/focus déjà
+  cohérents avec les jetons `tokens.css`, aucun des deux motifs de bugs
+  récurrents de ce chantier (`grep` fait, voir §5). **Premier écran de ce
+  chantier sans aucune modification** — le plus abouti rencontré jusqu'ici.
+  Note (pas un bug, juste une observation) : aucun fichier de test dédié
+  n'existe pour cet écran (`TableauDeBord.test.ts` absent) — à garder en
+  tête si un futur chantier y touche.
 - **13/09/2026** — `TemplatesFormulaires.vue` **terminé** (2 commits sur
   `main`), CI verte sur les deux :
   - Fonctionnel (`c4ef21e`) : relu en entier avec `useGabaritExportStore` —
@@ -389,9 +402,10 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `TableauDeBord.vue` — chantier fonctionnel puis UI, avec le
-   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre
-   de la liste en §3.
+1. `FicheProjet.vue` — chantier fonctionnel puis UI, avec le
+   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) et un projet
+   créé dessus depuis `TableauDeBord.vue` si besoin, dans l'ordre de la
+   liste en §3.
    **Balayage exhaustif fait le 13/09/2026** (`grep` sur tout
    `src/presentation/screens/*.vue`) pour les deux motifs de bugs
    récurrents de ce chantier — plus la peine de les redécouvrir un par un :
