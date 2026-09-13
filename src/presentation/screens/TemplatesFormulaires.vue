@@ -146,6 +146,8 @@ input[type='text'] {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  position: relative;
+  overflow: hidden;
   padding: 0.4rem 0.75rem;
   border: 1px solid var(--vp-bordure);
   border-radius: 0.25rem;
@@ -155,9 +157,18 @@ input[type='text'] {
 /* Le contrôle natif du fichier (« Choisir un fichier » + nom, largeur
    fixée par le navigateur) débordait sur mobile — seul le libellé stylé
    doit être visible, le `<label>` englobant continue de déclencher le
-   sélecteur de fichier natif au clic. */
+   sélecteur de fichier natif au clic. `display: none` (comme trouvé
+   initialement ici) retire cependant l'input du parcours clavier — un
+   utilisateur clavier ne peut alors ni l'atteindre ni l'activer. Même
+   correctif que Process.vue/RevueStructureProcedure.vue : superposition
+   invisible mais toujours focusable/activable (`opacity: 0` plutôt que
+   `display: none`), qui résout le débordement visuel sans sacrifier
+   l'accessibilité clavier. */
 .bouton-fichier input[type='file'] {
-  display: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .bandeau-erreur {
