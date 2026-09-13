@@ -79,7 +79,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `SuiviPeriodicite.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `Process.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `RevueStructureProcedure.vue` | ✅ *(aucun bug trouvé)* | ✅ *(non revalidé visuellement en direct — voir §4)* |
-| `TemplatesFormulaires.vue` | ⬜ | ⬜ |
+| `TemplatesFormulaires.vue` | ✅ *(aucun bug trouvé)* | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `TableauDeBord.vue` | ⬜ | ⬜ |
 | `FicheProjet.vue` | ⬜ | ⬜ |
 | `ListeMissions.vue` | ⬜ | ⬜ |
@@ -113,6 +113,24 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `TemplatesFormulaires.vue` **terminé** (2 commits sur
+  `main`), CI verte sur les deux :
+  - Fonctionnel (`c4ef21e`) : relu en entier avec `useGabaritExportStore` —
+    aucun bug trouvé. Point vérifié explicitement avant de le « corriger »
+    à tort : la suppression d'un gabarit sans confirmation est un
+    comportement **intentionnel et déjà testé** (`TemplatesFormulaires.
+    test.ts`, test « supprimer un gabarit... »), pas un oubli — laissé
+    inchangé. Test ajouté pour confirmer le bénéfice du correctif
+    `obtenirClient` (même motif que les écrans précédents).
+  - UI/**accessibilité** (`0a4124f`) : même bug que `Process.vue`/
+    `RevueStructureProcedure.vue` (`display: none` sur l'input fichier),
+    déjà annoncé dans la précédente mise à jour de ce fichier — confirmé
+    puis corrigé sans surprise. Le commentaire d'origine expliquait un vrai
+    problème de débordement visuel mobile ; la solution déjà établie
+    ailleurs (superposition invisible via `opacity: 0`) résout ce même
+    problème sans sacrifier l'accessibilité clavier.
+  - Non revalidé visuellement en direct (session de test toujours
+    expirée, voir §5).
 - **13/09/2026** — `RevueStructureProcedure.vue` **terminé** (1 seul
   commit, aucun chantier fonctionnel distinct — voir ci-dessous), CI
   verte :
@@ -371,13 +389,24 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `TemplatesFormulaires.vue` — chantier fonctionnel puis UI, avec le
+1. `TableauDeBord.vue` — chantier fonctionnel puis UI, avec le
    client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre
-   de la liste en §3. **Déjà confirmé (`grep`, 13/09/2026)** : cet écran a
-   le même bug `.bouton-fichier input[type='file'] { display: none; }` que
-   `Process.vue`/`RevueStructureProcedure.vue` — appliquer le même
-   correctif (voir leurs commits `115f386`/`36e16f3`) sans le
-   redécouvrir.
+   de la liste en §3.
+   **Balayage exhaustif fait le 13/09/2026** (`grep` sur tout
+   `src/presentation/screens/*.vue`) pour les deux motifs de bugs
+   récurrents de ce chantier — plus la peine de les redécouvrir un par un :
+   - `.bouton-fichier input[type='file'] { display: none; }`
+     (inaccessibilité clavier) : reste uniquement dans
+     `EditeurSection.vue` (plus loin dans la liste, §3). Tous les autres
+     écrans qui avaient ce motif sont déjà corrigés (`Process.vue`,
+     `RevueStructureProcedure.vue`, `TemplatesFormulaires.vue`).
+   - `.badge-confiance--connu { background-color: #dcfce7; ... }` (couleurs
+     hex fixes non adaptées au thème sombre) : reste uniquement dans
+     `MissionWorkspace.vue` (plus loin dans la liste, §3).
+   - Refaire ce `grep` sur le fichier de l'écran en cours avant de
+     conclure qu'« aucun bug trouvé » plutôt que de se fier seulement à
+     cette liste, qui date du 13/09/2026 et peut devenir obsolète si
+     d'autres correctifs sont faits ailleurs entre-temps.
 2. Mettre à jour ce fichier après **chaque** chantier terminé (pas
    seulement en fin de session) — voir la règle en §1.
 3. **Action de suivi issue de `StructureSysteme.vue`** : revalider
