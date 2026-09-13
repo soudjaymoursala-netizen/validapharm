@@ -88,7 +88,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `AssistantCreationLivrable.vue` | ✅ *(aucun bug trouvé)* | ✅ |
 | `EditeurSection.vue` | ✅ | ✅ |
 | `DefinitionTests.vue` | ✅ | ✅ |
-| `ExecutionTests.vue` | ⬜ | ⬜ |
+| `ExecutionTests.vue` | ✅ | ✅ *(aucun bug trouvé)* |
 | `RiskAssessmentAmdec.vue` | ⬜ | ⬜ |
 | `ImpactAssessment.vue` | ⬜ | ⬜ |
 | `ComputerSystemAssessment.vue` | ⬜ | ⬜ |
@@ -113,6 +113,45 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `ExecutionTests.vue` **terminé** (fonctionnel dans un
+  seul commit `6c44ee6`, CI verte, 2 nouveaux tests ; **aucun bug UI
+  trouvé** — écran déjà conforme) :
+  - Fonctionnel : **5 sites de mutation non vérifiée** (même motif que
+    les cinq écrans précédents) — `enregistrerResultatEtape`,
+    `ajouterMesure`, `consignerEvenement`, `cloturerExecution` et
+    `ajouterLocalisation` (appel secondaire dans `enregistrerPreuve`,
+    après un premier appel déjà correctement vérifié) retournent tous une
+    union avec `{erreur}`, jamais vérifiée. **Plus sérieux que les
+    précédents** : 3 de ces 5 sites peuvent échouer précisément avec
+    `execution_deja_cloturee` — le garde-fou d'immutabilité post-clôture
+    qui est **le principe central de cet écran**, explicitement annoncé à
+    l'utilisateur dans son propre rappel ("Immutable après clôture.").
+    Avant ce correctif, toute tentative d'agir sur une exécution déjà
+    clôturée entre-temps (race entre deux postes) échouait en silence
+    total, sans jamais confirmer à l'utilisateur que le garde-fou avait
+    bien fonctionné. Un `erreurParExecution` (indexé par exécution, pas
+    un seul message global, puisque plusieurs exécutions peuvent être
+    affichées en même temps) affiché dans chaque carte concernée. 2 tests
+    ajoutés (mock direct du store sur `cloturerExecution` et
+    `enregistrerResultatEtape`), confirment que l'état réel en base ne
+    change pas et que le message mentionne explicitement la clôture.
+  - UI : écran déjà conforme — pas de flash de contenu trompeur comme sur
+    les écrans précédents (les sections "Exécutions en cours"/"Exécutions
+    terminées" sont simplement absentes tant que non chargées, jamais un
+    message négatif explicite type "Aucune exécution" qui serait faux une
+    fois les données arrivées) ; pas d'input fichier ; pas de couleur hex
+    fixe (seulement des fallbacks `var(--token, #fallback)` inertes tant
+    que le token est défini, comme sur `DefinitionTests.vue`).
+  - **Anomalie CI notée en cours de route, non liée au code** : le commit
+    précédent `72746c4` (docs-only, mise à jour de ce fichier) n'a
+    déclenché **aucun run CI** après ~10 minutes d'attente, alors que
+    tous les commits précédents en avaient toujours déclenché un en
+    quelques secondes. Commit confirmé sur `main` via `git ls-remote`.
+    Pas de code impacté (markdown pur) — poursuite du chantier sans
+    bloquer sur ce non-événement d'infrastructure GitHub plutôt que
+    d'attendre indéfiniment un run qui pourrait ne jamais arriver.
+  - Non revalidé visuellement en direct (session de test toujours expirée,
+    voir §5).
 - **13/09/2026** — **Même test instable corrigé une TROISIÈME fois**
   (`1dcae5a`), a échoué à nouveau (constaté sur le commit `b8de7ea`,
   docs-only) malgré le correctif retry du `9834a1d`. Cette fois, cause
@@ -722,29 +761,34 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `ExecutionTests.vue` — chantier fonctionnel puis UI, avec le client de
-   test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre de la
-   liste en §3.
-   **Avant d'écrire de nouveaux tests** : vérifier si `ExecutionTests.test.ts`
-   (et les fichiers de test des écrans suivants) a un `afterEach` global
-   laissant le temps aux promesses résiduelles de se résoudre entre les
-   tests — son absence a fait échouer `MissionWorkspace.test.ts` en CI à
-   trois reprises (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge
-   plusieurs stores en `Promise.all` sans jamais démonter son wrapper
-   d'un test à l'autre. Si le fichier de l'écran en cours a le même
-   profil (plusieurs stores chargés dans `onMounted`, pas d'`afterEach`
-   de "settle"), ajouter ce filet préventivement plutôt que d'attendre un
-   nouvel incident CI.
+1. `RiskAssessmentAmdec.vue` — chantier fonctionnel puis UI, avec le
+   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans
+   l'ordre de la liste en §3.
+   **Avant d'écrire de nouveaux tests** : vérifier si
+   `RiskAssessmentAmdec.test.ts` a un `afterEach` global laissant le temps
+   aux promesses résiduelles de se résoudre entre les tests — son absence
+   a fait échouer `MissionWorkspace.test.ts` en CI à trois reprises
+   (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge plusieurs
+   stores en `Promise.all` sans jamais démonter son wrapper d'un test à
+   l'autre. Si le fichier de l'écran en cours a le même profil (plusieurs
+   stores chargés dans `onMounted`, pas d'`afterEach` de "settle"),
+   ajouter ce filet préventivement plutôt que d'attendre un nouvel
+   incident CI.
    **Piste à vérifier en priorité** : le motif « mutation non vérifiée »
    (union `Entité | {erreur}` ou `Entité | null`, ou effet de bord local
    appliqué inconditionnellement sans vérifier le résultat) — trouvé sur
    `FicheProjet.vue` (8 sites, `6e4513e`), `MissionWorkspace.vue` (2 sites,
    `34b59fe`), `AssistantStrategieQualification.vue` (1 site, `c9e743a`),
-   `EditeurSection.vue` (6 sites, `8b1b244`) et `DefinitionTests.vue`
-   (4 sites, `126b71f`) — cinq écrans sur les six derniers.
-   `AssistantCreationLivrable.vue` reste la seule exception (aucune
-   mutation à risque réaliste) — ce motif est désormais la piste par
-   défaut à vérifier sur chaque nouvel écran, pas une simple possibilité.
+   `EditeurSection.vue` (6 sites, `8b1b244`), `DefinitionTests.vue`
+   (4 sites, `126b71f`) et `ExecutionTests.vue` (5 sites, `6c44ee6`) — six
+   écrans sur les sept derniers, avec des conséquences de plus en plus
+   sérieuses (le dernier touchait directement un garde-fou d'immutabilité
+   annoncé à l'utilisateur). `AssistantCreationLivrable.vue` reste la
+   seule exception — ce motif est désormais la piste par défaut à
+   vérifier sur chaque nouvel écran, en particulier tout garde-fou
+   d'immutabilité/verrouillage explicitement documenté dans l'écran
+   (rechercher spécifiquement les codes d'erreur liés à un statut
+   "clôturé"/"verrouillé"/"validé" dans le store).
    **Piste à vérifier aussi** : l'absence d'état de chargement — trouvée
    sur `AssistantStrategieQualification.vue` (`c9e743a`), `EditeurSection.vue`
    (`8b1b244`, une section) et `DefinitionTests.vue` (`126b71f`, **tout
