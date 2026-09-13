@@ -81,7 +81,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `RevueStructureProcedure.vue` | ✅ *(aucun bug trouvé)* | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `TemplatesFormulaires.vue` | ✅ *(aucun bug trouvé)* | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `TableauDeBord.vue` | ✅ *(aucun bug trouvé)* | ✅ *(aucun bug trouvé — déjà conforme)* |
-| `FicheProjet.vue` | ⬜ | ⬜ |
+| `FicheProjet.vue` | ✅ | ✅ *(aucun bug trouvé — déjà conforme)* |
 | `ListeMissions.vue` | ⬜ | ⬜ |
 | `MissionWorkspace.vue` | ⬜ | ⬜ |
 | `AssistantStrategieQualification.vue` | ⬜ | ⬜ |
@@ -113,6 +113,28 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `FicheProjet.vue` **terminé** (1 commit fonctionnel,
+  aucun commit UI — déjà conforme), CI verte :
+  - Fonctionnel (`6e4513e`) : **8 sites d'appel** (partage, suspendre/
+    reprendre, archiver/désarchiver, changer de phase, supprimer)
+    ignoraient totalement le résultat métier renvoyé par
+    `useProjectsStore` (union `Project | {erreur}` pour des cas réels :
+    race concurrentielle entre deux postes — `introuvable` —, double clic
+    — `deja_suspendu`/`deja_archive`...). Le plus grave :
+    `confirmerArchivage`/`confirmerSuppression` redirigeaient
+    l'utilisateur vers le tableau de bord **comme si l'action avait
+    réussi**, sans jamais vérifier le résultat. Corrigé avec un bandeau
+    d'erreur de page (`erreurAction`) et des libellés humains pour tous
+    les codes métier connus — même discipline que `GestionClients.vue`.
+    2 tests ajoutés (mock direct du store pour reproduire un échec
+    métier réel, même motif que `ConfigurationClient.test.ts`), confirmés
+    en échec sans le correctif. Écran auparavant sans aucun test
+    (`FicheProjet.test.ts` n'existait pas).
+  - UI : **aucun bug trouvé** — écran déjà conforme (comme
+    `TableauDeBord.vue`) : `.bouton-fichier` utilise déjà le bon motif
+    accessible (`opacity: 0`), aucune couleur hex fixe, aucun `outline`/
+    `:focus` local ne fait obstacle à la règle globale
+    `button:focus-visible`.
 - **13/09/2026** — `TableauDeBord.vue` **terminé, aucun commit** (aucun
   bug trouvé sur aucun des deux chantiers) : écran relu en entier avec
   `useProjectsStore`/`useClientsStore`/`useSynchronisationStore` —
@@ -402,10 +424,16 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `FicheProjet.vue` — chantier fonctionnel puis UI, avec le
+1. `ListeMissions.vue` — chantier fonctionnel puis UI, avec le
    client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) et un projet
    créé dessus depuis `TableauDeBord.vue` si besoin, dans l'ordre de la
    liste en §3.
+   **Piste à vérifier en priorité** : le motif « mutations de statut
+   ignorées » trouvé sur `FicheProjet.vue` (8 sites, commit `6e4513e`)
+   n'est probablement pas isolé à cet écran — `grep` les autres écrans qui
+   appellent des méthodes de `useProjectsStore`/stores similaires
+   retournant une union `Entité | {erreur}` (suspendre/reprendre/archiver/
+   changer de statut) sans vérifier `if ('erreur' in resultat)`.
    **Balayage exhaustif fait le 13/09/2026** (`grep` sur tout
    `src/presentation/screens/*.vue`) pour les deux motifs de bugs
    récurrents de ce chantier — plus la peine de les redécouvrir un par un :
