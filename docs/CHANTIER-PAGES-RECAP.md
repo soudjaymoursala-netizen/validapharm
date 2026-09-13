@@ -91,7 +91,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `ExecutionTests.vue` | ✅ | ✅ *(aucun bug trouvé)* |
 | `RiskAssessmentAmdec.vue` | ✅ | ✅ |
 | `ImpactAssessment.vue` | ✅ | ✅ |
-| `ComputerSystemAssessment.vue` | ⬜ | ⬜ |
+| `ComputerSystemAssessment.vue` | ✅ *(aucun bug trouvé)* | ✅ *(aucun bug trouvé)* |
 | `JournalAnomalies.vue` | ⬜ | ⬜ |
 | `ResolutionConflit.vue` | ⬜ | ⬜ |
 | `DossierVivantActif.vue` | ⬜ | ⬜ |
@@ -112,6 +112,24 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 ---
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
+
+- **13/09/2026** — `ComputerSystemAssessment.vue` **terminé, aucun bug
+  trouvé ni fonctionnel ni UI** (aucun commit de code — seule la mise à
+  jour du recap). Contrairement à `RiskAssessmentAmdec.vue`/
+  `ImpactAssessment.vue`, pas de `MethodProfile` configurable par client :
+  la catégorie GAMP5 est une grille normative fixe (PIC/S PI 011-3),
+  sélection directe parmi 5 valeurs — donc pas de `profilActif` calculé
+  ni de risque de flash de faux message "non configuré" pendant le
+  chargement. `creerEvaluation` retourne `Promise<EvaluationCSVAssessment>`
+  directement (jamais d'union d'erreur), donc pas de mutation à vérifier
+  non plus — troisième écran propre sur ce motif après
+  `AssistantCreationLivrable.vue` et `ImpactAssessment.vue`. Testé en
+  direct sur le site déployé avec le client QA (formulaire complet,
+  soumission, historique) : rendu, espacement et libellés conformes,
+  aucun défaut visuel trouvé (le bouton "Nouvelle évaluation" suit
+  directement un `<p>` — qui conserve sa marge par défaut du navigateur —
+  contrairement au cas problématique d'`ImpactAssessment.vue` où un
+  `<button>` suivait un autre `<button>`/`<label>` sans marge).
 
 - **13/09/2026** — `ImpactAssessment.vue` **terminé** (fonctionnel
   `f47f926`, UI `3555292`, CI verte sur les deux, vérifié en direct sur le
@@ -844,11 +862,11 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `ComputerSystemAssessment.vue` — chantier fonctionnel puis UI, avec le
+1. `JournalAnomalies.vue` — chantier fonctionnel puis UI, avec le
    client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans
    l'ordre de la liste en §3.
    **Avant d'écrire de nouveaux tests** : vérifier si
-   `ComputerSystemAssessment.test.ts` a un `afterEach` global laissant le
+   `JournalAnomalies.test.ts` a un `afterEach` global laissant le
    temps aux promesses résiduelles de se résoudre entre les tests — son
    absence a fait échouer `MissionWorkspace.test.ts` en CI à trois
    reprises (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge
@@ -877,16 +895,18 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    `34b59fe`), `AssistantStrategieQualification.vue` (1 site, `c9e743a`),
    `EditeurSection.vue` (6 sites, `8b1b244`), `DefinitionTests.vue`
    (4 sites, `126b71f`), `ExecutionTests.vue` (5 sites, `6c44ee6`) et
-   `RiskAssessmentAmdec.vue` (1 site, `d68de27`) — sept écrans sur les neuf
+   `RiskAssessmentAmdec.vue` (1 site, `d68de27`) — sept écrans sur les dix
    derniers, avec des conséquences parfois sérieuses (un garde-fou
    d'immutabilité explicitement annoncé à l'utilisateur, sur
-   `ExecutionTests.vue`). `AssistantCreationLivrable.vue` **et**
+   `ExecutionTests.vue`). `AssistantCreationLivrable.vue`,
    `ImpactAssessment.vue` (`creerEvaluation` déjà vérifié,
-   `creerNouvelleVersion` ne retourne jamais d'union d'erreur) sont les
-   deux seules exceptions confirmées — ce motif reste la piste par défaut
-   à vérifier sur chaque nouvel écran, en particulier tout garde-fou
-   d'immutabilité/verrouillage explicitement documenté dans l'écran
-   (rechercher spécifiquement les codes d'erreur liés à un statut
+   `creerNouvelleVersion` ne retourne jamais d'union d'erreur) **et**
+   `ComputerSystemAssessment.vue` (`creerEvaluation` ne retourne jamais
+   d'union d'erreur non plus — pas de `MethodProfile` du tout sur cet
+   écran) sont les trois exceptions confirmées — ce motif reste la piste
+   par défaut à vérifier sur chaque nouvel écran, en particulier tout
+   garde-fou d'immutabilité/verrouillage explicitement documenté dans
+   l'écran (rechercher spécifiquement les codes d'erreur liés à un statut
    "clôturé"/"verrouillé"/"validé"/"introuvable" dans le store) — mais
    vérifier aussi la signature de retour réelle de chaque fonction du
    store avant de supposer le bug présent.
@@ -901,8 +921,10 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    avant de décider quel bloc afficher est un candidat direct à vérifier,
    même s'il n'a qu'un seul store à charger, et même si l'état vide
    semble découler d'un simple `computed` plutôt que d'un `ref` chargé
-   directement. Ce motif est désormais présent sur la quasi-totalité des
-   écrans à méthode configurable (profil actif calculé par `computed`).
+   directement. **Ne s'applique pas** aux écrans sans notion de
+   `MethodProfile`/profil actif configurable — `ComputerSystemAssessment.vue`
+   affiche toujours son formulaire directement (grille GAMP5 fixe), donc
+   aucun risque de flash de faux message "non configuré".
    **Piste à vérifier aussi** : les libellés d'union affichés bruts dans
    le template (`{{ opt }}` sur une valeur `snake_case` au lieu d'un
    dictionnaire de libellés) — trouvé sur `ImpactAssessment.vue`
