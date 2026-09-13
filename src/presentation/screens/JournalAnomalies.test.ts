@@ -1,9 +1,10 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
+import { useQualityEventStore } from '../stores/useQualityEventStore'
 import JournalAnomalies from './JournalAnomalies.vue'
 
 // `flushPromises` seul ne suffit pas toujours à attendre la fin d'une
@@ -37,6 +38,18 @@ beforeEach(async () => {
   await db.qualityEvents.clear()
   await db.referencesQualityEvent.clear()
   await db.assetNodes.clear()
+})
+
+// L'écran charge deux stores en `Promise.all` dans `onMounted` — même
+// profil de risque que `MissionWorkspace.vue`, qui a fait échouer ses
+// tests en CI à trois reprises (`91fd8f6`, `f72eb41`, `1dcae5a`) faute de
+// laisser le temps aux promesses résiduelles de se résoudre entre les
+// tests. Filet ajouté préventivement plutôt que d'attendre un incident.
+afterEach(async () => {
+  for (let tour = 0; tour < 5; tour++) {
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
 })
 
 describe('JournalAnomalies', () => {
@@ -74,6 +87,71 @@ describe('JournalAnomalies', () => {
       titre: 'Dérive de température sonde AUT-042',
       statut: 'ouvert',
     })
-    expect(wrapper.text()).toContain('Dérive de température sonde AUT-042')
+    await attendreQue(() => wrapper.text().includes('Dérive de température sonde AUT-042'))
+  })
+
+  test('affiche un état de chargement avant que les événements ne soient résolus', async () => {
+    // Reproduit un événement déjà en base, chargé de manière asynchrone —
+    // avant ce correctif, l'écran affichait à tort « Aucun événement pour
+    // l'instant » tant que le onMounted n'avait pas terminé.
+    const maintenant = new Date().toISOString()
+    await db.qualityEvents.put({
+      id: crypto.randomUUID(),
+      client_id: 'client-1',
+      type: 'deviation',
+      titre: 'Événement déjà en base',
+      description: '',
+      origine: 'interne',
+      reference_externe: null,
+      asset_node_id: null,
+      process_id: null,
+      manufacturing_context_id: null,
+      statut: 'ouvert',
+      audit_log: [],
+      created_at: maintenant,
+      updated_at: maintenant,
+    })
+
+    const wrapper = mount(JournalAnomalies, {
+      props: { clientId: 'client-1' },
+      global: { plugins: [routeurDeTest()] },
+    })
+
+    expect(wrapper.find('.etat-vide').text()).toBe('Chargement…')
+    expect(wrapper.text()).not.toContain("Aucun événement pour l'instant")
+
+    await attendreQue(() => wrapper.text().includes('Événement déjà en base'))
+  })
+
+  test('un changement de statut bloqué (événement supprimé entre-temps) affiche un message, ne casse pas silencieusement', async () => {
+    const wrapper = mount(JournalAnomalies, {
+      props: { clientId: 'client-1' },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await flushPromises()
+
+    await wrapper.find('select').setValue('deviation')
+    await wrapper.find('input[type="text"]').setValue('Fuite détectée cuve B12')
+    await wrapper.find('.formulaire').trigger('submit.prevent')
+    await attendreQue(
+      async () => (await db.qualityEvents.where('client_id').equals('client-1').count()) > 0,
+    )
+    await attendreQue(() => wrapper.find('.liste-evenements select').exists())
+
+    // Reproduit un événement supprimé/modifié entre-temps sur un autre
+    // poste — avant ce correctif, le changement de statut échouait en
+    // silence total, sans le moindre message, et le sélecteur affichait
+    // malgré tout le nouveau statut jamais persisté (mutation optimiste
+    // via `v-model` avant correctif).
+    const evenementsStore = useQualityEventStore()
+    evenementsStore.changerStatut = vi.fn().mockResolvedValue(null)
+
+    const selectStatut = wrapper.find('.liste-evenements select')
+    await selectStatut.setValue('cloture')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('supprimé entre-temps')
+    const evenement = (await db.qualityEvents.toArray())[0]
+    expect(evenement?.statut).toBe('ouvert')
   })
 })

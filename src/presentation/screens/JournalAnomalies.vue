@@ -25,14 +25,19 @@ const evenementsStore = useQualityEventStore()
 const structureStore = useStructureSystemeStore()
 
 const nomClient = ref<string | null>(null)
+const chargementInitial = ref(true)
 
 onMounted(async () => {
-  const client = await clientsStore.obtenirClient(props.clientId)
-  nomClient.value = client?.name ?? null
-  await Promise.all([
-    evenementsStore.charger(props.clientId),
-    structureStore.charger(props.clientId),
-  ])
+  try {
+    const client = await clientsStore.obtenirClient(props.clientId)
+    nomClient.value = client?.name ?? null
+    await Promise.all([
+      evenementsStore.charger(props.clientId),
+      structureStore.charger(props.clientId),
+    ])
+  } finally {
+    chargementInitial.value = false
+  }
 })
 
 const LIBELLES_TYPE: Record<TypeQualityEvent, string> = {
@@ -66,6 +71,16 @@ const brouillon = reactive({
 const filtreType = ref<TypeQualityEvent | ''>('')
 const filtreStatut = ref<QualityEvent['statut'] | ''>('')
 const evenementSourcePourReference = reactive<Record<string, string>>({})
+const erreurChangementStatut = reactive<Record<string, string>>({})
+
+async function changerStatut(evenementId: string, statut: QualityEvent['statut']): Promise<void> {
+  erreurChangementStatut[evenementId] = ''
+  const resultat = await evenementsStore.changerStatut(props.clientId, evenementId, statut)
+  if (!resultat) {
+    erreurChangementStatut[evenementId] =
+      'Impossible de changer le statut — cet événement a peut-être été supprimé entre-temps.'
+  }
+}
 
 const formulaireComplet = computed(() => brouillon.type !== '' && brouillon.titre.trim().length > 0)
 
@@ -202,50 +217,61 @@ function titreEvenement(id: string): string {
       </label>
     </section>
 
-    <ul class="liste-evenements">
-      <li v-for="e in evenementsFiltres" :key="e.id">
-        <div class="ligne-evenement">
-          <strong>{{ e.titre }}</strong>
-          <span class="meta">({{ LIBELLES_TYPE[e.type] }})</span>
-          <span :class="['statut', e.statut]">{{ LIBELLES_STATUT[e.statut] }}</span>
-        </div>
-        <p v-if="e.description" class="description">{{ e.description }}</p>
-        <p class="meta">
-          Origine : {{ LIBELLES_ORIGINE[e.origine] }} · Actif : {{ nomNoeud(e.asset_node_id) }}
-          <span v-if="e.reference_externe">
-            · Réf. externe : {{ e.reference_externe.systeme }} /
-            {{ e.reference_externe.identifiant }}
-          </span>
-        </p>
-        <ul v-if="evenementsStore.referencesDepuis(e.id).length > 0" class="liste-references">
-          <li v-for="r in evenementsStore.referencesDepuis(e.id)" :key="r.id">
-            → {{ titreEvenement(r.quality_event_cible_id) }}
-          </li>
-        </ul>
-        <div class="actions-evenement">
-          <select
-            v-model="e.statut"
-            @change="evenementsStore.changerStatut(props.clientId, e.id, e.statut)"
-          >
-            <option v-for="(libelle, statut) in LIBELLES_STATUT" :key="statut" :value="statut">
-              {{ libelle }}
-            </option>
-          </select>
-          <select v-model="evenementSourcePourReference[e.id]">
-            <option value="">— référencer depuis —</option>
-            <option
-              v-for="autre in evenementsStore.evenements.filter((a) => a.id !== e.id)"
-              :key="autre.id"
-              :value="autre.id"
+    <p v-if="chargementInitial" class="etat-vide">Chargement…</p>
+    <template v-else>
+      <ul class="liste-evenements">
+        <li v-for="e in evenementsFiltres" :key="e.id">
+          <div class="ligne-evenement">
+            <strong>{{ e.titre }}</strong>
+            <span class="meta">({{ LIBELLES_TYPE[e.type] }})</span>
+            <span :class="['statut', e.statut]">{{ LIBELLES_STATUT[e.statut] }}</span>
+          </div>
+          <p v-if="e.description" class="description">{{ e.description }}</p>
+          <p class="meta">
+            Origine : {{ LIBELLES_ORIGINE[e.origine] }} · Actif : {{ nomNoeud(e.asset_node_id) }}
+            <span v-if="e.reference_externe">
+              · Réf. externe : {{ e.reference_externe.systeme }} /
+              {{ e.reference_externe.identifiant }}
+            </span>
+          </p>
+          <ul v-if="evenementsStore.referencesDepuis(e.id).length > 0" class="liste-references">
+            <li v-for="r in evenementsStore.referencesDepuis(e.id)" :key="r.id">
+              → {{ titreEvenement(r.quality_event_cible_id) }}
+            </li>
+          </ul>
+          <p v-if="erreurChangementStatut[e.id]" class="bandeau-erreur" role="alert">
+            {{ erreurChangementStatut[e.id] }}
+          </p>
+          <div class="actions-evenement">
+            <select
+              :value="e.statut"
+              @change="
+                changerStatut(
+                  e.id,
+                  ($event.target as HTMLSelectElement).value as QualityEvent['statut'],
+                )
+              "
             >
-              {{ autre.titre }}
-            </option>
-          </select>
-          <button type="button" @click="creerReference(e.id)">Référencer</button>
-        </div>
-      </li>
-    </ul>
-    <p v-if="evenementsFiltres.length === 0" class="etat-vide">Aucun événement pour l'instant.</p>
+              <option v-for="(libelle, statut) in LIBELLES_STATUT" :key="statut" :value="statut">
+                {{ libelle }}
+              </option>
+            </select>
+            <select v-model="evenementSourcePourReference[e.id]">
+              <option value="">— référencer depuis —</option>
+              <option
+                v-for="autre in evenementsStore.evenements.filter((a) => a.id !== e.id)"
+                :key="autre.id"
+                :value="autre.id"
+              >
+                {{ autre.titre }}
+              </option>
+            </select>
+            <button type="button" @click="creerReference(e.id)">Référencer</button>
+          </div>
+        </li>
+      </ul>
+      <p v-if="evenementsFiltres.length === 0" class="etat-vide">Aucun événement pour l'instant.</p>
+    </template>
   </main>
 </template>
 
@@ -386,5 +412,10 @@ button:disabled {
 
 .etat-vide {
   color: var(--vp-texte-secondaire);
+}
+
+.bandeau-erreur {
+  color: var(--vp-danger);
+  margin: 0;
 }
 </style>
