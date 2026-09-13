@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import JSZip from 'jszip'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
 import {
@@ -161,5 +161,33 @@ describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maî
     await wrapper.find('.bouton-danger').trigger('click')
     await attendreQue(async () => (await db.gabaritsExportClient.toArray()).length === 0)
     expect(wrapper.text()).not.toContain('QD-0007 Protocole OQ')
+  })
+
+  test("un Worker injoignable pour le nom du client n'empêche pas l'affichage des gabarits (purement locaux, déjà persistés)", async () => {
+    const clientId = 'client-test-templates'
+    await db.gabaritsExportClient.put({
+      id: 'gabarit-1',
+      client_id: clientId,
+      nom: 'QD-0007 Protocole OQ',
+      fichier: new ArrayBuffer(0),
+      tags_trouves: [],
+      created_at: new Date().toISOString(),
+    })
+
+    // Même bug que celui corrigé au niveau de `useClientsStore.obtenirClient`
+    // (voir StructureSysteme.test.ts) : cet écran enchaîne aussi ce même
+    // appel avant un charger purement local (gabaritStore).
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    const router = routeurDeTest()
+    await router.push({ name: 'templates-formulaires', params: { clientId } })
+    const wrapper = mount(TemplatesFormulaires, {
+      props: { clientId },
+      global: { plugins: [router] },
+    })
+    await attendreQue(() => wrapper.text().includes('QD-0007 Protocole OQ'))
+
+    expect(wrapper.text()).toContain('QD-0007 Protocole OQ')
+    expect(wrapper.find('h1').text()).toContain(clientId)
   })
 })
