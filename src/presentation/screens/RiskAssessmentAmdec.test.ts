@@ -1,9 +1,10 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
+import { useRiskAssessmentStore } from '../stores/useRiskAssessmentStore'
 import RiskAssessmentAmdec from './RiskAssessmentAmdec.vue'
 
 function routeurDeTest() {
@@ -41,7 +42,7 @@ describe('RiskAssessmentAmdec', () => {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },
     })
-    await flushPromises()
+    await attendreQue(() => wrapper.find('.bloc-config form').exists())
 
     // Configuration du profil — aucun profil au départ, formulaire ouvert automatiquement
     const formConfig = wrapper.find('.bloc-config form')
@@ -103,10 +104,80 @@ describe('RiskAssessmentAmdec', () => {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },
     })
-    await flushPromises()
+    await attendreQue(() => wrapper.find('.bloc-config').exists())
 
     expect(wrapper.find('.bloc-config').exists()).toBe(true)
     expect(wrapper.find('.bloc-nouvelle-ligne').exists()).toBe(false)
     expect(await db.risksAssessment.count()).toBe(0)
+  })
+
+  test('affiche un état de chargement avant que le profil ne soit résolu', async () => {
+    // Reproduit un profil déjà configuré, chargé de manière asynchrone —
+    // avant ce correctif, l'écran affichait à tort « Aucun profil AMDEC
+    // n'est configuré » tant que le onMounted n'avait pas terminé.
+    const maintenant = new Date().toISOString()
+    await db.methodProfilesRiskAssessment.put({
+      id: crypto.randomUUID(),
+      client_id: 'client-1',
+      version: 'v1',
+      effective_date: maintenant,
+      source: 'Processus_AMDEC.xlsx',
+      origin: 'procedure_client',
+      echelle_min: 1,
+      echelle_max: 5,
+      seuil_action: 50,
+      created_at: maintenant,
+    })
+
+    const wrapper = mount(RiskAssessmentAmdec, {
+      props: { clientId: 'client-1' },
+      global: { plugins: [routeurDeTest()] },
+    })
+
+    expect(wrapper.find('.etat-vide').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Aucun profil AMDEC')
+
+    await attendreQue(() => wrapper.find('.bloc-nouvelle-ligne').exists())
+    expect(wrapper.find('.etat-vide').exists()).toBe(false)
+  })
+})
+
+describe('RiskAssessmentAmdec — mutations non vérifiées', () => {
+  test("un enregistrement d'action résiduelle bloqué (ligne supprimée entre-temps) affiche un message", async () => {
+    const wrapper = mount(RiskAssessmentAmdec, {
+      props: { clientId: 'client-1' },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await attendreQue(() => wrapper.find('.bloc-config form').exists())
+
+    const formConfig = wrapper.find('.bloc-config form')
+    await formConfig.find('input[type="text"]').setValue('Processus_AMDEC.xlsx')
+    const inputsNombre = formConfig.findAll('input[type="number"]')
+    await inputsNombre[0]?.setValue(1)
+    await inputsNombre[1]?.setValue(5)
+    await inputsNombre[2]?.setValue(50)
+    await formConfig.trigger('submit.prevent')
+    await attendreQue(() => wrapper.find('.bloc-nouvelle-ligne form').exists())
+
+    const formLigne = wrapper.find('.bloc-nouvelle-ligne form')
+    const inputsTexte = formLigne.findAll('input[type="text"]')
+    await inputsTexte[0]?.setValue('Cycle de stérilisation')
+    await inputsTexte[1]?.setValue('Sous-charge thermique')
+    await formLigne.trigger('submit.prevent')
+    await attendreQue(async () => (await db.risksAssessment.count()) > 0)
+    await attendreQue(() => wrapper.find('.carte-evaluation .ligne-formulaire').exists())
+
+    // Reproduit une ligne AMDEC supprimée entre-temps sur un autre poste —
+    // avant ce correctif, le clic sur « Enregistrer l'action résiduelle »
+    // échouait en silence total.
+    const riskStore = useRiskAssessmentStore()
+    riskStore.enregistrerActionResiduelle = vi.fn().mockResolvedValue({ erreur: 'introuvable' })
+
+    const zoneAction = wrapper.find('.carte-evaluation .ligne-formulaire')
+    await zoneAction.find('button').trigger('click')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('introuvable')
+    expect((await db.risksAssessment.toArray())[0]?.ipr_residuel).toBeNull()
   })
 })

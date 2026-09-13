@@ -21,14 +21,19 @@ const riskStore = useRiskAssessmentStore()
 
 const nomClient = ref<string | null>(null)
 const formulaireConfigOuvert = ref(false)
+const chargementInitial = ref(true)
 
 onMounted(async () => {
-  const client = await clientsStore.obtenirClient(props.clientId)
-  nomClient.value = client?.name ?? null
-  await structureStore.charger(props.clientId)
-  await parameterStore.charger(props.clientId)
-  await riskStore.charger(props.clientId)
-  if (!riskStore.profilActif) formulaireConfigOuvert.value = true
+  try {
+    const client = await clientsStore.obtenirClient(props.clientId)
+    nomClient.value = client?.name ?? null
+    await structureStore.charger(props.clientId)
+    await parameterStore.charger(props.clientId)
+    await riskStore.charger(props.clientId)
+    if (!riskStore.profilActif) formulaireConfigOuvert.value = true
+  } finally {
+    chargementInitial.value = false
+  }
 })
 
 const LIBELLES_VERDICT: Record<string, string> = {
@@ -106,9 +111,11 @@ const responsableBrouillon = ref<Record<string, string>>({})
 const severiteResiduelleBrouillon = ref<Record<string, number | null>>({})
 const occurrenceResiduelleBrouillon = ref<Record<string, number | null>>({})
 const detectabiliteResiduelleBrouillon = ref<Record<string, number | null>>({})
+const erreurAction = ref<string | null>(null)
 
 async function enregistrerAction(riskAssessmentId: string): Promise<void> {
-  await riskStore.enregistrerActionResiduelle(props.clientId, riskAssessmentId, {
+  erreurAction.value = null
+  const resultat = await riskStore.enregistrerActionResiduelle(props.clientId, riskAssessmentId, {
     recommandation: recommandationBrouillon.value[riskAssessmentId]?.trim() || null,
     responsable: responsableBrouillon.value[riskAssessmentId]?.trim() || null,
     dateCible: null,
@@ -117,6 +124,10 @@ async function enregistrerAction(riskAssessmentId: string): Promise<void> {
     occurrenceResiduelle: occurrenceResiduelleBrouillon.value[riskAssessmentId] ?? null,
     detectabiliteResiduelle: detectabiliteResiduelleBrouillon.value[riskAssessmentId] ?? null,
   })
+  if ('erreur' in resultat) {
+    erreurAction.value =
+      'Cette ligne AMDEC est introuvable — elle a peut-être été supprimée entre-temps.'
+  }
 }
 
 function libelleAssetNode(assetNodeId: string | null): string {
@@ -139,164 +150,168 @@ const evaluationsTriees = computed(() =>
       décision, cohérent avec la méthodologie AMDEC du client (ICH Q9).
     </p>
 
-    <section v-if="!riskStore.profilActif || formulaireConfigOuvert" class="bloc-config">
-      <h2>Configuration du profil de méthode</h2>
-      <p v-if="!riskStore.profilActif" class="rappel" role="alert">
-        Aucun profil AMDEC n'est configuré pour ce client. Renseignez l'échelle réelle S×O×D et le
-        seuil d'action de la méthodologie du client.
-      </p>
-      <form class="formulaire" @submit.prevent="enregistrerNouvelleVersion">
-        <label>
-          Source
-          <input v-model="source" type="text" required placeholder="ex. Processus_AMDEC.xlsx" />
-        </label>
-        <label>
-          Origine
-          <select v-model="origin">
-            <option value="procedure_client">Procédure client</option>
-            <option value="defini_utilisateur">Défini avec l'utilisateur</option>
-            <option value="baseline_validapharm">Baseline ValidaPharm</option>
-          </select>
-        </label>
-        <label>
-          Échelle minimale
-          <input v-model.number="echelleMin" type="number" required />
-        </label>
-        <label>
-          Échelle maximale
-          <input v-model.number="echelleMax" type="number" required />
-        </label>
-        <label>
-          Seuil d'action (IPR)
-          <input v-model.number="seuilAction" type="number" required />
-        </label>
-        <div class="actions">
-          <button
-            v-if="riskStore.profilActif"
-            type="button"
-            @click="formulaireConfigOuvert = false"
-          >
-            Annuler
-          </button>
-          <button type="submit">Enregistrer cette version</button>
-        </div>
-      </form>
-    </section>
-
+    <p v-if="chargementInitial" class="etat-vide">Chargement…</p>
     <template v-else>
-      <section class="bloc-nouvelle-ligne">
-        <h2>
-          Nouvelle ligne AMDEC — {{ riskStore.profilActif.source }} ({{
-            riskStore.profilActif.version
-          }})
-        </h2>
-        <button type="button" class="lien-config" @click="formulaireConfigOuvert = true">
-          Configurer une nouvelle version du profil
-        </button>
-        <form class="formulaire" @submit.prevent="creerEvaluation">
+      <section v-if="!riskStore.profilActif || formulaireConfigOuvert" class="bloc-config">
+        <h2>Configuration du profil de méthode</h2>
+        <p v-if="!riskStore.profilActif" class="rappel" role="alert">
+          Aucun profil AMDEC n'est configuré pour ce client. Renseignez l'échelle réelle S×O×D et le
+          seuil d'action de la méthodologie du client.
+        </p>
+        <form class="formulaire" @submit.prevent="enregistrerNouvelleVersion">
           <label>
-            Nœud Structure Système (optionnel)
-            <select v-model="assetNodeSelectionne">
-              <option value="">— aucun —</option>
-              <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
-                {{ noeud.name }} ({{ noeud.code }})
-              </option>
+            Source
+            <input v-model="source" type="text" required placeholder="ex. Processus_AMDEC.xlsx" />
+          </label>
+          <label>
+            Origine
+            <select v-model="origin">
+              <option value="procedure_client">Procédure client</option>
+              <option value="defini_utilisateur">Défini avec l'utilisateur</option>
+              <option value="baseline_validapharm">Baseline ValidaPharm</option>
             </select>
           </label>
           <label>
-            Paramètre (optionnel)
-            <select v-model="parameterSelectionne">
-              <option value="">— aucun —</option>
-              <option v-for="p in parameterStore.parametres" :key="p.id" :value="p.id">
-                {{ p.nom }}
-              </option>
-            </select>
+            Échelle minimale
+            <input v-model.number="echelleMin" type="number" required />
           </label>
           <label>
-            Étape du processus
-            <input v-model="etapeProcessus" type="text" required />
+            Échelle maximale
+            <input v-model.number="echelleMax" type="number" required />
           </label>
           <label>
-            Mode de défaillance
-            <input v-model="modeDefaillance" type="text" required />
+            Seuil d'action (IPR)
+            <input v-model.number="seuilAction" type="number" required />
           </label>
-          <label>
-            Effet de la défaillance
-            <input v-model="effetDefaillance" type="text" />
-          </label>
-          <label>
-            Cause potentielle
-            <input v-model="causePotentielle" type="text" />
-          </label>
-          <label>
-            Contrôle actuel
-            <input v-model="controleActuel" type="text" />
-          </label>
-          <label>
-            Sévérité initiale
-            <input v-model.number="severiteInitiale" type="number" />
-          </label>
-          <label>
-            Occurrence initiale
-            <input v-model.number="occurrenceInitiale" type="number" />
-          </label>
-          <label>
-            Détectabilité initiale
-            <input v-model.number="detectabiliteInitiale" type="number" />
-          </label>
-          <p v-if="erreurCreation" class="bandeau-erreur" role="alert">{{ erreurCreation }}</p>
-          <button type="submit">Créer la ligne</button>
+          <div class="actions">
+            <button
+              v-if="riskStore.profilActif"
+              type="button"
+              @click="formulaireConfigOuvert = false"
+            >
+              Annuler
+            </button>
+            <button type="submit">Enregistrer cette version</button>
+          </div>
         </form>
       </section>
-    </template>
 
-    <section v-if="evaluationsTriees.length > 0" class="bloc-evaluations">
-      <h2>Lignes AMDEC</h2>
-      <ul class="liste-evaluations">
-        <li v-for="e in evaluationsTriees" :key="e.id" class="carte-evaluation">
-          <p>
-            <strong>{{ e.mode_defaillance }}</strong> — {{ e.etape_processus }} —
-            {{ libelleAssetNode(e.asset_node_id) }}
-          </p>
-          <p class="meta">
-            IPR initial : <strong>{{ e.ipr_initial ?? '—' }}</strong> — Verdict :
-            <strong>{{ e.verdict_initial ? LIBELLES_VERDICT[e.verdict_initial] : '—' }}</strong>
-          </p>
-          <template v-if="e.ipr_residuel === null">
-            <div class="ligne-formulaire">
-              <input
-                v-model="recommandationBrouillon[e.id]"
-                type="text"
-                placeholder="Recommandation"
-              />
-              <input v-model="responsableBrouillon[e.id]" type="text" placeholder="Responsable" />
-              <input
-                v-model.number="severiteResiduelleBrouillon[e.id]"
-                type="number"
-                placeholder="S résiduelle"
-              />
-              <input
-                v-model.number="occurrenceResiduelleBrouillon[e.id]"
-                type="number"
-                placeholder="O résiduelle"
-              />
-              <input
-                v-model.number="detectabiliteResiduelleBrouillon[e.id]"
-                type="number"
-                placeholder="D résiduelle"
-              />
-              <button type="button" @click="enregistrerAction(e.id)">
-                Enregistrer l'action résiduelle
-              </button>
-            </div>
-          </template>
-          <p v-else class="meta">
-            IPR résiduel : <strong>{{ e.ipr_residuel }}</strong> — Verdict résiduel :
-            <strong>{{ e.verdict_residuel ? LIBELLES_VERDICT[e.verdict_residuel] : '—' }}</strong>
-          </p>
-        </li>
-      </ul>
-    </section>
+      <template v-else>
+        <section class="bloc-nouvelle-ligne">
+          <h2>
+            Nouvelle ligne AMDEC — {{ riskStore.profilActif.source }} ({{
+              riskStore.profilActif.version
+            }})
+          </h2>
+          <button type="button" class="lien-config" @click="formulaireConfigOuvert = true">
+            Configurer une nouvelle version du profil
+          </button>
+          <form class="formulaire" @submit.prevent="creerEvaluation">
+            <label>
+              Nœud Structure Système (optionnel)
+              <select v-model="assetNodeSelectionne">
+                <option value="">— aucun —</option>
+                <option v-for="noeud in structureStore.noeuds" :key="noeud.id" :value="noeud.id">
+                  {{ noeud.name }} ({{ noeud.code }})
+                </option>
+              </select>
+            </label>
+            <label>
+              Paramètre (optionnel)
+              <select v-model="parameterSelectionne">
+                <option value="">— aucun —</option>
+                <option v-for="p in parameterStore.parametres" :key="p.id" :value="p.id">
+                  {{ p.nom }}
+                </option>
+              </select>
+            </label>
+            <label>
+              Étape du processus
+              <input v-model="etapeProcessus" type="text" required />
+            </label>
+            <label>
+              Mode de défaillance
+              <input v-model="modeDefaillance" type="text" required />
+            </label>
+            <label>
+              Effet de la défaillance
+              <input v-model="effetDefaillance" type="text" />
+            </label>
+            <label>
+              Cause potentielle
+              <input v-model="causePotentielle" type="text" />
+            </label>
+            <label>
+              Contrôle actuel
+              <input v-model="controleActuel" type="text" />
+            </label>
+            <label>
+              Sévérité initiale
+              <input v-model.number="severiteInitiale" type="number" />
+            </label>
+            <label>
+              Occurrence initiale
+              <input v-model.number="occurrenceInitiale" type="number" />
+            </label>
+            <label>
+              Détectabilité initiale
+              <input v-model.number="detectabiliteInitiale" type="number" />
+            </label>
+            <p v-if="erreurCreation" class="bandeau-erreur" role="alert">{{ erreurCreation }}</p>
+            <button type="submit">Créer la ligne</button>
+          </form>
+        </section>
+      </template>
+
+      <section v-if="evaluationsTriees.length > 0" class="bloc-evaluations">
+        <h2>Lignes AMDEC</h2>
+        <ul class="liste-evaluations">
+          <li v-for="e in evaluationsTriees" :key="e.id" class="carte-evaluation">
+            <p>
+              <strong>{{ e.mode_defaillance }}</strong> — {{ e.etape_processus }} —
+              {{ libelleAssetNode(e.asset_node_id) }}
+            </p>
+            <p class="meta">
+              IPR initial : <strong>{{ e.ipr_initial ?? '—' }}</strong> — Verdict :
+              <strong>{{ e.verdict_initial ? LIBELLES_VERDICT[e.verdict_initial] : '—' }}</strong>
+            </p>
+            <template v-if="e.ipr_residuel === null">
+              <div class="ligne-formulaire">
+                <input
+                  v-model="recommandationBrouillon[e.id]"
+                  type="text"
+                  placeholder="Recommandation"
+                />
+                <input v-model="responsableBrouillon[e.id]" type="text" placeholder="Responsable" />
+                <input
+                  v-model.number="severiteResiduelleBrouillon[e.id]"
+                  type="number"
+                  placeholder="S résiduelle"
+                />
+                <input
+                  v-model.number="occurrenceResiduelleBrouillon[e.id]"
+                  type="number"
+                  placeholder="O résiduelle"
+                />
+                <input
+                  v-model.number="detectabiliteResiduelleBrouillon[e.id]"
+                  type="number"
+                  placeholder="D résiduelle"
+                />
+                <button type="button" @click="enregistrerAction(e.id)">
+                  Enregistrer l'action résiduelle
+                </button>
+                <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
+              </div>
+            </template>
+            <p v-else class="meta">
+              IPR résiduel : <strong>{{ e.ipr_residuel }}</strong> — Verdict résiduel :
+              <strong>{{ e.verdict_residuel ? LIBELLES_VERDICT[e.verdict_residuel] : '—' }}</strong>
+            </p>
+          </li>
+        </ul>
+      </section>
+    </template>
   </main>
 </template>
 
@@ -375,6 +390,10 @@ select {
 
 .bandeau-erreur {
   color: var(--vp-danger);
+}
+
+.etat-vide {
+  color: var(--vp-texte-secondaire);
 }
 
 button {
