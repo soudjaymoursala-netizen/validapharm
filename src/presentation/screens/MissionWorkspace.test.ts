@@ -365,7 +365,13 @@ describe('MissionWorkspace — changements de statut non vérifiés', () => {
     await formulaireActivite.find('input[type="text"]').setValue('Préparer protocole')
     await formulaireActivite.trigger('submit.prevent')
     await attendreQue(async () => (await db.activities.count()) === 1)
-    await wrapper.vm.$nextTick()
+    // Le rendu de la nouvelle `Activity` (et de son <select>) n'est pas
+    // garanti après un seul `$nextTick()` sur un environnement plus lent
+    // (constaté en CI, jamais reproduit en local malgré plusieurs
+    // répétitions) — on attend explicitement l'élément avant d'interagir,
+    // même discipline que pour le <select> des événements qualité plus
+    // haut dans ce fichier.
+    await attendreQue(() => wrapper.find('section.activites li select').exists())
 
     const missionStore = useMissionStore()
     missionStore.changerStatutActivity = vi.fn().mockResolvedValue(null)
