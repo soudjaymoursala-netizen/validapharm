@@ -78,7 +78,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `StructureSysteme.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `SuiviPeriodicite.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `Process.vue` | ✅ | ✅ *(non revalidé visuellement en direct — voir §4)* |
-| `RevueStructureProcedure.vue` | ⬜ | ⬜ |
+| `RevueStructureProcedure.vue` | ✅ *(aucun bug trouvé)* | ✅ *(non revalidé visuellement en direct — voir §4)* |
 | `TemplatesFormulaires.vue` | ⬜ | ⬜ |
 | `TableauDeBord.vue` | ⬜ | ⬜ |
 | `FicheProjet.vue` | ⬜ | ⬜ |
@@ -113,6 +113,35 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `RevueStructureProcedure.vue` **terminé** (1 seul
+  commit, aucun chantier fonctionnel distinct — voir ci-dessous), CI
+  verte :
+  - Fonctionnel : écran relu en entier avec ses trois stores
+    (`useProcedureStore`, `useClientConfigStore`, `useConnexionRelaisIAStore`)
+    — `onMounted` charge les trois en `Promise.all` (les deux premiers
+    purement locaux, le troisième déjà protégé par son propre `catch`
+    interne, corrigé lors d'un chantier antérieur) ; `genererProposition`/
+    `confirmerProposition` renvoient des valeurs concrètes déjà gérées
+    correctement côté composant. **Aucun bug trouvé** — pas de commit
+    fonctionnel séparé pour cet écran (à la différence des précédents, où
+    au moins un test de confirmation était ajouté).
+  - UI/**accessibilité** (`36e16f3`), deux correctifs trouvés par
+    comparaison de code base :
+    1. Même bug d'accessibilité clavier que `Process.vue` (`.bouton-fichier
+       input { display: none; }`) — corrigé à l'identique.
+    2. `.badge-source`/`.badge-confiance` utilisaient des couleurs hex
+       fixes (`#dcfce7`, `#166534`...) jamais migrées vers les jetons
+       sémantiques de `tokens.css` — ne s'adaptaient jamais au thème
+       sombre (Phase 40), contrairement au reste de l'application. Migrées
+       vers `--vp-succes`/`--vp-info`/`--vp-danger`/`--vp-attention` (+
+       variantes `-fond-leger`).
+  - **Piste ouverte identifiée** : `MissionWorkspace.vue` (plus loin dans
+    la liste, §3) partage l'exact même motif `.badge-confiance` en hex
+    fixe (son propre commentaire dans `RevueStructureProcedure.vue`
+    disait déjà « même style que `MissionWorkspace.vue` ») — à corriger
+    explicitement à son tour, pas par surprise.
+  - Non revalidé visuellement en direct (session de test toujours
+    expirée, voir §5).
 - **13/09/2026** — `Process.vue` **terminé** (fonctionnel + UI), 2 commits
   sur `main`, CI verte sur les deux :
   - Fonctionnel (`49d13ff`) : écran relu en entier avec ses deux stores
@@ -342,9 +371,13 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `RevueStructureProcedure.vue` — chantier fonctionnel puis UI, avec le
+1. `TemplatesFormulaires.vue` — chantier fonctionnel puis UI, avec le
    client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre
-   de la liste en §3.
+   de la liste en §3. **Déjà confirmé (`grep`, 13/09/2026)** : cet écran a
+   le même bug `.bouton-fichier input[type='file'] { display: none; }` que
+   `Process.vue`/`RevueStructureProcedure.vue` — appliquer le même
+   correctif (voir leurs commits `115f386`/`36e16f3`) sans le
+   redécouvrir.
 2. Mettre à jour ce fichier après **chaque** chantier terminé (pas
    seulement en fin de session) — voir la règle en §1.
 3. **Action de suivi issue de `StructureSysteme.vue`** : revalider
