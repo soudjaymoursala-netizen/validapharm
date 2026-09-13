@@ -11,6 +11,7 @@ import { construireNarratifContexte } from '../../logique-metier/contexte/narrat
 import type { EtatConfianceIA, Mission } from '../../logique-metier/domaine/types'
 import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
 import { useClientConfigStore } from '../stores/useClientConfigStore'
+import { useClientsStore } from '../stores/useClientsStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 import { useContextEngineStore } from '../stores/useContextEngineStore'
 import { useMissionStore } from '../stores/useMissionStore'
@@ -24,6 +25,7 @@ import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 const props = defineProps<{ clientId: string; missionId: string }>()
 
 const missionStore = useMissionStore()
+const clientsStore = useClientsStore()
 const contextStore = useContextEngineStore()
 const reasoningStore = useReasoningEngineStore()
 const qualityEventStore = useQualityEventStore()
@@ -40,6 +42,8 @@ const qualityEventASsocierId = ref('')
 const objectifRaisonnement = ref('')
 const raisonnementEnCours = ref(false)
 const erreurRaisonnement = ref<string | null>(null)
+const nomClient = ref<string | null>(null)
+const erreurStatut = ref<string | null>(null)
 
 const mission = computed<Mission | undefined>(() =>
   missionStore.missions.find((m) => m.id === props.missionId),
@@ -83,6 +87,8 @@ const nomFournisseurActuel = computed(() =>
 )
 
 onMounted(async () => {
+  const client = await clientsStore.obtenirClient(props.clientId)
+  nomClient.value = client?.name ?? null
   await Promise.all([
     missionStore.charger(props.clientId),
     contextStore.charger(props.clientId),
@@ -97,7 +103,12 @@ onMounted(async () => {
 })
 
 async function changerStatutMission(statut: Mission['statut']): Promise<void> {
-  await missionStore.changerStatutMission(props.clientId, props.missionId, statut)
+  erreurStatut.value = null
+  const resultat = await missionStore.changerStatutMission(props.clientId, props.missionId, statut)
+  if (!resultat) {
+    erreurStatut.value =
+      'Impossible de changer le statut de la mission — elle a peut-être été modifiée ou supprimée entre-temps.'
+  }
 }
 
 async function creerActivite(): Promise<void> {
@@ -112,11 +123,16 @@ async function creerActivite(): Promise<void> {
 }
 
 async function changerStatutActivite(activityId: string, statut: string): Promise<void> {
-  await missionStore.changerStatutActivity(
+  erreurStatut.value = null
+  const resultat = await missionStore.changerStatutActivity(
     props.clientId,
     activityId,
     statut as Parameters<typeof missionStore.changerStatutActivity>[2],
   )
+  if (!resultat) {
+    erreurStatut.value =
+      "Impossible de changer le statut de l'activité — elle a peut-être été modifiée ou supprimée entre-temps."
+  }
 }
 
 async function ajouterDependance(): Promise<void> {
@@ -200,8 +216,14 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
 
 <template>
   <main v-if="mission" class="mission-workspace">
+    <RouterLink
+      :to="{ name: 'liste-missions', params: { clientId: props.clientId } }"
+      class="lien-retour"
+    >
+      Missions
+    </RouterLink>
     <header>
-      <h1>{{ mission.titre }}</h1>
+      <h1>{{ mission.titre }} — {{ nomClient ?? props.clientId }}</h1>
       <select
         :value="mission.statut"
         @change="
@@ -213,6 +235,7 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
         <option value="cloturee">Clôturée</option>
       </select>
     </header>
+    <p v-if="erreurStatut" class="bandeau-erreur" role="alert">{{ erreurStatut }}</p>
     <p>{{ mission.description }}</p>
 
     <section class="activites">
@@ -363,7 +386,7 @@ header {
 }
 
 .bandeau-erreur {
-  color: var(--vp-statut-requalification-en-retard);
+  color: var(--vp-danger);
 }
 
 .formulaire-inline {
@@ -424,28 +447,28 @@ section li {
 }
 
 .badge-confiance--connu {
-  background-color: #dcfce7;
-  color: #166534;
+  background-color: var(--vp-succes-fond-leger);
+  color: var(--vp-succes);
 }
 
 .badge-confiance--infere {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: var(--vp-info-fond-leger);
+  color: var(--vp-info);
 }
 
 .badge-confiance--inconnu {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--vp-fond-page);
+  color: var(--vp-texte-secondaire);
 }
 
 .badge-confiance--conflit {
-  background-color: #fee2e2;
-  color: #991b1b;
+  background-color: var(--vp-danger-fond-leger);
+  color: var(--vp-danger);
 }
 
 .badge-confiance--a_verifier {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: var(--vp-attention-fond-leger);
+  color: var(--vp-attention);
 }
 
 .trace-outils {

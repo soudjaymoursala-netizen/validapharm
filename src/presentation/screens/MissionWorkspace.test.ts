@@ -1,10 +1,17 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { QualityEvent } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
+import { useClientsStore } from '../stores/useClientsStore'
+import { useMissionStore } from '../stores/useMissionStore'
 import MissionWorkspace from './MissionWorkspace.vue'
 
 // Le composant construit lui-même ses adaptateurs IA via
@@ -33,6 +40,11 @@ function routeurDeTest() {
       {
         path: '/clients/:clientId/missions/:missionId',
         name: 'mission-workspace',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/clients/:clientId/missions',
+        name: 'liste-missions',
         component: { template: '<div />' },
       },
     ],
@@ -180,6 +192,13 @@ describe('MissionWorkspace — Événements qualité associés', () => {
     const wrapper = await monter()
 
     const formulaire = wrapper.find('section.quality-events form')
+    // Le chargement du QualityEvent (`qualityEventStore.charger`) est
+    // parallèle à celui de la Mission (`Promise.all` dans `onMounted`) —
+    // `monter()` n'attend que le titre de la Mission, pas les options de ce
+    // <select> : on attend explicitement leur apparition avant d'interagir,
+    // sans quoi une course entre les deux chargements rendrait ce test
+    // intermittent (flaky).
+    await attendreQue(() => formulaire.find('option[value="qe-1"]').exists())
     await formulaire.find('select').setValue('qe-1')
     await formulaire.trigger('submit.prevent')
 
@@ -277,5 +296,85 @@ describe('MissionWorkspace — Raisonnement', () => {
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
     expect(wrapper.find('[role="alert"]').text()).toContain('Appel au relais IA échoué (404).')
     expect(await db.aiResponses.count()).toBe(0)
+  })
+})
+
+describe('MissionWorkspace — navigation retour vers la liste des missions', () => {
+  let demonter: () => void
+
+  beforeEach(async () => {
+    await reinitialiserAuthDeTest()
+    demonter = installerFauxWorkerAuth().demonter
+    await connecterAdminDeTest()
+  })
+
+  afterEach(() => {
+    demonter()
+  })
+
+  test('affiche un lien retour vers la liste des missions, avec le nom du client une fois chargé', async () => {
+    const clientsStore = useClientsStore()
+    const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })
+    if ('erreur' in client) throw client
+
+    await db.missions.put({
+      id: MISSION_ID,
+      client_id: client.id,
+      workspace_id: null,
+      asset_node_id: null,
+      titre: 'Qualification granulateur GR-01',
+      description: '',
+      statut: 'ouverte',
+      audit_log: [],
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    })
+
+    const router = routeurDeTest()
+    await router.push(`/clients/${client.id}/missions/${MISSION_ID}`)
+    const wrapper = mount(MissionWorkspace, {
+      props: { clientId: client.id, missionId: MISSION_ID },
+      global: { plugins: [router] },
+    })
+    await attendreQue(() => wrapper.text().includes('PharmaTech Solutions'))
+
+    const lien = wrapper.find('.lien-retour')
+    expect(lien.exists()).toBe(true)
+    expect(lien.text()).toBe('Missions')
+    expect(wrapper.find('h1').text()).toContain('PharmaTech Solutions')
+  })
+})
+
+describe('MissionWorkspace — changements de statut non vérifiés', () => {
+  test('un échec de changement de statut de mission affiche un message, ne casse pas silencieusement', async () => {
+    const wrapper = await monter()
+    const missionStore = useMissionStore()
+    missionStore.changerStatutMission = vi.fn().mockResolvedValue(null)
+
+    await wrapper.find('header select').setValue('cloturee')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain(
+      'Impossible de changer le statut de la mission',
+    )
+  })
+
+  test("un échec de changement de statut d'activité affiche un message, ne casse pas silencieusement", async () => {
+    const wrapper = await monter()
+    const formulaireActivite = wrapper.find('section.activites form')
+    await formulaireActivite.find('input[type="text"]').setValue('Préparer protocole')
+    await formulaireActivite.trigger('submit.prevent')
+    await attendreQue(async () => (await db.activities.count()) === 1)
+    await wrapper.vm.$nextTick()
+
+    const missionStore = useMissionStore()
+    missionStore.changerStatutActivity = vi.fn().mockResolvedValue(null)
+
+    await wrapper.find('section.activites li select').setValue('terminee')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain(
+      "Impossible de changer le statut de l'activité",
+    )
   })
 })
