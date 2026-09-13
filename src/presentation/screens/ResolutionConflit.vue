@@ -47,16 +47,25 @@ onMounted(async () => {
 
 async function chargerConflits(): Promise<void> {
   enChargement.value = true
-  conflits.value = await syncStore.analyserConflit()
-  decisions.clear()
-  for (const conflit of conflits.value) {
-    const parChamp: Record<string, DecisionChamp> = {}
-    for (const divergence of conflit.divergences) {
-      parChamp[divergence.champ] = { choix: 'distante', valeurManuelle: '' }
+  messageEtat.value = null
+  try {
+    conflits.value = await syncStore.analyserConflit()
+    decisions.clear()
+    // Aucune décision pré-remplie : chaque champ divergent reste sans
+    // entrée dans `parChamp` tant que l'utilisateur n'a pas explicitement
+    // choisi une option — `toutesDecisionsPrises` traite déjà une entrée
+    // absente comme « non décidée ». Pré-remplir un choix ici (même
+    // "distante") romprait la garantie annoncée en tête de fichier :
+    // le bouton de confirmation resterait actif sans aucune décision
+    // réelle de l'utilisateur.
+    for (const conflit of conflits.value) {
+      decisions.set(cleConflit(conflit), {})
     }
-    decisions.set(cleConflit(conflit), parChamp)
+  } catch {
+    messageEtat.value = "Impossible d'analyser les conflits — réessayez."
+  } finally {
+    enChargement.value = false
   }
-  enChargement.value = false
 }
 
 const toutesDecisionsPrises = computed(() =>
@@ -103,9 +112,13 @@ async function confirmer(): Promise<void> {
       return
     }
     if ('conflit' in resultat && resultat.conflit) {
+      // `chargerConflits()` efface `messageEtat` en début d'exécution (pour
+      // ne pas laisser une ancienne erreur affichée après un rechargement
+      // réussi) — le message ci-dessous doit donc être posé APRÈS l'appel,
+      // jamais avant, sous peine d'être immédiatement effacé.
+      await chargerConflits()
       messageEtat.value =
         'La branche distante a de nouveau changé pendant la résolution — relancez la résolution.'
-      await chargerConflits()
       return
     }
     messageEtat.value = 'message' in resultat ? resultat.message : 'Erreur.'
