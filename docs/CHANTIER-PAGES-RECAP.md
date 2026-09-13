@@ -84,7 +84,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `FicheProjet.vue` | ✅ | ✅ *(aucun bug trouvé — déjà conforme)* |
 | `ListeMissions.vue` | ✅ *(aucun bug trouvé)* | ✅ |
 | `MissionWorkspace.vue` | ✅ | ✅ |
-| `AssistantStrategieQualification.vue` | ⬜ | ⬜ |
+| `AssistantStrategieQualification.vue` | ✅ | ✅ |
 | `AssistantCreationLivrable.vue` | ⬜ | ⬜ |
 | `EditeurSection.vue` | ⬜ | ⬜ |
 | `DefinitionTests.vue` | ⬜ | ⬜ |
@@ -113,6 +113,33 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `AssistantStrategieQualification.vue` **terminé**
+  (fonctionnel + UI dans un seul commit `c9e743a`, CI verte) :
+  - Fonctionnel : **évaluation ACFC non vérifiée** (même motif que
+    `FicheProjet.vue`/`MissionWorkspace.vue`, ici avec
+    `EvaluationACFC | {erreur: 'aucun_profil_configure'}`) —
+    `enregistrerEvaluation()` affichait toujours « Évaluation enregistrée. »
+    sans jamais vérifier le résultat de `methodeStore.creerEvaluation`,
+    y compris dans le cas réel où la méthode ACFC est réinitialisée/
+    supprimée entre le chargement du formulaire et la soumission (autre
+    poste). Ajout d'un `erreurEvaluation` affiché dans un `.bandeau-erreur
+    role="alert"`.
+  - UI : **absence d'état de chargement** — `onMounted` charge le profil
+    ACFC de façon asynchrone (`methodeStore.charger`), mais le template
+    évaluait `!methodeStore.profilActif` dès le premier rendu (avant que
+    `onMounted` n'ait eu la moindre chance de résoudre), affichant
+    systématiquement « Aucune méthode ACFC n'est configurée pour ce
+    client » même quand une méthode existe bel et bien — un flash de
+    contenu trompeur à chaque chargement. Ajout d'un `enChargement`
+    (motif déjà établi ailleurs dans l'app : `AdminUtilisateurs.vue`,
+    `ResolutionConflit.vue`, classe `.etat-vide` réutilisée à l'identique)
+    qui masque tout le contenu conditionnel tant que le chargement initial
+    n'est pas terminé.
+  - Le reste de l'écran (lien-retour/nom du client, accessibilité du
+    `.bouton-fichier`, absence de couleurs hex fixes) était déjà conforme
+    aux corrections des chantiers précédents — rien à refaire.
+  - Non revalidé visuellement en direct (session de test toujours expirée,
+    voir §5).
 - **13/09/2026** — `MissionWorkspace.vue` **terminé** (fonctionnel + UI dans
   un seul commit `34b59fe`, CI verte) :
   - Fonctionnel :
@@ -500,15 +527,22 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `AssistantStrategieQualification.vue` — chantier fonctionnel puis UI,
-   avec le client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans
-   l'ordre de la liste en §3.
-   **Piste à vérifier en priorité** : le motif « mutations de statut
-   ignorées » trouvé sur `FicheProjet.vue` (8 sites, commit `6e4513e`) et
-   `MissionWorkspace.vue` (2 sites, commit `34b59fe`) n'est probablement pas
-   isolé à ces deux écrans — `grep` les autres écrans qui appellent des
-   méthodes de store retournant une union `Entité | {erreur}` **ou**
-   `Entité | null` sans vérifier le résultat.
+1. `AssistantCreationLivrable.vue` — chantier fonctionnel puis UI, avec le
+   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre
+   de la liste en §3.
+   **Piste à vérifier en priorité** : le motif « mutation non vérifiée »
+   trouvé sur `FicheProjet.vue` (8 sites, `6e4513e`),
+   `MissionWorkspace.vue` (2 sites, `34b59fe`) et
+   `AssistantStrategieQualification.vue` (1 site, `c9e743a`) — trois écrans
+   d'affilée — n'est probablement pas isolé à ceux-ci — `grep` les autres
+   écrans qui appellent des méthodes de store retournant une union
+   `Entité | {erreur}` **ou** `Entité | null` sans vérifier le résultat.
+   **Piste à vérifier aussi** : l'absence d'état de chargement trouvée sur
+   `AssistantStrategieQualification.vue` (commit `c9e743a`) — un écran dont
+   `onMounted` charge des données async avant de décider quel bloc afficher
+   peut souffrir du même flash de contenu trompeur si rien ne masque le
+   rendu pendant le chargement initial (motif déjà établi ailleurs :
+   `AdminUtilisateurs.vue`, `ResolutionConflit.vue`, classe `.etat-vide`).
    **Balayage exhaustif fait le 13/09/2026** (`grep` sur tout
    `src/presentation/screens/*.vue`) pour les deux motifs de bugs
    récurrents de ce chantier — plus la peine de les redécouvrir un par un :
