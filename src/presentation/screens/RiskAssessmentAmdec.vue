@@ -130,8 +130,8 @@ async function enregistrerAction(riskAssessmentId: string): Promise<void> {
   }
 }
 
-function libelleAssetNode(assetNodeId: string | null): string {
-  if (!assetNodeId) return '—'
+function libelleAssetNode(assetNodeId: string | null): string | null {
+  if (!assetNodeId) return null
   const noeud = structureStore.noeuds.find((n) => n.id === assetNodeId)
   return noeud ? `${noeud.name} (${noeud.code})` : assetNodeId
 }
@@ -268,8 +268,10 @@ const evaluationsTriees = computed(() =>
         <ul class="liste-evaluations">
           <li v-for="e in evaluationsTriees" :key="e.id" class="carte-evaluation">
             <p>
-              <strong>{{ e.mode_defaillance }}</strong> — {{ e.etape_processus }} —
-              {{ libelleAssetNode(e.asset_node_id) }}
+              <strong>{{ e.mode_defaillance }}</strong> — {{ e.etape_processus }}
+              <template v-if="libelleAssetNode(e.asset_node_id)">
+                — {{ libelleAssetNode(e.asset_node_id) }}
+              </template>
             </p>
             <p class="meta">
               IPR initial : <strong>{{ e.ipr_initial ?? '—' }}</strong> — Verdict :
@@ -304,10 +306,18 @@ const evaluationsTriees = computed(() =>
                 <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
               </div>
             </template>
-            <p v-else class="meta">
-              IPR résiduel : <strong>{{ e.ipr_residuel }}</strong> — Verdict résiduel :
-              <strong>{{ e.verdict_residuel ? LIBELLES_VERDICT[e.verdict_residuel] : '—' }}</strong>
-            </p>
+            <template v-else>
+              <p class="meta">
+                IPR résiduel : <strong>{{ e.ipr_residuel }}</strong> — Verdict résiduel :
+                <strong>{{
+                  e.verdict_residuel ? LIBELLES_VERDICT[e.verdict_residuel] : '—'
+                }}</strong>
+              </p>
+              <p v-if="e.recommandation" class="meta">
+                Action : {{ e.recommandation }}
+                <template v-if="e.responsable"> — Responsable : {{ e.responsable }}</template>
+              </p>
+            </template>
           </li>
         </ul>
       </section>

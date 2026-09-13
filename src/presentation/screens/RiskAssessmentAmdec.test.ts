@@ -95,6 +95,11 @@ describe('RiskAssessmentAmdec', () => {
     const ligneAvecAction = (await db.risksAssessment.toArray())[0]
     expect(ligneAvecAction?.ipr_residuel).toBe(10)
     expect(ligneAvecAction?.recommandation).toBe('Ajouter une sonde de contrôle')
+
+    // La recommandation et le responsable saisis doivent rester visibles une
+    // fois l'action résiduelle enregistrée, pas seulement persistés en base.
+    await attendreQue(() => wrapper.find('.carte-evaluation').text().includes('Ajouter une sonde'))
+    expect(wrapper.find('.carte-evaluation').text()).toContain('Responsable Qualité')
   })
 
   test('créer une ligne AMDEC sans profil configuré est refusé (garde-fou)', async () => {
