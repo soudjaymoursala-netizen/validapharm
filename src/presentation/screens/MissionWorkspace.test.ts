@@ -134,6 +134,25 @@ beforeEach(async () => {
   await creerMissionDeTest()
 })
 
+// `MissionWorkspace.onMounted` charge 9 stores en `Promise.all`, mais
+// `monter()` n'attend que le titre de la mission — les autres chargements
+// (contextStore, reasoningStore, qualityEventStore, structureStore,
+// processContextStore, organizationStore, configStore, relaisStore)
+// peuvent encore être en vol quand un test se termine, et aucun wrapper
+// n'est jamais démonté d'un test à l'autre dans ce fichier. Sans cette
+// pause, ces chargements résiduels continuent en arrière-plan pendant le
+// test suivant, créant une contention de macrotâches (fake-indexeddb) qui
+// a fait échouer un test plus loin dans ce fichier à plusieurs reprises en
+// CI (jamais reproduit en local, où il n'y a pas cette accumulation de
+// bruit de fond) malgré deux tentatives de fiabilisation ciblées
+// uniquement sur ce test — la vraie cause était plus en amont.
+afterEach(async () => {
+  for (let tour = 0; tour < 5; tour++) {
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+})
+
 describe('MissionWorkspace — Activités et dépendances', () => {
   test('crée deux activités puis lie une dépendance entre elles', async () => {
     const wrapper = await monter()
