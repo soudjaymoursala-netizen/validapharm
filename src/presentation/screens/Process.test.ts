@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import JSZip from 'jszip'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
 import {
@@ -199,5 +199,37 @@ describe('Process — écran Process/Fonction (§6 du prompt maître)', () => {
 
     expect(wrapper.text()).toContain("Aucun process pour l'instant.")
     expect(wrapper.text()).toContain("Aucune fonction pour l'instant.")
+  })
+
+  test("un Worker injoignable pour le nom du client n'empêche pas l'affichage des process/fonctions (purement locaux, déjà persistés)", async () => {
+    const clientId = 'client-test-process'
+    await db.processes.put({
+      id: 'process-1',
+      client_id: clientId,
+      nom: 'Compression',
+      description: '',
+      type: 'manufacturing',
+      source_id: null,
+      audit_log: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+
+    // Même bug que celui corrigé au niveau de `useClientsStore.obtenirClient`
+    // (voir StructureSysteme.test.ts) : cet écran enchaîne aussi ce même
+    // appel avant trois chargers purement locaux (processStore, structureStore,
+    // sourceStore) dans son onMounted.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    const router = routeurDeTest()
+    await router.push({ name: 'gestion-process', params: { clientId } })
+    const wrapper = mount(Process, {
+      props: { clientId },
+      global: { plugins: [router] },
+    })
+    await attendreQue(() => wrapper.text().includes('Compression'))
+
+    expect(wrapper.text()).toContain('Compression')
+    expect(wrapper.find('h1').text()).toContain(clientId)
   })
 })
