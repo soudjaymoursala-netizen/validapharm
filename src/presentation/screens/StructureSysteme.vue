@@ -696,7 +696,12 @@ const noeudsAffiches = computed(() =>
 .lien-suivi-periodicite {
   font-size: 0.85rem;
   color: var(--vp-marque);
+  text-decoration: none;
   white-space: nowrap;
+}
+
+.lien-suivi-periodicite:hover {
+  text-decoration: underline;
 }
 
 .formulaire {
@@ -719,14 +724,15 @@ select {
   font-family: inherit;
 }
 
-button {
-  background-color: var(--vp-marque);
-  color: var(--vp-marque-bouton-texte);
-  border: none;
-  border-radius: var(--vp-rayon);
-  padding: 0.5rem 1rem;
-  cursor: pointer;
-}
+/* Pas de règle `button {}` locale : la base globale (tokens.css) applique
+   déjà le violet de marque aux boutons `type="submit"` (« Ajouter le
+   niveau », « Créer le nœud », « Créer la relation ») et un style
+   neutre/bordé aux autres (« Modifier », « Supprimer », « Reparenter »,
+   « Enregistrer » de qualification...) — une règle locale ici les
+   uniformiserait tous en violet, effaçant la distinction entre action
+   principale et actions secondaires/destructives (même bug que
+   `ConfigurationClient.vue`, corrigé de la même façon : suppression plutôt
+   qu'ajout). */
 
 .actions {
   display: flex;
@@ -785,6 +791,11 @@ button {
 .lien-dossier-vivant {
   font-size: 0.85em;
   color: var(--vp-marque);
+  text-decoration: none;
+}
+
+.lien-dossier-vivant:hover {
+  text-decoration: underline;
 }
 
 .erreur {
