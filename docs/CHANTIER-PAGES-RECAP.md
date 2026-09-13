@@ -113,6 +113,24 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — **Même test instable re-corrigé une seconde fois**
+  (`f72eb41`), a de nouveau bloqué la CI (constaté sur le commit
+  `01d2c3f`, docs-only, alors que 15 répétitions locales du fichier
+  restaient vertes). Le correctif du 91fd8f6 (attendre explicitement le
+  `<select>` avant d'interagir) a réduit mais **pas éliminé** la course :
+  le `<select>` existe bien à ce moment-là, mais quelque chose entre la
+  récupération de la référence et le déclenchement de l'événement
+  `change` empêche parfois le gestionnaire de s'exécuter en environnement
+  CI plus chargé (cause exacte non identifiée avec certitude — hypothèse
+  la plus probable : re-création du nœud DOM par Vue entre les deux).
+  Plutôt que de rétrécir encore la fenêtre de course, le test redéclenche
+  désormais `setValue('terminee')` **à chaque itération** de son propre
+  `attendreQue` jusqu'à ce que le bandeau d'erreur apparaisse — sans
+  risque ici puisque le mock est idempotent. **Piste à surveiller** :
+  si un futur test interagit avec un élément juste après son apparition
+  (pas seulement après une écriture Dexie comme la fois précédente),
+  envisager d'emblée ce motif de re-déclenchement plutôt qu'un simple
+  `attendreQue` sur l'existence de l'élément.
 - **13/09/2026** — `EditeurSection.vue` **terminé** (le plus gros écran du
   chantier — 1357 lignes — fonctionnel + UI dans un seul commit `8b1b244`,
   CI verte). Analyse initiale déléguée à un agent Explore en tâche de fond
