@@ -92,7 +92,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `RiskAssessmentAmdec.vue` | ✅ | ✅ |
 | `ImpactAssessment.vue` | ✅ | ✅ |
 | `ComputerSystemAssessment.vue` | ✅ *(aucun bug trouvé)* | ✅ *(aucun bug trouvé)* |
-| `JournalAnomalies.vue` | ⬜ | ⬜ |
+| `JournalAnomalies.vue` | ✅ | ✅ *(aucun bug trouvé)* |
 | `ResolutionConflit.vue` | ⬜ | ⬜ |
 | `DossierVivantActif.vue` | ⬜ | ⬜ |
 | `BlocageIncompatibilite.vue` | ⬜ | ⬜ |
@@ -112,6 +112,38 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 ---
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
+
+- **13/09/2026** — `JournalAnomalies.vue` **terminé** (fonctionnel
+  `ab6a6a3`, CI verte, UI vérifiée en direct sans nouveau correctif) :
+  - Fonctionnel : deux défauts trouvés. (1) **mutation non vérifiée, plus
+    grave que l'usuel** — `changerStatut` (`Promise<QualityEvent | null>`)
+    était appelé sans vérifier le résultat, ET le `<select>` de statut
+    utilisait `v-model="e.statut"` directement sur l'objet réactif du
+    store : en cas d'échec (événement supprimé entre-temps sur un autre
+    poste), l'interface affichait un nouveau statut **jamais persisté**,
+    sans le moindre message — pas seulement une absence de feedback mais
+    un affichage activement faux. Corrigé en reprenant le patron déjà
+    validé sur `MissionWorkspace.vue` (`changerStatutActivite`) :
+    `:value="e.statut"` (binding unidirectionnel) + `@change` lisant
+    `$event.target.value` explicitement, jamais de mutation optimiste.
+    `creerEvenement`/`referencerEvenement` ne retournent jamais d'union
+    d'erreur — rien à vérifier là. (2) **absence d'état de chargement** —
+    "Aucun événement pour l'instant." s'affichait à tort pendant le
+    chargement (`onMounted` en `Promise.all` sur 2 stores). `afterEach`
+    préventif ajouté au fichier de test (profil de risque identique à
+    `MissionWorkspace.vue`, jamais rencontré de flakiness ici mais ajouté
+    par précaution). 2 tests ajoutés (chargement, statut non vérifié),
+    1 test existant sécurisé avec `attendreQue` avant l'assertion finale.
+  - UI : testé en direct avec le client QA (création, changement de
+    statut, badges) — rendu et espacement déjà conformes, aucun défaut
+    trouvé. Le badge `.statut.ouvert` réutilise
+    `--vp-statut-requalification-en-retard` (nom de domaine étroit) mais
+    ce jeton est en réalité déjà utilisé comme rouge/urgent générique sur
+    au moins 7 autres écrans (`ConfigurationClient.vue`,
+    `ConfigurationDrive.vue`, `ConfigurationIA.vue`,
+    `RevueStructureProcedure.vue`, `ResolutionConflit.vue`,
+    `StructureSysteme.vue`) — pas une réutilisation isolée à corriger ici,
+    mais une convention déjà établie dans la base malgré son nom.
 
 - **13/09/2026** — `ComputerSystemAssessment.vue` **terminé, aucun bug
   trouvé ni fonctionnel ni UI** (aucun commit de code — seule la mise à
@@ -862,23 +894,25 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `JournalAnomalies.vue` — chantier fonctionnel puis UI, avec le
+1. `ResolutionConflit.vue` — chantier fonctionnel puis UI, avec le
    client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans
    l'ordre de la liste en §3.
    **Avant d'écrire de nouveaux tests** : vérifier si
-   `JournalAnomalies.test.ts` a un `afterEach` global laissant le
+   `ResolutionConflit.test.ts` a un `afterEach` global laissant le
    temps aux promesses résiduelles de se résoudre entre les tests — son
    absence a fait échouer `MissionWorkspace.test.ts` en CI à trois
    reprises (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge
    plusieurs stores en `Promise.all` sans jamais démonter son wrapper
    d'un test à l'autre. Le risque ne concerne que les `onMounted` en
-   `Promise.all` concurrent (plusieurs stores lancés en parallèle) — un
-   `onMounted` à `await` séquentiels comme ceux de
+   `Promise.all` concurrent (plusieurs stores lancés en parallèle) —
+   confirmé une seconde fois comme un profil à filet préventif sur
+   `JournalAnomalies.vue` (`ab6a6a3`, ajouté sans incident CI observé,
+   par précaution). Un `onMounted` à `await` séquentiels comme ceux de
    `RiskAssessmentAmdec.vue`/`ImpactAssessment.vue` n'a pas ce profil de
    risque et n'a pas eu besoin de ce filet. Si le fichier de l'écran en
-   cours a le même profil que `MissionWorkspace.vue` (plusieurs stores
-   chargés en parallèle, pas d'`afterEach` de "settle"), ajouter ce filet
-   préventivement plutôt que d'attendre un nouvel incident CI.
+   cours a le même profil (plusieurs stores chargés en parallèle, pas
+   d'`afterEach` de "settle"), ajouter ce filet préventivement plutôt que
+   d'attendre un nouvel incident CI.
    **Avant de vérifier l'UI en direct sur le site déployé** : après un
    push tout juste passé au vert en CI, faire un **hard reload**
    (`cmd+shift+r`/`ctrl+shift+r`), pas un simple rechargement — un
@@ -895,10 +929,14 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    `34b59fe`), `AssistantStrategieQualification.vue` (1 site, `c9e743a`),
    `EditeurSection.vue` (6 sites, `8b1b244`), `DefinitionTests.vue`
    (4 sites, `126b71f`), `ExecutionTests.vue` (5 sites, `6c44ee6`) et
-   `RiskAssessmentAmdec.vue` (1 site, `d68de27`) — sept écrans sur les dix
-   derniers, avec des conséquences parfois sérieuses (un garde-fou
-   d'immutabilité explicitement annoncé à l'utilisateur, sur
-   `ExecutionTests.vue`). `AssistantCreationLivrable.vue`,
+   `RiskAssessmentAmdec.vue` (1 site, `d68de27`) et `JournalAnomalies.vue`
+   (1 site, `ab6a6a3`) — huit écrans sur les onze derniers, avec des
+   conséquences parfois sérieuses (un garde-fou d'immutabilité
+   explicitement annoncé à l'utilisateur, sur `ExecutionTests.vue` ; un
+   affichage activement faux — pas seulement une absence de feedback —
+   sur `JournalAnomalies.vue`, où un `<select v-model="e.statut">` liait
+   directement l'objet réactif du store, donc montrait un nouveau statut
+   jamais persisté en cas d'échec). `AssistantCreationLivrable.vue`,
    `ImpactAssessment.vue` (`creerEvaluation` déjà vérifié,
    `creerNouvelleVersion` ne retourne jamais d'union d'erreur) **et**
    `ComputerSystemAssessment.vue` (`creerEvaluation` ne retourne jamais
@@ -910,6 +948,16 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    "clôturé"/"verrouillé"/"validé"/"introuvable" dans le store) — mais
    vérifier aussi la signature de retour réelle de chaque fonction du
    store avant de supposer le bug présent.
+   **Piste à vérifier aussi** : un `<select>`/`<input>` avec `v-model`
+   lié DIRECTEMENT à un champ d'un objet venant du store (ex.
+   `v-model="e.statut"` où `e` est un élément de `store.evenements`)
+   mute l'affichage de façon optimiste avant même la réponse de la
+   mutation asynchrone — si celle-ci échoue, l'utilisateur voit une
+   valeur jamais persistée, sans le moindre message. Préférer le patron
+   déjà validé sur `MissionWorkspace.vue`/`JournalAnomalies.vue` :
+   `:value="e.champ"` (binding unidirectionnel, jamais muté localement)
+   + `@change` lisant `$event.target.value` explicitement et appelant la
+   fonction du store, qui seule décide si `e` change réellement.
    **Piste à vérifier aussi** : l'absence d'état de chargement — trouvée
    sur `AssistantStrategieQualification.vue` (`c9e743a`), `EditeurSection.vue`
    (`8b1b244`, une section), `DefinitionTests.vue` (`126b71f`, **tout
