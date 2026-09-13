@@ -74,7 +74,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `AccueilQueVoulezVousFaire.vue` | ✅ | ✅ |
 | `GestionClients.vue` | ✅ | ✅ |
 | `FicheClient.vue` | ✅ | ✅ |
-| `ConfigurationClient.vue` | ⬜ | ⬜ |
+| `ConfigurationClient.vue` | ✅ | ✅ |
 | `StructureSysteme.vue` | ⬜ | ⬜ |
 | `SuiviPeriodicite.vue` | ⬜ | ⬜ |
 | `Process.vue` | ⬜ | ⬜ |
@@ -113,6 +113,44 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `ConfigurationClient.vue` **terminé** (fonctionnel + UI),
+  3 commits sur `main` (2 fonctionnel dont 1 sur des stores partagés, 1
+  esthétique), CI verte sur les trois :
+  - Fonctionnel (`caa1f53` + `eae65ad`) : même famille de bug que les
+    écrans précédents, mais trouvée à **quatre endroits distincts** sur cet
+    écran — `enregistrer()`/`effacer()` (dépôt GitHub), `enregistrerRelais()`/
+    `effacerRelais()` (Relais IA) ne capturaient jamais les exceptions de
+    connectivité, et le `onMounted` enchaînait trois `charger()` (GitHub,
+    Relais IA, Authentification) **sans isolation** : un échec sur le
+    premier bloquait le chargement des deux suivants, laissant croire que
+    toute la configuration avait disparu. Corrigé à deux niveaux :
+    1. Écran — chaque action et chaque `charger()` du `onMounted` isolés
+       dans leur propre `try/catch`, avec un message affiché plutôt qu'un
+       échec silencieux (formulaire gardé intact avec la saisie en cours).
+    2. **Stores partagés** (`useConnexionGitHubStore.charger()`,
+       `useConnexionRelaisIAStore.charger()`) — ajout d'un `catch` interne
+       manquant, sur le même principe que `useClientsStore.chargerClients()`
+       déjà en place. Ces deux stores sont aussi appelés par
+       `MissionWorkspace.vue`/`RevueStructureProcedure.vue`/`EditeurSection.vue`
+       (hors chantier pour l'instant) — corrigés au niveau store plutôt
+       qu'au niveau écran pour que ces écrans futurs en bénéficient déjà
+       sans repasser dessus. 3 tests ajoutés dans un nouveau fichier
+       `ConfigurationClient.test.ts` (aucun test n'existait avant sur cet
+       écran) — dont un qui mocke directement `useConnexionGitHubStore().charger`
+       pour prouver l'isolation réelle du `onMounted`, indépendamment du
+       correctif interne au store.
+  - UI (commit `4531bae`, contenu identique au commit local `41eac02`) :
+    trouvé en comparant un rendu réel de l'écran — tous les boutons («
+    Enregistrer », « Effacer », « Tester la connexion ») apparaissaient
+    visuellement identiques (fond neutre), alors que `tokens.css` définit
+    une hiérarchie globale (`button[type="submit"]` violet/primaire, le
+    reste neutre/bordé). Cause : une règle locale scoped `button {...}` /
+    `button:disabled {...}` sur cet écran masquait la règle globale pour
+    tout l'écran. Corrigé par **suppression** de cette règle locale
+    redondante plutôt que par ajout — laisse la hiérarchie globale
+    s'appliquer normalement (vérifié visuellement en local,
+    `localhost:5173/configuration`, route non protégée via
+    `ROUTES_SANS_GARDE`).
 - **12/09/2026** — `FicheClient.vue` **terminé** (fonctionnel + UI), 2
   commits sur `main`, CI verte sur les deux :
   - Fonctionnel (`2325909`) : même défaut exact que `GestionClients.vue` —
@@ -209,9 +247,11 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `ConfigurationClient.vue` — chantier fonctionnel puis UI, avec le
-   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`).
-2. Puis `StructureSysteme.vue`, dans l'ordre de la liste en §3.
+1. `StructureSysteme.vue` — chantier fonctionnel puis UI, avec le
+   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) ; probable
+   besoin de créer une structure système dessus si aucune n'existe encore
+   (voir §2 — rien créé sur ce client pour l'instant).
+2. Puis `SuiviPeriodicite.vue`, dans l'ordre de la liste en §3.
 3. Mettre à jour ce fichier après **chaque** chantier terminé (pas
    seulement en fin de session) — voir la règle en §1.
 4. **Piste ouverte, à surveiller sur les écrans suivants** : le même bug
