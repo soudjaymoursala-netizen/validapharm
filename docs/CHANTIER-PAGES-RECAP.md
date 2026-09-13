@@ -87,7 +87,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `AssistantStrategieQualification.vue` | ✅ | ✅ |
 | `AssistantCreationLivrable.vue` | ✅ *(aucun bug trouvé)* | ✅ |
 | `EditeurSection.vue` | ✅ | ✅ |
-| `DefinitionTests.vue` | ⬜ | ⬜ |
+| `DefinitionTests.vue` | ✅ | ✅ |
 | `ExecutionTests.vue` | ⬜ | ⬜ |
 | `RiskAssessmentAmdec.vue` | ⬜ | ⬜ |
 | `ImpactAssessment.vue` | ⬜ | ⬜ |
@@ -113,6 +113,37 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `DefinitionTests.vue` **terminé** (fonctionnel + UI dans
+  un seul commit `126b71f`, CI verte, 2 nouveaux tests) :
+  - Fonctionnel : **4 sites de mutation non vérifiée** (même motif que
+    `FicheProjet.vue`/`MissionWorkspace.vue`/
+    `AssistantStrategieQualification.vue`/`EditeurSection.vue` — cinquième
+    écran d'affilée) — `accepterTestCandidate`/`rejeterTestCandidate`/
+    `marquerBesoinInformation`/`approuverTest` retournent tous
+    `Entité | null` (candidat/test introuvable ou modifié entre-temps sur
+    un autre poste) sans que le composant ne vérifie jamais le résultat —
+    les boutons "Accepter"/"Rejeter"/"Besoin d'information"/"Approuver"
+    échouaient en silence total dans ce cas. Un `erreurAction` partagé
+    ajouté, affiché une seule fois près du haut de l'écran (même
+    convention que `FicheProjet.vue`). 2 tests ajoutés (mock direct du
+    store), confirment que le statut réel en base reste inchangé quand
+    l'action échoue.
+  - UI : **absence totale d'état de chargement** — contrairement aux
+    écrans précédents qui gataient au moins la section concernée, ici
+    aucun `v-if` ne protégeait le moindre bloc : les 5 sections (Exigences,
+    Objectifs, Candidats, Tests, Couverture) affichaient toutes leur état
+    "Aucun ... pour l'instant." dès le premier rendu, avant que
+    `testStore.charger()` n'ait eu la moindre chance de résoudre — un
+    flash de contenu trompeur sur l'écran entier, pas seulement une
+    sous-section. Un `enChargement` ajouté, masque tout le contenu
+    conditionnel (même motif que `AssistantStrategieQualification.vue`).
+  - Test existant adapté : les 2 tests déjà présents attendaient un seul
+    `flushPromises()` après le montage sans jamais vérifier que le
+    formulaire était rendu — fonctionnait par hasard tant qu'aucune garde
+    de chargement n'existait ; converti en `attendreQue` sur le rendu réel
+    du formulaire, même précaution que pour `EditeurSection.vue`.
+  - Non revalidé visuellement en direct (session de test toujours expirée,
+    voir §5).
 - **13/09/2026** — **Même test instable re-corrigé une seconde fois**
   (`f72eb41`), a de nouveau bloqué la CI (constaté sur le commit
   `01d2c3f`, docs-only, alors que 15 répétitions locales du fichier
@@ -667,26 +698,26 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `DefinitionTests.vue` — chantier fonctionnel puis UI, avec le client de
+1. `ExecutionTests.vue` — chantier fonctionnel puis UI, avec le client de
    test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre de la
    liste en §3.
    **Piste à vérifier en priorité** : le motif « mutation non vérifiée »
    (union `Entité | {erreur}` ou `Entité | null`, ou effet de bord local
-   appliqué inconditionnellement sans vérifier le résultat) reste le plus
-   fréquent de ce chantier — trouvé sur `FicheProjet.vue` (8 sites,
-   `6e4513e`), `MissionWorkspace.vue` (2 sites, `34b59fe`),
-   `AssistantStrategieQualification.vue` (1 site, `c9e743a`) et
-   `EditeurSection.vue` (6 sites, `8b1b244`) — quatre écrans sur les cinq
-   derniers. `AssistantCreationLivrable.vue` en était l'exception (aucune
-   mutation à risque réaliste) — ne pas supposer que c'est systématique,
-   mais `grep` chaque nouvel écran avant de conclure.
-   **Piste à vérifier aussi** : l'absence d'état de chargement pour des
-   données secondaires chargées en fin de chaîne séquentielle dans
-   `onMounted` (trouvée sur `AssistantStrategieQualification.vue`,
-   `c9e743a`, et `EditeurSection.vue`, `8b1b244` — section entière qui
-   affiche un faux "rien n'est lié" tant que le store correspondant n'a
-   pas fini de charger). Un écran qui charge plusieurs stores en séquence
-   avant de décider quel bloc afficher est un candidat direct à vérifier.
+   appliqué inconditionnellement sans vérifier le résultat) — trouvé sur
+   `FicheProjet.vue` (8 sites, `6e4513e`), `MissionWorkspace.vue` (2 sites,
+   `34b59fe`), `AssistantStrategieQualification.vue` (1 site, `c9e743a`),
+   `EditeurSection.vue` (6 sites, `8b1b244`) et `DefinitionTests.vue`
+   (4 sites, `126b71f`) — cinq écrans sur les six derniers.
+   `AssistantCreationLivrable.vue` reste la seule exception (aucune
+   mutation à risque réaliste) — ce motif est désormais la piste par
+   défaut à vérifier sur chaque nouvel écran, pas une simple possibilité.
+   **Piste à vérifier aussi** : l'absence d'état de chargement — trouvée
+   sur `AssistantStrategieQualification.vue` (`c9e743a`), `EditeurSection.vue`
+   (`8b1b244`, une section) et `DefinitionTests.vue` (`126b71f`, **tout
+   l'écran** : aucune garde du tout avant ce correctif) — un écran qui
+   charge des données async dans `onMounted` avant de décider quel bloc
+   afficher est un candidat direct à vérifier, même s'il n'a qu'un seul
+   store à charger.
    **Piste à vérifier aussi** : sur `EditeurSection.vue`, un cas non
    corrigé faute de solution correcte — `imprimer()` journalise l'export
    avant que `window.print()` ne soit confirmé (aucune API navigateur ne
