@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
 import DossierVivantActif from './DossierVivantActif.vue'
@@ -54,6 +54,17 @@ beforeEach(async () => {
   await db.missions.clear()
   await db.qualityEvents.clear()
   await db.sections.clear()
+})
+
+// `onMounted` charge 7 stores en `Promise.all` — même profil de risque
+// que `MissionWorkspace.vue`, qui a fait échouer ses tests en CI à trois
+// reprises (`91fd8f6`, `f72eb41`, `1dcae5a`) faute de laisser le temps
+// aux promesses résiduelles de se résoudre entre les tests.
+afterEach(async () => {
+  for (let tour = 0; tour < 5; tour++) {
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
 })
 
 describe('DossierVivantActif', () => {
@@ -171,6 +182,46 @@ describe('DossierVivantActif', () => {
 
     expect(wrapper.text()).toContain('OQ presse P-200')
     expect(wrapper.text()).not.toContain('Aucun livrable explicitement lié')
+  })
+
+  test('affiche un état de chargement avant que le nœud ne soit résolu, jamais « Nœud introuvable » à tort', async () => {
+    // Reproduit un nœud déjà en base, chargé de manière asynchrone — avant
+    // ce correctif, `noeud` (computed dérivé de `structureStore.noeuds`,
+    // vide avant `structureStore.charger()`) valait `null` pendant tout le
+    // chargement, donc l'écran affichait à tort « Nœud introuvable » même
+    // pour un nœud existant (même motif que `RiskAssessmentAmdec.vue`/
+    // `ImpactAssessment.vue` — le commentaire du fichier de test notait
+    // déjà cette course avant ce correctif, mais seulement comme une
+    // contrainte de test à contourner, pas comme un bug de l'écran).
+    const maintenant = new Date().toISOString()
+    await db.assetNodes.put({
+      id: 'noeud-3',
+      client_id: 'client-1',
+      workspace_id: null,
+      level_key: 'equipement',
+      name: 'Étuve E-500',
+      code: 'E-500',
+      parent_id: null,
+      associated_nodes: [],
+      source: 'manuel',
+      qms_connector_id: null,
+      periodic_qualification: { applicable: false, deadline: null },
+      qualification_status: 'qualifie',
+      audit_log: [],
+      created_at: maintenant,
+      updated_at: maintenant,
+    })
+
+    const wrapper = mount(DossierVivantActif, {
+      props: { clientId: 'client-1', noeudId: 'noeud-3' },
+      global: { plugins: [routeurDeTest()] },
+    })
+
+    expect(wrapper.text()).toContain('Chargement…')
+    expect(wrapper.text()).not.toContain('Nœud introuvable')
+
+    await attendreQue(() => wrapper.text().includes('Étuve E-500'))
+    expect(wrapper.text()).not.toContain('Chargement…')
   })
 
   test('nœud introuvable -> message explicite, jamais un écran vide silencieux', async () => {

@@ -49,26 +49,31 @@ const qualityEventStore = useQualityEventStore()
 
 const nomClient = ref<string | null>(null)
 const sectionsLiees = ref<Section[]>([])
+const chargementInitial = ref(true)
 
 onMounted(async () => {
-  const client = await clientsStore.obtenirClient(props.clientId)
-  nomClient.value = client?.name ?? null
-  await Promise.all([
-    structureStore.charger(props.clientId),
-    acfcStore.charger(props.clientId),
-    impactStore.charger(props.clientId),
-    csvStore.charger(props.clientId),
-    riskStore.charger(props.clientId),
-    missionStore.charger(props.clientId),
-    qualityEventStore.charger(props.clientId),
-    db.sections
-      .where('asset_node_id')
-      .equals(props.noeudId)
-      .toArray()
-      .then((s) => {
-        sectionsLiees.value = s
-      }),
-  ])
+  try {
+    const client = await clientsStore.obtenirClient(props.clientId)
+    nomClient.value = client?.name ?? null
+    await Promise.all([
+      structureStore.charger(props.clientId),
+      acfcStore.charger(props.clientId),
+      impactStore.charger(props.clientId),
+      csvStore.charger(props.clientId),
+      riskStore.charger(props.clientId),
+      missionStore.charger(props.clientId),
+      qualityEventStore.charger(props.clientId),
+      db.sections
+        .where('asset_node_id')
+        .equals(props.noeudId)
+        .toArray()
+        .then((s) => {
+          sectionsLiees.value = s
+        }),
+    ])
+  } finally {
+    chargementInitial.value = false
+  }
 })
 
 const noeud = computed(() => structureStore.noeuds.find((n) => n.id === props.noeudId) ?? null)
@@ -258,6 +263,7 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
         </p>
       </section>
     </template>
+    <p v-else-if="chargementInitial" class="etat-vide">Chargement…</p>
     <p v-else class="etat-vide">Nœud introuvable.</p>
   </main>
 </template>
