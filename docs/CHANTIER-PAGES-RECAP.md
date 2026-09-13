@@ -93,7 +93,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `ImpactAssessment.vue` | ✅ | ✅ |
 | `ComputerSystemAssessment.vue` | ✅ *(aucun bug trouvé)* | ✅ *(aucun bug trouvé)* |
 | `JournalAnomalies.vue` | ✅ | ✅ *(aucun bug trouvé)* |
-| `ResolutionConflit.vue` | ⬜ | ⬜ |
+| `ResolutionConflit.vue` | ✅ | ✅ *(vue "aucun conflit" vérifiée en direct ; vue "conflit" non revalidée visuellement en direct — voir §4)* |
 | `DossierVivantActif.vue` | ⬜ | ⬜ |
 | `BlocageIncompatibilite.vue` | ⬜ | ⬜ |
 | `SourceIntelligence.vue` | ⬜ | ⬜ |
@@ -112,6 +112,55 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 ---
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
+
+- **13/09/2026** — `ResolutionConflit.vue` **terminé** (fonctionnel
+  `7b8eb22`, CI verte, **aucun fichier de test n'existait avant ce
+  chantier** — `ResolutionConflit.test.ts` créé de toutes pièces, 5 tests) :
+  - Fonctionnel — **bug le plus sérieux du chantier à ce jour** : le
+    commentaire en tête du fichier source annonce explicitement « Aucun
+    choix par défaut silencieux : le bouton de confirmation reste
+    désactivé tant qu'un champ divergent n'a pas de décision » — mais
+    `chargerConflits()` préremplissait en réalité **chaque champ
+    divergent** avec `{choix: 'distante', valeurManuelle: ''}` dès le
+    chargement, ce qui satisfaisait immédiatement `toutesDecisionsPrises`
+    et activait le bouton de confirmation **sans qu'aucune décision n'ait
+    jamais été prise par l'utilisateur**. Un utilisateur pressé pouvait
+    cliquer "Confirmer" sans avoir regardé le moindre champ, écrasant
+    silencieusement toute donnée locale divergente par la version
+    distante. Contradiction directe entre l'intention documentée dans le
+    fichier et son comportement réel — `toutesDecisionsPrises` gérait
+    déjà correctement une entrée absente comme "non décidée", seule la
+    pré-initialisation en trop cassait la garantie. Corrigé en laissant
+    `decisions` vide par conflit ; chaque `@change` de radio crée
+    lui-même l'entrée au premier choix explicite. Second bug : `chargerConflits()`
+    n'avait aucun `try/catch` — `analyserConflit()` fait des appels réseau
+    à l'API GitHub (`lireDistantOuNull` en boucle séquentielle, jamais
+    `Promise.all`) et peut légitimement lever une exception (réseau,
+    authentification) ; sans filet, l'écran restait bloqué indéfiniment
+    sur "Analyse des conflits…", sans aucun message ni possibilité de
+    savoir qu'une erreur s'était produite. `try/catch/finally` ajouté,
+    avec un message d'erreur explicite. **Piège rencontré en corrigeant** :
+    un premier correctif plaçait `messageEtat.value = null` en début de
+    `chargerConflits()`, ce qui effaçait immédiatement le message "la
+    branche distante a de nouveau changé" posé juste avant l'appel dans
+    `confirmer()` (branche de conflit pendant la confirmation) — détecté
+    par le test correspondant, corrigé en posant ce message APRÈS l'appel
+    à `chargerConflits()`, jamais avant.
+  - UI : écran non lié à un client (`/resolution-conflit`, pas de
+    `clientId`) — l'état "aucun conflit détecté" a été vérifié en direct
+    sur le site déployé (rendu et espacement conformes, header bien
+    aligné). L'état "conflit" (radios, formatage des valeurs,
+    fusion manuelle) n'a **pas** été revalidé visuellement en direct —
+    reproduire un vrai conflit exigerait d'éditer simultanément un
+    fichier GitHub et l'IndexedDB local avec des valeurs divergentes,
+    disproportionné pour ce chantier. Relecture de code : tokens
+    sémantiques cohérents avec le reste de l'app, `role="radiogroup"` et
+    `aria-label` déjà présents par champ divergent (accessibilité déjà
+    soignée sur cet écran, contrairement à plusieurs écrans plus anciens
+    du chantier), espacement explicite sur tous les conteneurs. Les 5
+    tests couvrent l'état "conflit" (bouton désactivé par défaut,
+    activation après décision, confirmation, nouveau conflit pendant la
+    confirmation) — à défaut de vérification visuelle live.
 
 - **13/09/2026** — `JournalAnomalies.vue` **terminé** (fonctionnel
   `ab6a6a3`, CI verte, UI vérifiée en direct sans nouveau correctif) :
@@ -894,11 +943,20 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `ResolutionConflit.vue` — chantier fonctionnel puis UI, avec le
-   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans
+1. `DossierVivantActif.vue` — chantier fonctionnel puis UI, avec le
+   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) si l'écran
+   est bien client-scopé (vérifier sa route dans `router/index.ts` avant
+   de supposer un `clientId` — `ResolutionConflit.vue` n'en avait pas,
+   contrairement à la quasi-totalité des écrans précédents), dans
    l'ordre de la liste en §3.
+   **Vérifier d'abord si un fichier de test existe** — `ResolutionConflit.vue`
+   n'en avait aucun avant ce chantier (`ResolutionConflit.test.ts` créé de
+   toutes pièces, 5 tests), contrairement à tous les écrans précédents de
+   cette liste qui avaient déjà une suite existante à corriger/étendre.
+   Ne pas supposer qu'un fichier `<Écran>.test.ts` existe sans `find`/`ls`
+   préalable.
    **Avant d'écrire de nouveaux tests** : vérifier si
-   `ResolutionConflit.test.ts` a un `afterEach` global laissant le
+   `DossierVivantActif.test.ts` a un `afterEach` global laissant le
    temps aux promesses résiduelles de se résoudre entre les tests — son
    absence a fait échouer `MissionWorkspace.test.ts` en CI à trois
    reprises (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge
@@ -973,6 +1031,29 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    `MethodProfile`/profil actif configurable — `ComputerSystemAssessment.vue`
    affiche toujours son formulaire directement (grille GAMP5 fixe), donc
    aucun risque de flash de faux message "non configuré".
+   **Piste à vérifier aussi** : un commentaire en tête de fichier qui
+   décrit une garantie précise ("aucun choix par défaut silencieux",
+   "le bouton reste désactivé tant que…") mérite une vérification directe
+   du code qui l'implémente, pas une confiance a priori — sur
+   `ResolutionConflit.vue` (`7b8eb22`), le commentaire annonçait
+   exactement le comportement inverse de ce que faisait
+   `chargerConflits()` (préremplissage silencieux de chaque champ
+   divergent avec un choix par défaut). Un tel écart entre intention
+   documentée et code réel est un signal fort à chercher spécifiquement
+   sur les écrans à décisions explicites obligatoires (garde-fous
+   "jamais de valeur par défaut", "toujours une saisie explicite").
+   **Piste à vérifier aussi** : une fonction de chargement (`onMounted`
+   ou une fonction dédiée type `chargerXxx()`) sans `try`/`catch` autour
+   d'un appel réseau réel (API GitHub, fetch externe — pas seulement
+   IndexedDB local, qui échoue rarement en pratique) peut laisser l'écran
+   bloqué indéfiniment sur son état de chargement si l'appel lève une
+   exception, sans le moindre message ni retry possible — trouvé sur
+   `ResolutionConflit.vue` (`analyserConflit()` fait des appels API
+   GitHub séquentiels via `lireDistantOuNull`, jamais wrappé). Plus grave
+   qu'un simple flash de faux message : ici rien ne se résout jamais.
+   Chercher spécifiquement les écrans dont le chargement dépend d'un
+   connecteur externe (GitHub, Drive, IA) plutôt que de la seule
+   IndexedDB locale.
    **Piste à vérifier aussi** : les libellés d'union affichés bruts dans
    le template (`{{ opt }}` sur une valeur `snake_case` au lieu d'un
    dictionnaire de libellés) — trouvé sur `ImpactAssessment.vue`
