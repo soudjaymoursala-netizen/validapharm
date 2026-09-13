@@ -254,6 +254,11 @@ function texteEcheance(ligne: LigneSuivi): string {
   align-self: flex-start;
   font-size: 0.85em;
   color: var(--vp-marque);
+  text-decoration: none;
+}
+
+.lien-dossier-vivant:hover {
+  text-decoration: underline;
 }
 
 .etat-vide {
