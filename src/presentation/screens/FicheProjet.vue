@@ -36,6 +36,31 @@ const modaleSuppressionOuverte = ref(false)
 const erreurImportDocument = ref<string | null>(null)
 const nouvelUtilisateurPartage = ref('')
 const nouveauNiveauPartage = ref<'lecture' | 'édition'>('lecture')
+const erreurAction = ref<string | null>(null)
+
+/**
+ * Toutes les mutations de statut/partage du projet ci-dessous renvoient une
+ * union `Project | {erreur}` (jamais une exception) pour des cas métier
+ * réels — race concurrentielle entre deux postes (`introuvable`), double
+ * clic sur un bouton d'action (`deja_suspendu`/`deja_archive`...). Avant ce
+ * correctif, aucune n'était vérifiée : l'action échouait en silence total
+ * (rien ne se passait, sans le moindre message), et `confirmerArchivage`/
+ * `confirmerSuppression` redirigeaient même vers le tableau de bord comme
+ * si l'action avait réussi.
+ */
+const LIBELLES_ERREUR_ACTION: Record<string, string> = {
+  introuvable: 'Ce projet est introuvable — il a peut-être été supprimé depuis un autre poste.',
+  deja_archive: 'Ce projet est déjà archivé.',
+  deja_actif: 'Ce projet est déjà actif.',
+  deja_suspendu: 'Ce projet est déjà suspendu.',
+  pas_suspendu: "Ce projet n'est pas suspendu.",
+  deja_supprime: 'Ce projet est déjà marqué comme supprimé.',
+  pas_archive: "Ce projet doit d'abord être archivé avant de pouvoir être supprimé.",
+}
+
+function libelleErreurAction(resultat: { erreur: string }): string {
+  return LIBELLES_ERREUR_ACTION[resultat.erreur] ?? 'Action refusée.'
+}
 
 /**
  * Garde d'affichage du partage de projet — convention
@@ -50,53 +75,88 @@ const peutModifier = computed(() =>
 async function ajouterPartage(): Promise<void> {
   const userId = nouvelUtilisateurPartage.value.trim()
   if (userId.length === 0) return
+  erreurAction.value = null
   const resultat = await projetsStore.partagerProjet(
     props.projectId,
     userId,
     nouveauNiveauPartage.value,
   )
-  if (!('erreur' in resultat)) projet.value = resultat
+  if ('erreur' in resultat) {
+    erreurAction.value = libelleErreurAction(resultat)
+    return
+  }
+  projet.value = resultat
   nouvelUtilisateurPartage.value = ''
 }
 
 async function retirerPartage(userId: string): Promise<void> {
+  erreurAction.value = null
   const resultat = await projetsStore.retirerPartage(props.projectId, userId)
-  if (!('erreur' in resultat)) projet.value = resultat
+  if ('erreur' in resultat) {
+    erreurAction.value = libelleErreurAction(resultat)
+    return
+  }
+  projet.value = resultat
 }
 
 async function confirmerArchivage(identiteDeclaree: string): Promise<void> {
-  await projetsStore.archiverProjet(props.projectId, identiteDeclaree)
   modaleArchivageOuverte.value = false
+  erreurAction.value = null
+  const resultat = await projetsStore.archiverProjet(props.projectId, identiteDeclaree)
+  if ('erreur' in resultat) {
+    erreurAction.value = libelleErreurAction(resultat)
+    return
+  }
   await router.push({ name: 'tableau-de-bord' })
 }
 
 async function suspendreProjet(): Promise<void> {
+  erreurAction.value = null
   const resultat = await projetsStore.suspendreProjet(
     props.projectId,
     projetsStore.identiteCourante,
   )
-  if (!('erreur' in resultat)) projet.value = resultat
+  if ('erreur' in resultat) {
+    erreurAction.value = libelleErreurAction(resultat)
+    return
+  }
+  projet.value = resultat
 }
 
 async function reprendreProjet(): Promise<void> {
+  erreurAction.value = null
   const resultat = await projetsStore.reprendreProjet(
     props.projectId,
     projetsStore.identiteCourante,
   )
-  if (!('erreur' in resultat)) projet.value = resultat
+  if ('erreur' in resultat) {
+    erreurAction.value = libelleErreurAction(resultat)
+    return
+  }
+  projet.value = resultat
 }
 
 async function desarchiverProjet(): Promise<void> {
+  erreurAction.value = null
   const resultat = await projetsStore.desarchiverProjet(
     props.projectId,
     projetsStore.identiteCourante,
   )
-  if (!('erreur' in resultat)) projet.value = resultat
+  if ('erreur' in resultat) {
+    erreurAction.value = libelleErreurAction(resultat)
+    return
+  }
+  projet.value = resultat
 }
 
 async function confirmerSuppression(identiteDeclaree: string): Promise<void> {
-  await projetsStore.supprimerProjet(props.projectId, identiteDeclaree)
   modaleSuppressionOuverte.value = false
+  erreurAction.value = null
+  const resultat = await projetsStore.supprimerProjet(props.projectId, identiteDeclaree)
+  if ('erreur' in resultat) {
+    erreurAction.value = libelleErreurAction(resultat)
+    return
+  }
   await router.push({ name: 'tableau-de-bord' })
 }
 
@@ -108,13 +168,18 @@ const LIBELLES_PHASE: Record<PhaseProjet, string> = {
 }
 
 async function changerPhase(evenement: Event): Promise<void> {
+  erreurAction.value = null
   const phase = (evenement.target as HTMLSelectElement).value as PhaseProjet
   const resultat = await projetsStore.changerPhaseProjet(
     props.projectId,
     phase,
     projetsStore.identiteCourante,
   )
-  if (!('erreur' in resultat)) projet.value = resultat
+  if ('erreur' in resultat) {
+    erreurAction.value = libelleErreurAction(resultat)
+    return
+  }
+  projet.value = resultat
 }
 
 // Catalogue restreint à ce qui est réellement exploitable par la machine à
@@ -303,6 +368,7 @@ async function importerFichier(evenement: Event): Promise<void> {
         </template>
       </div>
     </header>
+    <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
     <p v-if="projet.statut === 'supprime'" class="rappel-suppression">
       Ce projet est marqué comme supprimé — retiré des listes actives, ses données restent
       conservées (ALCOA+).
@@ -666,6 +732,12 @@ async function importerFichier(evenement: Event): Promise<void> {
 }
 
 .rappel-suppression {
+  color: var(--vp-danger);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.bandeau-erreur {
   color: var(--vp-danger);
   font-size: 0.85rem;
   margin: 0;
