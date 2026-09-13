@@ -86,7 +86,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `MissionWorkspace.vue` | ✅ | ✅ |
 | `AssistantStrategieQualification.vue` | ✅ | ✅ |
 | `AssistantCreationLivrable.vue` | ✅ *(aucun bug trouvé)* | ✅ |
-| `EditeurSection.vue` | ⬜ | ⬜ |
+| `EditeurSection.vue` | ✅ | ✅ |
 | `DefinitionTests.vue` | ⬜ | ⬜ |
 | `ExecutionTests.vue` | ⬜ | ⬜ |
 | `RiskAssessmentAmdec.vue` | ⬜ | ⬜ |
@@ -113,6 +113,90 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — `EditeurSection.vue` **terminé** (le plus gros écran du
+  chantier — 1357 lignes — fonctionnel + UI dans un seul commit `8b1b244`,
+  CI verte). Analyse initiale déléguée à un agent Explore en tâche de fond
+  (fichier trop volumineux pour une lecture linéaire efficace), puis chaque
+  finding vérifié par lecture directe avant correction — 8 correctifs
+  fonctionnels, 3 correctifs UI, 3 nouveaux tests (+ 2 tests existants
+  adaptés) :
+  - Fonctionnel :
+    1. `rejeter()` effaçait `motifRejet` **même en cas d'échec** de la
+       transition (garde-fou bloquant) — l'utilisateur perdait le motif
+       qu'il venait de saisir sans que rien ne l'indique. Corrigé : effacé
+       uniquement sur succès.
+    2. `validerSectionIA()` réinitialisait la checklist de relecture
+       (`sousSectionsRevues`) **même en cas d'échec** — allait à l'encontre
+       du principe explicite « jamais de validation globale en un clic »
+       du fichier lui-même. Corrigé : réinitialisée uniquement sur succès.
+    3. `genererBrouillon()` confondait le motif d'échec `statut_incompatible`
+       (section changée de statut entre-temps, ex. autre onglet) avec
+       `confirmation_droit_usage_requise` — message trompeur. Un message
+       dédié ajouté.
+    4. `exporterWordGabaritClient()` ne faisait strictement rien, sans le
+       moindre message, si le gabarit sélectionné avait été supprimé
+       entre-temps (autre onglet) — message d'erreur ajouté.
+    5. `lierSectionSelectionnee()`/`delierSection()` ne rattrapaient jamais
+       l'exception levée par `useProjectsStore.ajouterLien`/`retirerLien`
+       si le projet est introuvable — rejet de promesse non géré, aucun
+       message. `try/catch` ajouté avec un `erreurLienSection` affiché.
+    6. `forcerEngagerVerification()`/`forcerApprouver()` ne réinitialisaient
+       jamais `motifForcage` sur succès (contrairement à
+       `engagerVerification()`) — un motif de forçage obsolète pouvait
+       réapparaître pré-rempli pour un blocage ultérieur sans rapport.
+    7. **Absence d'état de chargement** (même motif que
+       `AssistantStrategieQualification.vue`) : `procedureStore`/
+       `structureStore` se chargent en toute fin de la chaîne séquentielle
+       de `onMounted`, mais la section « Liens structurels » se rendait
+       immédiatement après le premier `recharger()` — un lien réellement
+       enregistré s'affichait comme absent (formulaire "Lier à…" au lieu du
+       lien existant) pendant ce court intervalle. Un `chargementInitial`
+       masque désormais cette section tant que tout n'est pas chargé.
+    8. **Section introuvable affichait "Chargement…" indéfiniment**
+       (`sectionId` invalide/supprimée) au lieu d'un message d'erreur —
+       distingué du vrai état de chargement grâce au même
+       `chargementInitial`.
+    9. (Trouvé en marge, pas un des 4 motifs) Le `watch(contenu, ...)`
+       (sauvegarde automatique du champ générique) ne distinguait pas une
+       frappe utilisateur d'une réassignation programmatique par
+       `recharger()` — une valeur rechargée depuis un autre onglet pouvait
+       planifier une écriture `mettreAJourValeurs` 400ms plus tard, ajoutant
+       une entrée d'audit "modification" fantôme (préoccupant dans un
+       contexte GxP où ce fichier insiste explicitement sur ALCOA+). Corrigé
+       avec un flag `rechargementEnCours` suspendant le watcher le temps
+       de la réassignation.
+    - **Piste identifiée, non corrigée** : `imprimer()` journalise l'export
+      **avant** `window.print()` (contrairement aux autres exports, qui
+      journalisent après le déclenchement réussi du téléchargement) —
+      si l'utilisateur annule la boîte de dialogue d'impression, une trace
+      d'export figure quand même dans `audit_log`. Aucune API navigateur
+      fiable ne permet de distinguer une impression confirmée d'une
+      impression annulée (`onafterprint` se déclenche dans les deux cas) —
+      non corrigé faute de solution correcte, à documenter/trancher par
+      l'utilisateur plutôt qu'à contourner par un correctif fragile.
+  - UI :
+    1. `.bouton-fichier input[type='file'] { display: none; }` (deux
+       occurrences, même classe partagée) — même motif déjà corrigé sur
+       `Process.vue`/`RevueStructureProcedure.vue`/`TemplatesFormulaires.vue`,
+       dernier écran à l'avoir (balayage du 13/09/2026 déjà à jour).
+    2. `.blocage`/`.bandeau-erreur` utilisaient
+       `--vp-statut-requalification-en-retard` (jeton du domaine
+       qualification d'actif, sans rapport) au lieu de `--vp-danger`/
+       `--vp-danger-fond-leger` — même motif que `MissionWorkspace.vue`.
+    3. État de chargement de la section « Liens structurels » (voir
+       fonctionnel #7 ci-dessus — frontière fonctionnel/UI floue ici,
+       classé dans les deux pour ne pas sous-déclarer).
+  - Tests : `EditeurSection.liensStructurels.test.ts` (2 tests existants)
+    attendait seulement le titre "Liens structurels" avant d'interagir —
+    cassé par le nouvel état de chargement, corrigé en attendant le
+    contenu réel attendu. Nouveau fichier
+    `EditeurSection.mutationsNonVerifiees.test.ts` (3 tests : rejet
+    bloqué, validation IA bloquée, section introuvable) — technique
+    "pré-semer Dexie via le store réel puis `db.sections.put()` pour
+    ajuster juste le statut" plutôt que de reconstruire un `Section`
+    à la main.
+  - Non revalidé visuellement en direct (session de test toujours expirée,
+    voir §5).
 - **13/09/2026** — **Test instable corrigé** (`91fd8f6`), hors chantier
   écran-par-écran mais bloquant la CI : le test `MissionWorkspace.test.ts`
   « un échec de changement de statut d'activité... » (ajouté au commit
@@ -565,53 +649,55 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `EditeurSection.vue` — chantier fonctionnel puis UI, avec le client de
+1. `DefinitionTests.vue` — chantier fonctionnel puis UI, avec le client de
    test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre de la
    liste en §3.
-   **Vérifier en priorité** (déjà confirmé présent le 13/09/2026 par le
-   balayage exhaustif ci-dessous, à corriger explicitement) : le motif
-   `.bouton-fichier input[type='file'] { display: none; }`
-   (inaccessibilité clavier) — dernier écran connu à l'avoir, tous les
-   autres étant déjà corrigés.
-   **Piste à vérifier aussi** : le motif « mutation non vérifiée » trouvé
-   sur `FicheProjet.vue` (8 sites, `6e4513e`), `MissionWorkspace.vue`
-   (2 sites, `34b59fe`) et `AssistantStrategieQualification.vue` (1 site,
-   `c9e743a`) — `grep` les méthodes de store appelées ici qui retournent
-   une union `Entité | {erreur}` **ou** `Entité | null` sans vérifier le
-   résultat. `AssistantCreationLivrable.vue` (chantier précédent) en était
-   exempt — ne pas supposer que c'est systématique, mais rester vigilant.
-   **Piste à vérifier aussi** : l'absence d'état de chargement trouvée sur
-   `AssistantStrategieQualification.vue` (commit `c9e743a`) — un écran dont
-   `onMounted` charge des données async avant de décider quel bloc afficher
-   peut souffrir du même flash de contenu trompeur si rien ne masque le
-   rendu pendant le chargement initial (motif déjà établi ailleurs :
-   `AdminUtilisateurs.vue`, `ResolutionConflit.vue`, classe `.etat-vide`).
+   **Piste à vérifier en priorité** : le motif « mutation non vérifiée »
+   (union `Entité | {erreur}` ou `Entité | null`, ou effet de bord local
+   appliqué inconditionnellement sans vérifier le résultat) reste le plus
+   fréquent de ce chantier — trouvé sur `FicheProjet.vue` (8 sites,
+   `6e4513e`), `MissionWorkspace.vue` (2 sites, `34b59fe`),
+   `AssistantStrategieQualification.vue` (1 site, `c9e743a`) et
+   `EditeurSection.vue` (6 sites, `8b1b244`) — quatre écrans sur les cinq
+   derniers. `AssistantCreationLivrable.vue` en était l'exception (aucune
+   mutation à risque réaliste) — ne pas supposer que c'est systématique,
+   mais `grep` chaque nouvel écran avant de conclure.
+   **Piste à vérifier aussi** : l'absence d'état de chargement pour des
+   données secondaires chargées en fin de chaîne séquentielle dans
+   `onMounted` (trouvée sur `AssistantStrategieQualification.vue`,
+   `c9e743a`, et `EditeurSection.vue`, `8b1b244` — section entière qui
+   affiche un faux "rien n'est lié" tant que le store correspondant n'a
+   pas fini de charger). Un écran qui charge plusieurs stores en séquence
+   avant de décider quel bloc afficher est un candidat direct à vérifier.
+   **Piste à vérifier aussi** : sur `EditeurSection.vue`, un cas non
+   corrigé faute de solution correcte — `imprimer()` journalise l'export
+   avant que `window.print()` ne soit confirmé (aucune API navigateur ne
+   distingue impression confirmée vs annulée). Si un futur écran a un
+   bouton d'impression avec la même discipline d'audit trail, le même
+   compromis se posera — ne pas le "corriger" par un correctif fragile.
    **Piste à vérifier aussi** : le motif « interaction avec un élément
    avant que Vue n'ait fini de le rendre, juste après un `attendreQue` sur
    un compteur Dexie » trouvé dans un test de `MissionWorkspace.test.ts`
    (corrigé le 13/09/2026, commit `91fd8f6`, découvert seulement en CI —
-   jamais reproduit en local malgré 8 répétitions) — si un nouveau test
-   pour `EditeurSection.vue` interagit avec un élément fraîchement rendu
-   après une écriture Dexie, attendre explicitement l'élément lui-même
-   plutôt qu'un seul `$nextTick()`.
+   jamais reproduit en local malgré 8 répétitions) — attendre explicitement
+   l'élément lui-même avant d'interagir, jamais un seul `$nextTick()`.
    **Balayage exhaustif fait le 13/09/2026** (`grep` sur tout
-   `src/presentation/screens/*.vue`) pour les deux motifs de bugs
-   récurrents de ce chantier — plus la peine de les redécouvrir un par un :
+   `src/presentation/screens/*.vue`) pour les deux motifs de bugs les plus
+   mécaniques de ce chantier — plus la peine de les redécouvrir un par un,
+   les deux sont désormais **entièrement corrigés partout** :
    - `.bouton-fichier input[type='file'] { display: none; }`
-     (inaccessibilité clavier) : reste uniquement dans
-     `EditeurSection.vue` (plus loin dans la liste, §3). Tous les autres
-     écrans qui avaient ce motif sont déjà corrigés (`Process.vue`,
-     `RevueStructureProcedure.vue`, `TemplatesFormulaires.vue`).
-   - `.badge-confiance--connu { background-color: #dcfce7; ... }` (couleurs
-     hex fixes non adaptées au thème sombre) : corrigé partout où ce
-     `grep` l'avait trouvé (`RevueStructureProcedure.vue`,
-     `MissionWorkspace.vue`) — refaire ce `grep` sur les écrans suivants
-     avant de conclure qu'il n'y en a plus, cette liste datant du
-     13/09/2026.
+     (inaccessibilité clavier) : dernier occurrence corrigée sur
+     `EditeurSection.vue` (`8b1b244`) — plus aucun écran connu ne l'a.
+   - `.badge-confiance--connu { background-color: #dcfce7; ... }` /
+     jetons `--vp-statut-*` mal utilisés hors de leur domaine (couleurs non
+     adaptées au thème sombre, ou couplage accidentel entre deux domaines
+     sémantiques distincts) : corrigé sur `RevueStructureProcedure.vue`,
+     `MissionWorkspace.vue`, `EditeurSection.vue` — refaire ce `grep` sur
+     les écrans suivants avant de conclure qu'il n'y en a plus, cette
+     liste datant du 13/09/2026 et pouvant devenir obsolète.
    - Refaire ce `grep` sur le fichier de l'écran en cours avant de
      conclure qu'« aucun bug trouvé » plutôt que de se fier seulement à
-     cette liste, qui date du 13/09/2026 et peut devenir obsolète si
-     d'autres correctifs sont faits ailleurs entre-temps.
+     cette liste.
 2. Mettre à jour ce fichier après **chaque** chantier terminé (pas
    seulement en fin de session) — voir la règle en §1.
 3. **Action de suivi issue de `StructureSysteme.vue`** : revalider
