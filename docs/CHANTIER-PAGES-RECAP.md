@@ -113,6 +113,30 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
 
+- **13/09/2026** — **Même test instable corrigé une TROISIÈME fois**
+  (`1dcae5a`), a échoué à nouveau (constaté sur le commit `b8de7ea`,
+  docs-only) malgré le correctif retry du `9834a1d`. Cette fois, cause
+  racine identifiée plutôt qu'un nouveau rafistolage local : le fichier
+  `MissionWorkspace.test.ts` ne démonte jamais ses `wrapper` d'un test à
+  l'autre, et `MissionWorkspace.vue` charge **9 stores** en `Promise.all`
+  dans `onMounted` — or `monter()` (l'utilitaire de montage commun à tous
+  les tests du fichier) n'attend que le titre de la mission, pas la
+  résolution complète de ces 9 chargements. Les chargements résiduels
+  d'un composant "fantôme" (jamais démonté) peuvent donc continuer de
+  tourner en arrière-plan pendant le test suivant, ajoutant une
+  contention de macrotâches (fake-indexeddb) qui grossit au fil des 10
+  tests du fichier — plausible explication de pourquoi ce test précis,
+  parmi les derniers du fichier, était le plus exposé, et pourquoi jamais
+  reproduit en local (peu de bruit de fond accumulé). Un `afterEach`
+  global ajouté au fichier (laisse 5 tours de `flushPromises` + 10ms entre
+  chaque test) pour empêcher cette accumulation, plutôt que de continuer à
+  rétrécir la fenêtre de course du test lui-même. **Piste à surveiller** :
+  toute suite de tests qui monte des composants avec de lourdes chaînes
+  `Promise.all` dans `onMounted`, sans jamais démonter le wrapper ni
+  laisser le temps aux chargements résiduels de se terminer entre les
+  tests, est exposée au même risque — vérifier si d'autres fichiers de
+  tests de ce chantier (écrans avec beaucoup de stores) ont le même
+  manque avant qu'un incident CI ne le révèle.
 - **13/09/2026** — `DefinitionTests.vue` **terminé** (fonctionnel + UI dans
   un seul commit `126b71f`, CI verte, 2 nouveaux tests) :
   - Fonctionnel : **4 sites de mutation non vérifiée** (même motif que
@@ -701,6 +725,16 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 1. `ExecutionTests.vue` — chantier fonctionnel puis UI, avec le client de
    test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans l'ordre de la
    liste en §3.
+   **Avant d'écrire de nouveaux tests** : vérifier si `ExecutionTests.test.ts`
+   (et les fichiers de test des écrans suivants) a un `afterEach` global
+   laissant le temps aux promesses résiduelles de se résoudre entre les
+   tests — son absence a fait échouer `MissionWorkspace.test.ts` en CI à
+   trois reprises (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge
+   plusieurs stores en `Promise.all` sans jamais démonter son wrapper
+   d'un test à l'autre. Si le fichier de l'écran en cours a le même
+   profil (plusieurs stores chargés dans `onMounted`, pas d'`afterEach`
+   de "settle"), ajouter ce filet préventivement plutôt que d'attendre un
+   nouvel incident CI.
    **Piste à vérifier en priorité** : le motif « mutation non vérifiée »
    (union `Entité | {erreur}` ou `Entité | null`, ou effet de bord local
    appliqué inconditionnellement sans vérifier le résultat) — trouvé sur
