@@ -90,7 +90,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `DefinitionTests.vue` | ✅ | ✅ |
 | `ExecutionTests.vue` | ✅ | ✅ *(aucun bug trouvé)* |
 | `RiskAssessmentAmdec.vue` | ✅ | ✅ |
-| `ImpactAssessment.vue` | ⬜ | ⬜ |
+| `ImpactAssessment.vue` | ✅ | ✅ |
 | `ComputerSystemAssessment.vue` | ⬜ | ⬜ |
 | `JournalAnomalies.vue` | ⬜ | ⬜ |
 | `ResolutionConflit.vue` | ⬜ | ⬜ |
@@ -112,6 +112,51 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 ---
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
+
+- **13/09/2026** — `ImpactAssessment.vue` **terminé** (fonctionnel
+  `f47f926`, UI `3555292`, CI verte sur les deux, vérifié en direct sur le
+  site déployé avec le client QA après un correctif serveur/CI puis un
+  hard-reload — **cache navigateur** : un `location.reload()` normal ne
+  suffit pas toujours à récupérer les nouveaux chunks JS hashés d'un
+  déploiement GitHub Pages tout juste terminé ; le navigateur peut encore
+  servir depuis le cache HTTP un chunk d'un build précédent (le fichier
+  correspondant n'existe alors plus côté serveur — une requête directe
+  dessus renvoie un 404). Utiliser un hard reload (`cmd+shift+r` /
+  `ctrl+shift+r`) pour la vérification visuelle post-déploiement, pas un
+  simple rechargement) :
+  - Fonctionnel : seul le motif « absence d'état de chargement » était
+    présent — `profilActif` (computed dérivé de `profils.value`, vide
+    avant `charger()`) causait le même flash de faux message "Aucune
+    méthode Impact Assessment n'est configurée" que sur
+    `RiskAssessmentAmdec.vue`, malgré un profil déjà existant. Un
+    `chargementInitial` local ajouté avec la même discipline
+    try/finally. **Motif « mutation non vérifiée » absent** — `creerEvaluation`
+    est déjà vérifié dans le composant, et `creerNouvelleVersion` ne
+    retourne jamais d'union d'erreur (signature `Promise<MethodProfileImpactAssessment>`
+    directe) : deuxième écran propre sur ce point après
+    `AssistantCreationLivrable.vue`. 1 test ajouté (état de chargement
+    avec profil pré-seedé), 1 test existant mis à jour pour attendre le
+    contenu réel au lieu d'un `flushPromises()` immédiat.
+  - UI : deux défauts trouvés en exerçant l'écran avec le client QA (pas
+    de simple lecture de code) : (1) les sections `.bloc-config` et
+    `.bloc-evaluation` n'avaient aucun `gap`/`display:flex` propre —
+    leurs enfants (h2, lien "Configurer...", labels, listes de questions)
+    s'empilaient avec les marges par défaut du navigateur (0 pour
+    `<button>`/`<label>`), produisant un rendu visuellement collé,
+    incohérent avec le reste de l'écran (`.formulaire` a bien un `gap`
+    mais pas les sections qui l'englobent). (2) les libellés de réponse
+    des questions oui/non affichaient la valeur brute de l'union
+    (`sans_objet` → "Sans_objet" via `text-transform: capitalize`,
+    underscore visible) au lieu d'un texte lisible — ajout d'un
+    dictionnaire `LIBELLES_REPONSE` (même patron que `LIBELLES_VERDICT`
+    ailleurs) et suppression du `text-transform` devenu inutile. **Piste
+    identifiée mais non corrigée ici** : ce même manque de `gap` sur les
+    sections englobantes existe aussi sur `AssistantStrategieQualification.vue`
+    (`.bloc-criticite`, déjà marqué UI ✅ dans ce chantier) — motif
+    probablement présent sur d'autres écrans plus anciens ; à corriger
+    lors d'une passe UI dédiée plutôt qu'en rouvrant un écran déjà livré.
+    1 assertion de test ajoutée verrouillant "Sans objet" (et l'absence
+    de "sans_objet" brut).
 
 - **13/09/2026** — `RiskAssessmentAmdec.vue` **terminé** (fonctionnel
   `d68de27`, UI `4a44484`, CI verte sur les deux) :
@@ -799,23 +844,32 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `ImpactAssessment.vue` — chantier fonctionnel puis UI, avec le
+1. `ComputerSystemAssessment.vue` — chantier fonctionnel puis UI, avec le
    client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`), dans
    l'ordre de la liste en §3.
    **Avant d'écrire de nouveaux tests** : vérifier si
-   `ImpactAssessment.test.ts` a un `afterEach` global laissant le temps
-   aux promesses résiduelles de se résoudre entre les tests — son absence
-   a fait échouer `MissionWorkspace.test.ts` en CI à trois reprises
-   (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge plusieurs
-   stores en `Promise.all` sans jamais démonter son wrapper d'un test à
-   l'autre. Le risque ne concerne que les `onMounted` en `Promise.all`
-   concurrent (plusieurs stores lancés en parallèle) — un `onMounted` à
-   `await` séquentiels comme celui de `RiskAssessmentAmdec.vue` n'a pas ce
-   profil de risque et n'a pas eu besoin de ce filet. Si le fichier de
-   l'écran en cours a le même profil que `MissionWorkspace.vue`
-   (plusieurs stores chargés en parallèle, pas d'`afterEach` de "settle"),
-   ajouter ce filet préventivement plutôt que d'attendre un nouvel
-   incident CI.
+   `ComputerSystemAssessment.test.ts` a un `afterEach` global laissant le
+   temps aux promesses résiduelles de se résoudre entre les tests — son
+   absence a fait échouer `MissionWorkspace.test.ts` en CI à trois
+   reprises (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge
+   plusieurs stores en `Promise.all` sans jamais démonter son wrapper
+   d'un test à l'autre. Le risque ne concerne que les `onMounted` en
+   `Promise.all` concurrent (plusieurs stores lancés en parallèle) — un
+   `onMounted` à `await` séquentiels comme ceux de
+   `RiskAssessmentAmdec.vue`/`ImpactAssessment.vue` n'a pas ce profil de
+   risque et n'a pas eu besoin de ce filet. Si le fichier de l'écran en
+   cours a le même profil que `MissionWorkspace.vue` (plusieurs stores
+   chargés en parallèle, pas d'`afterEach` de "settle"), ajouter ce filet
+   préventivement plutôt que d'attendre un nouvel incident CI.
+   **Avant de vérifier l'UI en direct sur le site déployé** : après un
+   push tout juste passé au vert en CI, faire un **hard reload**
+   (`cmd+shift+r`/`ctrl+shift+r`), pas un simple rechargement — un
+   `location.reload()` normal peut encore servir depuis le cache HTTP du
+   navigateur un chunk JS hashé d'un déploiement GitHub Pages précédent
+   (le fichier correspondant n'existe alors plus côté serveur : une
+   requête directe dessus renvoie un 404). Repéré sur `ImpactAssessment.vue`
+   (`3555292`) — deux vérifications successives sans hard reload ont
+   montré à tort l'ancien rendu non corrigé.
    **Piste à vérifier en priorité** : le motif « mutation non vérifiée »
    (union `Entité | {erreur}` ou `Entité | null`, ou effet de bord local
    appliqué inconditionnellement sans vérifier le résultat) — trouvé sur
@@ -823,26 +877,47 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    `34b59fe`), `AssistantStrategieQualification.vue` (1 site, `c9e743a`),
    `EditeurSection.vue` (6 sites, `8b1b244`), `DefinitionTests.vue`
    (4 sites, `126b71f`), `ExecutionTests.vue` (5 sites, `6c44ee6`) et
-   `RiskAssessmentAmdec.vue` (1 site, `d68de27`) — sept écrans sur les huit
+   `RiskAssessmentAmdec.vue` (1 site, `d68de27`) — sept écrans sur les neuf
    derniers, avec des conséquences parfois sérieuses (un garde-fou
    d'immutabilité explicitement annoncé à l'utilisateur, sur
-   `ExecutionTests.vue`). `AssistantCreationLivrable.vue` reste la seule
-   exception — ce motif est désormais la piste par défaut à vérifier sur
-   chaque nouvel écran, en particulier tout garde-fou
+   `ExecutionTests.vue`). `AssistantCreationLivrable.vue` **et**
+   `ImpactAssessment.vue` (`creerEvaluation` déjà vérifié,
+   `creerNouvelleVersion` ne retourne jamais d'union d'erreur) sont les
+   deux seules exceptions confirmées — ce motif reste la piste par défaut
+   à vérifier sur chaque nouvel écran, en particulier tout garde-fou
    d'immutabilité/verrouillage explicitement documenté dans l'écran
    (rechercher spécifiquement les codes d'erreur liés à un statut
-   "clôturé"/"verrouillé"/"validé"/"introuvable" dans le store).
+   "clôturé"/"verrouillé"/"validé"/"introuvable" dans le store) — mais
+   vérifier aussi la signature de retour réelle de chaque fonction du
+   store avant de supposer le bug présent.
    **Piste à vérifier aussi** : l'absence d'état de chargement — trouvée
    sur `AssistantStrategieQualification.vue` (`c9e743a`), `EditeurSection.vue`
    (`8b1b244`, une section), `DefinitionTests.vue` (`126b71f`, **tout
-   l'écran** : aucune garde du tout avant ce correctif) et
-   `RiskAssessmentAmdec.vue` (`d68de27`, un `computed` dérivé d'un store
-   qui vaut `null`/faux avant chargement, donc un flash de message négatif
-   trompeur même avec un seul store en apparence) — un écran qui charge
-   des données async dans `onMounted` avant de décider quel bloc afficher
-   est un candidat direct à vérifier, même s'il n'a qu'un seul store à
-   charger, et même si l'état vide semble découler d'un simple `computed`
-   plutôt que d'un `ref` chargé directement.
+   l'écran** : aucune garde du tout avant ce correctif),
+   `RiskAssessmentAmdec.vue` et `ImpactAssessment.vue` (`d68de27`/`f47f926`,
+   un `computed` dérivé d'un store qui vaut `null`/faux avant chargement,
+   donc un flash de message négatif trompeur même avec un seul store en
+   apparence) — un écran qui charge des données async dans `onMounted`
+   avant de décider quel bloc afficher est un candidat direct à vérifier,
+   même s'il n'a qu'un seul store à charger, et même si l'état vide
+   semble découler d'un simple `computed` plutôt que d'un `ref` chargé
+   directement. Ce motif est désormais présent sur la quasi-totalité des
+   écrans à méthode configurable (profil actif calculé par `computed`).
+   **Piste à vérifier aussi** : les libellés d'union affichés bruts dans
+   le template (`{{ opt }}` sur une valeur `snake_case` au lieu d'un
+   dictionnaire de libellés) — trouvé sur `ImpactAssessment.vue`
+   (`sans_objet` → "Sans_objet" via `text-transform: capitalize`,
+   underscore resté visible, corrigé en `3555292`). Vérifier toute liste
+   de valeurs codées (radios, options, badges) rendue directement sans
+   passer par un `LIBELLES_*` dictionnaire.
+   **Piste à vérifier aussi** : sections sans `gap`/`display:flex` propre
+   — leurs enfants s'empilent avec les marges par défaut du navigateur
+   (souvent 0 pour `<button>`/`<label>`), produisant un rendu collé.
+   Trouvé et corrigé sur `ImpactAssessment.vue` (`.bloc-config`/
+   `.bloc-evaluation`, `3555292`) ; le même manque existe sur
+   `AssistantStrategieQualification.vue` (`.bloc-criticite`, déjà livré,
+   non retouché pour éviter de rouvrir un écran déjà terminé) — à traiter
+   lors d'une passe UI systémique dédiée plutôt qu'écran par écran.
    **Piste à vérifier aussi** : sur `EditeurSection.vue`, un cas non
    corrigé faute de solution correcte — `imprimer()` journalise l'export
    avant que `window.print()` ne soit confirmé (aucune API navigateur ne
