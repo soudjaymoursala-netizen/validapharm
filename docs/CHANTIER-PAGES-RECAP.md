@@ -95,7 +95,7 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 | `JournalAnomalies.vue` | ✅ | ✅ *(aucun bug trouvé)* |
 | `ResolutionConflit.vue` | ✅ | ✅ *(vue "aucun conflit" vérifiée en direct ; vue "conflit" non revalidée visuellement en direct — voir §4)* |
 | `DossierVivantActif.vue` | ✅ | ✅ *(aucun bug trouvé)* |
-| `BlocageIncompatibilite.vue` | ⬜ | ⬜ |
+| `BlocageIncompatibilite.vue` | ✅ *(aucun bug trouvé)* | ✅ *(vérifiée par lecture de code — voir §4)* |
 | `SourceIntelligence.vue` | ⬜ | ⬜ |
 | `ContentPlan.vue` | ⬜ | ⬜ |
 | `PanneauChat.vue` | ⬜ | ⬜ |
@@ -112,6 +112,34 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 ---
 
 ## 4. Dernières tâches réalisées (log, plus récent en haut)
+
+- **13/09/2026** — `BlocageIncompatibilite.vue` **terminé, aucun bug
+  trouvé** (`08d773b`, CI verte — seule la couverture de test a été
+  ajoutée, aucun code applicatif modifié). Écran particulier : contrairement
+  à tous les autres écrans de ce chantier, ce n'est pas une route
+  navigable (absent de `router/index.ts`) mais un écran de blocage
+  plein-page monté conditionnellement par `App.vue`
+  (`<BlocageIncompatibilite v-if="etatDemarrage === 'bloque'" />`) quand
+  `verifierCompatibiliteAvantAcces()` détecte que les données ont un
+  `schemaVersion` postérieur à `VERSION_SCHEMA_CONNUE`. Aucun fichier de
+  test n'existait avant ce chantier — `BlocageIncompatibilite.test.ts`
+  créé de toutes pièces (3 tests : message FR par défaut avec la version
+  interpolée, EN et DE explicites).
+  - Fonctionnel : composant purement présentationnel (pas de mutation,
+    pas de chargement asynchrone) — motifs habituels du chantier sans
+    objet ici. Point vérifié spécifiquement : le prop `langue` n'est
+    jamais transmis par `App.vue` (toujours `'fr'` par défaut) —
+    confirmé **volontaire, pas un oubli** : le commentaire de
+    `usePreferencesAffichageStore.ts` documente explicitement l'absence
+    de tout mécanisme d'i18n d'interface dans l'application ("la langue
+    d'interface... n'existe dans le code"), donc rien à câbler.
+  - UI : écran non atteignable par navigation directe (nécessite de
+    forcer `etatDemarrage` à `'bloque'`, un état interne d'`App.vue`, ou
+    de manipuler `db.schemaVersion` pour déclencher réellement le
+    blocage) — **non revalidé visuellement en direct**, vérifié
+    uniquement par lecture de code : mise en page centrée avec jetons
+    (`--vp-fond-page`, `--vp-texte-principal`), `role="alert"` déjà
+    présent (accessibilité correcte), aucune couleur codée en dur.
 
 - **13/09/2026** — `DossierVivantActif.vue` **terminé** (fonctionnel
   `1b3df56`, CI verte, UI vérifiée en direct sans nouveau correctif) :
@@ -967,12 +995,17 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
 
 ## 5. Reste à faire (prochaine action immédiate)
 
-1. `BlocageIncompatibilite.vue` — chantier fonctionnel puis UI, avec le
-   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) si l'écran
-   est bien client-scopé (vérifier sa route dans `router/index.ts` avant
-   de supposer un `clientId` — `ResolutionConflit.vue` n'en avait pas,
-   contrairement à la quasi-totalité des écrans précédents), dans
-   l'ordre de la liste en §3.
+1. `SourceIntelligence.vue` — chantier fonctionnel puis UI, avec le
+   client de test QA (`a25ae104-6117-451c-b80d-7ca9cf13f2d1`) — écran
+   client-scopé (`/clients/:clientId/ingestion-documentaire`), dans
+   l'ordre de la liste en §3. `SourceIntelligence.test.ts` et
+   `useSourceIntelligenceStore.test.ts` existent déjà.
+   **Rappel général** : vérifier la route dans `router/index.ts` avant de
+   supposer qu'un écran est client-scopé — `ResolutionConflit.vue` n'en
+   avait pas, contrairement à la quasi-totalité des écrans du chantier ;
+   et vérifier qu'un fichier `<Écran>.test.ts` existe réellement
+   (`find`/`ls`) avant de supposer une suite à étendre — `ResolutionConflit.vue`
+   et `BlocageIncompatibilite.vue` n'en avaient aucun.
    **Si le client QA n'a pas les données nécessaires pour atteindre
    l'écran** (ex. hiérarchie Structure Système vide) : injecter les
    enregistrements directement en IndexedDB via `javascript_tool` plutôt
@@ -980,14 +1013,8 @@ Légende : ⬜ pas commencé · 🔧 fonctionnel en cours · 🎨 UI en cours ·
    (`1b3df56`, un `assetNode` créé directement pour le client QA, qui
    n'avait aucun nœud configuré) après un hard reload pour charger le
    code déployé à jour.
-   **Vérifier d'abord si un fichier de test existe** — `ResolutionConflit.vue`
-   n'en avait aucun avant son chantier (`ResolutionConflit.test.ts` créé de
-   toutes pièces, 5 tests), contrairement à la plupart des écrans
-   précédents de cette liste qui avaient déjà une suite existante à
-   corriger/étendre. Ne pas supposer qu'un fichier `<Écran>.test.ts`
-   existe sans `find`/`ls` préalable.
    **Avant d'écrire de nouveaux tests** : vérifier si
-   `BlocageIncompatibilite.test.ts` a un `afterEach` global laissant le
+   `SourceIntelligence.test.ts` a un `afterEach` global laissant le
    temps aux promesses résiduelles de se résoudre entre les tests — son
    absence a fait échouer `MissionWorkspace.test.ts` en CI à trois
    reprises (`91fd8f6`, `f72eb41`, `1dcae5a`) sur un écran qui charge
