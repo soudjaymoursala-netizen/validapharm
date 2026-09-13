@@ -408,13 +408,6 @@ async function genererLivrable(depuisDocument: boolean): Promise<void> {
   gap: 1.5rem;
 }
 
-.lien-retour {
-  color: var(--vp-texte-secondaire);
-  text-decoration: none;
-  font-size: 0.85rem;
-  width: fit-content;
-}
-
 .rappel {
   color: var(--vp-texte-secondaire);
   font-size: 0.9em;
