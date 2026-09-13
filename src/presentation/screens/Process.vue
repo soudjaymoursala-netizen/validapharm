@@ -399,6 +399,8 @@ li {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  position: relative;
+  overflow: hidden;
   padding: 0.5rem 0.9rem;
   border: 1px solid var(--vp-bordure, #ccc);
   border-radius: 0.4rem;
@@ -406,8 +408,17 @@ li {
   font-size: 0.9rem;
 }
 
+/* `display: none` (comme trouvé initialement ici) retire l'input du
+   parcours clavier — un utilisateur clavier ne peut alors ni l'atteindre ni
+   l'activer. Convention déjà établie ailleurs pour ce même composant
+   (FicheProjet.vue, AssistantStrategieQualification.vue) : superposition
+   invisible mais toujours focusable/activable (`opacity: 0` plutôt que
+   `display: none`). */
 .bouton-fichier input[type='file'] {
-  display: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .erreur {
