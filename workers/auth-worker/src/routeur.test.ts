@@ -1604,7 +1604,7 @@ describe('routerRequete — Sections (Phase 3b du chantier de migration D1)', ()
       body: { sections: [sectionLocale] },
     })
     expect(migrationRejouee.status).toBe(201)
-    expect(migrationRejouee.corps.sections[0].status).toBe('en_verification')
+    expect(migrationRejouee.corps.sections[0]?.status).toBe('en_verification')
 
     const obtenirApresRejeu = await requete(ctx, 'GET', '/sections/s-locale', {
       jeton: admin.jeton,
