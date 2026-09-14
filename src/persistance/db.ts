@@ -212,6 +212,20 @@ export interface DocumentNormatifAncien {
 export const documentsNormatifsAMigrer: DocumentNormatifAncien[] = []
 
 /**
+ * Structure Système (référentiel d'actifs) capturée depuis les anciennes
+ * tables locales `assetHierarchySchemas`/`assetNodes`/`relationsTechniques`
+ * juste avant leur suppression (version 34, Phase 1 du chantier de
+ * migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même filet de
+ * sécurité que `documentsNormatifsAMigrer` : vide sur un navigateur déjà
+ * passé par cette version. Consommé et envoyé au serveur par
+ * `migrerStructureSystemeLocaleVersServeur` (`useStructureSystemeStore`) au
+ * premier chargement de l'écran Structure Système.
+ */
+export const assetHierarchySchemasAMigrer: AssetHierarchySchema[] = []
+export const assetNodesAMigrer: AssetNode[] = []
+export const relationsTechniquesAMigrer: RelationTechnique[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -231,8 +245,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  assetHierarchySchemas!: EntityTable<AssetHierarchySchema, 'client_id'>
-  assetNodes!: EntityTable<AssetNode, 'id'>
   methodProfilesACFC!: EntityTable<MethodProfileACFC, 'id'>
   evaluationsACFC!: EntityTable<EvaluationACFC, 'id'>
   parameters!: EntityTable<Parameter, 'id'>
@@ -286,7 +298,6 @@ export class ValidaPharmDatabase extends Dexie {
   aiRequests!: EntityTable<AIRequest, 'id'>
   aiResponses!: EntityTable<AIResponse, 'id'>
   citationsAIResponse!: EntityTable<CitationAIResponse, 'id'>
-  relationsTechniques!: EntityTable<RelationTechnique, 'id'>
   procedures!: EntityTable<Procedure, 'id'>
   procedureSteps!: EntityTable<ProcedureStep, 'id'>
   gabaritsExportClient!: EntityTable<GabaritExportClient, 'id'>
@@ -574,6 +585,33 @@ export class ValidaPharmDatabase extends Dexie {
       .upgrade(async (tx) => {
         const anciens = await tx.table<DocumentNormatifAncien>('normativeDocuments').toArray()
         documentsNormatifsAMigrer.push(...anciens)
+      })
+
+    // Structure Système (référentiel d'actifs) : migrée vers le Worker/D1
+    // (Phase 1 du chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md)
+    // — même limite déjà corrigée pour les documents normatifs ci-dessus,
+    // cette fois sur la hiérarchie et les nœuds eux-mêmes. Capture avant
+    // suppression physique (même technique que la version 33) : seul un
+    // navigateur qui exécute réellement cette montée de version a des
+    // données à récupérer (ex. la hiérarchie FERRING PHARMACEUTICAL déjà
+    // configurée). Consommé et envoyé au serveur par
+    // `migrerStructureSystemeLocaleVersServeur` (`useStructureSystemeStore`)
+    // au premier chargement de l'écran Structure Système.
+    this.version(34)
+      .stores({
+        assetHierarchySchemas: null,
+        assetNodes: null,
+        relationsTechniques: null,
+      })
+      .upgrade(async (tx) => {
+        const [schemas, noeuds, relations] = await Promise.all([
+          tx.table<AssetHierarchySchema>('assetHierarchySchemas').toArray(),
+          tx.table<AssetNode>('assetNodes').toArray(),
+          tx.table<RelationTechnique>('relationsTechniques').toArray(),
+        ])
+        assetHierarchySchemasAMigrer.push(...schemas)
+        assetNodesAMigrer.push(...noeuds)
+        relationsTechniquesAMigrer.push(...relations)
       })
   }
 }

@@ -68,7 +68,6 @@ beforeEach(async () => {
   await db.projects.clear()
   await db.sections.clear()
   await db.procedures.clear()
-  await db.assetNodes.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
@@ -110,7 +109,7 @@ describe('EditeurSection — liens structurels réels (tâche #118)', () => {
       code: 'P-200',
       parent_id: null,
     })
-    const noeud = (await db.assetNodes.toArray())[0]
+    const noeud = structureStore.noeuds[0]
 
     const sectionsStore = useSectionsStore()
     const section = await sectionsStore.creerSection({

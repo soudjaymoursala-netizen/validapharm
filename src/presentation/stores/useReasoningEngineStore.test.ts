@@ -1,15 +1,44 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from 'vitest'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import type {
   ContexteEnvoi,
   ModeUsageIA,
   ProviderAdapter,
   Reponse,
 } from '../../connecteurs/ia/ProviderAdapter'
-import type { AssetNode } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useReasoningEngineStore } from './useReasoningEngineStore'
+
+/** Structure Système migrée vers le Worker/D1 (Phase 1) — installe le faux Worker et crée un client réel pour que `structureStore.charger` (appelé par `executerRaisonnement`) puisse réellement lire les nœuds seedés. */
+async function installerAuthEtClient(
+  clientId: string,
+): Promise<{ ctx: Contexte; demonter: () => void }> {
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  await connecterAdminDeTest()
+  await installation.ctx.clientsRepo.creer({
+    id: clientId,
+    name: clientId,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+  return installation
+}
 
 interface FournisseurMock extends ProviderAdapter {
   envoyerMessage: Mock<
@@ -34,8 +63,6 @@ beforeEach(async () => {
   await db.requirements.clear()
   await db.couvertures.clear()
   await db.tests.clear()
-  await db.assetNodes.clear()
-  await db.relationsTechniques.clear()
   await db.procedures.clear()
   await db.procedureSteps.clear()
   await db.manufacturingContexts.clear()
@@ -127,35 +154,43 @@ describe('useReasoningEngineStore — scénario réel : changement de recette (s
 })
 
 describe('useReasoningEngineStore — scénario réel : traversée Architecture Technique', () => {
+  let demonter: () => void
+
+  afterEach(() => {
+    demonter()
+  })
+
   test('exécute tracer_chaine_technique et résout une citation de type asset_node', async () => {
+    const { ctx, demonter: d } = await installerAuthEtClient('client-1')
+    demonter = d
     const maintenant = '2026-01-01T00:00:00.000Z'
-    function noeud(id: string): AssetNode {
+    function noeud(id: string) {
       return {
         id,
-        client_id: 'client-1',
-        workspace_id: null,
-        level_key: 'equipement',
+        clientId: 'client-1',
+        workspaceId: null,
+        levelKey: 'equipement',
         name: id,
         code: id,
-        parent_id: null,
-        associated_nodes: [],
-        source: 'manuel',
-        qms_connector_id: null,
-        periodic_qualification: { applicable: false, deadline: null },
-        qualification_status: 'non_qualifie',
-        audit_log: [],
-        created_at: maintenant,
-        updated_at: maintenant,
+        parentId: null,
+        associatedNodes: [],
+        source: 'manuel' as const,
+        qmsConnectorId: null,
+        periodicQualification: { applicable: false, deadline: null },
+        qualificationStatus: 'non_qualifie',
+        auditLog: [],
+        createdAt: maintenant,
+        updatedAt: maintenant,
       }
     }
-    await db.assetNodes.bulkPut([noeud('granulateur-01'), noeud('plc-01')])
-    await db.relationsTechniques.put({
+    await ctx.structureSystemeRepo.creerNoeuds([noeud('granulateur-01'), noeud('plc-01')])
+    await ctx.structureSystemeRepo.creerRelationTechnique({
       id: 'rel-1',
-      client_id: 'client-1',
-      type_relation: 'controle_par',
-      noeud_source_id: 'granulateur-01',
-      noeud_cible_id: 'plc-01',
-      created_at: maintenant,
+      clientId: 'client-1',
+      typeRelation: 'controle_par',
+      noeudSourceId: 'granulateur-01',
+      noeudCibleId: 'plc-01',
+      createdAt: maintenant,
     })
 
     const store = useReasoningEngineStore()
@@ -281,25 +316,33 @@ describe('useReasoningEngineStore — garde-fous non négociables', () => {
 })
 
 describe('useReasoningEngineStore — narratif de contexte assemblé', () => {
+  let demonter: (() => void) | undefined
+
+  afterEach(() => {
+    demonter?.()
+    demonter = undefined
+  })
+
   test('un contextSnapshotId résout le narratif et le rend citable comme "connu" sans appel d’outil', async () => {
-    const noeud: AssetNode = {
+    const { ctx, demonter: d } = await installerAuthEtClient('client-1')
+    demonter = d
+    await ctx.structureSystemeRepo.creerNoeud({
       id: 'n1',
-      client_id: 'client-1',
-      workspace_id: null,
-      level_key: 'systeme',
+      clientId: 'client-1',
+      workspaceId: null,
+      levelKey: 'systeme',
       name: 'Ligne A12',
       code: 'SYS-A12',
-      parent_id: null,
-      associated_nodes: [],
+      parentId: null,
+      associatedNodes: [],
       source: 'manuel',
-      qms_connector_id: null,
-      periodic_qualification: { applicable: false, deadline: null },
-      qualification_status: 'qualifie',
-      audit_log: [],
-      created_at: '2026-01-01T00:00:00.000Z',
-      updated_at: '2026-01-01T00:00:00.000Z',
-    }
-    await db.assetNodes.put(noeud)
+      qmsConnectorId: null,
+      periodicQualification: { applicable: false, deadline: null },
+      qualificationStatus: 'qualifie',
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })
     await db.contextSnapshotItems.put({
       id: 'item-1',
       client_id: 'client-1',

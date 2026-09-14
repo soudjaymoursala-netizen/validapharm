@@ -1,9 +1,16 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
+import { useClientsStore } from '../stores/useClientsStore'
+import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import ContentPlan from './ContentPlan.vue'
 
 function routeurDeTest() {
@@ -31,28 +38,35 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
 
 const maintenant = new Date().toISOString()
 
-async function seedNoeud(id: string): Promise<void> {
-  await db.assetNodes.put({
-    id,
-    client_id: 'client-1',
-    workspace_id: null,
+let clientId: string
+let demonter: () => void
+
+/** Structure Système migrée vers le Worker/D1 — seedé via le store (le client réel doit exister). */
+async function seedNoeud(id: string): Promise<string> {
+  const structureStore = useStructureSystemeStore()
+  await structureStore.charger(clientId)
+  await structureStore.ajouterNiveau(clientId, {
+    key: 'equipement',
+    label: { fr: 'Équipement', en: 'Equipment', de: 'Equipment' },
+    numbering_pattern: '',
+  })
+  await structureStore.creerNoeud(clientId, {
     level_key: 'equipement',
     name: 'Autoclave AC-104',
-    code: 'AC-104',
+    code: id,
     parent_id: null,
-    associated_nodes: [],
-    source: 'manuel',
-    qms_connector_id: null,
-    periodic_qualification: { applicable: false, deadline: null },
-    qualification_status: 'qualifie',
-  } as never)
+  })
+  await structureStore.charger(clientId)
+  const noeud = structureStore.noeuds.find((n) => n.code === id)
+  if (!noeud) throw new Error('seedNoeud : nœud introuvable après création')
+  return noeud.id
 }
 
 /** Seed la chaîne complète Requirement→Couverture→Test→Execution→Evidence, prête. */
 async function seedChainePrete(assetNodeId: string): Promise<void> {
   await db.requirements.put({
     id: 'req-1',
-    client_id: 'client-1',
+    client_id: clientId,
     reference: 'URS-001',
     titre: 'F0 minimal',
     description: '',
@@ -64,7 +78,7 @@ async function seedChainePrete(assetNodeId: string): Promise<void> {
   } as never)
   await db.tests.put({
     id: 'test-1',
-    client_id: 'client-1',
+    client_id: clientId,
     test_candidate_id: 'candidat-1',
     titre: 'OQ-TEST-01',
     description: '',
@@ -76,14 +90,14 @@ async function seedChainePrete(assetNodeId: string): Promise<void> {
   } as never)
   await db.couvertures.put({
     id: 'couv-1',
-    client_id: 'client-1',
+    client_id: clientId,
     requirement_id: 'req-1',
     test_id: 'test-1',
     created_at: maintenant,
   } as never)
   await db.executions.put({
     id: 'exec-1',
-    client_id: 'client-1',
+    client_id: clientId,
     test_id: 'test-1',
     asset_node_id: assetNodeId,
     executant: 'local',
@@ -97,7 +111,7 @@ async function seedChainePrete(assetNodeId: string): Promise<void> {
   } as never)
   await db.evidences.put({
     id: 'ev-1',
-    client_id: 'client-1',
+    client_id: clientId,
     execution_id: 'exec-1',
     execution_step_id: null,
     type: 'native',
@@ -112,19 +126,29 @@ async function seedChainePrete(assetNodeId: string): Promise<void> {
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.contentPlans.clear()
-  await db.assetNodes.clear()
   await db.requirements.clear()
   await db.couvertures.clear()
   await db.tests.clear()
   await db.executions.clear()
   await db.evidences.clear()
   await db.qualityEvents.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
+
+  const client = await useClientsStore().creerClient({ name: 'Client ContentPlan' })
+  if ('erreur' in client) throw client
+  clientId = client.id
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('ContentPlan', () => {
   test('un plan créé sans nœud a une readiness "besoin_information" (jamais devinée favorable)', async () => {
     const wrapper = mount(ContentPlan, {
-      props: { clientId: 'client-1' },
+      props: { clientId },
       global: { plugins: [routeurDeTest()] },
     })
     await flushPromises()
@@ -133,7 +157,7 @@ describe('ContentPlan', () => {
     await formCreation.find('select').setValue('oq')
     await formCreation.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.contentPlans.where('client_id').equals('client-1').count()) > 0,
+      async () => (await db.contentPlans.where('client_id').equals(clientId).count()) > 0,
     )
 
     const plan = (await db.contentPlans.toArray())[0]
@@ -142,11 +166,11 @@ describe('ContentPlan', () => {
   })
 
   test('un plan ne peut être gelé qu\'après validation ET readiness "pret" (garde-fou non négociable)', async () => {
-    await seedNoeud('noeud-1')
-    await seedChainePrete('noeud-1')
+    const noeudId = await seedNoeud('AC-104')
+    await seedChainePrete(noeudId)
 
     const wrapper = mount(ContentPlan, {
-      props: { clientId: 'client-1' },
+      props: { clientId },
       global: { plugins: [routeurDeTest()] },
     })
     await flushPromises()
@@ -161,7 +185,7 @@ describe('ContentPlan', () => {
     const formCreation = wrapper.find('.bloc-creation form')
     const selects = formCreation.findAll('select')
     await selects[0]?.setValue('oq')
-    await selects[1]?.setValue('noeud-1')
+    await selects[1]?.setValue(noeudId)
     await formCreation.trigger('submit.prevent')
     await attendreQue(async () => (await db.contentPlans.count()) > 0)
 

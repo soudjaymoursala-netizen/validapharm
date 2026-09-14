@@ -37,7 +37,6 @@ beforeEach(async () => {
   setActivePinia(createPinia())
   await db.qualityEvents.clear()
   await db.referencesQualityEvent.clear()
-  await db.assetNodes.clear()
 })
 
 // L'écran charge deux stores en `Promise.all` dans `onMounted` — même

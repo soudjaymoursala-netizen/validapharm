@@ -57,6 +57,54 @@ export interface DocumentNormatifWire {
   uploadedBy: string
 }
 
+export interface NiveauHierarchieWire {
+  key: string
+  label: Record<'fr' | 'en' | 'de', string>
+  numberingPattern: string
+}
+
+export interface AssetHierarchySchemaWire {
+  clientId: string
+  levels: NiveauHierarchieWire[]
+}
+
+export interface AssetNodeWire {
+  id: string
+  clientId: string
+  workspaceId: string | null
+  levelKey: string
+  name: string
+  code: string
+  parentId: string | null
+  associatedNodes: string[]
+  source: 'manuel' | 'qms_pull' | 'import_fichier'
+  qmsConnectorId: string | null
+  periodicQualification: { applicable: boolean; deadline: string | null }
+  qualificationStatus: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RelationTechniqueWire {
+  id: string
+  clientId: string
+  typeRelation: string
+  noeudSourceId: string
+  noeudCibleId: string
+  createdAt: string
+}
+
+export interface SaisieCreationNoeudWire {
+  /** Réservé à l'import en lot (`creerNoeudsEnLot`) — voir sa documentation pour pourquoi le client impose l'identifiant dans ce cas précis. Ignoré par `creerNoeud` (création manuelle). */
+  id?: string
+  levelKey: string
+  name: string
+  code: string
+  parentId: string | null
+  workspaceId?: string | null
+}
+
 export interface SaisieCreationDocumentNormatif {
   category: string
   titre: string
@@ -215,6 +263,95 @@ export class AuthApiClient {
     justification: string,
   ): Promise<ResultatApi<{ ok: true }>> {
     return this.requete('DELETE', `/clients/${id}`, { jeton, body: { justification } })
+  }
+
+  // --- Structure Système (référentiel d'actifs, D1 = source de vérité, Phase 1 du chantier de migration D1) ---
+
+  obtenirStructureSysteme(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      schema: AssetHierarchySchemaWire
+      noeuds: AssetNodeWire[]
+      relationsTechniques: RelationTechniqueWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/structure-systeme`, { jeton })
+  }
+
+  enregistrerSchemaHierarchie(
+    jeton: string,
+    clientId: string,
+    levels: NiveauHierarchieWire[],
+  ): Promise<ResultatApi<{ schema: AssetHierarchySchemaWire }>> {
+    return this.requete('PUT', `/clients/${clientId}/structure-systeme/schema`, {
+      jeton,
+      body: { levels },
+    })
+  }
+
+  creerNoeud(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationNoeudWire,
+  ): Promise<ResultatApi<{ noeud: AssetNodeWire }>> {
+    return this.requete('POST', `/clients/${clientId}/structure-systeme/noeuds`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerNoeudsEnLot(
+    jeton: string,
+    clientId: string,
+    noeuds: SaisieCreationNoeudWire[],
+    action: string,
+  ): Promise<ResultatApi<{ noeuds: AssetNodeWire[] }>> {
+    return this.requete('POST', `/clients/${clientId}/structure-systeme/noeuds/lot`, {
+      jeton,
+      body: { noeuds, action },
+    })
+  }
+
+  modifierNoeud(
+    jeton: string,
+    clientId: string,
+    noeudId: string,
+    changements: {
+      parentId?: string | null
+      qualificationStatus?: string
+      periodicQualification?: { applicable: boolean; deadline: string | null }
+      action?: string
+    },
+  ): Promise<ResultatApi<{ noeud: AssetNodeWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/structure-systeme/noeuds/${noeudId}`, {
+      jeton,
+      body: changements,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerNoeudsLocaux` : seule voie qui accepte un nœud déjà complet (statut de qualification/périodicité/journal d'audit/horodatages d'origine), jamais fabriqués ici. */
+  migrerNoeudsLocaux(
+    jeton: string,
+    clientId: string,
+    noeuds: Omit<AssetNodeWire, 'clientId'>[],
+  ): Promise<ResultatApi<{ noeuds: AssetNodeWire[] }>> {
+    return this.requete('POST', `/clients/${clientId}/structure-systeme/noeuds/migration-locale`, {
+      jeton,
+      body: { noeuds },
+    })
+  }
+
+  creerRelationTechnique(
+    jeton: string,
+    clientId: string,
+    saisie: { typeRelation: string; noeudSourceId: string; noeudCibleId: string },
+  ): Promise<ResultatApi<{ relation: RelationTechniqueWire }>> {
+    return this.requete('POST', `/clients/${clientId}/structure-systeme/relations-techniques`, {
+      jeton,
+      body: saisie,
+    })
   }
 
   // --- Paramètres d'installation (dépôt GitHub, Relais IA, Drive normes — globaux, partagés par tous les comptes) ---

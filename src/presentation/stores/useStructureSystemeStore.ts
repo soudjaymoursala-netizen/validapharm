@@ -1,5 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type {
+  AssetHierarchySchemaWire,
+  AssetNodeWire,
+  NiveauHierarchieWire,
+  RelationTechniqueWire,
+  SaisieCreationNoeudWire,
+} from '../../connecteurs/auth/AuthApiClient'
 import {
   chaineTechniqueDepuis,
   type EtapeChaineTechnique,
@@ -27,8 +34,13 @@ import { codeDejaUtilise } from '../../logique-metier/structure-systeme/validerC
 import { extraireGrilleHtmlSap } from '../../connecteurs/office/HtmlSapAdapter'
 import { extraireGrilleXlsx } from '../../connecteurs/office/XlsxNatifAdapter'
 import { DocumentInvalideError } from '../../connecteurs/office/erreurs'
-import { identifiantActeurCourant } from '../identite/identiteLocale'
-import { db } from '../../persistance/db'
+import {
+  assetHierarchySchemasAMigrer,
+  assetNodesAMigrer,
+  relationsTechniquesAMigrer,
+  db,
+} from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 
 export interface NouveauNiveauInput {
   key: string
@@ -83,6 +95,74 @@ export type ResultatCreationRelationTechnique =
   | { ok: false; raison: 'noeud_introuvable' }
   | { ok: false; raison: 'clients_differents' }
 
+function schemaWireVersDomaine(wire: AssetHierarchySchemaWire): AssetHierarchySchema {
+  return {
+    client_id: wire.clientId,
+    levels: wire.levels.map((l) => ({
+      key: l.key,
+      label: l.label,
+      numbering_pattern: l.numberingPattern,
+    })),
+  }
+}
+
+function niveauDomaineVersWire(
+  niveau: AssetHierarchySchema['levels'][number],
+): NiveauHierarchieWire {
+  return { key: niveau.key, label: niveau.label, numberingPattern: niveau.numbering_pattern }
+}
+
+function noeudWireVersDomaine(wire: AssetNodeWire): AssetNode {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    workspace_id: wire.workspaceId,
+    level_key: wire.levelKey,
+    name: wire.name,
+    code: wire.code,
+    parent_id: wire.parentId,
+    associated_nodes: wire.associatedNodes,
+    source: wire.source,
+    qms_connector_id: wire.qmsConnectorId,
+    periodic_qualification: wire.periodicQualification,
+    qualification_status: wire.qualificationStatus as QualificationStatus,
+    audit_log: wire.auditLog,
+    created_at: wire.createdAt,
+    updated_at: wire.updatedAt,
+  }
+}
+
+/** Réservé au filet de sécurité de migration locale (`migrerStructureSystemeLocaleVersServeur`) — préserve tous les champs, y compris le statut de qualification/périodicité/journal d'audit/horodatages d'origine, jamais fabriqués. */
+function noeudDomaineVersWireComplet(n: AssetNode): Omit<AssetNodeWire, 'clientId'> {
+  return {
+    id: n.id,
+    workspaceId: n.workspace_id,
+    levelKey: n.level_key,
+    name: n.name,
+    code: n.code,
+    parentId: n.parent_id,
+    associatedNodes: n.associated_nodes,
+    source: n.source,
+    qmsConnectorId: n.qms_connector_id,
+    periodicQualification: n.periodic_qualification,
+    qualificationStatus: n.qualification_status,
+    auditLog: n.audit_log,
+    createdAt: n.created_at,
+    updatedAt: n.updated_at,
+  }
+}
+
+function relationWireVersDomaine(wire: RelationTechniqueWire): RelationTechnique {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    type_relation: wire.typeRelation as TypeRelationTechnique,
+    noeud_source_id: wire.noeudSourceId,
+    noeud_cible_id: wire.noeudCibleId,
+    created_at: wire.createdAt,
+  }
+}
+
 /**
  * Store de la Couche Présentation pour le référentiel d'actifs —
  * hiérarchie configurable + CRUD de nœuds avec
@@ -91,6 +171,17 @@ export type ResultatCreationRelationTechnique =
  * qualification (édition manuelle uniquement). Le
  * graphe `associated_nodes[]` et le pull QMS restent hors périmètre
  * (backlog).
+ *
+ * **Phase 1 du chantier de migration D1** (docs/CHANTIER-MIGRATION-D1-RECAP.md,
+ * 14/09/2026) : Cloudflare D1 devient la source de vérité (Worker
+ * `auth-worker`, routes `/clients/:clientId/structure-systeme/...`) —
+ * disponible depuis n'importe quel appareil, contrairement à l'ancien
+ * stockage IndexedDB seul. La logique métier (unicité de code, absence de
+ * cycle, un niveau référencé par un nœud ne peut être ni renommé ni
+ * supprimé) reste ici, déjà testée — le Worker ne fait que persister
+ * l'état validé. Seule exception encore locale : la vérification qu'un
+ * `workspace_id` fourni existe bien (`db.workspaces`, Organization/
+ * Workspace pas encore migré — Phase 2 du même chantier).
  */
 export const useStructureSystemeStore = defineStore('structureSysteme', () => {
   const schema = ref<AssetHierarchySchema | null>(null)
@@ -98,34 +189,131 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
   const relationsTechniques = ref<RelationTechnique[]>([])
   const enChargement = ref(false)
 
+  async function obtenirApi() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    return { api, jeton: authStore.jeton }
+  }
+
+  /**
+   * Envoie au serveur la Structure Système capturée depuis les anciennes
+   * tables IndexedDB locales (`db.assetHierarchySchemasAMigrer`/
+   * `assetNodesAMigrer`/`relationsTechniquesAMigrer`) juste avant leur
+   * suppression — n'a d'effet réel qu'une seule fois, sur le premier
+   * navigateur qui ouvre l'application avec ce code (voir migration Dexie
+   * v34, `persistance/db.ts`) : sans ce filet, une hiérarchie déjà
+   * configurée localement (statuts de qualification inclus) serait perdue
+   * définitivement. Ne retire chaque élément de la file qu'après succès,
+   * pour réessayer automatiquement au prochain chargement en cas d'échec
+   * réseau — jamais de retrait optimiste avant confirmation serveur.
+   */
+  async function migrerStructureSystemeLocaleVersServeur(clientId: string): Promise<void> {
+    const indexSchema = assetHierarchySchemasAMigrer.findIndex((s) => s.client_id === clientId)
+    if (indexSchema !== -1) {
+      const schemaLocal = assetHierarchySchemasAMigrer[indexSchema] as AssetHierarchySchema
+      await enregistrerSchema(clientId, schemaLocal.levels)
+      assetHierarchySchemasAMigrer.splice(indexSchema, 1)
+    }
+
+    const noeudsClient = assetNodesAMigrer.filter((n) => n.client_id === clientId)
+    if (noeudsClient.length > 0) {
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.migrerNoeudsLocaux(
+        jeton,
+        clientId,
+        noeudsClient.map(noeudDomaineVersWireComplet),
+      )
+      if (!resultat.ok) throw new Error(`Échec de la migration des nœuds : ${resultat.erreur}`)
+      for (const n of noeudsClient) {
+        const index = assetNodesAMigrer.findIndex((x) => x.id === n.id)
+        if (index !== -1) assetNodesAMigrer.splice(index, 1)
+      }
+    }
+
+    const relationsClient = relationsTechniquesAMigrer.filter((r) => r.client_id === clientId)
+    for (const r of relationsClient) {
+      const { api, jeton } = await obtenirApi()
+      await api.creerRelationTechnique(jeton, clientId, {
+        typeRelation: r.type_relation,
+        noeudSourceId: r.noeud_source_id,
+        noeudCibleId: r.noeud_cible_id,
+      })
+      const index = relationsTechniquesAMigrer.findIndex((x) => x.id === r.id)
+      if (index !== -1) relationsTechniquesAMigrer.splice(index, 1)
+    }
+  }
+
   async function charger(clientId: string): Promise<void> {
     enChargement.value = true
     try {
-      schema.value = (await db.assetHierarchySchemas.get(clientId)) ?? {
-        client_id: clientId,
-        levels: [],
+      const authStore = useAuthStore()
+      const api = await authStore.client()
+      if (!api || !authStore.jeton) {
+        schema.value = { client_id: clientId, levels: [] }
+        noeuds.value = []
+        relationsTechniques.value = []
+        return
       }
-      noeuds.value = await db.assetNodes.where('client_id').equals(clientId).toArray()
-      relationsTechniques.value = await db.relationsTechniques
-        .where('client_id')
-        .equals(clientId)
-        .toArray()
+      try {
+        await migrerStructureSystemeLocaleVersServeur(clientId)
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
+      }
+      // Même discipline que `useClientsStore.obtenirClient` : un Worker
+      // injoignable (panne réseau) ne doit jamais faire planter le
+      // chargement d'un écran avec une exception non gérée — juste un état
+      // vide, réessayé au prochain `charger()`.
+      try {
+        const resultat = await api.obtenirStructureSysteme(authStore.jeton, clientId)
+        if (!resultat.ok) {
+          schema.value = { client_id: clientId, levels: [] }
+          noeuds.value = []
+          relationsTechniques.value = []
+          return
+        }
+        schema.value = schemaWireVersDomaine(resultat.donnees.schema)
+        noeuds.value = resultat.donnees.noeuds.map(noeudWireVersDomaine)
+        relationsTechniques.value =
+          resultat.donnees.relationsTechniques.map(relationWireVersDomaine)
+      } catch {
+        schema.value = { client_id: clientId, levels: [] }
+        noeuds.value = []
+        relationsTechniques.value = []
+      }
     } finally {
       enChargement.value = false
     }
   }
 
+  /** Relit toujours le schéma frais depuis le serveur avant modification — jamais depuis `schema.value` (un ref réactif Vue pourrait être obsolète face à une autre session/onglet). */
+  async function schemaActuelFrais(clientId: string): Promise<AssetHierarchySchema> {
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.obtenirStructureSysteme(jeton, clientId)
+    return resultat.ok
+      ? schemaWireVersDomaine(resultat.donnees.schema)
+      : { client_id: clientId, levels: [] }
+  }
+
+  async function enregistrerSchema(
+    clientId: string,
+    niveaux: AssetHierarchySchema['levels'],
+  ): Promise<AssetHierarchySchema> {
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.enregistrerSchemaHierarchie(
+      jeton,
+      clientId,
+      niveaux.map(niveauDomaineVersWire),
+    )
+    if (!resultat.ok) throw new Error(`Échec de l'enregistrement : ${resultat.erreur}`)
+    return schemaWireVersDomaine(resultat.donnees.schema)
+  }
+
   async function ajouterNiveau(clientId: string, niveau: NouveauNiveauInput): Promise<void> {
-    // Relu frais depuis Dexie (jamais depuis `schema.value`, un ref
-    // réactif Vue) — même piège que `reparenterNoeud` : un objet lu
-    // depuis l'état réactif Pinia fait échouer le clonage structuré
-    // d'IndexedDB dès le deuxième appel.
-    const actuel = (await db.assetHierarchySchemas.get(clientId)) ?? {
-      client_id: clientId,
-      levels: [],
-    }
-    const misAJour: AssetHierarchySchema = { ...actuel, levels: [...actuel.levels, niveau] }
-    await db.assetHierarchySchemas.put(misAJour)
+    const actuel = await schemaActuelFrais(clientId)
+    const misAJour = await enregistrerSchema(clientId, [...actuel.levels, niveau])
     schema.value = misAJour
   }
 
@@ -140,10 +328,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     cleActuelle: string,
     changements: { key?: string; libelleFr?: string; numbering_pattern?: string },
   ): Promise<ResultatModificationNiveau> {
-    const actuel = (await db.assetHierarchySchemas.get(clientId)) ?? {
-      client_id: clientId,
-      levels: [],
-    }
+    const actuel = await schemaActuelFrais(clientId)
     const index = actuel.levels.findIndex((n) => n.key === cleActuelle)
     if (index === -1) return { ok: false, raison: 'niveau_introuvable' }
     const niveauActuel = actuel.levels[index] as AssetHierarchySchema['levels'][number]
@@ -167,9 +352,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
           : niveauActuel.label,
       numbering_pattern: changements.numbering_pattern ?? niveauActuel.numbering_pattern,
     }
-    const misAJour: AssetHierarchySchema = { ...actuel, levels }
-    await db.assetHierarchySchemas.put(misAJour)
-    schema.value = misAJour
+    schema.value = await enregistrerSchema(clientId, levels)
     return { ok: true }
   }
 
@@ -181,16 +364,11 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     if (noeuds.value.some((n) => n.level_key === key)) {
       return { ok: false, raison: 'niveau_utilise_par_des_noeuds' }
     }
-    const actuel = (await db.assetHierarchySchemas.get(clientId)) ?? {
-      client_id: clientId,
-      levels: [],
-    }
-    const misAJour: AssetHierarchySchema = {
-      ...actuel,
-      levels: actuel.levels.filter((n) => n.key !== key),
-    }
-    await db.assetHierarchySchemas.put(misAJour)
-    schema.value = misAJour
+    const actuel = await schemaActuelFrais(clientId)
+    schema.value = await enregistrerSchema(
+      clientId,
+      actuel.levels.filter((n) => n.key !== key),
+    )
     return { ok: true }
   }
 
@@ -209,29 +387,21 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       }
     }
     // Pas de vérification de cycle à la création : un nœud neuf reçoit un
-    // id inédit, qu'aucun nœud existant ne peut déjà avoir comme parent —
-    // un cycle est structurellement impossible ici. Seul le reparentage
-    // d'un nœud existant (`reparenterNoeud`) peut en introduire un.
+    // id inédit (généré côté serveur), qu'aucun nœud existant ne peut déjà
+    // avoir comme parent — un cycle est structurellement impossible ici.
+    // Seul le reparentage d'un nœud existant (`reparenterNoeud`) peut en
+    // introduire un.
 
-    const maintenant = new Date().toISOString()
-    const noeud: AssetNode = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      workspace_id: workspaceId,
-      level_key: input.level_key,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerNoeud(jeton, clientId, {
+      levelKey: input.level_key,
       name: input.name,
       code: input.code,
-      parent_id: input.parent_id,
-      associated_nodes: [],
-      source: 'manuel',
-      qms_connector_id: null,
-      periodic_qualification: { applicable: false, deadline: null },
-      qualification_status: 'non_qualifie',
-      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
-      created_at: maintenant,
-      updated_at: maintenant,
-    }
-    await db.assetNodes.put(noeud)
+      parentId: input.parent_id,
+      workspaceId,
+    })
+    if (!resultat.ok) throw new Error(`Échec de la création du nœud : ${resultat.erreur}`)
+    const noeud = noeudWireVersDomaine(resultat.donnees.noeud)
     noeuds.value = [...noeuds.value, noeud]
     return { ok: true }
   }
@@ -241,10 +411,10 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
    * — lecture native minimale
    * (`XlsxNatifAdapter.extraireGrilleXlsx`) puis planification pure
    * (`preparerImportHierarchie`), jamais d'écriture avant validation
-   * complète du plan. Écrit en un seul lot Dexie (`bulkPut`) plutôt
-   * qu'un `creerNoeud` par ligne, pour ne pas laisser une hiérarchie
+   * complète du plan. Écrit en un seul appel serveur (`creerNoeudsEnLot`)
+   * plutôt qu'un `creerNoeud` par ligne, pour ne pas laisser une hiérarchie
    * partiellement importée si une erreur survient en cours de route
-   * (la planification, elle, échoue ou réussit avant toute écriture).
+   * (la planification, elle, échoue ou réussit avant tout appel réseau).
    */
   async function importerHierarchieDepuisXlsx(
     clientId: string,
@@ -260,47 +430,21 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       throw erreur
     }
 
-    // Relus frais depuis Dexie (jamais depuis `schema.value`/`noeuds.value`,
-    // des refs réactifs Vue) — même piège que `ajouterNiveau`/`creerNoeud`.
-    const schemaActuel = (await db.assetHierarchySchemas.get(clientId)) ?? {
-      client_id: clientId,
-      levels: [],
-    }
-    const noeudsExistants = await db.assetNodes.where('client_id').equals(clientId).toArray()
+    const schemaActuel = await schemaActuelFrais(clientId)
+    const { api, jeton } = await obtenirApi()
+    const listeActuelle = await api.obtenirStructureSysteme(jeton, clientId)
+    const noeudsExistants = listeActuelle.ok
+      ? listeActuelle.donnees.noeuds.map(noeudWireVersDomaine)
+      : noeuds.value
 
     const resultat = preparerImportHierarchie(grille, schemaActuel, noeudsExistants)
     if (!resultat.ok) return resultat
 
-    const maintenant = new Date().toISOString()
-    const nouveauxNoeuds: AssetNode[] = resultat.plan.aCreer.map((n) => ({
-      id: n.id,
-      client_id: clientId,
-      workspace_id: null,
-      level_key: n.level_key,
-      name: n.name,
-      code: n.code,
-      parent_id: n.parent_id,
-      associated_nodes: [],
-      source: 'import_fichier',
-      qms_connector_id: null,
-      periodic_qualification: { applicable: false, deadline: null },
-      qualification_status: 'non_qualifie',
-      audit_log: [
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: 'création (import XLSX)',
-        },
-      ],
-      created_at: maintenant,
-      updated_at: maintenant,
-    }))
-
-    if (nouveauxNoeuds.length > 0) {
-      await db.assetNodes.bulkPut(nouveauxNoeuds)
-      noeuds.value = [...noeuds.value, ...nouveauxNoeuds]
-    }
-
+    const nouveauxNoeuds = await ecrireNoeudsPlanifies(
+      clientId,
+      resultat.plan.aCreer,
+      'création (import XLSX)',
+    )
     return { ok: true, noeudsCrees: nouveauxNoeuds.length, erreurs: resultat.plan.erreurs }
   }
 
@@ -310,7 +454,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
    * variable selon les branches) — voir la documentation de
    * `preparerImportHierarchieSap` pour la convention réelle reconnue.
    * Même discipline que `importerHierarchieDepuisXlsx` : planification
-   * pure puis écriture en un seul lot Dexie.
+   * pure puis écriture en un seul appel serveur.
    */
   async function importerHierarchieSapDepuisXlsx(
     clientId: string,
@@ -357,46 +501,51 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     clientId: string,
     grille: string[][],
   ): Promise<ResultatImportHierarchieSap> {
-    const schemaActuel = (await db.assetHierarchySchemas.get(clientId)) ?? {
-      client_id: clientId,
-      levels: [],
-    }
-    const noeudsExistants = await db.assetNodes.where('client_id').equals(clientId).toArray()
+    const schemaActuel = await schemaActuelFrais(clientId)
+    const { api, jeton } = await obtenirApi()
+    const listeActuelle = await api.obtenirStructureSysteme(jeton, clientId)
+    const noeudsExistants = listeActuelle.ok
+      ? listeActuelle.donnees.noeuds.map(noeudWireVersDomaine)
+      : noeuds.value
 
     const resultat = preparerImportHierarchieSap(grille, schemaActuel, noeudsExistants)
     if (!resultat.ok) return resultat
 
-    const maintenant = new Date().toISOString()
-    const nouveauxNoeuds: AssetNode[] = resultat.plan.aCreer.map((n) => ({
+    const nouveauxNoeuds = await ecrireNoeudsPlanifies(
+      clientId,
+      resultat.plan.aCreer,
+      'création (import SAP)',
+    )
+    return { ok: true, noeudsCrees: nouveauxNoeuds.length, erreurs: resultat.plan.erreurs }
+  }
+
+  /**
+   * Envoie au serveur les nœuds calculés par une planification pure
+   * (`preparerImportHierarchie`/`preparerImportHierarchieSap`) — leurs
+   * `id` sont imposés tels quels (voir la documentation de
+   * `SaisieCreationNoeudWire.id` côté Worker) : la planification les a
+   * déjà utilisés pour chaîner `parent_id` entre nouveaux nœuds du même
+   * lot, un identifiant régénéré côté serveur casserait ce chaînage.
+   */
+  async function ecrireNoeudsPlanifies(
+    clientId: string,
+    aCreer: readonly Pick<AssetNode, 'id' | 'level_key' | 'name' | 'code' | 'parent_id'>[],
+    action: string,
+  ): Promise<AssetNode[]> {
+    if (aCreer.length === 0) return []
+    const saisies: SaisieCreationNoeudWire[] = aCreer.map((n) => ({
       id: n.id,
-      client_id: clientId,
-      workspace_id: null,
-      level_key: n.level_key,
+      levelKey: n.level_key,
       name: n.name,
       code: n.code,
-      parent_id: n.parent_id,
-      associated_nodes: [],
-      source: 'import_fichier',
-      qms_connector_id: null,
-      periodic_qualification: { applicable: false, deadline: null },
-      qualification_status: 'non_qualifie',
-      audit_log: [
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: 'création (import SAP)',
-        },
-      ],
-      created_at: maintenant,
-      updated_at: maintenant,
+      parentId: n.parent_id,
     }))
-
-    if (nouveauxNoeuds.length > 0) {
-      await db.assetNodes.bulkPut(nouveauxNoeuds)
-      noeuds.value = [...noeuds.value, ...nouveauxNoeuds]
-    }
-
-    return { ok: true, noeudsCrees: nouveauxNoeuds.length, erreurs: resultat.plan.erreurs }
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerNoeudsEnLot(jeton, clientId, saisies, action)
+    if (!resultat.ok) throw new Error(`Échec de l'import : ${resultat.erreur}`)
+    const nouveauxNoeuds = resultat.donnees.noeuds.map(noeudWireVersDomaine)
+    noeuds.value = [...noeuds.value, ...nouveauxNoeuds]
+    return nouveauxNoeuds
   }
 
   /**
@@ -410,27 +559,16 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     if (introduitUnCycle(noeuds.value, noeudId, nouveauParentId)) {
       return { ok: false, raison: 'cycle_introduit' }
     }
-    // Relu frais depuis Dexie (jamais depuis `noeuds.value`, un tableau
-    // réactif Vue) — écrire un objet issu d'un ref réactif directement
-    // dans IndexedDB fait échouer le clonage structuré des navigateurs.
-    const noeud = await db.assetNodes.get(noeudId)
+    const noeud = noeuds.value.find((n) => n.id === noeudId)
     if (!noeud) return { ok: true }
 
-    const maintenant = new Date().toISOString()
-    const misAJour: AssetNode = {
-      ...noeud,
-      parent_id: nouveauParentId,
-      updated_at: maintenant,
-      audit_log: [
-        ...noeud.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: 'modification',
-        },
-      ],
-    }
-    await db.assetNodes.put(misAJour)
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.modifierNoeud(jeton, noeud.client_id, noeudId, {
+      parentId: nouveauParentId,
+      action: 'modification',
+    })
+    if (!resultat.ok) throw new Error(`Échec du reparentage : ${resultat.erreur}`)
+    const misAJour = noeudWireVersDomaine(resultat.donnees.noeud)
     noeuds.value = noeuds.value.map((n) => (n.id === noeudId ? misAJour : n))
     return { ok: true }
   }
@@ -466,22 +604,21 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     noeudSourceId: string,
     noeudCibleId: string,
   ): Promise<ResultatCreationRelationTechnique> {
-    const source = await db.assetNodes.get(noeudSourceId)
-    const cible = await db.assetNodes.get(noeudCibleId)
+    const source = noeuds.value.find((n) => n.id === noeudSourceId)
+    const cible = noeuds.value.find((n) => n.id === noeudCibleId)
     if (!source || !cible) return { ok: false, raison: 'noeud_introuvable' }
     if (source.client_id !== clientId || cible.client_id !== clientId) {
       return { ok: false, raison: 'clients_differents' }
     }
 
-    const relation: RelationTechnique = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      type_relation: typeRelation,
-      noeud_source_id: noeudSourceId,
-      noeud_cible_id: noeudCibleId,
-      created_at: new Date().toISOString(),
-    }
-    await db.relationsTechniques.put(relation)
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerRelationTechnique(jeton, clientId, {
+      typeRelation,
+      noeudSourceId,
+      noeudCibleId,
+    })
+    if (!resultat.ok) throw new Error(`Échec de la création de la relation : ${resultat.erreur}`)
+    const relation = relationWireVersDomaine(resultat.donnees.relation)
     relationsTechniques.value = [...relationsTechniques.value, relation]
     return { ok: true, relation }
   }
@@ -496,9 +633,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
    * périodicité — jamais de transition
    * automatique fabriquée par l'outil (même discipline que partout
    * ailleurs : rien n'est déduit à la place de l'utilisateur sur une
-   * donnée à impact GMP). Trouvé figé à `non_qualifie` sans aucun moyen
-   * de le faire évoluer, en simulant une requalification périodique
-   * réelle (31/08/2026).
+   * donnée à impact GMP).
    */
   async function modifierQualificationNoeud(
     noeudId: string,
@@ -507,25 +642,17 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       periodic_qualification: { applicable: boolean; deadline: string | null }
     },
   ): Promise<void> {
-    const noeud = await db.assetNodes.get(noeudId)
+    const noeud = noeuds.value.find((n) => n.id === noeudId)
     if (!noeud) return
 
-    const maintenant = new Date().toISOString()
-    const misAJour: AssetNode = {
-      ...noeud,
-      qualification_status: changement.qualification_status,
-      periodic_qualification: changement.periodic_qualification,
-      updated_at: maintenant,
-      audit_log: [
-        ...noeud.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: 'modification',
-        },
-      ],
-    }
-    await db.assetNodes.put(misAJour)
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.modifierNoeud(jeton, noeud.client_id, noeudId, {
+      qualificationStatus: changement.qualification_status,
+      periodicQualification: changement.periodic_qualification,
+      action: 'modification',
+    })
+    if (!resultat.ok) throw new Error(`Échec de la modification : ${resultat.erreur}`)
+    const misAJour = noeudWireVersDomaine(resultat.donnees.noeud)
     noeuds.value = noeuds.value.map((n) => (n.id === noeudId ? misAJour : n))
   }
 

@@ -12,6 +12,13 @@ import type {
   ValeurParametreInstallation,
 } from './repos/parametresInstallationRepo'
 import type { StockageBinaireRepo } from './repos/stockageBinaireRepo'
+import type {
+  AssetHierarchySchemaEnregistre,
+  AssetNodeEnregistre,
+  NiveauHierarchieEnregistre,
+  RelationTechniqueEnregistree,
+  StructureSystemeRepo,
+} from './repos/structureSystemeRepo'
 import type { UtilisateursRepo } from './repos/utilisateursRepo'
 import type { ClientEnregistre, EntreeAudit, Role, UtilisateurEnregistre } from './types'
 import { versUtilisateurPublic } from './types'
@@ -30,6 +37,7 @@ export interface Contexte {
   parametresInstallationRepo: ParametresInstallationRepo
   documentsNormatifsRepo: DocumentsNormatifsRepo
   stockageBinaireRepo: StockageBinaireRepo
+  structureSystemeRepo: StructureSystemeRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -220,6 +228,52 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   }
   if (matchClientId && request.method === 'DELETE') {
     return gererSupprimerClientDefinitivement(request, ctx, entetes, matchClientId[1] as string)
+  }
+
+  // --- Structure Système (référentiel d'actifs, D1 = source de vérité,
+  // Phase 1 du chantier de migration D1) ---
+  const matchStructureSysteme = chemin.match(/^\/clients\/([^/]+)\/structure-systeme$/)
+  if (matchStructureSysteme && request.method === 'GET') {
+    return gererObtenirStructureSysteme(request, ctx, entetes, matchStructureSysteme[1] as string)
+  }
+  const matchSchemaHierarchie = chemin.match(/^\/clients\/([^/]+)\/structure-systeme\/schema$/)
+  if (matchSchemaHierarchie && request.method === 'PUT') {
+    return gererEnregistrerSchemaHierarchie(
+      request,
+      ctx,
+      entetes,
+      matchSchemaHierarchie[1] as string,
+    )
+  }
+  const matchNoeudsBulk = chemin.match(/^\/clients\/([^/]+)\/structure-systeme\/noeuds\/lot$/)
+  if (matchNoeudsBulk && request.method === 'POST') {
+    return gererCreerNoeudsEnLot(request, ctx, entetes, matchNoeudsBulk[1] as string)
+  }
+  const matchMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/structure-systeme\/noeuds\/migration-locale$/,
+  )
+  if (matchMigrationLocale && request.method === 'POST') {
+    return gererMigrerNoeudsLocaux(request, ctx, entetes, matchMigrationLocale[1] as string)
+  }
+  const matchNoeuds = chemin.match(/^\/clients\/([^/]+)\/structure-systeme\/noeuds$/)
+  if (matchNoeuds && request.method === 'POST') {
+    return gererCreerNoeud(request, ctx, entetes, matchNoeuds[1] as string)
+  }
+  const matchNoeudId = chemin.match(/^\/clients\/([^/]+)\/structure-systeme\/noeuds\/([^/]+)$/)
+  if (matchNoeudId && request.method === 'PATCH') {
+    return gererModifierNoeud(
+      request,
+      ctx,
+      entetes,
+      matchNoeudId[1] as string,
+      matchNoeudId[2] as string,
+    )
+  }
+  const matchRelationsTechniques = chemin.match(
+    /^\/clients\/([^/]+)\/structure-systeme\/relations-techniques$/,
+  )
+  if (matchRelationsTechniques && request.method === 'POST') {
+    return gererCreerRelationTechnique(request, ctx, entetes, matchRelationsTechniques[1] as string)
   }
 
   // --- Paramètres d'installation (dépôt GitHub dédié, Relais IA, Drive normes) ---
@@ -796,6 +850,287 @@ async function gererSupprimerClientDefinitivement(
     corps.justification.trim(),
   )
   return reponseJson({ ok: true }, 200, entetes)
+}
+
+// --- Handlers : Structure Système (référentiel d'actifs, Phase 1 du
+// chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) ---
+//
+// La logique métier (unicité de code, absence de cycle, un niveau
+// référencé par un nœud ne peut être ni renommé ni supprimé…) reste
+// côté store frontend (`useStructureSystemeStore.ts`, déjà testée) — ces
+// handlers ne font qu'authentifier, vérifier l'accès au client concerné
+// et persister l'état qu'on leur donne, même discipline que
+// `gererModifierClient`/`peutModifierClient`.
+
+/** Authentifie puis vérifie l'accès au client concerné — retourne soit l'acteur, soit la Response d'erreur à renvoyer telle quelle. Même garde que `peutVoirClient`/`peutModifierClient` : jamais distinguer "client introuvable" de "non autorisé" à un appelant qui n'a pas le droit de le savoir. */
+async function exigerAccesClient(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<UtilisateurEnregistre | Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+  const client = await ctx.clientsRepo.parId(clientId)
+  if (!client || !peutVoirClient(utilisateur, client)) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  return utilisateur
+}
+
+async function gererObtenirStructureSysteme(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [schema, noeuds, relationsTechniques] = await Promise.all([
+    ctx.structureSystemeRepo.obtenirSchema(clientId),
+    ctx.structureSystemeRepo.listerNoeuds(clientId),
+    ctx.structureSystemeRepo.listerRelationsTechniques(clientId),
+  ])
+  return reponseJson(
+    { schema: schema ?? { clientId, levels: [] }, noeuds, relationsTechniques },
+    200,
+    entetes,
+  )
+}
+
+async function gererEnregistrerSchemaHierarchie(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<{ levels?: NiveauHierarchieEnregistre[] }>(request)
+  if (!corps || !Array.isArray(corps.levels)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const schema: AssetHierarchySchemaEnregistre = { clientId, levels: corps.levels }
+  await ctx.structureSystemeRepo.enregistrerSchema(schema)
+  return reponseJson({ schema }, 200, entetes)
+}
+
+/**
+ * Champs qu'un client peut fournir à la création — jamais `auditLog`/
+ * `createdAt`/`updatedAt`, dérivés ici pour ne jamais faire confiance à une
+ * identité d'acteur fournie par l'appelant (même discipline que
+ * `uploadedBy` sur les documents normatifs).
+ *
+ * `id` reste une exception délibérée pour l'import en lot uniquement
+ * (`gererCreerNoeudsEnLot`) : la planification pure d'un import
+ * (`preparerImportHierarchie`/`preparerImportHierarchieSap`, côté store
+ * frontend) attribue déjà les identifiants des nouveaux nœuds AVANT
+ * l'appel réseau, précisément pour pouvoir faire pointer un nouveau nœud
+ * vers le parent qu'il vient de créer dans le même lot (`parentId`
+ * référençant un autre élément du même tableau) — un identifiant
+ * regénéré côté serveur casserait ce chaînage. Aucun souci de sécurité :
+ * un identifiant n'est qu'une clé étrangère opaque, jamais une donnée
+ * sensible. `gererCreerNoeud` (création manuelle, un seul nœud, jamais de
+ * chaînage) ignore ce champ et génère toujours son propre identifiant.
+ */
+interface SaisieCreationNoeud {
+  id?: string
+  levelKey?: string
+  name?: string
+  code?: string
+  parentId?: string | null
+  workspaceId?: string | null
+}
+
+function noeudDepuisSaisie(
+  clientId: string,
+  saisie: SaisieCreationNoeud,
+  source: AssetNodeEnregistre['source'],
+  acteur: UtilisateurEnregistre,
+  action: string,
+  idImpose?: string,
+): AssetNodeEnregistre | null {
+  if (!saisie.levelKey || !saisie.name || !saisie.code) return null
+  const maintenant = horodatage()
+  return {
+    id: idImpose ?? genererId(),
+    clientId,
+    workspaceId: saisie.workspaceId ?? null,
+    levelKey: saisie.levelKey,
+    name: saisie.name,
+    code: saisie.code,
+    parentId: saisie.parentId ?? null,
+    associatedNodes: [],
+    source,
+    qmsConnectorId: null,
+    periodicQualification: { applicable: false, deadline: null },
+    qualificationStatus: 'non_qualifie',
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+}
+
+async function gererCreerNoeud(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationNoeud>(request)
+  const noeud = corps ? noeudDepuisSaisie(clientId, corps, 'manuel', acteur, 'création') : null
+  if (!noeud) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  await ctx.structureSystemeRepo.creerNoeud(noeud)
+  return reponseJson({ noeud }, 201, entetes)
+}
+
+async function gererCreerNoeudsEnLot(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<{ noeuds?: SaisieCreationNoeud[]; action?: string }>(request)
+  if (!corps || !Array.isArray(corps.noeuds)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const action = corps.action ?? 'création (import)'
+  const noeuds: AssetNodeEnregistre[] = []
+  for (const saisie of corps.noeuds) {
+    if (!saisie.id) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    const noeud = noeudDepuisSaisie(clientId, saisie, 'import_fichier', acteur, action, saisie.id)
+    if (!noeud) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    noeuds.push(noeud)
+  }
+
+  await ctx.structureSystemeRepo.creerNoeuds(noeuds)
+  return reponseJson({ noeuds }, 201, entetes)
+}
+
+/**
+ * Migration ponctuelle (filet de sécurité `assetNodesAMigrer`,
+ * `useStructureSystemeStore.migrerStructureSystemeLocaleVersServeur`) —
+ * seule route qui accepte un nœud déjà complet tel quel (statut de
+ * qualification, périodicité, journal d'audit d'origine, horodatages
+ * d'origine inclus) : contrairement à `gererCreerNoeud`/
+ * `gererCreerNoeudsEnLot`, ces données ne sont jamais fabriquées ici mais
+ * proviennent d'un enregistrement réel déjà existant côté navigateur
+ * (ALCOA+ : une migration de stockage ne doit jamais faire perdre un
+ * statut de qualification déjà acté ni réécrire son historique).
+ */
+async function gererMigrerNoeudsLocaux(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<{ noeuds?: AssetNodeEnregistre[] }>(request)
+  if (!corps || !Array.isArray(corps.noeuds)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const noeuds: AssetNodeEnregistre[] = []
+  for (const n of corps.noeuds) {
+    if (!n.id || !n.levelKey || !n.name || !n.code) {
+      return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    }
+    noeuds.push({ ...n, clientId })
+  }
+
+  await ctx.structureSystemeRepo.creerNoeuds(noeuds)
+  return reponseJson({ noeuds }, 201, entetes)
+}
+
+async function gererModifierNoeud(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  noeudId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const noeud = await ctx.structureSystemeRepo.noeudParId(noeudId)
+  if (!noeud || noeud.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+
+  const corps = await lireCorpsJson<{
+    parentId?: string | null
+    qualificationStatus?: string
+    periodicQualification?: { applicable: boolean; deadline: string | null }
+    action?: string
+  }>(request)
+  if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const maintenant = horodatage()
+  const misAJour: AssetNodeEnregistre = {
+    ...noeud,
+    ...(corps.parentId !== undefined ? { parentId: corps.parentId } : {}),
+    ...(corps.qualificationStatus !== undefined
+      ? { qualificationStatus: corps.qualificationStatus }
+      : {}),
+    ...(corps.periodicQualification !== undefined
+      ? { periodicQualification: corps.periodicQualification }
+      : {}),
+    updatedAt: maintenant,
+    auditLog: [
+      ...noeud.auditLog,
+      { timestamp: maintenant, actor: acteur.email, action: corps.action ?? 'modification' },
+    ],
+  }
+  await ctx.structureSystemeRepo.remplacerNoeud(misAJour)
+  return reponseJson({ noeud: misAJour }, 200, entetes)
+}
+
+async function gererCreerRelationTechnique(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<{
+    typeRelation?: string
+    noeudSourceId?: string
+    noeudCibleId?: string
+  }>(request)
+  if (!corps?.typeRelation || !corps.noeudSourceId || !corps.noeudCibleId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const source = await ctx.structureSystemeRepo.noeudParId(corps.noeudSourceId)
+  const cible = await ctx.structureSystemeRepo.noeudParId(corps.noeudCibleId)
+  if (!source || !cible || source.clientId !== clientId || cible.clientId !== clientId) {
+    return reponseJson({ erreur: 'noeud_introuvable' }, 400, entetes)
+  }
+
+  const relation: RelationTechniqueEnregistree = {
+    id: genererId(),
+    clientId,
+    typeRelation: corps.typeRelation,
+    noeudSourceId: corps.noeudSourceId,
+    noeudCibleId: corps.noeudCibleId,
+    createdAt: horodatage(),
+  }
+  await ctx.structureSystemeRepo.creerRelationTechnique(relation)
+  return reponseJson({ relation }, 201, entetes)
 }
 
 // --- Handlers : paramètres d'installation ---
