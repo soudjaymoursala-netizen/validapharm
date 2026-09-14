@@ -442,14 +442,19 @@ Phase 2) — l'incrément le plus large de ce chantier à ce jour.
     (**1230/1230 tests verts**), `cd workers/auth-worker && npx vitest run`
     (**104/104 tests verts**).
 
-### 6.2 Phase 3a — reste à faire après le merge
+### 6.2 Phase 3a — terminée (14/09/2026)
 
-1. ⬜ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
-2. ⬜ PR ouverte, CI verte, mergée sur `main`.
-3. ⬜ Migration `0006_projects.sql` appliquée en production D1
-   (`validapharm-auth`).
-4. ⬜ Code déployé vérifié sur le Worker en production
-   (`workers_get_worker_code`).
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #41 ouverte, CI verte (même panne connue `Workers Builds:
+   validapharm-auth-worker` hors `main`, commentaire de statu quo posté,
+   même précédent que #19/#24-28/#39/#40), mergée sur `main` (squash,
+   commit `146433d`).
+3. ✅ Migration `0006_projects.sql` appliquée en production D1
+   (`validapharm-auth`) — table `projects` et ses deux index confirmés
+   présents (`sqlite_master`).
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : `D1ProjectsRepo`,
+   les 16 routes `/projects/...` et `ctx.projectsRepo` bien présents.
 5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
    qu'en Phases 1/2, §4.2/§5.2 point 5) — `projects` a déjà sa
    synchronisation (préexistante, adaptée ci-dessus), seul le reste des
@@ -457,7 +462,8 @@ Phase 2) — l'incrément le plus large de ce chantier à ce jour.
 
 ### 6.3 Prochaine action
 
-Une fois la Phase 3a déployée : Phase 3b (`sections`) puis Phase 3c
-(`projectDocuments` + R2) — même consigne de l'utilisateur (14/09/2026) :
-enchaîner sur toutes les phases sans s'arrêter pour demander confirmation
-entre chacune, le sujet des nœuds (import SAP) reste repoussé à plus tard.
+Phase 3a close. Enchaîner directement sur la Phase 3b (`sections`) puis
+la Phase 3c (`projectDocuments` + R2) — même consigne de l'utilisateur
+(14/09/2026) : enchaîner sur toutes les phases sans s'arrêter pour
+demander confirmation entre chacune, le sujet des nœuds (import SAP) reste
+repoussé à plus tard.
