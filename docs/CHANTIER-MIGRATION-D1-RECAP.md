@@ -89,7 +89,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `assetHierarchySchemas`, `assetNodes` (Structure Système) | D1 | ✅ **Phase 1 terminée (14/09/2026)** — PR #39 mergée, migration 0004 appliquée en production D1, déploiement Worker vérifié |
 | `organizations`, `workspaces` | D1 | ✅ **Phase 2 terminée (14/09/2026)** — PR #40 mergée, migration 0005 appliquée en production D1, déploiement Worker vérifié |
 | `projects` | D1 (+ GitHub déjà en place, à conserver) | ✅ **Phase 3a terminée (14/09/2026)** — voir §6 |
-| `sections` | D1 (+ GitHub déjà en place, à conserver) | 🔧 **Phase 3b — code complet, PR en cours** — voir §7 |
+| `sections` | D1 (+ GitHub déjà en place, à conserver) | ✅ **Phase 3b terminée (14/09/2026)** — voir §7 |
 | `projectDocuments` (D1+R2, contenu binaire) | D1+R2 | ⬜ Phase 3c |
 | `methodProfilesACFC`, `evaluationsACFC` | D1 | ⬜ Phase 4 |
 | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ⬜ Phase 4 |
@@ -580,25 +580,42 @@ adaptation IA, discipline ALCOA+ complète sur `audit_log`/`revisions`.
     rencontré cette fois (contrairement à la Phase 3a) — les 11 fichiers
     utilisaient déjà ou utilisent désormais systématiquement
     `installerFauxWorkerAuth()`/`connecterAdminDeTest()`.
-12. **Validation complète** (14/09/2026) : `npx vue-tsc --noEmit -p
-    tsconfig.app.json` (0 erreur — **`-p .` seul sous-rapporte les erreurs
-    dans ce dépôt, toujours utiliser `tsconfig.app.json` explicitement**),
-    `npx eslint src/ --max-warnings 0` (0 erreur/warning), `npx vitest run`
-    racine (**1237/1237 tests verts**),
-    `cd workers/auth-worker && npx vitest run` (**103/103 tests verts**,
-    dont 2 nouveaux tests pour `/sections/:id/restauration` et
-    `/sections/migration-locale`).
+12. **Validation complète** (14/09/2026) : `npm run typecheck` racine
+    (`vue-tsc -b --noEmit`, 0 erreur), `npm run lint` (0 erreur/warning),
+    `npm run format` (0 erreur), `npx vitest run` racine (**1237/1237 tests
+    verts**), `cd workers/auth-worker && npx vitest run` (**103/103 tests
+    verts**, dont 2 nouveaux tests pour `/sections/:id/restauration` et
+    `/sections/migration-locale`). **Piège découvert pendant cette
+    validation** : `npx vue-tsc --noEmit -p tsconfig.app.json` (frontend
+    seul) et `npx vue-tsc --noEmit -p .` (racine, mode non-build) passent
+    tous les deux à tort sans erreur même quand `workers/auth-worker`
+    contient une vraie erreur de type — seul `npm run typecheck` (mode
+    `-b`, celui réellement exécuté par la CI, "Lint, typecheck, tests")
+    vérifie les deux ensemble avec les project references. A fait
+    échouer une première passe de CI (voir §7.2 point 1bis) — toujours
+    utiliser `npm run typecheck` pour valider localement avant de pousser,
+    jamais un `vue-tsc` isolé sur un seul sous-projet.
 
-### 7.2 Phase 3b — en cours de clôture (14/09/2026)
+### 7.2 Phase 3b — terminée (14/09/2026)
 
-1. ⬜ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
-2. ⬜ PR ouverte, CI verte (même panne connue `Workers Builds:
-   validapharm-auth-worker` hors `main` attendue, commentaire de statu quo
-   à reposter si nécessaire), à merger sur `main`.
-3. ⬜ Migration `0007_sections.sql` à appliquer en production D1
-   (`validapharm-auth`, database_id `5fb762ef-fe99-4e68-9086-e57126c5c2aa`).
-4. ⬜ Code déployé à vérifier sur le Worker en production
-   (`workers_get_worker_code`, `validapharm-auth-worker`).
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #42 ouverte. Premier passage CI rouge sur `Lint, typecheck, tests` —
+   pas la panne connue `Workers Builds` mais une vraie erreur de type dans
+   le test de migration locale ajouté cette session
+   (`corps.sections[0]` possiblement `undefined`,
+   `noUncheckedIndexedAccess`, jamais détectée localement faute d'avoir
+   utilisé `npm run typecheck`, voir §7.1 point 12) — corrigée (accès
+   chaîné en optionnel) et repoussée. CI verte (`Lint, typecheck, tests`),
+   même panne connue `Workers Builds: validapharm-auth-worker` hors `main`
+   confirmée (commentaire de statu quo posté, même précédent que
+   #19/#24-28/#39/#40/#41), mergée sur `main` (squash, commit `77ece5c`).
+3. ✅ Migration `0007_sections.sql` appliquée en production D1
+   (`validapharm-auth`) — table `sections` et ses trois index confirmés
+   présents (`sqlite_master`).
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : `D1SectionsRepo`,
+   les 8 routes `/sections/...` (dont `migration-locale` et
+   `:id/restauration`) et `ctx.sectionsRepo` bien présents.
 5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
    qu'en Phases 1/2/3a) — `sections` a déjà sa synchronisation (préexistante,
    adaptée ci-dessus, §7.1 point 8), seul le reste des domaines migrés en
@@ -606,9 +623,8 @@ adaptation IA, discipline ALCOA+ complète sur `audit_log`/`revisions`.
 
 ### 7.3 Prochaine action
 
-Terminer la clôture de la Phase 3b (§7.2), puis enchaîner directement sur
-la Phase 3c (`projectDocuments` + R2, contenu binaire `Blob`, miroir du
-patron déjà construit pour la Bibliothèque de normes) — même consigne de
-l'utilisateur (14/09/2026) : enchaîner sur toutes les phases sans
-s'arrêter pour demander confirmation entre chacune, le sujet des nœuds
-(import SAP) reste repoussé à plus tard.
+Phase 3b close. Enchaîner directement sur la Phase 3c (`projectDocuments`
++ R2, contenu binaire `Blob`, miroir du patron déjà construit pour la
+Bibliothèque de normes) — même consigne de l'utilisateur (14/09/2026) :
+enchaîner sur toutes les phases sans s'arrêter pour demander confirmation
+entre chacune, le sujet des nœuds (import SAP) reste repoussé à plus tard.
