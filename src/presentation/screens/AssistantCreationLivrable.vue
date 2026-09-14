@@ -126,10 +126,7 @@ async function chargerPrecedents(): Promise<void> {
     precedents.value = []
     return
   }
-  const projetsDuClient = await db.projects
-    .where('client_id')
-    .equals(projet.value.client_id)
-    .toArray()
+  const projetsDuClient = await projetsStore.listerProjetsClient(projet.value.client_id)
   const idsProjetsDuClient = new Set(projetsDuClient.map((p) => p.id))
   const sectionsMemeType = await db.sections
     .where('template_type')

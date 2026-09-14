@@ -15,6 +15,7 @@ import { ClientsRepoMemoire } from './repos/clientsRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
+import { ProjectsRepoMemoire } from './repos/projectsRepo'
 import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
 import { StructureSystemeRepoMemoire } from './repos/structureSystemeRepo'
 import { UtilisateursRepoMemoire } from './repos/utilisateursRepo'
@@ -36,6 +37,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     stockageBinaireRepo: new StockageBinaireRepoMemoire(),
     structureSystemeRepo: new StructureSystemeRepoMemoire(),
     organisationRepo: new OrganisationRepoMemoire(),
+    projectsRepo: new ProjectsRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -115,6 +117,31 @@ interface CorpsReponse {
   workspace: WorkspaceJson
   workspaceRacine: WorkspaceJson
   workspaces: WorkspaceJson[]
+  projet: ProjectJson
+  projects: ProjectJson[]
+}
+
+interface ProjectJson {
+  id: string
+  name: string
+  context: string
+  scopeIn: string
+  scopeOut: string
+  deadline: string | null
+  languageDefault: string
+  clientId: string | null
+  sections: string[]
+  documents: string[]
+  links: { fromSectionId: string; toSectionId: string; createdBy: string; createdAt: string }[]
+  statut: string
+  phase: string
+  ownerId: string
+  sharedWith: { userId: string; accessLevel: string }[]
+  archivedAt: string | null
+  archivedBy: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
 }
 
 interface OrganizationJson {
@@ -1033,6 +1060,331 @@ describe('routerRequete — Organization/Workspace (Phase 2 du chantier de migra
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/organisation`)
     expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Projects (Phase 3a du chantier de migration D1)', () => {
+  async function creerUtilisateurB(
+    ctx: Contexte,
+    jetonAdmin: string,
+  ): Promise<{ email: string; jeton: string }> {
+    const email = 'b@pharmatech.example'
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: jetonAdmin,
+      body: { email, motDePasse: 'MotDePasse!1', nom: 'N', prenom: 'P', role: 'utilisateur' },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email, motDePasse: 'MotDePasse!1' },
+    })
+    return { email, jeton: login.corps.jeton }
+  }
+
+  test('créer un projet — owner_id = email de l’auteur, statut actif, phase concept', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+
+    const creation = await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Qualification ligne A', context: 'Ctx', scopeIn: 'In', scopeOut: 'Out' },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.projet.ownerId).toBe('admin@pharmatech.example')
+    expect(creation.corps.projet.statut).toBe('actif')
+    expect(creation.corps.projet.phase).toBe('concept')
+    expect(creation.corps.projet.auditLog).toHaveLength(1)
+  })
+
+  test('nom obligatoire', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+
+    const creation = await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: '' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('nom_obligatoire')
+  })
+
+  test('un compte non-admin ne voit que ses projets (propriétaire ou partagé)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const b = await creerUtilisateurB(ctx, admin.jeton)
+
+    await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Projet admin' },
+    })
+    const creeParB = await requete(ctx, 'POST', '/projects', {
+      jeton: b.jeton,
+      body: { name: 'Projet B' },
+    })
+
+    const listeAdmin = await requete(ctx, 'GET', '/projects', { jeton: admin.jeton })
+    expect(listeAdmin.corps.projects).toHaveLength(2)
+
+    const listeB = await requete(ctx, 'GET', '/projects', { jeton: b.jeton })
+    expect(listeB.corps.projects).toHaveLength(1)
+    expect(listeB.corps.projects[0]?.id).toBe(creeParB.corps.projet.id)
+  })
+
+  test('obtenir un projet non visible -> 404 générique', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const b = await creerUtilisateurB(ctx, admin.jeton)
+    const creation = await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Projet admin' },
+    })
+
+    const obtenir = await requete(ctx, 'GET', `/projects/${creation.corps.projet.id}`, {
+      jeton: b.jeton,
+    })
+    expect(obtenir.status).toBe(404)
+  })
+
+  test('partager un projet en édition donne accès en modification à l’utilisateur partagé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const b = await creerUtilisateurB(ctx, admin.jeton)
+    const creation = await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Projet admin' },
+    })
+    const id = creation.corps.projet.id
+
+    const partage = await requete(ctx, 'POST', `/projects/${id}/partage`, {
+      jeton: admin.jeton,
+      body: { userId: b.email, accessLevel: 'édition' },
+    })
+    expect(partage.status).toBe(200)
+    expect(partage.corps.projet.sharedWith).toEqual([{ userId: b.email, accessLevel: 'édition' }])
+
+    const phase = await requete(ctx, 'PATCH', `/projects/${id}/phase`, {
+      jeton: b.jeton,
+      body: { phase: 'realisation' },
+    })
+    expect(phase.status).toBe(200)
+    expect(phase.corps.projet.phase).toBe('realisation')
+
+    const retrait = await requete(
+      ctx,
+      'DELETE',
+      `/projects/${id}/partage/${encodeURIComponent(b.email)}`,
+      {
+        jeton: admin.jeton,
+      },
+    )
+    expect(retrait.status).toBe(200)
+    expect(retrait.corps.projet.sharedWith).toEqual([])
+  })
+
+  test('un partage en lecture seule ne permet pas la modification -> 403', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const b = await creerUtilisateurB(ctx, admin.jeton)
+    const creation = await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Projet admin' },
+    })
+    const id = creation.corps.projet.id
+    await requete(ctx, 'POST', `/projects/${id}/partage`, {
+      jeton: admin.jeton,
+      body: { userId: b.email, accessLevel: 'lecture' },
+    })
+
+    const phase = await requete(ctx, 'PATCH', `/projects/${id}/phase`, {
+      jeton: b.jeton,
+      body: { phase: 'realisation' },
+    })
+    expect(phase.status).toBe(403)
+  })
+
+  test('cycle de vie statut : archiver -> désarchiver, avec gardes de transition', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const creation = await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Projet' },
+    })
+    const id = creation.corps.projet.id
+
+    const archiver = await requete(ctx, 'POST', `/projects/${id}/archiver`, { jeton: admin.jeton })
+    expect(archiver.status).toBe(200)
+    expect(archiver.corps.projet.statut).toBe('archive')
+    expect(archiver.corps.projet.archivedBy).toBe('admin@pharmatech.example')
+
+    const archiverDeNouveau = await requete(ctx, 'POST', `/projects/${id}/archiver`, {
+      jeton: admin.jeton,
+    })
+    expect(archiverDeNouveau.status).toBe(409)
+    expect(archiverDeNouveau.corps.erreur).toBe('deja_archive')
+
+    const desarchiver = await requete(ctx, 'POST', `/projects/${id}/desarchiver`, {
+      jeton: admin.jeton,
+    })
+    expect(desarchiver.status).toBe(200)
+    expect(desarchiver.corps.projet.statut).toBe('actif')
+  })
+
+  test('suppression exige un projet déjà archivé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const creation = await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Projet' },
+    })
+    const id = creation.corps.projet.id
+
+    const supprimerAvantArchivage = await requete(ctx, 'POST', `/projects/${id}/supprimer`, {
+      jeton: admin.jeton,
+    })
+    expect(supprimerAvantArchivage.status).toBe(409)
+    expect(supprimerAvantArchivage.corps.erreur).toBe('pas_archive')
+
+    await requete(ctx, 'POST', `/projects/${id}/archiver`, { jeton: admin.jeton })
+    const supprimer = await requete(ctx, 'POST', `/projects/${id}/supprimer`, {
+      jeton: admin.jeton,
+    })
+    expect(supprimer.status).toBe(200)
+    expect(supprimer.corps.projet.statut).toBe('supprime')
+  })
+
+  test('suspendre puis reprendre, avec gardes de transition', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const creation = await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Projet' },
+    })
+    const id = creation.corps.projet.id
+
+    const suspendre = await requete(ctx, 'POST', `/projects/${id}/suspendre`, {
+      jeton: admin.jeton,
+    })
+    expect(suspendre.status).toBe(200)
+    expect(suspendre.corps.projet.statut).toBe('suspendu')
+
+    const reprendreDeNouveau = await requete(ctx, 'POST', `/projects/${id}/reprendre`, {
+      jeton: admin.jeton,
+    })
+    expect(reprendreDeNouveau.status).toBe(200)
+    expect(reprendreDeNouveau.corps.projet.statut).toBe('actif')
+
+    const pasSuspendu = await requete(ctx, 'POST', `/projects/${id}/reprendre`, {
+      jeton: admin.jeton,
+    })
+    expect(pasSuspendu.status).toBe(409)
+    expect(pasSuspendu.corps.erreur).toBe('pas_suspendu')
+  })
+
+  test('ajouter puis retirer un lien entre deux sections, idempotent dans les deux sens', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const creation = await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Projet' },
+    })
+    const id = creation.corps.projet.id
+
+    const ajout = await requete(ctx, 'POST', `/projects/${id}/liens`, {
+      jeton: admin.jeton,
+      body: { fromSectionId: 's1', toSectionId: 's2' },
+    })
+    expect(ajout.corps.projet.links).toHaveLength(1)
+
+    const ajoutInverse = await requete(ctx, 'POST', `/projects/${id}/liens`, {
+      jeton: admin.jeton,
+      body: { fromSectionId: 's2', toSectionId: 's1' },
+    })
+    expect(ajoutInverse.corps.projet.links).toHaveLength(1)
+
+    const retrait = await requete(ctx, 'DELETE', `/projects/${id}/liens`, {
+      jeton: admin.jeton,
+      body: { fromSectionId: 's1', toSectionId: 's2' },
+    })
+    expect(retrait.corps.projet.links).toHaveLength(0)
+  })
+
+  test('lister les projets d’un client (usage panneau chat)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps: clientCorps } = await requete(ctx, 'POST', '/clients', {
+      jeton: admin.jeton,
+      body: { name: 'Ferring' },
+    })
+    const clientId = clientCorps.client.id
+    await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Projet lié', clientId },
+    })
+    await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'Projet sans client' },
+    })
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/projects`, { jeton: admin.jeton })
+    expect(liste.corps.projects).toHaveLength(1)
+    expect(liste.corps.projects[0]?.name).toBe('Projet lié')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const liste = await requete(ctx, 'GET', '/projects')
+    expect(liste.status).toBe(401)
+  })
+
+  test('migration locale : préserve id/owner_id/audit_log d’origine, idempotente si rejouée', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+
+    const projetLocal: ProjectJson = {
+      id: 'projet-local-1',
+      name: 'Ancien projet local',
+      context: 'Ctx',
+      scopeIn: 'In',
+      scopeOut: 'Out',
+      deadline: null,
+      languageDefault: 'fr',
+      clientId: null,
+      sections: [],
+      documents: [],
+      links: [],
+      statut: 'actif',
+      phase: 'concept',
+      ownerId: 'admin@pharmatech.example',
+      sharedWith: [],
+      archivedAt: null,
+      archivedBy: null,
+      auditLog: [
+        {
+          timestamp: '2025-01-01T00:00:00.000Z',
+          actor: 'admin@pharmatech.example',
+          action: 'création',
+        },
+      ],
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    }
+
+    const migration = await requete(ctx, 'POST', '/projects/migration-locale', {
+      jeton: admin.jeton,
+      body: { projects: [projetLocal] },
+    })
+    expect(migration.status).toBe(201)
+    expect(migration.corps.projects).toEqual([projetLocal])
+
+    const obtenir = await requete(ctx, 'GET', `/projects/${projetLocal.id}`, { jeton: admin.jeton })
+    expect(obtenir.corps.projet.createdAt).toBe('2025-01-01T00:00:00.000Z')
+    expect(obtenir.corps.projet.auditLog).toEqual(projetLocal.auditLog)
+
+    const migrationRejouee = await requete(ctx, 'POST', '/projects/migration-locale', {
+      jeton: admin.jeton,
+      body: { projects: [projetLocal] },
+    })
+    expect(migrationRejouee.status).toBe(201)
+    const liste = await requete(ctx, 'GET', '/projects', { jeton: admin.jeton })
+    expect(liste.corps.projects.filter((p) => p.id === projetLocal.id)).toHaveLength(1)
   })
 })
 

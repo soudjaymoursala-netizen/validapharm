@@ -11,6 +11,7 @@ import { envoyerAvecBascule } from '../../logique-metier/routeur-ia/envoyerAvecB
 import { deriveVersionDetectee } from '../../logique-metier/routeur-ia/qualificationFiabilite'
 import { db } from '../../persistance/db'
 import { construireAdaptateursIA } from './construireAdaptateursIA'
+import { useAuthStore } from './useAuthStore'
 import { useClientConfigStore } from './useClientConfigStore'
 import { useConnexionRelaisIAStore } from './useConnexionRelaisIAStore'
 
@@ -171,7 +172,12 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
    * client, jamais celles d'un autre client.
    */
   async function listerSectionsDisponibles(idClient: string): Promise<SectionDisponibleAJoindre[]> {
-    const projets = await db.projects.where('client_id').equals(idClient).toArray()
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return []
+    const resultat = await api.listerProjetsClient(authStore.jeton, idClient)
+    if (!resultat.ok) return []
+    const projets = resultat.donnees.projects
     const sectionsParProjet = await Promise.all(
       projets.map((projet) => db.sections.where('project_id').equals(projet.id).toArray()),
     )

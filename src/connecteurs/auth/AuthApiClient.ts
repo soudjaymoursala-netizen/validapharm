@@ -120,6 +120,29 @@ export interface WorkspaceWire {
   createdAt: string
 }
 
+export interface ProjectWire {
+  id: string
+  name: string
+  context: string
+  scopeIn: string
+  scopeOut: string
+  deadline: string | null
+  languageDefault: 'fr' | 'en' | 'de'
+  clientId: string | null
+  sections: string[]
+  documents: string[]
+  links: { fromSectionId: string; toSectionId: string; createdBy: string; createdAt: string }[]
+  statut: 'actif' | 'suspendu' | 'archive' | 'supprime'
+  phase: 'concept' | 'realisation' | 'operation' | 'retrait'
+  ownerId: string
+  sharedWith: { userId: string; accessLevel: 'lecture' | 'édition' }[]
+  archivedAt: string | null
+  archivedBy: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
 export interface SaisieCreationDocumentNormatif {
   category: string
   titre: string
@@ -393,6 +416,142 @@ export class AuthApiClient {
     return this.requete('POST', `/clients/${clientId}/organisation/workspaces`, {
       jeton,
       body: saisie,
+    })
+  }
+
+  // --- Projects (Phase 3a du chantier de migration D1) ---
+
+  listerProjets(jeton: string): Promise<ResultatApi<{ projects: ProjectWire[] }>> {
+    return this.requete('GET', '/projects', { jeton })
+  }
+
+  listerProjetsClient(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ projects: ProjectWire[] }>> {
+    return this.requete('GET', `/clients/${clientId}/projects`, { jeton })
+  }
+
+  obtenirProjet(jeton: string, id: string): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('GET', `/projects/${id}`, { jeton })
+  }
+
+  /** Réservé à `useSynchronisationStore` (restauration depuis GitHub / fusion de conflit déjà résolue côté client) — écrase sans fusionner, voir la documentation de la route Worker `gererRestaurerProjet`. */
+  restaurerProjet(
+    jeton: string,
+    id: string,
+    projet: ProjectWire,
+  ): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('PUT', `/projects/${id}/restauration`, { jeton, body: projet })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerProjetsLocaux` : seule voie qui accepte un projet déjà complet (id/owner_id/shared_with/audit_log/horodatages d'origine), jamais fabriqués ici. */
+  migrerProjetsLocaux(
+    jeton: string,
+    projects: ProjectWire[],
+  ): Promise<ResultatApi<{ projects: ProjectWire[] }>> {
+    return this.requete('POST', '/projects/migration-locale', { jeton, body: { projects } })
+  }
+
+  creerProjet(
+    jeton: string,
+    saisie: {
+      name: string
+      context?: string
+      scopeIn?: string
+      scopeOut?: string
+      deadline?: string | null
+      languageDefault?: ProjectWire['languageDefault']
+      clientId?: string | null
+    },
+  ): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('POST', '/projects', { jeton, body: saisie })
+  }
+
+  changerPhaseProjet(
+    jeton: string,
+    id: string,
+    phase: ProjectWire['phase'],
+  ): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('PATCH', `/projects/${id}/phase`, { jeton, body: { phase } })
+  }
+
+  archiverProjet(jeton: string, id: string): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('POST', `/projects/${id}/archiver`, { jeton })
+  }
+
+  desarchiverProjet(jeton: string, id: string): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('POST', `/projects/${id}/desarchiver`, { jeton })
+  }
+
+  suspendreProjet(jeton: string, id: string): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('POST', `/projects/${id}/suspendre`, { jeton })
+  }
+
+  reprendreProjet(jeton: string, id: string): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('POST', `/projects/${id}/reprendre`, { jeton })
+  }
+
+  supprimerProjet(jeton: string, id: string): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('POST', `/projects/${id}/supprimer`, { jeton })
+  }
+
+  partagerProjet(
+    jeton: string,
+    id: string,
+    userId: string,
+    accessLevel: 'lecture' | 'édition',
+  ): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('POST', `/projects/${id}/partage`, { jeton, body: { userId, accessLevel } })
+  }
+
+  retirerPartageProjet(
+    jeton: string,
+    id: string,
+    userId: string,
+  ): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('DELETE', `/projects/${id}/partage/${encodeURIComponent(userId)}`, {
+      jeton,
+    })
+  }
+
+  ajouterDocumentProjet(
+    jeton: string,
+    id: string,
+    documentId: string,
+  ): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('POST', `/projects/${id}/documents`, { jeton, body: { documentId } })
+  }
+
+  ajouterSectionProjet(
+    jeton: string,
+    id: string,
+    sectionId: string,
+  ): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('POST', `/projects/${id}/sections`, { jeton, body: { sectionId } })
+  }
+
+  ajouterLienProjet(
+    jeton: string,
+    id: string,
+    fromSectionId: string,
+    toSectionId: string,
+  ): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('POST', `/projects/${id}/liens`, {
+      jeton,
+      body: { fromSectionId, toSectionId },
+    })
+  }
+
+  retirerLienProjet(
+    jeton: string,
+    id: string,
+    fromSectionId: string,
+    toSectionId: string,
+  ): Promise<ResultatApi<{ projet: ProjectWire }>> {
+    return this.requete('DELETE', `/projects/${id}/liens`, {
+      jeton,
+      body: { fromSectionId, toSectionId },
     })
   }
 

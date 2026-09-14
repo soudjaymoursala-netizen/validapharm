@@ -1,13 +1,19 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useProjectDocumentsStore } from './useProjectDocumentsStore'
+import { useProjectsStore } from './useProjectsStore'
 
-function creerProjetMinimal(id: string) {
-  const maintenant = new Date().toISOString()
-  return db.projects.put({
-    id,
+let demonter: () => void
+
+async function creerProjetMinimal(): Promise<string> {
+  const projet = await useProjectsStore().creerProjet({
     name: 'Projet de test',
     context: '',
     scope_in: '',
@@ -15,37 +21,32 @@ function creerProjetMinimal(id: string) {
     deadline: null,
     language_default: 'fr',
     client_id: null,
-    sections: [],
-    documents: [],
-    links: [],
-    statut: 'actif',
-    phase: 'concept',
-    owner_id: 'utilisateur-local-phase1',
-    shared_with: [],
-    archived_at: null,
-    archived_by: null,
-    audit_log: [],
-    created_at: maintenant,
-    updated_at: maintenant,
   })
+  return projet.id
 }
 
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.projectDocuments.clear()
-  await db.projects.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useProjectDocumentsStore — importerDocument', () => {
   test('accepte un fichier de n’importe quel format et le marque toujours "référence de travail, non maître"', async () => {
-    await creerProjetMinimal('projet-1')
+    const projectId = await creerProjetMinimal()
     const store = useProjectDocumentsStore()
-    await store.charger('projet-1')
+    await store.charger(projectId)
     const fichier = new File(['contenu binaire'], 'manuel-fournisseur.pdf', {
       type: 'application/pdf',
     })
 
-    const document = await store.importerDocument('projet-1', fichier, 'utilisateur-local-phase1')
+    const document = await store.importerDocument(projectId, fichier, 'admin@pharmatech.example')
 
     expect(document.status).toBe('reference_de_travail_non_maitre')
     expect(document.filename).toBe('manuel-fournisseur.pdf')
@@ -58,59 +59,59 @@ describe('useProjectDocumentsStore — importerDocument', () => {
   })
 
   test('accepte un format sans type MIME connu (mime_type vide, jamais fabriqué)', async () => {
-    await creerProjetMinimal('projet-1')
+    const projectId = await creerProjetMinimal()
     const store = useProjectDocumentsStore()
-    await store.charger('projet-1')
+    await store.charger(projectId)
     const fichier = new File(['x'], 'schema.dwg', { type: '' })
 
-    const document = await store.importerDocument('projet-1', fichier, 'utilisateur-local-phase1')
+    const document = await store.importerDocument(projectId, fichier, 'admin@pharmatech.example')
 
     expect(document.mime_type).toBe('')
     expect(document.filename).toBe('schema.dwg')
   })
 
   test('ajoute l’id du document à project.documents et journalise l’ajout', async () => {
-    await creerProjetMinimal('projet-1')
+    const projectId = await creerProjetMinimal()
     const store = useProjectDocumentsStore()
-    await store.charger('projet-1')
+    await store.charger(projectId)
     const fichier = new File(['x'], 'photo-installation.jpg', { type: 'image/jpeg' })
 
-    const document = await store.importerDocument('projet-1', fichier, 'utilisateur-local-phase1')
+    const document = await store.importerDocument(projectId, fichier, 'admin@pharmatech.example')
 
-    const projet = await db.projects.get('projet-1')
+    const projet = await useProjectsStore().obtenirProjet(projectId)
     expect(projet?.documents).toContain(document.id)
     expect(projet?.audit_log.at(-1)?.action).toBe('ajout_document')
   })
 
   test('isolation stricte par projet', async () => {
-    await creerProjetMinimal('projet-A')
-    await creerProjetMinimal('projet-B')
+    const projectIdA = await creerProjetMinimal()
+    const projectIdB = await creerProjetMinimal()
     const store = useProjectDocumentsStore()
 
-    await store.charger('projet-A')
+    await store.charger(projectIdA)
     await store.importerDocument(
-      'projet-A',
+      projectIdA,
       new File(['x'], 'doc-a.pdf', { type: 'application/pdf' }),
-      'utilisateur-local-phase1',
+      'admin@pharmatech.example',
     )
 
-    await store.charger('projet-B')
+    await store.charger(projectIdB)
     expect(store.documents).toHaveLength(0)
 
-    await store.charger('projet-A')
+    await store.charger(projectIdA)
     expect(store.documents).toHaveLength(1)
   })
 })
 
 describe('useProjectDocumentsStore — supprimerDocument', () => {
   test('retire le document de la liste et de la base', async () => {
-    await creerProjetMinimal('projet-1')
+    const projectId = await creerProjetMinimal()
     const store = useProjectDocumentsStore()
-    await store.charger('projet-1')
+    await store.charger(projectId)
     const document = await store.importerDocument(
-      'projet-1',
+      projectId,
       new File(['x'], 'a-supprimer.pdf', { type: 'application/pdf' }),
-      'utilisateur-local-phase1',
+      'admin@pharmatech.example',
     )
 
     await store.supprimerDocument(document.id)

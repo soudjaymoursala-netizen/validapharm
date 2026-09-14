@@ -16,6 +16,13 @@ import type {
   ParametresInstallationRepo,
   ValeurParametreInstallation,
 } from './repos/parametresInstallationRepo'
+import type {
+  LienProjetEnregistre,
+  PartageProjetEnregistre,
+  PhaseProjetEnregistree,
+  ProjectEnregistre,
+  ProjectsRepo,
+} from './repos/projectsRepo'
 import type { StockageBinaireRepo } from './repos/stockageBinaireRepo'
 import type {
   AssetHierarchySchemaEnregistre,
@@ -44,6 +51,7 @@ export interface Contexte {
   stockageBinaireRepo: StockageBinaireRepo
   structureSystemeRepo: StructureSystemeRepo
   organisationRepo: OrganisationRepo
+  projectsRepo: ProjectsRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -299,6 +307,82 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   const matchWorkspaces = chemin.match(/^\/clients\/([^/]+)\/organisation\/workspaces$/)
   if (matchWorkspaces && request.method === 'POST') {
     return gererCreerWorkspace(request, ctx, entetes, matchWorkspaces[1] as string)
+  }
+
+  // --- Projects (Phase 3a du chantier de migration D1) ---
+  if (chemin === '/projects' && request.method === 'GET') {
+    return gererListerProjets(request, ctx, entetes)
+  }
+  if (chemin === '/projects' && request.method === 'POST') {
+    return gererCreerProjet(request, ctx, entetes)
+  }
+  if (chemin === '/projects/migration-locale' && request.method === 'POST') {
+    return gererMigrerProjetsLocaux(request, ctx, entetes)
+  }
+  const matchProjetsClient = chemin.match(/^\/clients\/([^/]+)\/projects$/)
+  if (matchProjetsClient && request.method === 'GET') {
+    return gererListerProjetsClient(request, ctx, entetes, matchProjetsClient[1] as string)
+  }
+  const matchProjetId = chemin.match(/^\/projects\/([^/]+)$/)
+  if (matchProjetId && request.method === 'GET') {
+    return gererObtenirProjet(request, ctx, entetes, matchProjetId[1] as string)
+  }
+  const matchProjetRestauration = chemin.match(/^\/projects\/([^/]+)\/restauration$/)
+  if (matchProjetRestauration && request.method === 'PUT') {
+    return gererRestaurerProjet(request, ctx, entetes, matchProjetRestauration[1] as string)
+  }
+  const matchProjetPhase = chemin.match(/^\/projects\/([^/]+)\/phase$/)
+  if (matchProjetPhase && request.method === 'PATCH') {
+    return gererChangerPhaseProjet(request, ctx, entetes, matchProjetPhase[1] as string)
+  }
+  const matchProjetArchiver = chemin.match(/^\/projects\/([^/]+)\/archiver$/)
+  if (matchProjetArchiver && request.method === 'POST') {
+    return gererArchiverProjet(request, ctx, entetes, matchProjetArchiver[1] as string)
+  }
+  const matchProjetDesarchiver = chemin.match(/^\/projects\/([^/]+)\/desarchiver$/)
+  if (matchProjetDesarchiver && request.method === 'POST') {
+    return gererDesarchiverProjet(request, ctx, entetes, matchProjetDesarchiver[1] as string)
+  }
+  const matchProjetSuspendre = chemin.match(/^\/projects\/([^/]+)\/suspendre$/)
+  if (matchProjetSuspendre && request.method === 'POST') {
+    return gererSuspendreProjet(request, ctx, entetes, matchProjetSuspendre[1] as string)
+  }
+  const matchProjetReprendre = chemin.match(/^\/projects\/([^/]+)\/reprendre$/)
+  if (matchProjetReprendre && request.method === 'POST') {
+    return gererReprendreProjet(request, ctx, entetes, matchProjetReprendre[1] as string)
+  }
+  const matchProjetSupprimer = chemin.match(/^\/projects\/([^/]+)\/supprimer$/)
+  if (matchProjetSupprimer && request.method === 'POST') {
+    return gererSupprimerProjet(request, ctx, entetes, matchProjetSupprimer[1] as string)
+  }
+  const matchProjetPartage = chemin.match(/^\/projects\/([^/]+)\/partage$/)
+  if (matchProjetPartage && request.method === 'POST') {
+    return gererPartagerProjet(request, ctx, entetes, matchProjetPartage[1] as string)
+  }
+  const matchProjetPartageUtilisateur = chemin.match(/^\/projects\/([^/]+)\/partage\/([^/]+)$/)
+  if (matchProjetPartageUtilisateur && request.method === 'DELETE') {
+    return gererRetirerPartageProjet(
+      request,
+      ctx,
+      entetes,
+      matchProjetPartageUtilisateur[1] as string,
+      decodeURIComponent(matchProjetPartageUtilisateur[2] as string),
+    )
+  }
+  const matchProjetDocuments = chemin.match(/^\/projects\/([^/]+)\/documents$/)
+  if (matchProjetDocuments && request.method === 'POST') {
+    return gererAjouterDocumentProjet(request, ctx, entetes, matchProjetDocuments[1] as string)
+  }
+  const matchProjetSections = chemin.match(/^\/projects\/([^/]+)\/sections$/)
+  if (matchProjetSections && request.method === 'POST') {
+    return gererAjouterSectionProjet(request, ctx, entetes, matchProjetSections[1] as string)
+  }
+  const matchProjetLiens = chemin.match(/^\/projects\/([^/]+)\/liens$/)
+  if (matchProjetLiens && request.method === 'POST') {
+    return gererAjouterLienProjet(request, ctx, entetes, matchProjetLiens[1] as string)
+  }
+  if (matchProjetLiens && request.method === 'DELETE') {
+    return gererRetirerLienProjet(request, ctx, entetes, matchProjetLiens[1] as string)
   }
 
   // --- Paramètres d'installation (dépôt GitHub dédié, Relais IA, Drive normes) ---
@@ -1261,6 +1345,641 @@ async function gererCreerWorkspace(
   }
   await ctx.organisationRepo.creerWorkspace(site)
   return reponseJson({ workspace: site }, 201, entetes)
+}
+
+// --- Handlers : Projects (Phase 3a du chantier de migration D1) ---
+//
+// Modèle de visibilité repris tel quel de l'ancienne implémentation Dexie
+// (`peutVoirProjet`/`peutModifierProjet`, `src/logique-metier/permissions/
+// permissionsProjet.ts`) : `owner_id`/`shared_with[].userId` stockent
+// l'email du compte (jamais l'id interne), un admin voit/modifie tout.
+// Contrairement à l'ancien commentaire « jamais une frontière de sécurité
+// réelle » (vrai tant que le dépôt Git sous-jacent n'était pas lui-même
+// partitionné), D1 devenant la seule source de vérité ces contrôles sont
+// ici une vraie frontière — même durcissement que `peutModifierClient` en
+// Phase 39.
+
+function peutVoirProjetServeur(
+  projet: ProjectEnregistre,
+  utilisateur: UtilisateurEnregistre,
+): boolean {
+  if (utilisateur.role === 'admin') return true
+  if (projet.ownerId === utilisateur.email) return true
+  return projet.sharedWith.some((p) => p.userId === utilisateur.email)
+}
+
+function peutModifierProjetServeur(
+  projet: ProjectEnregistre,
+  utilisateur: UtilisateurEnregistre,
+): boolean {
+  if (utilisateur.role === 'admin') return true
+  if (projet.ownerId === utilisateur.email) return true
+  return projet.sharedWith.some(
+    (p) => p.userId === utilisateur.email && p.accessLevel === 'édition',
+  )
+}
+
+async function gererListerProjets(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const projects = await ctx.projectsRepo.listerVisiblesPar(utilisateur)
+  return reponseJson({ projects }, 200, entetes)
+}
+
+async function gererListerProjetsClient(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const projects = await ctx.projectsRepo.listerParClient(clientId)
+  return reponseJson({ projects }, 200, entetes)
+}
+
+async function gererObtenirProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const projet = await ctx.projectsRepo.obtenirProjet(id)
+  if (!projet || !peutVoirProjetServeur(projet, utilisateur)) {
+    // 404 générique — même discipline que `gererObtenirClient` : jamais
+    // distinguer "introuvable" de "non autorisé".
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  return reponseJson({ projet }, 200, entetes)
+}
+
+/**
+ * Restauration/fusion en écrasement — utilisée par `useSynchronisationStore`
+ * (`recupererDepuisGitHub`, qui écrase délibérément le cache local par
+ * l'état distant ; `confirmerResolutionConflits`, qui envoie l'état déjà
+ * fusionné côté client) : accepte un enregistrement déjà complet tel quel
+ * (id, `owner_id`/`shared_with`/`audit_log`/horodatages inclus, jamais
+ * fabriqués ici) et REMPLACE l'existant s'il y en a un, sans jamais
+ * fusionner lui-même — contrairement à `gererMigrerProjetsLocaux` (qui
+ * préserve l'existant), cette route privilégie toujours la version fournie
+ * par l'appelant, cohérent avec le comportement `db.projects.put(...)`
+ * d'avant cette migration (« écrasement délibéré, pas de fusion »).
+ */
+async function gererRestaurerProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const corps = await lireCorpsJson<ProjectEnregistre>(request)
+  if (!corps?.name) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const projetAEcrire: ProjectEnregistre = { ...corps, id }
+  const existant = await ctx.projectsRepo.obtenirProjet(id)
+  if (existant) {
+    await ctx.projectsRepo.remplacerProjet(projetAEcrire)
+  } else {
+    await ctx.projectsRepo.creerProjet(projetAEcrire)
+  }
+  return reponseJson({ projet: projetAEcrire }, 200, entetes)
+}
+
+async function gererCreerProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const corps = await lireCorpsJson<{
+    name?: string
+    context?: string
+    scopeIn?: string
+    scopeOut?: string
+    deadline?: string | null
+    languageDefault?: string
+    clientId?: string | null
+  }>(request)
+  if (!corps?.name || corps.name.trim().length === 0) {
+    return reponseJson({ erreur: 'nom_obligatoire' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const projet: ProjectEnregistre = {
+    id: genererId(),
+    name: corps.name.trim(),
+    context: corps.context ?? '',
+    scopeIn: corps.scopeIn ?? '',
+    scopeOut: corps.scopeOut ?? '',
+    deadline: corps.deadline ?? null,
+    languageDefault: corps.languageDefault ?? 'fr',
+    clientId: corps.clientId ?? null,
+    sections: [],
+    documents: [],
+    links: [],
+    statut: 'actif',
+    phase: 'concept',
+    ownerId: utilisateur.email,
+    sharedWith: [],
+    archivedAt: null,
+    archivedBy: null,
+    auditLog: [{ timestamp: maintenant, actor: utilisateur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.projectsRepo.creerProjet(projet)
+  return reponseJson({ projet }, 201, entetes)
+}
+
+/**
+ * Migration ponctuelle (filet de sécurité `projectsAMigrer`,
+ * `useProjectsStore.migrerProjetsLocauxVersServeur`) — seule route qui
+ * accepte un projet déjà complet tel quel (id, `owner_id`/`shared_with`,
+ * `audit_log`, horodatages d'origine inclus) : contrairement à
+ * `gererCreerProjet`, ces données ne sont jamais fabriquées ici mais
+ * proviennent d'un enregistrement réel déjà existant côté navigateur
+ * (ALCOA+ : une migration de stockage ne doit jamais faire perdre
+ * l'historique ni changer l'id référencé par `sections`/
+ * `projectDocuments`, encore en IndexedDB local le temps des phases 3b/3c).
+ * Idempotente : un projet dont l'id existe déjà côté serveur est ignoré
+ * silencieusement (jamais un doublon ni une erreur), pour rester
+ * rejouable sans effet après un succès partiel.
+ */
+async function gererMigrerProjetsLocaux(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const corps = await lireCorpsJson<{ projects?: ProjectEnregistre[] }>(request)
+  if (!corps || !Array.isArray(corps.projects)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const projects: ProjectEnregistre[] = []
+  for (const p of corps.projects) {
+    if (!p.id || !p.name) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    const existant = await ctx.projectsRepo.obtenirProjet(p.id)
+    if (existant) {
+      projects.push(existant)
+      continue
+    }
+    await ctx.projectsRepo.creerProjet(p)
+    projects.push(p)
+  }
+
+  return reponseJson({ projects }, 201, entetes)
+}
+
+/** Authentifie puis charge le projet demandé, vérifiant la visibilité — retourne soit `{utilisateur, projet}`, soit la Response d'erreur à renvoyer telle quelle. */
+async function chargerProjetVisible(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<{ utilisateur: UtilisateurEnregistre; projet: ProjectEnregistre } | Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const projet = await ctx.projectsRepo.obtenirProjet(id)
+  if (!projet || !peutVoirProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  return { utilisateur, projet }
+}
+
+async function gererChangerPhaseProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+
+  const corps = await lireCorpsJson<{ phase?: PhaseProjetEnregistree }>(request)
+  const phasesValides: readonly PhaseProjetEnregistree[] = [
+    'concept',
+    'realisation',
+    'operation',
+    'retrait',
+  ]
+  if (!corps?.phase || !phasesValides.includes(corps.phase)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    phase: corps.phase,
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      {
+        timestamp: maintenant,
+        actor: utilisateur.email,
+        action: `changement_phase (${corps.phase})`,
+      },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+async function gererArchiverProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+  if (projet.statut === 'archive') return reponseJson({ erreur: 'deja_archive' }, 409, entetes)
+
+  const maintenant = horodatage()
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    statut: 'archive',
+    archivedAt: maintenant,
+    archivedBy: utilisateur.email,
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      { timestamp: maintenant, actor: utilisateur.email, action: 'archivage' },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+async function gererDesarchiverProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+  if (projet.statut !== 'archive') return reponseJson({ erreur: 'deja_actif' }, 409, entetes)
+
+  const maintenant = horodatage()
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      { timestamp: maintenant, actor: utilisateur.email, action: 'désarchivage' },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+async function gererSuspendreProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+  if (projet.statut === 'suspendu') return reponseJson({ erreur: 'deja_suspendu' }, 409, entetes)
+
+  const maintenant = horodatage()
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    statut: 'suspendu',
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      { timestamp: maintenant, actor: utilisateur.email, action: 'suspension' },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+async function gererReprendreProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+  if (projet.statut !== 'suspendu') return reponseJson({ erreur: 'pas_suspendu' }, 409, entetes)
+
+  const maintenant = horodatage()
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    statut: 'actif',
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      { timestamp: maintenant, actor: utilisateur.email, action: 'reprise' },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+async function gererSupprimerProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+  if (projet.statut === 'supprime') return reponseJson({ erreur: 'deja_supprime' }, 409, entetes)
+  if (projet.statut !== 'archive') return reponseJson({ erreur: 'pas_archive' }, 409, entetes)
+
+  const maintenant = horodatage()
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    statut: 'supprime',
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      { timestamp: maintenant, actor: utilisateur.email, action: 'suppression' },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+async function gererPartagerProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+
+  const corps = await lireCorpsJson<{
+    userId?: string
+    accessLevel?: PartageProjetEnregistre['accessLevel']
+  }>(request)
+  if (!corps?.userId || (corps.accessLevel !== 'lecture' && corps.accessLevel !== 'édition')) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const autres = projet.sharedWith.filter((p) => p.userId !== corps.userId)
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    sharedWith: [...autres, { userId: corps.userId, accessLevel: corps.accessLevel }],
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      {
+        timestamp: maintenant,
+        actor: utilisateur.email,
+        action: `partage_ajoute (${corps.userId})`,
+      },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+async function gererRetirerPartageProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+  userId: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+
+  const maintenant = horodatage()
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    sharedWith: projet.sharedWith.filter((p) => p.userId !== userId),
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      { timestamp: maintenant, actor: utilisateur.email, action: `partage_retire (${userId})` },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+/**
+ * Référence un `ProjectDocument` (encore stocké en IndexedDB local, Phase
+ * 3c à venir) dans `Project.documents[]` — seul le lien id est concerné
+ * ici, jamais le contenu du document lui-même. `retirerDocumentProjet`
+ * n'existe pas : `supprimerDocument`
+ * (`useProjectDocumentsStore`) n'a jamais nettoyé cette liste non plus
+ * avant cette migration, comportement préservé tel quel.
+ */
+async function gererAjouterDocumentProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+
+  const corps = await lireCorpsJson<{ documentId?: string }>(request)
+  if (!corps?.documentId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const maintenant = horodatage()
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    documents: [...projet.documents, corps.documentId],
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      { timestamp: maintenant, actor: utilisateur.email, action: 'ajout_document' },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+/**
+ * Référence une `Section` (encore stockée en IndexedDB local, Phase 3b à
+ * venir) dans `Project.sections[]` — seul le lien id est concerné ici,
+ * jamais le contenu de la section elle-même.
+ */
+async function gererAjouterSectionProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+
+  const corps = await lireCorpsJson<{ sectionId?: string }>(request)
+  if (!corps?.sectionId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const maintenant = horodatage()
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    sections: [...projet.sections, corps.sectionId],
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      { timestamp: maintenant, actor: utilisateur.email, action: 'ajout_section' },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+function memeLienProjet(
+  a: Pick<LienProjetEnregistre, 'fromSectionId' | 'toSectionId'>,
+  fromSectionId: string,
+  toSectionId: string,
+): boolean {
+  return (
+    (a.fromSectionId === fromSectionId && a.toSectionId === toSectionId) ||
+    (a.fromSectionId === toSectionId && a.toSectionId === fromSectionId)
+  )
+}
+
+async function gererAjouterLienProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+
+  const corps = await lireCorpsJson<{ fromSectionId?: string; toSectionId?: string }>(request)
+  if (!corps?.fromSectionId || !corps.toSectionId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  if (
+    projet.links.some((l) =>
+      memeLienProjet(l, corps.fromSectionId as string, corps.toSectionId as string),
+    )
+  ) {
+    return reponseJson({ projet }, 200, entetes)
+  }
+
+  const maintenant = horodatage()
+  const lien: LienProjetEnregistre = {
+    fromSectionId: corps.fromSectionId,
+    toSectionId: corps.toSectionId,
+    createdBy: utilisateur.email,
+    createdAt: maintenant,
+  }
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    links: [...projet.links, lien],
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      { timestamp: maintenant, actor: utilisateur.email, action: 'lien_ajoute' },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+async function gererRetirerLienProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, id)
+  if (charge instanceof Response) return charge
+  const { utilisateur, projet } = charge
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+
+  const corps = await lireCorpsJson<{ fromSectionId?: string; toSectionId?: string }>(request)
+  if (!corps?.fromSectionId || !corps.toSectionId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const projetMisAJour: ProjectEnregistre = {
+    ...projet,
+    links: projet.links.filter(
+      (l) => !memeLienProjet(l, corps.fromSectionId as string, corps.toSectionId as string),
+    ),
+    updatedAt: maintenant,
+    auditLog: [
+      ...projet.auditLog,
+      { timestamp: maintenant, actor: utilisateur.email, action: 'lien_retire' },
+    ],
+  }
+  await ctx.projectsRepo.remplacerProjet(projetMisAJour)
+  return reponseJson({ projet: projetMisAJour }, 200, entetes)
 }
 
 // --- Handlers : paramètres d'installation ---

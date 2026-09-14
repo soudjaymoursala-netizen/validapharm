@@ -1,7 +1,6 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -24,7 +23,6 @@ describe('useProjectsStore — isolation des comptes non-admin', () => {
 
   beforeEach(async () => {
     setActivePinia(createPinia())
-    await db.projects.clear()
     await reinitialiserAuthDeTest()
     demonterFauxWorker = installerFauxWorkerAuth().demonter
   })

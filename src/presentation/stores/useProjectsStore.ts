@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { Langue, LienProjet, PhaseProjet, Project } from '../../logique-metier/domaine/types'
-import { peutVoirProjet } from '../../logique-metier/permissions/permissionsProjet'
+import type { ProjectWire } from '../../connecteurs/auth/AuthApiClient'
+import type { Langue, PhaseProjet, Project } from '../../logique-metier/domaine/types'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
+import { projectsAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
-import { db } from '../../persistance/db'
 
 export type NiveauAccesPartage = 'lecture' | 'édition'
 export type ErreurPartageProjet = { erreur: 'introuvable' }
@@ -24,12 +24,78 @@ export type ErreurStatutProjet = {
   erreur: 'introuvable' | 'deja_suspendu' | 'pas_suspendu' | 'deja_supprime' | 'pas_archive'
 }
 
+/** Exporté pour `useSynchronisationStore` — le format JSON déjà poussé sur GitHub reste au format domaine (snake_case), jamais renommé par cette migration. */
+export function projetWireVersDomaine(wire: ProjectWire): Project {
+  return {
+    id: wire.id,
+    name: wire.name,
+    context: wire.context,
+    scope_in: wire.scopeIn,
+    scope_out: wire.scopeOut,
+    deadline: wire.deadline,
+    language_default: wire.languageDefault,
+    client_id: wire.clientId,
+    sections: wire.sections,
+    documents: wire.documents,
+    links: wire.links.map((l) => ({
+      from_section_id: l.fromSectionId,
+      to_section_id: l.toSectionId,
+      created_by: l.createdBy,
+      created_at: l.createdAt,
+    })),
+    statut: wire.statut,
+    phase: wire.phase,
+    owner_id: wire.ownerId,
+    shared_with: wire.sharedWith.map((s) => ({ user_id: s.userId, access_level: s.accessLevel })),
+    archived_at: wire.archivedAt,
+    archived_by: wire.archivedBy,
+    audit_log: wire.auditLog,
+    created_at: wire.createdAt,
+    updated_at: wire.updatedAt,
+  }
+}
+
+/** Réservé au filet de sécurité de migration locale (`migrerProjetsLocauxVersServeur`) et à `useSynchronisationStore` (restauration depuis GitHub/fusion de conflit) — préserve tous les champs, y compris `owner_id`/`shared_with`/`audit_log`/horodatages d'origine, jamais fabriqués. */
+export function projetDomaineVersWireComplet(p: Project): ProjectWire {
+  return {
+    id: p.id,
+    name: p.name,
+    context: p.context,
+    scopeIn: p.scope_in,
+    scopeOut: p.scope_out,
+    deadline: p.deadline,
+    languageDefault: p.language_default,
+    clientId: p.client_id,
+    sections: p.sections,
+    documents: p.documents,
+    links: p.links.map((l) => ({
+      fromSectionId: l.from_section_id,
+      toSectionId: l.to_section_id,
+      createdBy: l.created_by,
+      createdAt: l.created_at,
+    })),
+    statut: p.statut,
+    phase: p.phase,
+    ownerId: p.owner_id,
+    sharedWith: p.shared_with.map((s) => ({ userId: s.user_id, accessLevel: s.access_level })),
+    archivedAt: p.archived_at,
+    archivedBy: p.archived_by,
+    auditLog: p.audit_log,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+  }
+}
+
 /**
- * Store de la Couche Présentation orchestrant la persistance
- * locale (`persistance/db.ts`) pour la gestion de projets. Ne
- * contient aucune règle métier elle-même — les décisions restent dans
- * `logique-metier/` ; ce store ne fait qu'appeler/persister.
- *
+ * Store de la Couche Présentation orchestrant la persistance des projets —
+ * **Phase 3a du chantier de migration D1**
+ * (docs/CHANTIER-MIGRATION-D1-RECAP.md) : Cloudflare D1 devient la source
+ * de vérité (Worker `auth-worker`, routes `/projects/...`), jamais plus
+ * `persistance/db.ts` (`db.projects`, retiré). La logique métier reste
+ * côté client (audit_log/identité/idempotence des liens) — les handlers du
+ * Worker ne font que rejouer les mêmes règles côté serveur (défense en
+ * profondeur, même discipline que `useOrganizationStore`/
+ * `useStructureSystemeStore`).
  */
 export const useProjectsStore = defineStore('projects', () => {
   const projects = ref<Project[]>([])
@@ -52,53 +118,101 @@ export const useProjectsStore = defineStore('projects', () => {
     return identiteCourante.value
   }
 
+  async function obtenirApi() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    return { api, jeton: authStore.jeton }
+  }
+
+  /**
+   * Envoie au serveur les `Project` capturés depuis l'ancienne table
+   * IndexedDB locale (`projectsAMigrer`) juste avant sa suppression — n'a
+   * d'effet réel qu'une seule fois, sur le premier navigateur qui ouvre
+   * l'application avec ce code (voir migration Dexie v36,
+   * `persistance/db.ts`). Ne retire chaque projet de la file qu'après
+   * confirmation serveur, jamais avant (même discipline que
+   * `useOrganizationStore.migrerOrganisationsLocalesVersServeur`).
+   * `creerProjet` (Worker) générant un nouvel id à chaque appel, ce filet
+   * utilise `migrerProjetsLocaux` (route dédiée, idempotente), seule voie
+   * qui préserve l'id local existant — référencé par `sections`/
+   * `projectDocuments`, encore en IndexedDB local le temps des phases
+   * suivantes.
+   */
+  async function migrerProjetsLocauxVersServeur(): Promise<void> {
+    if (projectsAMigrer.length === 0) return
+    const { api, jeton } = await obtenirApi()
+
+    const resultat = await api.migrerProjetsLocaux(
+      jeton,
+      projectsAMigrer.map(projetDomaineVersWireComplet),
+    )
+    if (!resultat.ok) throw new Error(`Échec de la migration des projets : ${resultat.erreur}`)
+    projectsAMigrer.splice(0, projectsAMigrer.length)
+  }
+
   /**
    * Un compte admin voit tous les projets, sans filtre (comportement
    * inchangé). Un compte non-admin (créé pour un collaborateur/testeur)
    * ne voit que les projets dont il est propriétaire ou avec lesquels il
-   * a été explicitement partagé (`partagerProjet`) — jamais les projets
+   * a été explicitement partagé (`partagerProjet`) — appliqué désormais
+   * côté serveur (`ProjectsRepo.listerVisiblesPar`), jamais les projets
    * préexistants d'un autre compte.
    */
   async function chargerProjets(): Promise<void> {
     enChargement.value = true
     try {
-      const identite = resoudreIdentiteCourante()
-      const tous = await db.projects.toArray()
-      const visibles = useAuthStore().estAdmin
-        ? tous
-        : tous.filter((p) => peutVoirProjet(p, identite))
+      resoudreIdentiteCourante()
+      const { api, jeton } = await obtenirApi()
+      try {
+        await migrerProjetsLocauxVersServeur()
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
+      }
+      const resultat = await api.listerProjets(jeton)
+      if (!resultat.ok) {
+        projects.value = []
+        return
+      }
+      const visibles = resultat.donnees.projects.map(projetWireVersDomaine)
       projects.value = visibles.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    } catch {
+      // Panne réseau réelle ou relais non configuré : jamais une exception
+      // non gérée, même discipline que `useOrganizationStore.charger`.
+      projects.value = []
     } finally {
       enChargement.value = false
     }
   }
 
+  /** Projets d'un seul client — usage `AssistantCreationLivrable`/`usePanneauChatStore` (précédents du même gabarit, sections joignables au chat), jamais le filtre de visibilité complet de `chargerProjets`. */
+  async function listerProjetsClient(clientId: string): Promise<Project[]> {
+    try {
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.listerProjetsClient(jeton, clientId)
+      if (!resultat.ok) return []
+      return resultat.donnees.projects.map(projetWireVersDomaine)
+    } catch {
+      return []
+    }
+  }
+
   async function creerProjet(input: NouveauProjetInput): Promise<Project> {
-    const ownerId = resoudreIdentiteCourante()
-    const maintenant = new Date().toISOString()
-    const projet: Project = {
-      id: crypto.randomUUID(),
+    resoudreIdentiteCourante()
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerProjet(jeton, {
       name: input.name,
       context: input.context,
-      scope_in: input.scope_in,
-      scope_out: input.scope_out,
+      scopeIn: input.scope_in,
+      scopeOut: input.scope_out,
       deadline: input.deadline,
-      language_default: input.language_default,
-      client_id: input.client_id,
-      sections: [],
-      documents: [],
-      links: [],
-      statut: 'actif',
-      phase: 'concept',
-      owner_id: ownerId,
-      shared_with: [],
-      archived_at: null,
-      archived_by: null,
-      audit_log: [{ timestamp: maintenant, actor: ownerId, action: 'création' }],
-      created_at: maintenant,
-      updated_at: maintenant,
-    }
-    await db.projects.put(projet)
+      languageDefault: input.language_default,
+      clientId: input.client_id,
+    })
+    if (!resultat.ok) throw new Error(`Échec de la création du projet : ${resultat.erreur}`)
+    const projet = projetWireVersDomaine(resultat.donnees.projet)
     projects.value = [projet, ...projects.value]
     return projet
   }
@@ -115,21 +229,13 @@ export const useProjectsStore = defineStore('projects', () => {
     userId: string,
     accessLevel: NiveauAccesPartage,
   ): Promise<Project | ErreurPartageProjet> {
-    const projet = await db.projects.get(projectId)
-    if (!projet) return { erreur: 'introuvable' }
-    const maintenant = new Date().toISOString()
-    const acteur = identiteCourante.value
-    const autres = projet.shared_with.filter((p) => p.user_id !== userId)
-    const projetMisAJour: Project = {
-      ...projet,
-      shared_with: [...autres, { user_id: userId, access_level: accessLevel }],
-      updated_at: maintenant,
-      audit_log: [
-        ...projet.audit_log,
-        { timestamp: maintenant, actor: acteur, action: `partage_ajoute (${userId})` },
-      ],
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.partagerProjet(jeton, projectId, userId, accessLevel)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable') return { erreur: 'introuvable' }
+      throw new Error(`Échec du partage : ${resultat.erreur}`)
     }
-    await db.projects.put(projetMisAJour)
+    const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
     return projetMisAJour
@@ -140,20 +246,13 @@ export const useProjectsStore = defineStore('projects', () => {
     projectId: string,
     userId: string,
   ): Promise<Project | ErreurPartageProjet> {
-    const projet = await db.projects.get(projectId)
-    if (!projet) return { erreur: 'introuvable' }
-    const maintenant = new Date().toISOString()
-    const acteur = identiteCourante.value
-    const projetMisAJour: Project = {
-      ...projet,
-      shared_with: projet.shared_with.filter((p) => p.user_id !== userId),
-      updated_at: maintenant,
-      audit_log: [
-        ...projet.audit_log,
-        { timestamp: maintenant, actor: acteur, action: `partage_retire (${userId})` },
-      ],
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.retirerPartageProjet(jeton, projectId, userId)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable') return { erreur: 'introuvable' }
+      throw new Error(`Échec du retrait de partage : ${resultat.erreur}`)
     }
-    await db.projects.put(projetMisAJour)
+    const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
     return projetMisAJour
@@ -164,24 +263,18 @@ export const useProjectsStore = defineStore('projects', () => {
    * `chargerProjets` ferme pour la liste — sans ça, un compte non-admin
    * qui devine ou conserve l'URL d'un projet dont il n'a la visibilité ni
    * par propriété ni par partage pourrait tout de même l'ouvrir
-   * directement, contournant le filtre de la liste.
+   * directement, contournant le filtre de la liste. Le Worker applique
+   * désormais la même garde côté serveur (404 générique).
    */
   async function obtenirProjet(projectId: string): Promise<Project | undefined> {
-    const projet = await db.projects.get(projectId)
-    if (!projet) return undefined
-    if (useAuthStore().estAdmin) return projet
-    return peutVoirProjet(projet, resoudreIdentiteCourante()) ? projet : undefined
-  }
-
-  function memeLien(
-    a: Pick<LienProjet, 'from_section_id' | 'to_section_id'>,
-    fromSectionId: string,
-    toSectionId: string,
-  ): boolean {
-    return (
-      (a.from_section_id === fromSectionId && a.to_section_id === toSectionId) ||
-      (a.from_section_id === toSectionId && a.to_section_id === fromSectionId)
-    )
+    try {
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.obtenirProjet(jeton, projectId)
+      if (!resultat.ok) return undefined
+      return projetWireVersDomaine(resultat.donnees.projet)
+    } catch {
+      return undefined
+    }
   }
 
   /**
@@ -189,14 +282,9 @@ export const useProjectsStore = defineStore('projects', () => {
    * (`project.links[]`) — c'est le seul mécanisme qui permet
    * de satisfaire les garde-fous de finalisation U-01/U-02/U-03
    * (`gardesFinalisation.ts`) autrement qu'en forçant avec un motif
-   * obligatoire. Absent jusqu'ici de l'interface (aucune fonction ne
-   * mutait `project.links`) — trouvé en simulant un vrai parcours de
-   * qualification de bout en bout : chaque finalisation OQ/IQ/PQ était
-   * bloquée sans aucune voie légitime de la lever.
-   *
-   * Idempotent (un lien déjà existant, dans un sens ou l'autre, n'est
-   * jamais dupliqué) — le lien n'est pas dirigé au sens métier
-   * (`aLienVersTypeSection` accepte les deux sens), `from`/`to` ne
+   * obligatoire. Idempotent (un lien déjà existant, dans un sens ou
+   * l'autre, n'est jamais dupliqué) — le lien n'est pas dirigé au sens
+   * métier (`aLienVersTypeSection` accepte les deux sens), `from`/`to` ne
    * reflètent que l'ordre de création, à but d'audit uniquement.
    */
   async function ajouterLien(
@@ -204,30 +292,13 @@ export const useProjectsStore = defineStore('projects', () => {
     fromSectionId: string,
     toSectionId: string,
   ): Promise<void> {
-    const projet = await db.projects.get(projectId)
-    if (!projet) throw new Error(`Projet introuvable : ${projectId}`)
-    if (projet.links.some((l) => memeLien(l, fromSectionId, toSectionId))) return
-    const maintenant = new Date().toISOString()
-    const lien: LienProjet = {
-      from_section_id: fromSectionId,
-      to_section_id: toSectionId,
-      created_by: identifiantActeurCourant(),
-      created_at: maintenant,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.ajouterLienProjet(jeton, projectId, fromSectionId, toSectionId)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable') throw new Error(`Projet introuvable : ${projectId}`)
+      throw new Error(`Échec de l'ajout du lien : ${resultat.erreur}`)
     }
-    const projetMisAJour: Project = {
-      ...projet,
-      links: [...projet.links, lien],
-      updated_at: maintenant,
-      audit_log: [
-        ...projet.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: 'lien_ajoute',
-        },
-      ],
-    }
-    await db.projects.put(projetMisAJour)
+    const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
   }
@@ -238,23 +309,13 @@ export const useProjectsStore = defineStore('projects', () => {
     fromSectionId: string,
     toSectionId: string,
   ): Promise<void> {
-    const projet = await db.projects.get(projectId)
-    if (!projet) throw new Error(`Projet introuvable : ${projectId}`)
-    const maintenant = new Date().toISOString()
-    const projetMisAJour: Project = {
-      ...projet,
-      links: projet.links.filter((l) => !memeLien(l, fromSectionId, toSectionId)),
-      updated_at: maintenant,
-      audit_log: [
-        ...projet.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: 'lien_retire',
-        },
-      ],
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.retirerLienProjet(jeton, projectId, fromSectionId, toSectionId)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable') throw new Error(`Projet introuvable : ${projectId}`)
+      throw new Error(`Échec du retrait du lien : ${resultat.erreur}`)
     }
-    await db.projects.put(projetMisAJour)
+    const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
   }
@@ -265,28 +326,26 @@ export const useProjectsStore = defineStore('projects', () => {
    * restaurable. La garde de confirmation (nom retapé + mot de passe
    * local) est vérifiée par l'appelant avant d'invoquer cette fonction,
    * jamais ici (même séparation que `useClientsStore.archiverClient`).
+   * `identiteDeclaree` reste accepté pour compatibilité d'appel (garde de
+   * confirmation UI) mais n'est jamais transmis au serveur : l'acteur
+   * réellement consigné dans `audit_log`/`archived_by` est toujours
+   * l'identité authentifiée (JWT), jamais une valeur déclarée par
+   * l'appelant.
    */
   async function archiverProjet(
     projectId: string,
     identiteDeclaree: string,
   ): Promise<Project | ErreurArchivageProjet> {
-    const existant = await db.projects.get(projectId)
-    if (!existant) return { erreur: 'introuvable' }
-    if (existant.statut === 'archive') return { erreur: 'deja_archive' }
-
-    const maintenant = new Date().toISOString()
-    const projetMisAJour: Project = {
-      ...existant,
-      statut: 'archive',
-      archived_at: maintenant,
-      archived_by: identiteDeclaree,
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        { timestamp: maintenant, actor: identiteDeclaree, action: 'archivage' },
-      ],
+    void identiteDeclaree
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.archiverProjet(jeton, projectId)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable' || resultat.erreur === 'deja_archive') {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec de l'archivage : ${resultat.erreur}`)
     }
-    await db.projects.put(projetMisAJour)
+    const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
     return projetMisAJour
@@ -296,23 +355,16 @@ export const useProjectsStore = defineStore('projects', () => {
     projectId: string,
     identiteDeclaree: string,
   ): Promise<Project | ErreurArchivageProjet> {
-    const existant = await db.projects.get(projectId)
-    if (!existant) return { erreur: 'introuvable' }
-    if (existant.statut !== 'archive') return { erreur: 'deja_actif' }
-
-    const maintenant = new Date().toISOString()
-    const projetMisAJour: Project = {
-      ...existant,
-      statut: 'actif',
-      archived_at: null,
-      archived_by: null,
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        { timestamp: maintenant, actor: identiteDeclaree, action: 'désarchivage' },
-      ],
+    void identiteDeclaree
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.desarchiverProjet(jeton, projectId)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable' || resultat.erreur === 'deja_actif') {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec du désarchivage : ${resultat.erreur}`)
     }
-    await db.projects.put(projetMisAJour)
+    const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
     return projetMisAJour
@@ -332,20 +384,14 @@ export const useProjectsStore = defineStore('projects', () => {
     phase: PhaseProjet,
     identiteDeclaree: string,
   ): Promise<Project | ErreurArchivageProjet> {
-    const existant = await db.projects.get(projectId)
-    if (!existant) return { erreur: 'introuvable' }
-
-    const maintenant = new Date().toISOString()
-    const projetMisAJour: Project = {
-      ...existant,
-      phase,
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        { timestamp: maintenant, actor: identiteDeclaree, action: `changement_phase (${phase})` },
-      ],
+    void identiteDeclaree
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.changerPhaseProjet(jeton, projectId, phase)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable') return { erreur: 'introuvable' }
+      throw new Error(`Échec du changement de phase : ${resultat.erreur}`)
     }
-    await db.projects.put(projetMisAJour)
+    const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
     return projetMisAJour
@@ -360,21 +406,16 @@ export const useProjectsStore = defineStore('projects', () => {
     projectId: string,
     identiteDeclaree: string,
   ): Promise<Project | ErreurStatutProjet> {
-    const existant = await db.projects.get(projectId)
-    if (!existant) return { erreur: 'introuvable' }
-    if (existant.statut === 'suspendu') return { erreur: 'deja_suspendu' }
-
-    const maintenant = new Date().toISOString()
-    const projetMisAJour: Project = {
-      ...existant,
-      statut: 'suspendu',
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        { timestamp: maintenant, actor: identiteDeclaree, action: 'suspension' },
-      ],
+    void identiteDeclaree
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.suspendreProjet(jeton, projectId)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable' || resultat.erreur === 'deja_suspendu') {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec de la suspension : ${resultat.erreur}`)
     }
-    await db.projects.put(projetMisAJour)
+    const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
     return projetMisAJour
@@ -385,21 +426,16 @@ export const useProjectsStore = defineStore('projects', () => {
     projectId: string,
     identiteDeclaree: string,
   ): Promise<Project | ErreurStatutProjet> {
-    const existant = await db.projects.get(projectId)
-    if (!existant) return { erreur: 'introuvable' }
-    if (existant.statut !== 'suspendu') return { erreur: 'pas_suspendu' }
-
-    const maintenant = new Date().toISOString()
-    const projetMisAJour: Project = {
-      ...existant,
-      statut: 'actif',
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        { timestamp: maintenant, actor: identiteDeclaree, action: 'reprise' },
-      ],
+    void identiteDeclaree
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.reprendreProjet(jeton, projectId)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable' || resultat.erreur === 'pas_suspendu') {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec de la reprise : ${resultat.erreur}`)
     }
-    await db.projects.put(projetMisAJour)
+    const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
     return projetMisAJour
@@ -422,22 +458,20 @@ export const useProjectsStore = defineStore('projects', () => {
     projectId: string,
     identiteDeclaree: string,
   ): Promise<Project | ErreurStatutProjet> {
-    const existant = await db.projects.get(projectId)
-    if (!existant) return { erreur: 'introuvable' }
-    if (existant.statut === 'supprime') return { erreur: 'deja_supprime' }
-    if (existant.statut !== 'archive') return { erreur: 'pas_archive' }
-
-    const maintenant = new Date().toISOString()
-    const projetMisAJour: Project = {
-      ...existant,
-      statut: 'supprime',
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        { timestamp: maintenant, actor: identiteDeclaree, action: 'suppression' },
-      ],
+    void identiteDeclaree
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.supprimerProjet(jeton, projectId)
+    if (!resultat.ok) {
+      if (
+        resultat.erreur === 'introuvable' ||
+        resultat.erreur === 'deja_supprime' ||
+        resultat.erreur === 'pas_archive'
+      ) {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec de la suppression : ${resultat.erreur}`)
     }
-    await db.projects.put(projetMisAJour)
+    const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
     return projetMisAJour
@@ -454,6 +488,7 @@ export const useProjectsStore = defineStore('projects', () => {
     resoudreIdentiteCourante,
     chargerProjets,
     creerProjet,
+    listerProjetsClient,
     obtenirProjet,
     ajouterLien,
     retirerLien,

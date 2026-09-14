@@ -4,6 +4,7 @@ import type { RouteLocationRaw } from 'vue-router'
 import type { Client } from '../../logique-metier/domaine/types'
 import { correspondPourRecherche } from '../../logique-metier/recherche/correspondPourRecherche'
 import { db } from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 
 export type TypeResultatRecherche =
   'client' | 'section' | 'document' | 'procedure' | 'process' | 'connaissance'
@@ -65,12 +66,17 @@ export const useRechercheGlobaleStore = defineStore('rechercheGlobale', () => {
     if (requete.trim().length === 0) return []
     enRecherche.value = true
     try {
-      const [projetsDuClient, procedures, processes, knowledgeItems] = await Promise.all([
-        db.projects.where('client_id').equals(clientId).toArray(),
+      const authStore = useAuthStore()
+      const api = await authStore.client()
+      const [resultatProjets, procedures, processes, knowledgeItems] = await Promise.all([
+        api && authStore.jeton
+          ? api.listerProjetsClient(authStore.jeton, clientId)
+          : Promise.resolve(null),
         db.procedures.where('client_id').equals(clientId).toArray(),
         db.processes.where('client_id').equals(clientId).toArray(),
         db.knowledgeItems.where('client_id').equals(clientId).toArray(),
       ])
+      const projetsDuClient = resultatProjets?.ok ? resultatProjets.donnees.projects : []
       const idsProjets = projetsDuClient.map((p) => p.id)
       const [sections, documents] =
         idsProjets.length > 0
