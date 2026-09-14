@@ -87,7 +87,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | Config dépôt GitHub/Relais IA/Drive normes (`parametres_installation`) | D1 (déjà fait) | ✅ |
 | Documents Bibliothèque de normes (D1+R2, déjà fait) | D1+R2 | ✅ |
 | `assetHierarchySchemas`, `assetNodes` (Structure Système) | D1 | ✅ **Phase 1 terminée (14/09/2026)** — PR #39 mergée, migration 0004 appliquée en production D1, déploiement Worker vérifié |
-| `organizations`, `workspaces` | D1 | 🔧 **Phase 2 — code complet (14/09/2026), migration 0005 pas encore appliquée en prod, PR pas encore ouverte** |
+| `organizations`, `workspaces` | D1 | ✅ **Phase 2 terminée (14/09/2026)** — PR #40 mergée, migration 0005 appliquée en production D1, déploiement Worker vérifié |
 | `projects`, `sections`, `projectDocuments` | D1 (+ GitHub déjà en place, à conserver) | ⬜ Phase 3 |
 | `methodProfilesACFC`, `evaluationsACFC` | D1 | ⬜ Phase 4 |
 | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ⬜ Phase 4 |
@@ -312,24 +312,28 @@ SAP) reste repoussé à plus tard, à sa demande explicite (14/09/2026 :
    (**1218/1218 tests verts**), `cd workers/auth-worker && npx vitest run`
    (**91/91 tests verts**).
 
-### 5.2 Ce qui reste à faire avant de considérer la Phase 2 terminée
+### 5.2 Phase 2 — terminée (14/09/2026)
 
-1. Commit + push de l'incrément.
-2. Ouvrir la PR, suivre CI jusqu'au vert (même réflexe qu'en Phase 1 pour
-   la panne connue `Workers Builds: validapharm-auth-worker` hors `main`),
-   merger.
-3. Appliquer la migration `0005_organization_workspace.sql` en production D1.
-4. Vérifier le code réellement déployé sur le Worker en production.
-5. Marquer la ligne Organization/Workspace de §3 ✅ une fois les points
-   1-4 ci-dessus faits.
-6. GitHub sync généralisée : toujours reportée (même manque assumé qu'en
-   Phase 1, §4.2 point 5) — à traiter une fois plusieurs domaines migrés.
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #40 ouverte, CI verte (même panne connue `Workers Builds:
+   validapharm-auth-worker` hors `main`, commentaire de statu quo posté,
+   même précédent que #19/#24-28/#39), mergée sur `main` (squash, commit
+   `f62ee4e`).
+3. ✅ Migration `0005_organization_workspace.sql` appliquée en production
+   D1 (`validapharm-auth`) — tables `organizations`/`workspaces`
+   confirmées présentes (`sqlite_master`).
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : routes
+   `/clients/:clientId/organisation/...` et
+   `organisationRepo: new D1OrganisationRepo(env.DB)` bien présents.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   qu'en Phase 1, §4.2 point 5) — à traiter une fois plusieurs domaines
+   migrés.
 
-### 5.3 Prochaine action immédiate
+### 5.3 Prochaine action
 
-Commit/push de l'incrément Phase 2, puis ouverture de la PR et suivi
-CI/merge/migration prod/vérification déploiement — reprendre directement à
-cette étape si la session s'interrompt ici. Une fois clos, enchaîner sur
-la Phase 3 (`projects`/`sections`/`projectDocuments`, §3) — consigne de
-l'utilisateur : enchaîner sur toutes les phases sans s'arrêter pour
-demander confirmation entre chacune.
+Phase 2 close. Enchaîner directement sur la Phase 3
+(`projects`/`sections`/`projectDocuments`, §3) — consigne de l'utilisateur
+(14/09/2026) : enchaîner sur toutes les phases sans s'arrêter pour
+demander confirmation entre chacune, le sujet des nœuds (import SAP) reste
+repoussé à plus tard.
