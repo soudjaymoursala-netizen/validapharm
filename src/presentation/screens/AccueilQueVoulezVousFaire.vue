@@ -26,12 +26,14 @@ import { useClientActifStore } from '../stores/useClientActifStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useEpinglageStore, type RaccourciEpingle } from '../stores/useEpinglageStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
+import { useSectionsStore } from '../stores/useSectionsStore'
 import IconeSvg, { type NomIcone } from '../composants/IconeSvg.vue'
 
 const clientActifStore = useClientActifStore()
 const clientsStore = useClientsStore()
 const projetsStore = useProjectsStore()
 const epinglageStore = useEpinglageStore()
+const sectionsStore = useSectionsStore()
 
 const chargementTermine = ref(false)
 const erreurChargementClients = ref<string | null>(null)
@@ -64,7 +66,8 @@ onMounted(async () => {
 
   const projet = dernierProjetActif.value
   if (projet) {
-    const sections = await db.sections.where('project_id').equals(projet.id).toArray()
+    await sectionsStore.chargerSectionsDuProjet(projet.id)
+    const sections = sectionsStore.sectionsParProjet[projet.id] ?? []
     sectionsDernierProjet.value = {
       total: sections.length,
       validees: sections.filter((s) => s.status === 'valide_en_interne').length,

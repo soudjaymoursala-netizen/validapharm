@@ -5,6 +5,7 @@ import type { Client } from '../../logique-metier/domaine/types'
 import { correspondPourRecherche } from '../../logique-metier/recherche/correspondPourRecherche'
 import { db } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { sectionWireVersDomaine } from './useSectionsStore'
 
 export type TypeResultatRecherche =
   'client' | 'section' | 'document' | 'procedure' | 'process' | 'connaissance'
@@ -78,13 +79,21 @@ export const useRechercheGlobaleStore = defineStore('rechercheGlobale', () => {
       ])
       const projetsDuClient = resultatProjets?.ok ? resultatProjets.donnees.projects : []
       const idsProjets = projetsDuClient.map((p) => p.id)
-      const [sections, documents] =
+      const idsProjetsSet = new Set(idsProjets)
+      const [sectionsToutClient, documents] =
         idsProjets.length > 0
           ? await Promise.all([
-              db.sections.where('project_id').anyOf(idsProjets).toArray(),
+              api && authStore.jeton
+                ? api.listerToutesLesSections(authStore.jeton)
+                : Promise.resolve(null),
               db.projectDocuments.where('project_id').anyOf(idsProjets).toArray(),
             ])
-          : [[], []]
+          : [null, []]
+      const sections = (
+        sectionsToutClient?.ok
+          ? sectionsToutClient.donnees.sections.map(sectionWireVersDomaine)
+          : []
+      ).filter((s) => idsProjetsSet.has(s.project_id))
 
       const nomProjet = (projectId: string) =>
         projetsDuClient.find((p) => p.id === projectId)?.name ?? projectId

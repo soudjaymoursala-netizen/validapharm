@@ -5,18 +5,38 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { AssetNodeEnregistre } from '../../../workers/auth-worker/src/repos/structureSystemeRepo'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import type { Section } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
+import { useAuthStore } from '../stores/useAuthStore'
+import { sectionDomaineVersWire } from '../stores/useSectionsStore'
 import DossierVivantActif from './DossierVivantActif.vue'
 
 const CLIENT_ID = 'client-1'
 
 async function seedNoeud(noeud: AssetNodeEnregistre): Promise<void> {
   await ctx.structureSystemeRepo.creerNoeud(noeud)
+}
+
+/**
+ * `Section` vit désormais dans le Worker/D1 (Phase 3b du chantier de
+ * migration D1) — remplace l'ancien `db.sections.put(...)` direct de
+ * préparation de test, même pattern que `synchronisation.test.ts`.
+ */
+async function seedSection(section: Section): Promise<void> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) throw new Error('session absente en préparation de test')
+  const resultat = await api.restaurerSection(
+    authStore.jeton,
+    section.id,
+    sectionDomaineVersWire(section),
+  )
+  if (!resultat.ok) throw new Error(`échec de préparation de test : ${resultat.erreur}`)
 }
 
 let ctx: Contexte
@@ -67,7 +87,6 @@ beforeEach(async () => {
   await db.evaluationsCSVAssessment.clear()
   await db.missions.clear()
   await db.qualityEvents.clear()
-  await db.sections.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   ctx = installation.ctx
@@ -185,7 +204,7 @@ describe('DossierVivantActif', () => {
       createdAt: maintenant,
       updatedAt: maintenant,
     })
-    await db.sections.put({
+    await seedSection({
       id: 'section-1',
       project_id: 'projet-1',
       template_type: 'oq',

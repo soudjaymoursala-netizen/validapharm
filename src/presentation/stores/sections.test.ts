@@ -2,20 +2,25 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
+import type { Section } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
+import { useAuthStore } from './useAuthStore'
 import { useProjectsStore } from './useProjectsStore'
-import { useSectionsStore } from './useSectionsStore'
+import {
+  sectionDomaineVersWire,
+  sectionWireVersDomaine,
+  useSectionsStore,
+} from './useSectionsStore'
 
 let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.sections.clear()
   await db.projectDocuments.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
@@ -25,6 +30,35 @@ beforeEach(async () => {
 afterEach(() => {
   demonter()
 })
+
+/**
+ * `Section` vit désormais dans le Worker/D1 (Phase 3b du chantier de
+ * migration D1) — remplace les anciens `db.sections.put(...)` directs de
+ * préparation de test : utilise la même route `restaurerSection`
+ * (écrasement sans fusion) que `useSynchronisationStore.recupererDepuisGitHub`,
+ * seule voie qui accepte un enregistrement déjà complet avec un id choisi
+ * par l'appelant. Même pattern que `synchronisation.test.ts`.
+ */
+async function seedSection(section: Section): Promise<void> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) throw new Error('session absente en préparation de test')
+  const resultat = await api.restaurerSection(
+    authStore.jeton,
+    section.id,
+    sectionDomaineVersWire(section),
+  )
+  if (!resultat.ok) throw new Error(`échec de préparation de test : ${resultat.erreur}`)
+}
+
+async function obtenirSectionDeTest(id: string): Promise<Section | undefined> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) return undefined
+  const resultat = await api.obtenirSection(authStore.jeton, id)
+  if (!resultat.ok) return undefined
+  return sectionWireVersDomaine(resultat.donnees.section)
+}
 
 function providerRepondant(texte: string): ProviderAdapter {
   return {
@@ -112,7 +146,7 @@ describe('useProjectsStore', () => {
       titre: 'Contexte procédé',
       owner_id: 'user-1',
     })
-    await db.sections.put({
+    await seedSection({
       ...oq,
       workflow: { authors: ['user-1'], reviewers: [], approver_final: 'user-2' },
     })
@@ -141,15 +175,15 @@ describe('useSectionsStore — mettreAJourValeurs', () => {
   test('persiste les valeurs saisies', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await sections.mettreAJourValeurs(section.id, { contenu: "Texte rédigé par l'utilisateur" })
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.values.contenu).toBe("Texte rédigé par l'utilisateur")
   })
 
   test('refuse silencieusement toute écriture sur une section verrouillée', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await db.sections.put({ ...section, status: 'valide_en_interne', values: { contenu: 'v1' } })
+    await seedSection({ ...section, status: 'valide_en_interne', values: { contenu: 'v1' } })
     await sections.mettreAJourValeurs(section.id, { contenu: 'tentative après verrouillage' })
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.values.contenu).toBe('v1')
   })
 
@@ -158,16 +192,16 @@ describe('useSectionsStore — mettreAJourValeurs', () => {
     expect(section.audit_log).toHaveLength(1) // création uniquement, à ce stade
 
     await sections.mettreAJourValeurs(section.id, { contenu: 'v1' })
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.audit_log.at(-1)?.action).toBe('modification')
     expect(sectionEnBase?.audit_log).toHaveLength(2)
   })
 
   test('une section verrouillée ne journalise pas non plus de tentative refusée', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await db.sections.put({ ...section, status: 'valide_en_interne' })
+    await seedSection({ ...section, status: 'valide_en_interne' })
     await sections.mettreAJourValeurs(section.id, { contenu: 'tentative' })
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.audit_log).toHaveLength(1)
   })
 })
@@ -175,12 +209,12 @@ describe('useSectionsStore — mettreAJourValeurs', () => {
 describe('useSectionsStore — mettreAJourTable (tableau_dynamique)', () => {
   test('persiste les lignes sous la clé de table donnée, sans toucher aux autres tables', async () => {
     const { sections, section } = await creerProjetEtSection('dq')
-    await db.sections.put({ ...section, tables: { autre_table: [{ x: 1 }] } })
+    await seedSection({ ...section, tables: { autre_table: [{ x: 1 }] } })
 
     await sections.mettreAJourTable(section.id, 'risques', [
       { danger: 'Panne capteur', severite: 4, occurrence: 2, detectabilite: 3 },
     ])
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.tables.risques).toEqual([
       { danger: 'Panne capteur', severite: 4, occurrence: 2, detectabilite: 3 },
     ])
@@ -189,16 +223,16 @@ describe('useSectionsStore — mettreAJourTable (tableau_dynamique)', () => {
 
   test('refuse silencieusement toute écriture sur une section verrouillée', async () => {
     const { sections, section } = await creerProjetEtSection('dq')
-    await db.sections.put({ ...section, status: 'valide_en_interne', tables: { risques: [] } })
+    await seedSection({ ...section, status: 'valide_en_interne', tables: { risques: [] } })
     await sections.mettreAJourTable(section.id, 'risques', [{ danger: 'x' }])
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.tables.risques).toEqual([])
   })
 
   test("journalise une entrée 'modification'", async () => {
     const { sections, section } = await creerProjetEtSection('dq')
     await sections.mettreAJourTable(section.id, 'risques', [{ danger: 'x' }])
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.audit_log.at(-1)?.action).toBe('modification')
   })
 })
@@ -207,14 +241,14 @@ describe('useSectionsStore — workflow (approbateur, avis relecteur)', () => {
   test('assignerApprobateurFinal renseigne workflow.approver_final', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await sections.assignerApprobateurFinal(section.id, 'qa-1')
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.workflow.approver_final).toBe('qa-1')
   })
 
   test('ajouterAvisRelecteur ajoute une entrée à workflow.reviewers', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await sections.ajouterAvisRelecteur(section.id, 'revu-1', 'Favorable')
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.workflow.reviewers).toEqual([
       expect.objectContaining({ user_id: 'revu-1', avis: 'Favorable' }),
     ])
@@ -229,7 +263,7 @@ describe('useSectionsStore — workflow (approbateur, avis relecteur)', () => {
     expect(await sections.transmettreApprobation(section.id)).toEqual({ ok: true })
 
     expect(await sections.approuver(section.id)).toEqual({ ok: true })
-    const sectionFinale = await db.sections.get(section.id)
+    const sectionFinale = await obtenirSectionDeTest(section.id)
     expect(sectionFinale?.status).toBe('valide_en_interne')
   })
 })
@@ -240,7 +274,7 @@ describe('useSectionsStore — engagerVerification (garde-fou U-01)', () => {
     const resultat = await sections.engagerVerification(section.id)
     expect(resultat).toEqual({ ok: false, blocagesFinalisation: ['U-01'] })
 
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.status).toBe('brouillon_aide')
   })
 
@@ -252,7 +286,7 @@ describe('useSectionsStore — engagerVerification (garde-fou U-01)', () => {
 
   test('forçage avec motif passe outre le blocage et journalise', async () => {
     const { sections, section } = await creerProjetEtSection('oq')
-    await db.sections.put({
+    await seedSection({
       ...section,
       workflow: { authors: ['user-1'], reviewers: [], approver_final: 'user-2' },
     })
@@ -262,7 +296,7 @@ describe('useSectionsStore — engagerVerification (garde-fou U-01)', () => {
     )
     expect(resultat).toEqual({ ok: true })
 
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.status).toBe('en_verification')
     expect(sectionEnBase?.audit_log.at(-1)?.action).toContain('forcé')
   })
@@ -277,7 +311,7 @@ describe('useSectionsStore — engagerVerification (garde-fou U-01)', () => {
       owner_id: 'user-1',
     })
     await projets.ajouterLien(projet.id, section.id, contexte.id)
-    await db.sections.put({
+    await seedSection({
       ...section,
       workflow: { authors: ['user-1'], reviewers: [], approver_final: 'user-2' },
     })
@@ -305,7 +339,7 @@ describe("useSectionsStore — cycle complet jusqu'à valide_en_interne", () => 
 
   test('rejet ramène à brouillon_aide avec motif journalisé en revisions[]', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await db.sections.put({
+    await seedSection({
       ...section,
       workflow: { authors: ['user-1'], reviewers: [], approver_final: 'user-2' },
     })
@@ -316,14 +350,14 @@ describe("useSectionsStore — cycle complet jusqu'à valide_en_interne", () => 
     const rejet = await sections.rejeter(section.id, 'Références normatives manquantes')
     expect(rejet).toEqual({ ok: true })
 
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.status).toBe('brouillon_aide')
     expect(sectionEnBase?.revisions.at(-1)?.motif).toBe('Références normatives manquantes')
   })
 
   test("parcours nominal complet jusqu'à valide_en_interne (gabarit sans garde de lien)", async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await db.sections.put({
+    await seedSection({
       ...section,
       workflow: {
         authors: ['user-1'],
@@ -336,7 +370,7 @@ describe("useSectionsStore — cycle complet jusqu'à valide_en_interne", () => 
     expect(await sections.transmettreApprobation(section.id)).toEqual({ ok: true })
     expect(await sections.approuver(section.id)).toEqual({ ok: true })
 
-    const sectionFinale = await db.sections.get(section.id)
+    const sectionFinale = await obtenirSectionDeTest(section.id)
     expect(sectionFinale?.status).toBe('valide_en_interne')
 
     // Verrouillée : toute nouvelle transition est refusée.
@@ -349,22 +383,22 @@ describe('useSectionsStore — journaliserExport', () => {
   test('journalise "export" par défaut', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await sections.journaliserExport(section.id, false)
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.audit_log.at(-1)?.action).toBe('export')
   })
 
   test('journalise "export_force" quand forcé', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await sections.journaliserExport(section.id, true)
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.audit_log.at(-1)?.action).toBe('export_force')
   })
 
   test("n'est jamais bloqué par le verrouillage valide_en_interne (l'export d'une section validée est l'usage principal)", async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await db.sections.put({ ...section, status: 'valide_en_interne' })
+    await seedSection({ ...section, status: 'valide_en_interne' })
     await sections.journaliserExport(section.id, false)
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.audit_log.at(-1)?.action).toBe('export')
   })
 })
@@ -376,7 +410,7 @@ describe('useSectionsStore — journaliserContexteAssemble (assistant guidé, t�
       section.id,
       'procédure SOP-QA-012 — Impact Assessment, méthode ACFC v1',
     )
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.audit_log.at(-1)?.action).toBe(
       'contexte_assemble : procédure SOP-QA-012 — Impact Assessment, méthode ACFC v1',
     )
@@ -385,7 +419,7 @@ describe('useSectionsStore — journaliserContexteAssemble (assistant guidé, t�
   test("n'invente aucun nouveau champ sur Section — reste un simple audit_log", async () => {
     const { sections, section } = await creerProjetEtSection('oq')
     await sections.journaliserContexteAssemble(section.id, 'méthode AMDEC v1')
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(Object.keys(sectionEnBase ?? {}).sort()).toEqual(Object.keys(section).sort())
   })
 })
@@ -419,7 +453,7 @@ describe('useSectionsStore — importerSection', () => {
     expect(importee.project_id).toBe(projet.id)
     expect(importee.id).not.toBe('')
 
-    const sectionEnBase = await db.sections.get(importee.id)
+    const sectionEnBase = await obtenirSectionDeTest(importee.id)
     expect(sectionEnBase?.meta.titre).toBe('Section importée')
     // Historique importé préservé + entrée "import" ajoutée (jamais "création", qui masquerait l'origine).
     expect(sectionEnBase?.audit_log).toHaveLength(2)
@@ -447,13 +481,13 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis)', () => {
     )
     expect(resultat).toEqual({ ok: false, motif: 'confirmation_droit_usage_requise' })
 
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.status).toBe('brouillon_aide')
   })
 
   test('refuse sur une section qui n’est plus brouillon_aide', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await db.sections.put({ ...section, status: 'valide_en_interne' })
+    await seedSection({ ...section, status: 'valide_en_interne' })
     const resultat = await sections.genererBrouillonIA(
       section.id,
       {
@@ -488,7 +522,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis)', () => {
     )
     expect(resultat).toEqual({ ok: true, champsGeneres: 2, lignesTableauxGenerees: 0 })
 
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.status).toBe('propose_par_ia_non_valide')
     expect(sectionEnBase?.values.description_procede).toBe(
       'Remplissage aseptique adapté à la nouvelle ligne.',
@@ -543,7 +577,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis)', () => {
     )
     expect(resultat).toEqual({ ok: true, champsGeneres: 0, lignesTableauxGenerees: 2 })
 
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.tables.cpp).toEqual([
       { parametre: 'Température', valeur_cible: '121°C', tolerance: '±1°C' },
       { parametre: 'Pression', valeur_cible: '2 bar', tolerance: '±0.1 bar' },
@@ -567,7 +601,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis)', () => {
     )
     expect(resultat).toEqual({ ok: true, champsGeneres: 0, lignesTableauxGenerees: 0 })
 
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.tables.cpp).toEqual([{ parametre: 'Déjà saisi' }])
   })
 
@@ -589,13 +623,13 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis)', () => {
       providerRepondant('CHAMP|description.description_procede|Valeur proposée par IA.'),
     )
 
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.values.description_procede).toBe("Déjà rédigé par l'utilisateur.")
   })
 
   test('refuse quand aucun gabarit n’est défini pour le template_type', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await db.sections.put({ ...section, template_type: 'inconnu_hors_catalogue' as never })
+    await seedSection({ ...section, template_type: 'inconnu_hors_catalogue' as never })
     const resultat = await sections.genererBrouillonIA(
       section.id,
       {
@@ -614,7 +648,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis)', () => {
 describe('useSectionsStore — validerSectionIA (clarification ALCOA+)', () => {
   test('transition propose_par_ia_non_valide -> brouillon_aide avec une entrée revisions distincte motif "validation utilisateur"', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await db.sections.put({
+    await seedSection({
       ...section,
       status: 'propose_par_ia_non_valide',
       revisions: [
@@ -630,7 +664,7 @@ describe('useSectionsStore — validerSectionIA (clarification ALCOA+)', () => {
     const resultat = await sections.validerSectionIA(section.id)
     expect(resultat).toEqual({ ok: true })
 
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.status).toBe('brouillon_aide')
     expect(sectionEnBase?.revisions).toHaveLength(2)
     expect(sectionEnBase?.revisions.at(-1)).toMatchObject({ motif: 'validation utilisateur' })

@@ -98,11 +98,14 @@ function saisirChamp(champ: DefinitionChamp, brut: string): void {
  * réactifs Vue imbriqués dans `tablesLocales` — un tableau à plusieurs
  * lignes fait courir chaque ligne non modifiée à travers cette fonction
  * lors d'un ajout/suppression/édition d'une AUTRE ligne (`.map`/spread la
- * recopie telle quelle) ; passée ainsi à `db.sections.put()`, IndexedDB
- * rejette le Proxy avec `DataCloneError` et l'écriture échoue en silence
- * (aucun catch dans la chaîne d'appel), sans que l'état local affiché ne
- * le laisse voir — bug réel trouvé en navigateur (perte de toute ligne
- * au-delà de la première dans un tableau dynamique).
+ * recopie telle quelle) ; passée ainsi à `db.sections.put()` (avant la
+ * migration D1, Phase 3b), IndexedDB rejetait le Proxy avec
+ * `DataCloneError` et l'écriture échouait en silence (aucun catch dans la
+ * chaîne d'appel), sans que l'état local affiché ne le laisse voir — bug
+ * réel trouvé en navigateur (perte de toute ligne au-delà de la première
+ * dans un tableau dynamique). Le de-proxying reste nécessaire après la
+ * migration (le Worker/D1 a remplacé IndexedDB comme destination, jamais
+ * un Proxy réactif Vue dans le JSON envoyé).
  */
 function lignesTable(cleTable: string): Ligne[] {
   return (tablesLocales[cleTable] ?? []).map((ligne) => ({ ...toRaw(ligne) }))

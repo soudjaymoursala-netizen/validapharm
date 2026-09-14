@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import type { Project } from '../../logique-metier/domaine/types'
+import type { Project, Section } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
@@ -11,15 +11,16 @@ import {
 import { useAuthStore } from './useAuthStore'
 import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 import { projetDomaineVersWireComplet, projetWireVersDomaine } from './useProjectsStore'
+import { sectionDomaineVersWire, sectionWireVersDomaine } from './useSectionsStore'
 import { useSynchronisationStore } from './useSynchronisationStore'
 
 /**
- * `Project` vit désormais dans le Worker/D1 (Phase 3a du chantier de
- * migration D1) — remplace les anciens `db.projects.put(...)` directs de
- * préparation de test : utilise la même route `restaurerProjet` (écrasement
- * sans fusion) que `useSynchronisationStore.recupererDepuisGitHub`, seule
- * voie qui accepte un enregistrement déjà complet avec un id choisi par
- * l'appelant.
+ * `Project`/`Section` vivent désormais dans le Worker/D1 (Phases 3a/3b du
+ * chantier de migration D1) — remplace les anciens `db.projects.put(...)`/
+ * `db.sections.put(...)` directs de préparation de test : utilise la même
+ * route `restaurerProjet`/`restaurerSection` (écrasement sans fusion) que
+ * `useSynchronisationStore.recupererDepuisGitHub`, seule voie qui accepte
+ * un enregistrement déjà complet avec un id choisi par l'appelant.
  */
 async function seedProjet(projet: Project): Promise<void> {
   const authStore = useAuthStore()
@@ -40,6 +41,27 @@ async function obtenirProjetDeTest(id: string): Promise<Project | undefined> {
   const resultat = await api.obtenirProjet(authStore.jeton, id)
   if (!resultat.ok) return undefined
   return projetWireVersDomaine(resultat.donnees.projet)
+}
+
+async function seedSection(section: Section): Promise<void> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) throw new Error('session absente en préparation de test')
+  const resultat = await api.restaurerSection(
+    authStore.jeton,
+    section.id,
+    sectionDomaineVersWire(section),
+  )
+  if (!resultat.ok) throw new Error(`échec de préparation de test : ${resultat.erreur}`)
+}
+
+async function obtenirSectionDeTest(id: string): Promise<Section | undefined> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) return undefined
+  const resultat = await api.obtenirSection(authStore.jeton, id)
+  if (!resultat.ok) return undefined
+  return sectionWireVersDomaine(resultat.donnees.section)
 }
 
 function reponseMock(
@@ -72,7 +94,6 @@ beforeEach(async () => {
   setActivePinia(createPinia())
   await reinitialiserAuthDeTest()
   await db.etatSynchronisation.clear()
-  await db.sections.clear()
   fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
   demonter = installerFauxWorkerAuth().demonter
@@ -167,7 +188,7 @@ describe('useSynchronisationStore — synchroniser', () => {
       shaBrancheConnue: 'sha-connue',
       derniereSynchronisation: null,
     })
-    await db.sections.put({
+    await seedSection({
       id: 's1',
       project_id: 'p1',
       template_type: 'contexte_procede',
@@ -197,6 +218,8 @@ describe('useSynchronisationStore — synchroniser', () => {
       .mockResolvedValueOnce(reponseMock({ sha: 'sha-nouvel-arbre' }))
       .mockResolvedValueOnce(reponseMock({ sha: 'sha-nouveau-commit' }))
       .mockResolvedValueOnce(reponseMock({ object: { sha: 'sha-nouveau-commit' } }))
+
+    expect((await obtenirSectionDeTest('s1'))?.id).toBe('s1')
 
     const store = useSynchronisationStore()
     await store.synchroniser()

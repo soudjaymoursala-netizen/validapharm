@@ -23,6 +23,7 @@ import type {
   ProjectEnregistre,
   ProjectsRepo,
 } from './repos/projectsRepo'
+import type { SectionEnregistree, SectionsRepo } from './repos/sectionsRepo'
 import type { StockageBinaireRepo } from './repos/stockageBinaireRepo'
 import type {
   AssetHierarchySchemaEnregistre,
@@ -52,6 +53,7 @@ export interface Contexte {
   structureSystemeRepo: StructureSystemeRepo
   organisationRepo: OrganisationRepo
   projectsRepo: ProjectsRepo
+  sectionsRepo: SectionsRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -383,6 +385,39 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   }
   if (matchProjetLiens && request.method === 'DELETE') {
     return gererRetirerLienProjet(request, ctx, entetes, matchProjetLiens[1] as string)
+  }
+
+  // --- Sections (Phase 3b du chantier de migration D1) ---
+  //
+  // Une route `POST /projects/:id/sections` existe déjà depuis la Phase 3a
+  // (`gererAjouterSectionProjet` — référence un id de section dans
+  // `Project.sections[]`, jamais le contenu de la section elle-même,
+  // toujours consommé par `TableauDeBord.vue`) : la création réelle d'une
+  // section utilise donc `POST /sections` (id de projet dans le corps),
+  // jamais le même chemin, pour ne jamais entrer en collision avec elle.
+  if (chemin === '/sections' && request.method === 'GET') {
+    return gererListerToutesLesSections(request, ctx, entetes)
+  }
+  if (chemin === '/sections' && request.method === 'POST') {
+    return gererCreerSection(request, ctx, entetes)
+  }
+  if (chemin === '/sections/migration-locale' && request.method === 'POST') {
+    return gererMigrerSectionsLocales(request, ctx, entetes)
+  }
+  const matchSectionsProjet = chemin.match(/^\/projects\/([^/]+)\/sections$/)
+  if (matchSectionsProjet && request.method === 'GET') {
+    return gererListerSectionsProjet(request, ctx, entetes, matchSectionsProjet[1] as string)
+  }
+  const matchSectionId = chemin.match(/^\/sections\/([^/]+)$/)
+  if (matchSectionId && request.method === 'GET') {
+    return gererObtenirSection(request, ctx, entetes, matchSectionId[1] as string)
+  }
+  if (matchSectionId && request.method === 'PUT') {
+    return gererRemplacerSection(request, ctx, entetes, matchSectionId[1] as string)
+  }
+  const matchSectionRestauration = chemin.match(/^\/sections\/([^/]+)\/restauration$/)
+  if (matchSectionRestauration && request.method === 'PUT') {
+    return gererRestaurerSection(request, ctx, entetes, matchSectionRestauration[1] as string)
   }
 
   // --- Paramètres d'installation (dépôt GitHub dédié, Relais IA, Drive normes) ---
@@ -1980,6 +2015,168 @@ async function gererRetirerLienProjet(
   }
   await ctx.projectsRepo.remplacerProjet(projetMisAJour)
   return reponseJson({ projet: projetMisAJour }, 200, entetes)
+}
+
+// --- Handlers : Sections (Phase 3b du chantier de migration D1) ---
+//
+// Contrairement à Project (Phase 3a), aucune vérification de visibilité
+// par projet ici : `Section.owner_id`/`shared_with` ne sont, comme avant
+// cette migration, jamais câblés comme une frontière de sécurité réelle
+// (voir `permissionsProjet.ts`) — même régime d'accès que l'ancienne
+// table Dexie unique (authentification seule), pas une régression. Toute
+// la logique métier (machine à états, garde-fous de finalisation) reste
+// côté client, déjà testée — ces handlers ne font qu'authentifier et
+// persister l'état déjà validé.
+
+async function gererListerToutesLesSections(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const sections = await ctx.sectionsRepo.listerToutes()
+  return reponseJson({ sections }, 200, entetes)
+}
+
+async function gererListerSectionsProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  projectId: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const sections = await ctx.sectionsRepo.listerParProjet(projectId)
+  return reponseJson({ sections }, 200, entetes)
+}
+
+async function gererObtenirSection(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const section = await ctx.sectionsRepo.obtenirSection(id)
+  if (!section) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  return reponseJson({ section }, 200, entetes)
+}
+
+async function gererCreerSection(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const corps = await lireCorpsJson<SectionEnregistree>(request)
+  if (!corps?.id || !corps.projectId || !corps.templateType) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  await ctx.sectionsRepo.creerSection(corps)
+  return reponseJson({ section: corps }, 201, entetes)
+}
+
+async function gererRemplacerSection(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const existante = await ctx.sectionsRepo.obtenirSection(id)
+  if (!existante) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+
+  const corps = await lireCorpsJson<SectionEnregistree>(request)
+  if (!corps?.templateType) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const section: SectionEnregistree = { ...corps, id, projectId: existante.projectId }
+  await ctx.sectionsRepo.remplacerSection(section)
+  return reponseJson({ section }, 200, entetes)
+}
+
+/**
+ * Migration ponctuelle (filet de sécurité `sectionsAMigrer`,
+ * `useSectionsStore.migrerSectionsLocalesVersServeur`) — même patron que
+ * `gererMigrerProjetsLocaux` : accepte une section déjà complète telle
+ * quelle (id, `owner_id`/`shared_with`, `audit_log`, horodatages d'origine
+ * inclus), jamais fabriquée ici. Idempotente : une section dont l'id
+ * existe déjà côté serveur est ignorée silencieusement (jamais un doublon
+ * ni un écrasement d'une donnée déjà migrée/modifiée côté serveur),
+ * contrairement à `gererRestaurerSection` (qui écrase toujours) — ici
+ * l'existant côté serveur gagne toujours, cohérent avec « une migration de
+ * stockage ne doit jamais faire perdre l'historique ».
+ */
+async function gererMigrerSectionsLocales(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const corps = await lireCorpsJson<{ sections?: SectionEnregistree[] }>(request)
+  if (!corps || !Array.isArray(corps.sections)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const sections: SectionEnregistree[] = []
+  for (const s of corps.sections) {
+    if (!s.id || !s.projectId || !s.templateType) {
+      return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    }
+    const existante = await ctx.sectionsRepo.obtenirSection(s.id)
+    if (existante) {
+      sections.push(existante)
+      continue
+    }
+    await ctx.sectionsRepo.creerSection(s)
+    sections.push(s)
+  }
+
+  return reponseJson({ sections }, 201, entetes)
+}
+
+/**
+ * Filet de récupération après conflit GitHub (`recupererDepuisGitHub`) —
+ * écrit l'enregistrement fourni tel quel (id fixé par l'URL), en création
+ * ou en remplacement selon qu'il existe déjà, toujours en écrasant par la
+ * version fournie par l'appelant plutôt qu'en la fusionnant, cohérent avec
+ * le comportement `db.sections.put(...)` d'avant cette migration
+ * (« écrasement délibéré, pas de fusion »). Même patron que
+ * `gererRestaurerProjet`.
+ */
+async function gererRestaurerSection(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const corps = await lireCorpsJson<SectionEnregistree>(request)
+  if (!corps?.projectId || !corps.templateType) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const section: SectionEnregistree = { ...corps, id }
+  const existante = await ctx.sectionsRepo.obtenirSection(id)
+  if (existante) {
+    await ctx.sectionsRepo.remplacerSection(section)
+  } else {
+    await ctx.sectionsRepo.creerSection(section)
+  }
+  return reponseJson({ section }, 200, entetes)
 }
 
 // --- Handlers : paramètres d'installation ---

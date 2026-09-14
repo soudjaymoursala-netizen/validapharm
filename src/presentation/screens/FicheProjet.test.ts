@@ -50,7 +50,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.sections.clear()
   await db.projectDocuments.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter

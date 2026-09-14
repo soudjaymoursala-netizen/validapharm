@@ -10,11 +10,12 @@ import {
   type ChampDivergent,
   type ChoixResolutionChamp,
 } from '../../logique-metier/resolution-conflit/diffChamps'
-import type { Project } from '../../logique-metier/domaine/types'
+import type { Project, Section } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
 import { useConnexionGitHubStore } from './useConnexionGitHubStore'
 import { projetDomaineVersWireComplet, projetWireVersDomaine } from './useProjectsStore'
+import { sectionDomaineVersWire, sectionWireVersDomaine } from './useSectionsStore'
 
 export type ResultatSynchronisation =
   | { ok: true; nbFichiers: number }
@@ -59,18 +60,18 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
   const derniereSynchronisation = ref<string | null>(null)
 
   /**
-   * `Project` vit désormais dans le Worker/D1 (Phase 3a du chantier de
-   * migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — `null` si le
-   * relais n'est pas configuré, cette moitié de la synchronisation est
-   * alors silencieusement ignorée (même dégradation gracieuse que le
-   * reste de l'application). `sections` reste en IndexedDB local pour
-   * l'instant (Phase 3b) : son traitement ci-dessous n'a pas changé. Le
-   * format JSON déjà poussé sur GitHub reste au format domaine
-   * (snake_case) — conversion via `projetWireVersDomaine`/
-   * `projetDomaineVersWireComplet`, jamais un renommage de champ dans les
-   * fichiers déjà synchronisés.
+   * `Project` et `Section` vivent désormais dans le Worker/D1 (Phases 3a
+   * et 3b du chantier de migration D1,
+   * docs/CHANTIER-MIGRATION-D1-RECAP.md), plus jamais dans
+   * `persistance/db.ts` — `null` si le relais n'est pas configuré, la
+   * synchronisation est alors silencieusement ignorée (même dégradation
+   * gracieuse que le reste de l'application). Le format JSON déjà poussé
+   * sur GitHub reste au format domaine (snake_case) — conversion via
+   * `projetWireVersDomaine`/`projetDomaineVersWireComplet` et
+   * `sectionWireVersDomaine`/`sectionDomaineVersWire`, jamais un
+   * renommage de champ dans les fichiers déjà synchronisés.
    */
-  async function obtenirApiProjets(): Promise<{ api: AuthApiClient; jeton: string } | null> {
+  async function obtenirApi(): Promise<{ api: AuthApiClient; jeton: string } | null> {
     const authStore = useAuthStore()
     const api = await authStore.client()
     if (!api || !authStore.jeton) return null
@@ -78,11 +79,19 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
   }
 
   async function listerTousLesProjets(): Promise<Project[]> {
-    const apiProjets = await obtenirApiProjets()
-    if (!apiProjets) return []
-    const resultat = await apiProjets.api.listerProjets(apiProjets.jeton)
+    const apiClient = await obtenirApi()
+    if (!apiClient) return []
+    const resultat = await apiClient.api.listerProjets(apiClient.jeton)
     if (!resultat.ok) return []
     return resultat.donnees.projects.map(projetWireVersDomaine)
+  }
+
+  async function listerToutesLesSections(): Promise<Section[]> {
+    const apiClient = await obtenirApi()
+    if (!apiClient) return []
+    const resultat = await apiClient.api.listerToutesLesSections(apiClient.jeton)
+    if (!resultat.ok) return []
+    return resultat.donnees.sections.map(sectionWireVersDomaine)
   }
 
   async function obtenirConnecteur(): Promise<GitHubConnector | null> {
@@ -125,7 +134,10 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
         shaBrancheConnue = await connecteur.shaBrancheActuel()
       }
 
-      const [projets, sections] = await Promise.all([listerTousLesProjets(), db.sections.toArray()])
+      const [projets, sections] = await Promise.all([
+        listerTousLesProjets(),
+        listerToutesLesSections(),
+      ])
       const fichiers: FichierAEcrire[] = [
         ...projets.map((projet) => ({
           chemin: `data/projects/${projet.id}.json`,
@@ -180,13 +192,13 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
       const entreesProjets = arborescence.filter((e) => e.chemin.startsWith('data/projects/'))
       const entreesSections = arborescence.filter((e) => e.chemin.startsWith('data/sections/'))
 
-      const apiProjets = await obtenirApiProjets()
+      const apiClient = await obtenirApi()
       for (const entree of entreesProjets) {
         const contenu = await connecteur.lireBlob(entree.sha)
         const projet = JSON.parse(contenu) as Project
-        if (apiProjets) {
-          await apiProjets.api.restaurerProjet(
-            apiProjets.jeton,
+        if (apiClient) {
+          await apiClient.api.restaurerProjet(
+            apiClient.jeton,
             projet.id,
             projetDomaineVersWireComplet(projet),
           )
@@ -194,7 +206,14 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
       }
       for (const entree of entreesSections) {
         const contenu = await connecteur.lireBlob(entree.sha)
-        await db.sections.put(JSON.parse(contenu))
+        const section = JSON.parse(contenu) as Section
+        if (apiClient) {
+          await apiClient.api.restaurerSection(
+            apiClient.jeton,
+            section.id,
+            sectionDomaineVersWire(section),
+          )
+        }
       }
 
       const shaActuel = await connecteur.shaBrancheActuel()
@@ -225,7 +244,10 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
     const connecteur = await obtenirConnecteur()
     if (connecteur === null) return []
 
-    const [projets, sections] = await Promise.all([listerTousLesProjets(), db.sections.toArray()])
+    const [projets, sections] = await Promise.all([
+      listerTousLesProjets(),
+      listerToutesLesSections(),
+    ])
     const conflits: ConflitEnregistrement[] = []
 
     for (const projet of projets) {
@@ -285,9 +307,9 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
     for (const { conflit, choix } of resolutions) {
       const motif = construireMotifResolution(choix)
       if (conflit.type === 'project') {
-        const apiProjets = await obtenirApiProjets()
-        if (!apiProjets) continue
-        const resultatLocal = await apiProjets.api.obtenirProjet(apiProjets.jeton, conflit.id)
+        const apiClient = await obtenirApi()
+        if (!apiClient) continue
+        const resultatLocal = await apiClient.api.obtenirProjet(apiClient.jeton, conflit.id)
         if (!resultatLocal.ok) continue
         const local = projetWireVersDomaine(resultatLocal.donnees.projet)
         const fusionne = appliquerResolutions(
@@ -307,20 +329,23 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
             },
           ],
         }
-        await apiProjets.api.restaurerProjet(
-          apiProjets.jeton,
+        await apiClient.api.restaurerProjet(
+          apiClient.jeton,
           conflit.id,
           projetDomaineVersWireComplet(projetFinal),
         )
       } else {
-        const local = await db.sections.get(conflit.id)
-        if (local === undefined) continue
+        const apiClient = await obtenirApi()
+        if (!apiClient) continue
+        const resultatLocal = await apiClient.api.obtenirSection(apiClient.jeton, conflit.id)
+        if (!resultatLocal.ok) continue
+        const local = sectionWireVersDomaine(resultatLocal.donnees.section)
         const fusionne = appliquerResolutions(
           local,
           conflit.distant as unknown as typeof local,
           choix,
         )
-        await db.sections.put({
+        const sectionFinale: Section = {
           ...fusionne,
           updated_at: maintenant,
           audit_log: [
@@ -331,7 +356,12 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
             ...local.revisions,
             { version: local.meta.version, date: maintenant, auteur: local.owner_id, motif },
           ],
-        })
+        }
+        await apiClient.api.restaurerSection(
+          apiClient.jeton,
+          conflit.id,
+          sectionDomaineVersWire(sectionFinale),
+        )
       }
     }
 

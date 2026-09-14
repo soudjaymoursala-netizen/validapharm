@@ -25,7 +25,6 @@
 // apparaissent bien ici désormais ; seule l'absence de lien automatique/
 // déduit reste inchangée (toujours une association manuelle explicite).
 import { computed, onMounted, ref } from 'vue'
-import { db } from '../../persistance/db'
 import type { Section } from '../../logique-metier/domaine/types'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
@@ -35,6 +34,8 @@ import { useCSVAssessmentStore } from '../stores/useCSVAssessmentStore'
 import { useRiskAssessmentStore } from '../stores/useRiskAssessmentStore'
 import { useMissionStore } from '../stores/useMissionStore'
 import { useQualityEventStore } from '../stores/useQualityEventStore'
+import { useAuthStore } from '../stores/useAuthStore'
+import { sectionWireVersDomaine } from '../stores/useSectionsStore'
 
 const props = defineProps<{ clientId: string; noeudId: string }>()
 
@@ -51,6 +52,16 @@ const nomClient = ref<string | null>(null)
 const sectionsLiees = ref<Section[]>([])
 const chargementInitial = ref(true)
 
+async function chargerSectionsLiees(): Promise<void> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  const resultat =
+    api && authStore.jeton ? await api.listerToutesLesSections(authStore.jeton) : null
+  sectionsLiees.value = (
+    resultat?.ok ? resultat.donnees.sections.map(sectionWireVersDomaine) : []
+  ).filter((s) => s.asset_node_id === props.noeudId)
+}
+
 onMounted(async () => {
   try {
     const client = await clientsStore.obtenirClient(props.clientId)
@@ -63,13 +74,7 @@ onMounted(async () => {
       riskStore.charger(props.clientId),
       missionStore.charger(props.clientId),
       qualityEventStore.charger(props.clientId),
-      db.sections
-        .where('asset_node_id')
-        .equals(props.noeudId)
-        .toArray()
-        .then((s) => {
-          sectionsLiees.value = s
-        }),
+      chargerSectionsLiees(),
     ])
   } finally {
     chargementInitial.value = false

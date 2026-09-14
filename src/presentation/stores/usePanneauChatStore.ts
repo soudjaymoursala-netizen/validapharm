@@ -6,7 +6,7 @@ import type {
   ProviderAdapter,
   Reponse,
 } from '../../connecteurs/ia/ProviderAdapter'
-import type { AiChatSessionLog } from '../../logique-metier/domaine/types'
+import type { AiChatSessionLog, Section } from '../../logique-metier/domaine/types'
 import { envoyerAvecBascule } from '../../logique-metier/routeur-ia/envoyerAvecBascule'
 import { deriveVersionDetectee } from '../../logique-metier/routeur-ia/qualificationFiabilite'
 import { db } from '../../persistance/db'
@@ -14,6 +14,7 @@ import { construireAdaptateursIA } from './construireAdaptateursIA'
 import { useAuthStore } from './useAuthStore'
 import { useClientConfigStore } from './useClientConfigStore'
 import { useConnexionRelaisIAStore } from './useConnexionRelaisIAStore'
+import { sectionWireVersDomaine } from './useSectionsStore'
 
 export const NOM_FOURNISSEUR_LOCAL = 'Modèle local (Ollama)'
 
@@ -179,7 +180,15 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
     if (!resultat.ok) return []
     const projets = resultat.donnees.projects
     const sectionsParProjet = await Promise.all(
-      projets.map((projet) => db.sections.where('project_id').equals(projet.id).toArray()),
+      projets.map(async (projet) => {
+        const resultatSections = await api.listerSectionsProjet(
+          authStore.jeton as string,
+          projet.id,
+        )
+        return resultatSections.ok
+          ? resultatSections.donnees.sections.map(sectionWireVersDomaine)
+          : []
+      }),
     )
     return projets.flatMap((projet, index) =>
       (sectionsParProjet[index] ?? []).map((section) => ({
@@ -190,8 +199,12 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
     )
   }
 
-  async function obtenirSection(sectionId: string) {
-    return db.sections.get(sectionId)
+  async function obtenirSection(sectionId: string): Promise<Section | undefined> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return undefined
+    const resultat = await api.obtenirSection(authStore.jeton, sectionId)
+    return resultat.ok ? sectionWireVersDomaine(resultat.donnees.section) : undefined
   }
 
   async function fermerSession(mode: ModeUsageIA): Promise<void> {

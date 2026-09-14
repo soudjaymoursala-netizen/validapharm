@@ -3,7 +3,6 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -17,7 +16,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.sections.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
