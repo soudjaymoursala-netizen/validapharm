@@ -54,7 +54,6 @@ beforeEach(async () => {
   await db.sections.clear()
   await db.processes.clear()
   await db.procedures.clear()
-  await db.assetNodes.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
@@ -151,7 +150,7 @@ describe('AssistantCreationLivrable — chaîne de création de livrable assembl
     // Étape 3 — architecture (réelle, sélectionnable — lien structurel réel, tâche #118).
     expect(wrapper.text()).toContain('3. Architecture associée')
     expect(wrapper.text()).toContain('Presse P-200')
-    const noeudEnBase = (await db.assetNodes.toArray())[0]
+    const noeudEnBase = structureStore.noeuds[0]
     await wrapper.find('.etape select').setValue(noeudEnBase?.id)
     await wrapper.find('.actions button:last-child').trigger('click')
     await flushPromises()

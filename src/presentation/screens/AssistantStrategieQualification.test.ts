@@ -67,7 +67,6 @@ beforeEach(async () => {
   setActivePinia(createPinia())
   await db.methodProfilesACFC.clear()
   await db.evaluationsACFC.clear()
-  await db.assetNodes.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()

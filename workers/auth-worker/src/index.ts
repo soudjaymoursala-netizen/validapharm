@@ -4,6 +4,7 @@ import { D1AuditRepo } from './repos/d1/d1AuditRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
 import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
 import { D1ParametresInstallationRepo } from './repos/d1/d1ParametresInstallationRepo'
+import { D1StructureSystemeRepo } from './repos/d1/d1StructureSystemeRepo'
 import { D1UtilisateursRepo } from './repos/d1/d1UtilisateursRepo'
 import { R2StockageBinaireRepo } from './repos/r2/r2StockageBinaireRepo'
 import { routerRequete } from './routeur'
@@ -40,6 +41,7 @@ export default {
       parametresInstallationRepo: new D1ParametresInstallationRepo(env.DB),
       documentsNormatifsRepo: new D1DocumentsNormatifsRepo(env.DB),
       stockageBinaireRepo: new R2StockageBinaireRepo(env.BUCKET),
+      structureSystemeRepo: new D1StructureSystemeRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

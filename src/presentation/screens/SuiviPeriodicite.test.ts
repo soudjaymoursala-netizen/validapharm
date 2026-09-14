@@ -3,13 +3,16 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
+import type { AssetNodeEnregistre } from '../../../workers/auth-worker/src/repos/structureSystemeRepo'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import SuiviPeriodicite from './SuiviPeriodicite.vue'
+
+const CLIENT_ID = 'client-1'
 
 async function attendreQue(condition: () => boolean): Promise<void> {
   for (let tentative = 0; tentative < 50; tentative++) {
@@ -46,33 +49,58 @@ function noeudDeTest(
     applicable: boolean
     deadline: string | null
   }>,
-) {
+): AssetNodeEnregistre {
   const maintenant = new Date().toISOString()
   return {
     id,
-    client_id: 'client-1',
-    workspace_id: null,
-    level_key: 'equipement',
+    clientId: CLIENT_ID,
+    workspaceId: null,
+    levelKey: 'equipement',
     name: overrides.name ?? id,
     code: overrides.code ?? id.toUpperCase(),
-    parent_id: null,
-    associated_nodes: [],
-    source: 'manuel' as const,
-    qms_connector_id: null,
-    periodic_qualification: {
+    parentId: null,
+    associatedNodes: [],
+    source: 'manuel',
+    qmsConnectorId: null,
+    periodicQualification: {
       applicable: overrides.applicable ?? true,
       deadline: overrides.deadline ?? null,
     },
-    qualification_status: 'qualifie' as const,
-    audit_log: [],
-    created_at: maintenant,
-    updated_at: maintenant,
+    qualificationStatus: 'qualifie',
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
   }
 }
 
+let ctx: Contexte
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.assetNodes.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: 'Client de test',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('SuiviPeriodicite', () => {
@@ -83,7 +111,7 @@ describe('SuiviPeriodicite', () => {
       .toISOString()
       .slice(0, 10)
 
-    await db.assetNodes.bulkPut([
+    await ctx.structureSystemeRepo.creerNoeuds([
       noeudDeTest('en-retard', { name: 'Autoclave AUT-042', deadline: hier }),
       noeudDeTest('proche', { name: 'Isolateur ISO-01', deadline: dansUnMois }),
       noeudDeTest('a-jour', { name: 'Presse P-200', deadline: dansDeuxAns }),
@@ -91,7 +119,7 @@ describe('SuiviPeriodicite', () => {
     ])
 
     const wrapper = mount(SuiviPeriodicite, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.text().includes('Autoclave AUT-042'))
@@ -106,12 +134,12 @@ describe('SuiviPeriodicite', () => {
   })
 
   test('échéance non renseignée affichée distinctement', async () => {
-    await db.assetNodes.put(
+    await ctx.structureSystemeRepo.creerNoeud(
       noeudDeTest('sans-echeance', { name: 'Ligne L-07', applicable: true, deadline: null }),
     )
 
     const wrapper = mount(SuiviPeriodicite, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.text().includes('Ligne L-07'))
@@ -121,7 +149,7 @@ describe('SuiviPeriodicite', () => {
 
   test('aucun nœud périodique -> état vide explicite', async () => {
     const wrapper = mount(SuiviPeriodicite, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.text().includes("n'est soumis à requalification périodique"))
@@ -130,37 +158,23 @@ describe('SuiviPeriodicite', () => {
   })
 })
 
-describe('SuiviPeriodicite — panne de connectivité pendant le chargement du nom du client', () => {
-  let demonter: () => void
-
-  beforeEach(async () => {
-    await reinitialiserAuthDeTest()
-    demonter = installerFauxWorkerAuth().demonter
-    await connecterAdminDeTest()
-  })
-
-  afterEach(() => {
-    demonter()
-  })
-
-  test("un Worker injoignable pour le nom du client n'empêche pas l'affichage du suivi (purement local)", async () => {
-    const hier = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    await db.assetNodes.put(noeudDeTest('en-retard', { name: 'Autoclave AUT-042', deadline: hier }))
-
-    // Même bug que celui corrigé au niveau de `useClientsStore.obtenirClient`
-    // (voir StructureSysteme.test.ts) : cet écran appelle exactement le même
-    // enchaînement dans son `onMounted` (nom du client, puis hiérarchie
-    // locale) — vérifie que le correctif au niveau store profite aussi à cet
-    // écran, sans avoir à le corriger une seconde fois ici.
+describe('SuiviPeriodicite — panne de connectivité', () => {
+  test("un Worker injoignable n'empêche jamais l'affichage de l'écran (dégradation gracieuse, jamais une exception non gérée)", async () => {
+    // Depuis la migration D1 (Structure Système, docs/CHANTIER-MIGRATION-D1-RECAP.md),
+    // les nœuds ne sont plus purement locaux : une panne réseau signifie
+    // réellement une absence de données pour cet écran, jamais un crash —
+    // même discipline que `useClientsStore.obtenirClient` (voir
+    // `useStructureSystemeStore.charger`, catch autour de
+    // `api.obtenirStructureSysteme`).
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
 
     const wrapper = mount(SuiviPeriodicite, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
-    await attendreQue(() => wrapper.text().includes('Autoclave AUT-042'))
+    await attendreQue(() => wrapper.text().includes("n'est soumis à requalification périodique"))
 
-    expect(wrapper.text()).toContain('Autoclave AUT-042')
-    expect(wrapper.find('h1').text()).toContain('client-1')
+    expect(wrapper.find('h1').text()).toContain(CLIENT_ID)
+    expect(wrapper.text()).toContain("n'est soumis à requalification périodique")
   })
 })

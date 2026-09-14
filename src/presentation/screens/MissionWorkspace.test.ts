@@ -126,7 +126,6 @@ beforeEach(async () => {
   await db.citationsAIResponse.clear()
   await db.organizations.clear()
   await db.workspaces.clear()
-  await db.assetNodes.clear()
   await db.clientConfigs.clear()
   await db.requirements.clear()
   await db.couvertures.clear()

@@ -54,7 +54,6 @@ beforeEach(async () => {
   await db.missions.clear()
   await db.organizations.clear()
   await db.workspaces.clear()
-  await db.assetNodes.clear()
 })
 
 describe('ListeMissions', () => {

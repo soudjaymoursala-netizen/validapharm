@@ -1,8 +1,14 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import type { AssetNode, Workspace } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useStructureSystemeStore } from './useStructureSystemeStore'
 
 function idDuNoeud(noeuds: readonly AssetNode[], code: string): string {
@@ -11,13 +17,43 @@ function idDuNoeud(noeuds: readonly AssetNode[], code: string): string {
   return trouve?.id ?? ''
 }
 
+let ctx: Contexte
+let demonter: () => void
+
+/** Structure Système migrée vers le Worker/D1 (Phase 1) — un client doit réellement exister pour que `exigerAccesClient` l'autorise. */
+async function creerClientDeTest(id: string): Promise<void> {
+  await ctx.clientsRepo.creer({
+    id,
+    name: id,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.assetHierarchySchemas.clear()
-  await db.assetNodes.clear()
   await db.organizations.clear()
   await db.workspaces.clear()
-  await db.relationsTechniques.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await creerClientDeTest('client-1')
+  await creerClientDeTest('client-A')
+  await creerClientDeTest('client-B')
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useStructureSystemeStore — charger', () => {
@@ -57,7 +93,7 @@ describe('useStructureSystemeStore — ajouterNiveau', () => {
     })
     expect(store.schema?.levels.map((l) => l.key)).toEqual(['site', 'zone'])
 
-    const relu = await db.assetHierarchySchemas.get('client-1')
+    const relu = await ctx.structureSystemeRepo.obtenirSchema('client-1')
     expect(relu?.levels.map((l) => l.key)).toEqual(['site', 'zone'])
   })
 })
@@ -446,7 +482,7 @@ describe('useStructureSystemeStore — Architecture Technique', () => {
     expect(store.relationsTechniques[0]?.type_relation).toBe('controle_par')
   })
 
-  test('refuse une relation entre deux nœuds de clients différents', async () => {
+  test('refuse une relation vers un nœud d’un autre client — jamais distingué d’un nœud introuvable (même discipline que `peutVoirClient` côté Worker)', async () => {
     const store = useStructureSystemeStore()
     await store.charger('client-A')
     await store.creerNoeud('client-A', {
@@ -457,6 +493,14 @@ describe('useStructureSystemeStore — Architecture Technique', () => {
     })
     const equipementAId = idDuNoeud(store.noeuds, 'EQ-A')
 
+    // `charger('client-B')` remplace `store.noeuds` par la seule vue du
+    // client B (Phase 1 du chantier de migration D1 : un seul client chargé
+    // à la fois, jamais un cache multi-client accumulé) — le nœud du
+    // client A n'y est donc plus présent, et est traité comme introuvable :
+    // exactement la même discipline que le Worker
+    // (`gererCreerRelationTechnique`), qui renvoie déjà `noeud_introuvable`
+    // dans les deux cas plutôt que de révéler qu'un nœud existe chez un
+    // autre client.
     await store.charger('client-B')
     await store.creerNoeud('client-B', {
       level_key: 'plc',
@@ -473,7 +517,7 @@ describe('useStructureSystemeStore — Architecture Technique', () => {
       plcBId,
     )
 
-    expect(resultat).toEqual({ ok: false, raison: 'clients_differents' })
+    expect(resultat).toEqual({ ok: false, raison: 'noeud_introuvable' })
     expect(store.relationsTechniques).toHaveLength(0)
   })
 

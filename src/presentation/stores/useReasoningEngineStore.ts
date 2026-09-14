@@ -13,6 +13,7 @@ import type {
 import { executerBoucleRaisonnement } from '../../logique-metier/raisonnement/boucleRaisonnement'
 import { CATALOGUE_OUTILS_RAISONNEMENT } from '../../logique-metier/raisonnement/outilsRaisonnement'
 import { db } from '../../persistance/db'
+import { useStructureSystemeStore } from './useStructureSystemeStore'
 
 const VERSION_CONFIGURATION_ACTUELLE = 'v1'
 
@@ -96,6 +97,12 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
   ): Promise<ResultatRaisonnement> {
     const configuration = await assurerConfiguration(clientId)
 
+    // Structure Système migrée vers le Worker/D1 (Phase 1 du chantier de
+    // migration D1) — chargée via le store dédié plutôt qu'un accès Dexie
+    // direct, devenu impossible depuis cette migration.
+    const structureStore = useStructureSystemeStore()
+    await structureStore.charger(clientId)
+
     const [
       requirements,
       couvertures,
@@ -103,8 +110,6 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       executions,
       evidences,
       knowledgeItems,
-      assetNodes,
-      relationsTechniques,
       procedures,
       procedureSteps,
       manufacturingContexts,
@@ -118,8 +123,6 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       db.executions.where('client_id').equals(clientId).toArray(),
       db.evidences.where('client_id').equals(clientId).toArray(),
       db.knowledgeItems.where('client_id').equals(clientId).toArray(),
-      db.assetNodes.where('client_id').equals(clientId).toArray(),
-      db.relationsTechniques.where('client_id').equals(clientId).toArray(),
       db.procedures.where('client_id').equals(clientId).toArray(),
       db.procedureSteps.where('client_id').equals(clientId).toArray(),
       db.manufacturingContexts.where('client_id').equals(clientId).toArray(),
@@ -132,6 +135,8 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
             .toArray()
         : Promise.resolve([]),
     ])
+    const assetNodes = structureStore.noeuds
+    const relationsTechniques = structureStore.relationsTechniques
 
     // Narratif du ContextSnapshot en vigueur — réutilise
     // les mêmes objets déjà chargés pour les outils, jamais une seconde

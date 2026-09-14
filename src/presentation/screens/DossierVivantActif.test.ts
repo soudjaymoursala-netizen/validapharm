@@ -3,8 +3,24 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { AssetNodeEnregistre } from '../../../workers/auth-worker/src/repos/structureSystemeRepo'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import DossierVivantActif from './DossierVivantActif.vue'
+
+const CLIENT_ID = 'client-1'
+
+async function seedNoeud(noeud: AssetNodeEnregistre): Promise<void> {
+  await ctx.structureSystemeRepo.creerNoeud(noeud)
+}
+
+let ctx: Contexte
+let demonter: () => void
 
 // `flushPromises` seul ne suffit pas : `onMounted` lance 6 `charger()`
 // concurrents (Structure Système, ACFC, Impact, CSV, Risk, Missions), et
@@ -48,12 +64,29 @@ function routeurDeTest() {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.assetNodes.clear()
-  await db.relationsTechniques.clear()
   await db.evaluationsCSVAssessment.clear()
   await db.missions.clear()
   await db.qualityEvents.clear()
   await db.sections.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: 'Client de test',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
 })
 
 // `onMounted` charge 7 stores en `Promise.all` — même profil de risque
@@ -65,31 +98,32 @@ afterEach(async () => {
     await flushPromises()
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
+  demonter()
 })
 
 describe('DossierVivantActif', () => {
   test('agrège le statut de qualification et les évaluations rattachées à l’actif', async () => {
     const maintenant = new Date().toISOString()
-    await db.assetNodes.put({
+    await seedNoeud({
       id: 'noeud-1',
-      client_id: 'client-1',
-      workspace_id: null,
-      level_key: 'equipement',
+      clientId: CLIENT_ID,
+      workspaceId: null,
+      levelKey: 'equipement',
       name: 'Autoclave AUT-042',
       code: 'AUT-042',
-      parent_id: null,
-      associated_nodes: [],
+      parentId: null,
+      associatedNodes: [],
       source: 'manuel',
-      qms_connector_id: null,
-      periodic_qualification: { applicable: true, deadline: '2027-01-01' },
-      qualification_status: 'qualifie',
-      audit_log: [],
-      created_at: maintenant,
-      updated_at: maintenant,
+      qmsConnectorId: null,
+      periodicQualification: { applicable: true, deadline: '2027-01-01' },
+      qualificationStatus: 'qualifie',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
     })
     await db.evaluationsCSVAssessment.put({
       id: 'eval-1',
-      client_id: 'client-1',
+      client_id: CLIENT_ID,
       asset_node_id: 'noeud-1',
       nom_systeme: 'PLC autoclave',
       categorie_gamp5: 4,
@@ -104,7 +138,7 @@ describe('DossierVivantActif', () => {
 
     await db.qualityEvents.put({
       id: 'event-1',
-      client_id: 'client-1',
+      client_id: CLIENT_ID,
       type: 'audit_finding',
       titre: 'Traçabilité incomplète de la requalification',
       description: 'x',
@@ -120,7 +154,7 @@ describe('DossierVivantActif', () => {
     })
 
     const wrapper = mount(DossierVivantActif, {
-      props: { clientId: 'client-1', noeudId: 'noeud-1' },
+      props: { clientId: CLIENT_ID, noeudId: 'noeud-1' },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.text().includes('Autoclave AUT-042'))
@@ -134,22 +168,22 @@ describe('DossierVivantActif', () => {
 
   test('liste les livrables explicitement liés à cet actif (tâche #118)', async () => {
     const maintenant = new Date().toISOString()
-    await db.assetNodes.put({
+    await seedNoeud({
       id: 'noeud-2',
-      client_id: 'client-1',
-      workspace_id: null,
-      level_key: 'equipement',
+      clientId: CLIENT_ID,
+      workspaceId: null,
+      levelKey: 'equipement',
       name: 'Presse P-200',
       code: 'P-200',
-      parent_id: null,
-      associated_nodes: [],
+      parentId: null,
+      associatedNodes: [],
       source: 'manuel',
-      qms_connector_id: null,
-      periodic_qualification: { applicable: false, deadline: null },
-      qualification_status: 'non_qualifie',
-      audit_log: [],
-      created_at: maintenant,
-      updated_at: maintenant,
+      qmsConnectorId: null,
+      periodicQualification: { applicable: false, deadline: null },
+      qualificationStatus: 'non_qualifie',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
     })
     await db.sections.put({
       id: 'section-1',
@@ -175,7 +209,7 @@ describe('DossierVivantActif', () => {
     })
 
     const wrapper = mount(DossierVivantActif, {
-      props: { clientId: 'client-1', noeudId: 'noeud-2' },
+      props: { clientId: CLIENT_ID, noeudId: 'noeud-2' },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.text().includes('Presse P-200'))
@@ -194,26 +228,26 @@ describe('DossierVivantActif', () => {
     // déjà cette course avant ce correctif, mais seulement comme une
     // contrainte de test à contourner, pas comme un bug de l'écran).
     const maintenant = new Date().toISOString()
-    await db.assetNodes.put({
+    await seedNoeud({
       id: 'noeud-3',
-      client_id: 'client-1',
-      workspace_id: null,
-      level_key: 'equipement',
+      clientId: CLIENT_ID,
+      workspaceId: null,
+      levelKey: 'equipement',
       name: 'Étuve E-500',
       code: 'E-500',
-      parent_id: null,
-      associated_nodes: [],
+      parentId: null,
+      associatedNodes: [],
       source: 'manuel',
-      qms_connector_id: null,
-      periodic_qualification: { applicable: false, deadline: null },
-      qualification_status: 'qualifie',
-      audit_log: [],
-      created_at: maintenant,
-      updated_at: maintenant,
+      qmsConnectorId: null,
+      periodicQualification: { applicable: false, deadline: null },
+      qualificationStatus: 'qualifie',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
     })
 
     const wrapper = mount(DossierVivantActif, {
-      props: { clientId: 'client-1', noeudId: 'noeud-3' },
+      props: { clientId: CLIENT_ID, noeudId: 'noeud-3' },
       global: { plugins: [routeurDeTest()] },
     })
 
@@ -226,7 +260,7 @@ describe('DossierVivantActif', () => {
 
   test('nœud introuvable -> message explicite, jamais un écran vide silencieux', async () => {
     const wrapper = mount(DossierVivantActif, {
-      props: { clientId: 'client-1', noeudId: 'id-inconnu' },
+      props: { clientId: CLIENT_ID, noeudId: 'id-inconnu' },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.text().includes('Nœud introuvable'))

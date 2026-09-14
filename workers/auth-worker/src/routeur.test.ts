@@ -15,6 +15,7 @@ import { ClientsRepoMemoire } from './repos/clientsRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
 import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
+import { StructureSystemeRepoMemoire } from './repos/structureSystemeRepo'
 import { UtilisateursRepoMemoire } from './repos/utilisateursRepo'
 import { routerRequete, type Contexte } from './routeur'
 
@@ -32,6 +33,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     parametresInstallationRepo: new ParametresInstallationRepoMemoire(),
     documentsNormatifsRepo: new DocumentsNormatifsRepoMemoire(),
     stockageBinaireRepo: new StockageBinaireRepoMemoire(),
+    structureSystemeRepo: new StructureSystemeRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -102,6 +104,43 @@ interface CorpsReponse {
   resultats: { id: string; hasBinaryContent: boolean; corrige: boolean }[]
   urlAutorisation: string
   expiresIn: number
+  schema: { clientId: string; levels: NiveauHierarchieJson[] }
+  noeud: AssetNodeJson
+  noeuds: AssetNodeJson[]
+  relationsTechniques: RelationTechniqueJson[]
+  relation: RelationTechniqueJson
+}
+
+interface NiveauHierarchieJson {
+  key: string
+  label: Record<string, string>
+  numberingPattern: string
+}
+
+interface AssetNodeJson {
+  id: string
+  clientId: string
+  workspaceId: string | null
+  levelKey: string
+  name: string
+  code: string
+  parentId: string | null
+  associatedNodes: string[]
+  source: string
+  qualificationStatus: string
+  periodicQualification: { applicable: boolean; deadline: string | null }
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface RelationTechniqueJson {
+  id: string
+  clientId: string
+  typeRelation: string
+  noeudSourceId: string
+  noeudCibleId: string
+  createdAt: string
 }
 
 interface DocumentNormatifJson {
@@ -622,6 +661,220 @@ describe('routerRequete — clients (D1 = source de vérité)', () => {
     expect(entree).toBeDefined()
     expect(entree?.justification).toContain('RGPD')
     expect(entree?.targetId).toBe(clientId)
+  })
+})
+
+describe('routerRequete — Structure Système (référentiel d’actifs, D1 = source de vérité)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sur un client sans schéma configuré -> levels vide, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/structure-systeme`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.schema).toEqual({ clientId, levels: [] })
+    expect(obtenir.corps.noeuds).toEqual([])
+    expect(obtenir.corps.relationsTechniques).toEqual([])
+  })
+
+  test('enregistrer le schéma de hiérarchie puis le relire', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const enregistrement = await requete(
+      ctx,
+      'PUT',
+      `/clients/${clientId}/structure-systeme/schema`,
+      {
+        jeton: admin.jeton,
+        body: {
+          levels: [
+            {
+              key: 'site',
+              label: { fr: 'Site', en: 'Site', de: 'Standort' },
+              numberingPattern: 'S-{n}',
+            },
+          ],
+        },
+      },
+    )
+    expect(enregistrement.status).toBe(200)
+    expect(enregistrement.corps.schema.levels).toHaveLength(1)
+
+    const relecture = await requete(ctx, 'GET', `/clients/${clientId}/structure-systeme`, {
+      jeton: admin.jeton,
+    })
+    expect(relecture.corps.schema.levels[0]?.key).toBe('site')
+  })
+
+  test('créer un nœud : id/audit_log/horodatages dérivés côté serveur, jamais acceptés depuis le corps', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/structure-systeme/noeuds`, {
+      jeton: admin.jeton,
+      body: { levelKey: 'site', name: 'Site SMP', code: 'SMP', parentId: null },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.noeud.clientId).toBe(clientId)
+    expect(creation.corps.noeud.source).toBe('manuel')
+    expect(creation.corps.noeud.auditLog).toEqual([
+      { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
+    ])
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/structure-systeme`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.noeuds.map((n) => n.id)).toContain(creation.corps.noeud.id)
+  })
+
+  test('créer un nœud sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/structure-systeme/noeuds`, {
+      jeton: admin.jeton,
+      body: { levelKey: 'site', name: 'Site SMP' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('création en lot (import de hiérarchie) : plusieurs nœuds en une seule requête, source import_fichier', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const lot = await requete(ctx, 'POST', `/clients/${clientId}/structure-systeme/noeuds/lot`, {
+      jeton: admin.jeton,
+      body: {
+        action: 'création (import SAP)',
+        noeuds: [
+          {
+            id: 'id-site-genere-cote-client',
+            levelKey: 'site',
+            name: 'Site SMP',
+            code: 'SMP',
+            parentId: null,
+          },
+          {
+            id: 'id-zone-generee-cote-client',
+            levelKey: 'zone',
+            name: 'Zone PRD',
+            code: 'SMP-PRD',
+            parentId: 'id-site-genere-cote-client',
+          },
+        ],
+      },
+    })
+    expect(lot.status).toBe(201)
+    expect(lot.corps.noeuds).toHaveLength(2)
+    expect(lot.corps.noeuds.every((n) => n.source === 'import_fichier')).toBe(true)
+    expect(lot.corps.noeuds[0]?.auditLog[0]?.action).toBe('création (import SAP)')
+    // L'id fourni par le client est bien conservé (nécessaire pour que le
+    // chaînage parent_id calculé par la planification pure côté store
+    // reste cohérent) — jamais régénéré côté serveur pour ce chemin précis.
+    expect(lot.corps.noeuds[0]?.id).toBe('id-site-genere-cote-client')
+    expect(lot.corps.noeuds[1]?.parentId).toBe('id-site-genere-cote-client')
+  })
+
+  test('reparenter un nœud (PATCH) : parentId mis à jour, entrée ajoutée à audit_log', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const parent = await requete(ctx, 'POST', `/clients/${clientId}/structure-systeme/noeuds`, {
+      jeton: admin.jeton,
+      body: { levelKey: 'site', name: 'Site', code: 'S1', parentId: null },
+    })
+    const enfant = await requete(ctx, 'POST', `/clients/${clientId}/structure-systeme/noeuds`, {
+      jeton: admin.jeton,
+      body: { levelKey: 'zone', name: 'Zone', code: 'Z1', parentId: null },
+    })
+
+    const modification = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/structure-systeme/noeuds/${enfant.corps.noeud.id}`,
+      { jeton: admin.jeton, body: { parentId: parent.corps.noeud.id, action: 'modification' } },
+    )
+    expect(modification.status).toBe(200)
+    expect(modification.corps.noeud.parentId).toBe(parent.corps.noeud.id)
+    expect(modification.corps.noeud.auditLog).toHaveLength(2)
+  })
+
+  test('créer une relation technique entre deux nœuds du même client', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const a = await requete(ctx, 'POST', `/clients/${clientId}/structure-systeme/noeuds`, {
+      jeton: admin.jeton,
+      body: { levelKey: 'systeme', name: 'A', code: 'A', parentId: null },
+    })
+    const b = await requete(ctx, 'POST', `/clients/${clientId}/structure-systeme/noeuds`, {
+      jeton: admin.jeton,
+      body: { levelKey: 'systeme', name: 'B', code: 'B', parentId: null },
+    })
+
+    const relation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/structure-systeme/relations-techniques`,
+      {
+        jeton: admin.jeton,
+        body: {
+          typeRelation: 'alimente',
+          noeudSourceId: a.corps.noeud.id,
+          noeudCibleId: b.corps.noeud.id,
+        },
+      },
+    )
+    expect(relation.status).toBe(201)
+    expect(relation.corps.relation.noeudSourceId).toBe(a.corps.noeud.id)
+  })
+
+  test('un utilisateur non lié au client se voit refuser tout accès (404 générique)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { corps: b } = await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'b@pharmatech.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'N',
+        prenom: 'P',
+        role: 'utilisateur',
+      },
+    })
+    void b
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email: 'b@pharmatech.example', motDePasse: 'MotDePasse!1' },
+    })
+    const jetonB = login.corps.jeton
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/structure-systeme`, {
+      jeton: jetonB,
+    })
+    expect(obtenir.status).toBe(404)
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/structure-systeme`)
+    expect(obtenir.status).toBe(401)
   })
 })
 

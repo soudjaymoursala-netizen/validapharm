@@ -19,4 +19,6 @@ export interface D1PreparedStatement {
 
 export interface D1Database {
   prepare(requete: string): D1PreparedStatement
+  /** Exécute plusieurs requêtes préparées en une seule transaction atomique — utilisé pour l'écriture en lot (import de hiérarchie, ex. `D1StructureSystemeRepo.creerNoeuds`). */
+  batch<T = unknown>(instructions: D1PreparedStatement[]): Promise<D1Result<T>[]>
 }
