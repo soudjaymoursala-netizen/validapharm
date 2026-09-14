@@ -1,7 +1,6 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -15,8 +14,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.organizations.clear()
-  await db.workspaces.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
@@ -39,7 +36,7 @@ describe('useOrganizationStore — migration Client -> Organization (décision s
   test('migrerClient crée une Organization dont l’id est strictement égal au Client.id, avec un Workspace racine global', async () => {
     const client = await creerClient('Client Pharma A')
     const store = useOrganizationStore()
-    await store.charger()
+    await store.charger(client.id)
 
     const organization = await store.migrerClient(client.id)
     if ('erreur' in organization) throw new Error('unreachable')
@@ -60,7 +57,7 @@ describe('useOrganizationStore — migration Client -> Organization (décision s
     if ('erreur' in premiere || 'erreur' in seconde) throw new Error('unreachable')
     expect(premiere.id).toBe(seconde.id)
 
-    await store.charger()
+    await store.charger(client.id)
     expect(store.workspacesOrganization(client.id)).toHaveLength(1)
   })
 

@@ -52,8 +52,6 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.missions.clear()
-  await db.organizations.clear()
-  await db.workspaces.clear()
 })
 
 describe('ListeMissions', () => {

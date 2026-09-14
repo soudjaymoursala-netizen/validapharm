@@ -26,7 +26,7 @@ onMounted(async () => {
   nomClient.value = client?.name ?? null
   await Promise.all([
     missionStore.charger(props.clientId),
-    organizationStore.charger(),
+    organizationStore.charger(props.clientId),
     structureStore.charger(props.clientId),
   ])
 })

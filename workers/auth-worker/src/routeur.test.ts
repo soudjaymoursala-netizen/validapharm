@@ -13,6 +13,7 @@ import { EnvoyeurEmailMemoire } from './notifications/envoyeurEmail'
 import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
+import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
 import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
 import { StructureSystemeRepoMemoire } from './repos/structureSystemeRepo'
@@ -34,6 +35,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     documentsNormatifsRepo: new DocumentsNormatifsRepoMemoire(),
     stockageBinaireRepo: new StockageBinaireRepoMemoire(),
     structureSystemeRepo: new StructureSystemeRepoMemoire(),
+    organisationRepo: new OrganisationRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -109,6 +111,25 @@ interface CorpsReponse {
   noeuds: AssetNodeJson[]
   relationsTechniques: RelationTechniqueJson[]
   relation: RelationTechniqueJson
+  organization: OrganizationJson | null
+  workspace: WorkspaceJson
+  workspaceRacine: WorkspaceJson
+  workspaces: WorkspaceJson[]
+}
+
+interface OrganizationJson {
+  id: string
+  nom: string
+  createdAt: string
+}
+
+interface WorkspaceJson {
+  id: string
+  organizationId: string
+  type: string
+  nom: string
+  parentWorkspaceId: string | null
+  createdAt: string
 }
 
 interface NiveauHierarchieJson {
@@ -874,6 +895,143 @@ describe('routerRequete — Structure Système (référentiel d’actifs, D1 = s
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/structure-systeme`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Organization/Workspace (Phase 2 du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test("migrer un client crée une Organization dont l'id est strictement égal au Client.id, avec un Workspace racine global", async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const migration = await requete(ctx, 'POST', `/clients/${clientId}/organisation/migrer`, {
+      jeton: admin.jeton,
+    })
+    expect(migration.status).toBe(201)
+    expect(migration.corps.organization?.id).toBe(clientId)
+    expect(migration.corps.workspaceRacine.type).toBe('global')
+    expect(migration.corps.workspaceRacine.parentWorkspaceId).toBeNull()
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/organisation`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.corps.organization?.id).toBe(clientId)
+    expect(obtenir.corps.workspaces).toHaveLength(1)
+  })
+
+  test('migrer deux fois le même client ne duplique jamais le Workspace racine', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const premiere = await requete(ctx, 'POST', `/clients/${clientId}/organisation/migrer`, {
+      jeton: admin.jeton,
+    })
+    const seconde = await requete(ctx, 'POST', `/clients/${clientId}/organisation/migrer`, {
+      jeton: admin.jeton,
+    })
+    expect(premiere.corps.workspaceRacine.id).toBe(seconde.corps.workspaceRacine.id)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/organisation`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.corps.workspaces).toHaveLength(1)
+  })
+
+  test('GET sur un client jamais migré -> organization null, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/organisation`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.organization).toBeNull()
+    expect(obtenir.corps.workspaces).toEqual([])
+  })
+
+  test('créer un Workspace site rattaché au Workspace racine', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const migration = await requete(ctx, 'POST', `/clients/${clientId}/organisation/migrer`, {
+      jeton: admin.jeton,
+    })
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/organisation/workspaces`, {
+      jeton: admin.jeton,
+      body: { nom: 'Site A — Lyon', parentWorkspaceId: migration.corps.workspaceRacine.id },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.workspace.type).toBe('site')
+    expect(creation.corps.workspace.parentWorkspaceId).toBe(migration.corps.workspaceRacine.id)
+  })
+
+  test('créer un Workspace pour un client jamais migré -> organization_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/organisation/workspaces`, {
+      jeton: admin.jeton,
+      body: { nom: 'Site', parentWorkspaceId: 'workspace-inconnu' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('organization_introuvable')
+  })
+
+  test('créer un Workspace avec un parent inconnu -> parent_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await requete(ctx, 'POST', `/clients/${clientId}/organisation/migrer`, { jeton: admin.jeton })
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/organisation/workspaces`, {
+      jeton: admin.jeton,
+      body: { nom: 'Site', parentWorkspaceId: 'workspace-inconnu' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('parent_introuvable')
+  })
+
+  test('un utilisateur non lié au client se voit refuser tout accès (404 générique)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'b@pharmatech.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'N',
+        prenom: 'P',
+        role: 'utilisateur',
+      },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email: 'b@pharmatech.example', motDePasse: 'MotDePasse!1' },
+    })
+    const jetonB = login.corps.jeton
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/organisation`, {
+      jeton: jetonB,
+    })
+    expect(obtenir.status).toBe(404)
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/organisation`)
     expect(obtenir.status).toBe(401)
   })
 })
