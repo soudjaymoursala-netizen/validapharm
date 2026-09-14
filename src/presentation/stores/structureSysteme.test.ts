@@ -3,7 +3,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import type { AssetNode, Workspace } from '../../logique-metier/domaine/types'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -40,8 +39,6 @@ async function creerClientDeTest(id: string): Promise<void> {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.organizations.clear()
-  await db.workspaces.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   ctx = installation.ctx
@@ -327,10 +324,10 @@ describe('useStructureSystemeStore — reparenterNoeud', () => {
 
 describe('useStructureSystemeStore — câblage Workspace, étape 1 (CABLAGE_ETAPE_1_STRUCTURE_SYSTEME_SPEC.md)', () => {
   async function creerOrganizationEtWorkspaces(clientId: string) {
-    await db.organizations.put({
+    await ctx.organisationRepo.creerOrganization({
       id: clientId,
       nom: 'Client Pharma',
-      created_at: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
     })
     const global: Workspace = {
       id: crypto.randomUUID(),
@@ -356,7 +353,16 @@ describe('useStructureSystemeStore — câblage Workspace, étape 1 (CABLAGE_ETA
       parent_workspace_id: global.id,
       created_at: new Date().toISOString(),
     }
-    await db.workspaces.bulkPut([global, siteA, siteB])
+    for (const w of [global, siteA, siteB]) {
+      await ctx.organisationRepo.creerWorkspace({
+        id: w.id,
+        organizationId: w.organization_id,
+        type: w.type,
+        nom: w.nom,
+        parentWorkspaceId: w.parent_workspace_id,
+        createdAt: w.created_at,
+      })
+    }
     return { global, siteA, siteB }
   }
 

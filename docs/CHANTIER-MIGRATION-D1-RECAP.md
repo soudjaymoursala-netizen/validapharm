@@ -87,7 +87,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | Config dépôt GitHub/Relais IA/Drive normes (`parametres_installation`) | D1 (déjà fait) | ✅ |
 | Documents Bibliothèque de normes (D1+R2, déjà fait) | D1+R2 | ✅ |
 | `assetHierarchySchemas`, `assetNodes` (Structure Système) | D1 | ✅ **Phase 1 terminée (14/09/2026)** — PR #39 mergée, migration 0004 appliquée en production D1, déploiement Worker vérifié |
-| `organizations`, `workspaces` | D1 | ⬜ Phase 2 |
+| `organizations`, `workspaces` | D1 | 🔧 **Phase 2 — code complet (14/09/2026), migration 0005 pas encore appliquée en prod, PR pas encore ouverte** |
 | `projects`, `sections`, `projectDocuments` | D1 (+ GitHub déjà en place, à conserver) | ⬜ Phase 3 |
 | `methodProfilesACFC`, `evaluationsACFC` | D1 | ⬜ Phase 4 |
 | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ⬜ Phase 4 |
@@ -240,9 +240,96 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
    domaine si un patron générique se dégage) — pas bloquant pour démarrer la
    Phase 2 ni pour reprendre le sujet des nœuds (import SAP).
 
-### 4.3 Prochaine action
+### 4.3 Phase 1 — clôturée
 
-Phase 1 close. Deux threads possibles pour la suite (au choix de
-l'utilisateur au moment de la reprise) : reprendre le sujet original des
-nœuds (import SAP, mis en pause pour ce chantier) ou enchaîner sur la
-Phase 2 (Organization/Workspace, §3).
+Terminée intégralement (§4.2). L'utilisateur a demandé d'enchaîner
+directement sur toutes les phases suivantes — le sujet des nœuds (import
+SAP) reste repoussé à plus tard, à sa demande explicite (14/09/2026 :
+« on enchaine sur toutes les phases, on s'occupera des noeuds plus tard »).
+
+---
+
+## 5. État détaillé — Phase 2 (Organization/Workspace), au 14/09/2026
+
+### 5.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0005_organization_workspace.sql`
+   crée `organizations` (clé `id` — reprend exactement l'id du `Client`
+   migré, même convention que l'ancienne implémentation Dexie) et
+   `workspaces` (id, `organization_id` indexé, type/nom/parent_workspace_id).
+   **Pas encore appliquée en production.**
+2. **Repo Worker** : `workers/auth-worker/src/repos/organisationRepo.ts`
+   (interface + `OrganisationRepoMemoire`) et
+   `.../repos/d1/d1OrganisationRepo.ts` (implémentation D1).
+3. **Routes `auth-worker`** : 3 routes sous `/clients/:clientId/organisation/...`
+   (GET schéma+workspaces, POST migration idempotente, POST création de
+   site) — toutes protégées par `exigerAccesClient()`. La route de
+   migration (`gererMigrerClientVersOrganisation`) reproduit exactement la
+   logique d'idempotence de l'ancienne implémentation Dexie : si
+   l'`Organization` existe déjà pour ce client, renvoie son `Workspace`
+   racine existant plutôt que d'en recréer un.
+4. **`AuthApiClient`** : méthodes `obtenirOrganisation`,
+   `migrerClientVersOrganisation`, `creerWorkspace`.
+5. **`useOrganizationStore`** entièrement réécrit (même API publique) —
+   changement de contrat assumé : `charger()` prend désormais un
+   `clientId` obligatoire (auparavant, chargeait tous les clients d'un
+   coup — incompatible avec le scoping serveur par client, même discipline
+   que `useStructureSystemeStore`/Phase 1). Deux call sites mis à jour
+   (`ListeMissions.vue`, `MissionWorkspace.vue`, tous deux avaient déjà
+   `props.clientId` disponible). Même dégradation gracieuse sur panne
+   réseau que Phase 1.
+6. **Filet de sécurité de migration locale** : capture Dexie v35
+   (`organizations`/`workspaces` supprimées, données capturées dans
+   `organizationsAMigrer`/`workspacesAMigrer`) +
+   `migrerOrganisationsLocalesVersServeur()`. Point notable : contrairement
+   au Workspace racine (recréé idempotent côté serveur, l'original local
+   simplement abandonné — aucune donnée utilisateur perdue, juste son id
+   change), les Workspaces "site" sont recréés dans l'ordre topologique en
+   remappant chaque ancien id local vers le nouvel id serveur (un site ne
+   peut être recréé qu'une fois son parent déjà migré) — nécessaire pour
+   préserver une hiérarchie de sites à plusieurs niveaux. Retrait
+   progressif de la file uniquement après confirmation serveur de chaque
+   site (jamais de retrait optimiste), même discipline que les relations
+   techniques en Phase 1.
+7. **Dépendance croisée corrigée** : `useStructureSystemeStore.creerNoeud()`
+   vérifiait un `workspace_id` fourni via `db.workspaces.get(...)` direct
+   (dépendance transitoire documentée comme telle en Phase 1, "Organization/
+   Workspace pas encore migré") — remplacé par un appel à
+   `api.obtenirOrganisation(clientId)` et recherche dans la liste retournée
+   (scoping implicite : un workspace renvoyé pour ce client lui appartient
+   forcément).
+8. **Ripple effect** : 4 fichiers de test corrigés — `ListeMissions.test.ts`/
+   `MissionWorkspace.test.ts` (simple retrait de `.clear()`, ces tests
+   n'exercent pas Organization/Workspace directement) ;
+   `useOrganizationStore.test.ts` (déjà câblé `installerFauxWorkerAuth`
+   pour la création de client — seuls les appels `store.charger()` sans
+   argument ont dû passer un `clientId`) ; `structureSysteme.test.ts`
+   (helper `creerOrganizationEtWorkspaces` converti de `db.organizations.put`/
+   `db.workspaces.bulkPut` vers `ctx.organisationRepo.creerOrganization`/
+   `creerWorkspace`, même patron que Phase 1).
+9. **Validation complète** (14/09/2026) : `npm run typecheck`,
+   `npm run lint` (0 erreur/warning), `npx vitest run` racine
+   (**1218/1218 tests verts**), `cd workers/auth-worker && npx vitest run`
+   (**91/91 tests verts**).
+
+### 5.2 Ce qui reste à faire avant de considérer la Phase 2 terminée
+
+1. Commit + push de l'incrément.
+2. Ouvrir la PR, suivre CI jusqu'au vert (même réflexe qu'en Phase 1 pour
+   la panne connue `Workers Builds: validapharm-auth-worker` hors `main`),
+   merger.
+3. Appliquer la migration `0005_organization_workspace.sql` en production D1.
+4. Vérifier le code réellement déployé sur le Worker en production.
+5. Marquer la ligne Organization/Workspace de §3 ✅ une fois les points
+   1-4 ci-dessus faits.
+6. GitHub sync généralisée : toujours reportée (même manque assumé qu'en
+   Phase 1, §4.2 point 5) — à traiter une fois plusieurs domaines migrés.
+
+### 5.3 Prochaine action immédiate
+
+Commit/push de l'incrément Phase 2, puis ouverture de la PR et suivi
+CI/merge/migration prod/vérification déploiement — reprendre directement à
+cette étape si la session s'interrompt ici. Une fois clos, enchaîner sur
+la Phase 3 (`projects`/`sections`/`projectDocuments`, §3) — consigne de
+l'utilisateur : enchaîner sur toutes les phases sans s'arrêter pour
+demander confirmation entre chacune.

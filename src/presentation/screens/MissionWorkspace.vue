@@ -96,7 +96,7 @@ onMounted(async () => {
     qualityEventStore.charger(props.clientId),
     structureStore.charger(props.clientId),
     processContextStore.charger(props.clientId),
-    organizationStore.charger(),
+    organizationStore.charger(props.clientId),
     configStore.charger(props.clientId),
     relaisStore.charger(),
   ])

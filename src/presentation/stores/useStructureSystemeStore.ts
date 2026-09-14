@@ -38,7 +38,6 @@ import {
   assetHierarchySchemasAMigrer,
   assetNodesAMigrer,
   relationsTechniquesAMigrer,
-  db,
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
 
@@ -179,9 +178,9 @@ function relationWireVersDomaine(wire: RelationTechniqueWire): RelationTechnique
  * stockage IndexedDB seul. La logique métier (unicité de code, absence de
  * cycle, un niveau référencé par un nœud ne peut être ni renommé ni
  * supprimé) reste ici, déjà testée — le Worker ne fait que persister
- * l'état validé. Seule exception encore locale : la vérification qu'un
- * `workspace_id` fourni existe bien (`db.workspaces`, Organization/
- * Workspace pas encore migré — Phase 2 du même chantier).
+ * l'état validé. La vérification qu'un `workspace_id` fourni existe bien
+ * passe par l'API Organization/Workspace (Phase 2 du même chantier,
+ * `/clients/:clientId/organisation`).
  */
 export const useStructureSystemeStore = defineStore('structureSysteme', () => {
   const schema = ref<AssetHierarchySchema | null>(null)
@@ -381,8 +380,16 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     }
     const workspaceId = input.workspace_id ?? null
     if (workspaceId !== null) {
-      const workspace = await db.workspaces.get(workspaceId)
-      if (!workspace || workspace.organization_id !== clientId) {
+      // Organization/Workspace migrés vers le Worker/D1 (Phase 2 du chantier
+      // de migration D1) — un workspace retourné par cet appel scopé au
+      // client appartient forcément à ce client, aucune vérification
+      // `organization_id` séparée n'est donc nécessaire ici.
+      const { api, jeton } = await obtenirApi()
+      const resultatOrganisation = await api.obtenirOrganisation(jeton, clientId)
+      const workspace = resultatOrganisation.ok
+        ? resultatOrganisation.donnees.workspaces.find((w) => w.id === workspaceId)
+        : undefined
+      if (!workspace) {
         return { ok: false, raison: 'workspace_introuvable' }
       }
     }

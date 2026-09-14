@@ -105,6 +105,21 @@ export interface SaisieCreationNoeudWire {
   workspaceId?: string | null
 }
 
+export interface OrganizationWire {
+  id: string
+  nom: string
+  createdAt: string
+}
+
+export interface WorkspaceWire {
+  id: string
+  organizationId: string
+  type: string
+  nom: string
+  parentWorkspaceId: string | null
+  createdAt: string
+}
+
 export interface SaisieCreationDocumentNormatif {
   category: string
   titre: string
@@ -349,6 +364,33 @@ export class AuthApiClient {
     saisie: { typeRelation: string; noeudSourceId: string; noeudCibleId: string },
   ): Promise<ResultatApi<{ relation: RelationTechniqueWire }>> {
     return this.requete('POST', `/clients/${clientId}/structure-systeme/relations-techniques`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  // --- Organization/Workspace (Phase 2 du chantier de migration D1) ---
+
+  obtenirOrganisation(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ organization: OrganizationWire | null; workspaces: WorkspaceWire[] }>> {
+    return this.requete('GET', `/clients/${clientId}/organisation`, { jeton })
+  }
+
+  migrerClientVersOrganisation(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ organization: OrganizationWire; workspaceRacine: WorkspaceWire }>> {
+    return this.requete('POST', `/clients/${clientId}/organisation/migrer`, { jeton })
+  }
+
+  creerWorkspace(
+    jeton: string,
+    clientId: string,
+    saisie: { nom: string; parentWorkspaceId: string },
+  ): Promise<ResultatApi<{ workspace: WorkspaceWire }>> {
+    return this.requete('POST', `/clients/${clientId}/organisation/workspaces`, {
       jeton,
       body: saisie,
     })

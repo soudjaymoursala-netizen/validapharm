@@ -8,6 +8,11 @@ import type {
   DocumentsNormatifsRepo,
 } from './repos/documentsNormatifsRepo'
 import type {
+  OrganisationRepo,
+  OrganizationEnregistree,
+  WorkspaceEnregistre,
+} from './repos/organisationRepo'
+import type {
   ParametresInstallationRepo,
   ValeurParametreInstallation,
 } from './repos/parametresInstallationRepo'
@@ -38,6 +43,7 @@ export interface Contexte {
   documentsNormatifsRepo: DocumentsNormatifsRepo
   stockageBinaireRepo: StockageBinaireRepo
   structureSystemeRepo: StructureSystemeRepo
+  organisationRepo: OrganisationRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -274,6 +280,25 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   )
   if (matchRelationsTechniques && request.method === 'POST') {
     return gererCreerRelationTechnique(request, ctx, entetes, matchRelationsTechniques[1] as string)
+  }
+
+  // --- Organization/Workspace (Phase 2 du chantier de migration D1) ---
+  const matchOrganisation = chemin.match(/^\/clients\/([^/]+)\/organisation$/)
+  if (matchOrganisation && request.method === 'GET') {
+    return gererObtenirOrganisation(request, ctx, entetes, matchOrganisation[1] as string)
+  }
+  const matchMigrerOrganisation = chemin.match(/^\/clients\/([^/]+)\/organisation\/migrer$/)
+  if (matchMigrerOrganisation && request.method === 'POST') {
+    return gererMigrerClientVersOrganisation(
+      request,
+      ctx,
+      entetes,
+      matchMigrerOrganisation[1] as string,
+    )
+  }
+  const matchWorkspaces = chemin.match(/^\/clients\/([^/]+)\/organisation\/workspaces$/)
+  if (matchWorkspaces && request.method === 'POST') {
+    return gererCreerWorkspace(request, ctx, entetes, matchWorkspaces[1] as string)
   }
 
   // --- Paramètres d'installation (dépôt GitHub dédié, Relais IA, Drive normes) ---
@@ -1131,6 +1156,111 @@ async function gererCreerRelationTechnique(
   }
   await ctx.structureSystemeRepo.creerRelationTechnique(relation)
   return reponseJson({ relation }, 201, entetes)
+}
+
+// --- Handlers : Organization/Workspace (Phase 2 du chantier de migration D1) ---
+
+async function gererObtenirOrganisation(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [organization, workspaces] = await Promise.all([
+    ctx.organisationRepo.obtenirOrganization(clientId),
+    ctx.organisationRepo.listerWorkspaces(clientId),
+  ])
+  return reponseJson({ organization, workspaces }, 200, entetes)
+}
+
+/**
+ * Idempotente — même discipline que l'ancienne implémentation Dexie
+ * (`useOrganizationStore.migrerClient`) : si l'`Organization` existe déjà
+ * pour ce client, la renvoie telle quelle avec son `Workspace` racine déjà
+ * créé, jamais une seconde création. `Organization.id` reprend
+ * exactement `clientId` (jamais un id généré) — décision structurante qui
+ * évite de toucher aux ~25 tables indexées par `client_id`.
+ */
+async function gererMigrerClientVersOrganisation(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const existante = await ctx.organisationRepo.obtenirOrganization(clientId)
+  if (existante) {
+    const workspaces = await ctx.organisationRepo.listerWorkspaces(clientId)
+    const workspaceRacine = workspaces.find((w) => w.parentWorkspaceId === null)
+    if (!workspaceRacine) {
+      // Incohérence de données jamais censée survenir (toute Organization
+      // créée par cette même route a systématiquement son Workspace
+      // racine) — jamais fabriquer un Workspace de remplacement ici.
+      return reponseJson({ erreur: 'workspace_racine_introuvable' }, 500, entetes)
+    }
+    return reponseJson({ organization: existante, workspaceRacine }, 200, entetes)
+  }
+
+  const client = await ctx.clientsRepo.parId(clientId)
+  if (!client) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+
+  const maintenant = horodatage()
+  const organization: OrganizationEnregistree = {
+    id: clientId,
+    nom: client.name,
+    createdAt: maintenant,
+  }
+  const workspaceRacine: WorkspaceEnregistre = {
+    id: genererId(),
+    organizationId: clientId,
+    type: 'global',
+    nom: `${client.name} — Global`,
+    parentWorkspaceId: null,
+    createdAt: maintenant,
+  }
+  await ctx.organisationRepo.creerOrganization(organization)
+  await ctx.organisationRepo.creerWorkspace(workspaceRacine)
+  return reponseJson({ organization, workspaceRacine }, 201, entetes)
+}
+
+async function gererCreerWorkspace(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<{ nom?: string; parentWorkspaceId?: string }>(request)
+  if (!corps?.nom || !corps.parentWorkspaceId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const organization = await ctx.organisationRepo.obtenirOrganization(clientId)
+  if (!organization) return reponseJson({ erreur: 'organization_introuvable' }, 400, entetes)
+
+  const parent = await ctx.organisationRepo.workspaceParId(corps.parentWorkspaceId)
+  if (!parent || parent.organizationId !== clientId) {
+    return reponseJson({ erreur: 'parent_introuvable' }, 400, entetes)
+  }
+
+  const site: WorkspaceEnregistre = {
+    id: genererId(),
+    organizationId: clientId,
+    type: 'site',
+    nom: corps.nom,
+    parentWorkspaceId: corps.parentWorkspaceId,
+    createdAt: horodatage(),
+  }
+  await ctx.organisationRepo.creerWorkspace(site)
+  return reponseJson({ workspace: site }, 201, entetes)
 }
 
 // --- Handlers : paramètres d'installation ---

@@ -226,6 +226,18 @@ export const assetNodesAMigrer: AssetNode[] = []
 export const relationsTechniquesAMigrer: RelationTechnique[] = []
 
 /**
+ * Organization/Workspace capturés depuis les anciennes tables locales
+ * `organizations`/`workspaces` juste avant leur suppression (version 35,
+ * Phase 2 du chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md)
+ * — même filet de sécurité que `assetHierarchySchemasAMigrer` ci-dessus :
+ * vide sur un navigateur déjà passé par cette version. Consommé et envoyé
+ * au serveur par `migrerOrganisationsLocalesVersServeur`
+ * (`useOrganizationStore`) au premier `charger()`.
+ */
+export const organizationsAMigrer: Organization[] = []
+export const workspacesAMigrer: Workspace[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -286,8 +298,6 @@ export class ValidaPharmDatabase extends Dexie {
   connectors!: EntityTable<Connector, 'id'>
   syncJobs!: EntityTable<SyncJob, 'id'>
   externalReferences!: EntityTable<ExternalReference, 'id'>
-  organizations!: EntityTable<Organization, 'id'>
-  workspaces!: EntityTable<Workspace, 'id'>
   missions!: EntityTable<Mission, 'id'>
   associationsMissionQualityEvent!: EntityTable<AssociationMissionQualityEvent, 'id'>
   activities!: EntityTable<Activity, 'id'>
@@ -612,6 +622,25 @@ export class ValidaPharmDatabase extends Dexie {
         assetHierarchySchemasAMigrer.push(...schemas)
         assetNodesAMigrer.push(...noeuds)
         relationsTechniquesAMigrer.push(...relations)
+      })
+
+    // Organization/Workspace : migrés vers le Worker/D1 (Phase 2 du
+    // chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) —
+    // même technique de capture avant suppression physique que la version
+    // 34 ci-dessus. Consommé et envoyé au serveur par
+    // `migrerOrganisationsLocalesVersServeur` (`useOrganizationStore`).
+    this.version(35)
+      .stores({
+        organizations: null,
+        workspaces: null,
+      })
+      .upgrade(async (tx) => {
+        const [organizations, workspaces] = await Promise.all([
+          tx.table<Organization>('organizations').toArray(),
+          tx.table<Workspace>('workspaces').toArray(),
+        ])
+        organizationsAMigrer.push(...organizations)
+        workspacesAMigrer.push(...workspaces)
       })
   }
 }
