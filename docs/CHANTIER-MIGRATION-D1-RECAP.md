@@ -726,10 +726,26 @@ préchargé avec la liste.
     vitest run` (**119/119 tests verts**, dont les 8 nouveaux tests
     `ProjectDocument`).
 
-### 8.2 Phase 3c — terminée
+### 8.2 Phase 3c — terminée (14/09/2026)
 
-_À compléter après commit/push/PR/merge/migration-apply/déploiement — voir
-§8.3._
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #43 ouverte. `Lint, typecheck, tests` vert dès le premier passage
+   (leçon de la Phase 3b déjà appliquée). Seule la panne connue `Workers
+   Builds: validapharm-auth-worker` hors `main` est rouge — commentaire de
+   statu quo posté (même précédent que #19/#24-28/#39/#40/#41/#42),
+   mergée sur `main` (squash, commit `f0862bf`).
+3. ✅ Migration `0008_project_documents.sql` appliquée en production D1
+   (`validapharm-auth`) — table `project_documents` et son index confirmés
+   présents (`sqlite_master`).
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `D1ProjectDocumentsRepo`, les routes `/project-documents/...` et
+   `ctx.projectDocumentsRepo` bien présents.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les Phases 1/2/3a/3b) — `projectDocuments` n'a d'ailleurs jamais
+   été synchronisé vers GitHub, même avant cette migration (portée de
+   `useSynchronisationStore` limitée à projects/sections) : pas une
+   régression introduite ici.
 
 ### 8.3 Prochaine action
 
