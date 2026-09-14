@@ -51,7 +51,6 @@ import type {
   Process,
   ProvenanceLink,
   Project,
-  ProjectDocument,
   QualityEvent,
   ReferenceQualityEvent,
   RelationTechnique,
@@ -260,6 +259,36 @@ export const projectsAMigrer: Project[] = []
 export const sectionsAMigrer: Section[] = []
 
 /**
+ * Forme de `ProjectDocument` telle qu'enregistrée en IndexedDB avant la
+ * version 38 (voir migration ci-dessous) — `content`/`mime_type`
+ * remplacés côté serveur par `has_binary_content` (le contenu binaire
+ * vivant désormais dans R2, jamais préchargé), même transformation que
+ * `DocumentNormatifAncien` à la migration 0003.
+ */
+export interface ProjectDocumentAncien {
+  id: string
+  project_id: string
+  filename: string
+  status: string
+  uploaded_at: string
+  uploaded_by: string
+  extracted_text: string
+  content: Blob | null
+  mime_type: string
+}
+
+/**
+ * `ProjectDocument` capturés depuis l'ancienne table locale
+ * `projectDocuments` juste avant sa suppression (version 38, Phase 3c du
+ * chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même
+ * filet de sécurité que `sectionsAMigrer` ci-dessus : vide sur un
+ * navigateur déjà passé par cette version. Consommé et envoyé au serveur
+ * par `migrerDocumentsLocauxVersServeur` (`useProjectDocumentsStore`) au
+ * premier `charger()`.
+ */
+export const projectDocumentsAMigrer: ProjectDocumentAncien[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -269,7 +298,6 @@ export const sectionsAMigrer: Section[] = []
  */
 export class ValidaPharmDatabase extends Dexie {
   clients!: EntityTable<Client, 'id'>
-  projectDocuments!: EntityTable<ProjectDocument, 'id'>
   clientConfigs!: EntityTable<ClientConfig, 'client_id'>
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
   etatSynchronisation!: EntityTable<EnregistrementEtatSynchronisation, 'id'>
@@ -667,9 +695,10 @@ export class ValidaPharmDatabase extends Dexie {
     // D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique de capture
     // avant suppression physique que la version 35 ci-dessus. `sections`
     // (Phase 3b, version 37 ci-dessous) et `projectDocuments` (Phase 3c,
-    // à venir) continuent de référencer le même id de projet, désormais
-    // côté serveur plutôt que dans cette table. Consommé et envoyé au
-    // serveur par `migrerProjetsLocauxVersServeur` (`useProjectsStore`).
+    // version 38 ci-dessous) continuent de référencer le même id de
+    // projet, désormais côté serveur plutôt que dans cette table.
+    // Consommé et envoyé au serveur par `migrerProjetsLocauxVersServeur`
+    // (`useProjectsStore`).
     this.version(36)
       .stores({
         projects: null,
@@ -682,10 +711,10 @@ export class ValidaPharmDatabase extends Dexie {
     // Section : migrée vers le Worker/D1 (Phase 3b du chantier de
     // migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique
     // de capture avant suppression physique que la version 36 ci-dessus.
-    // `projectDocuments` reste en IndexedDB local pour l'instant (Phase
-    // 3c) : son `project_id` continue de référencer le même id de projet,
-    // désormais côté serveur. Consommé et envoyé au serveur par
-    // `migrerSectionsLocalesVersServeur` (`useSectionsStore`).
+    // `projectDocuments` (Phase 3c, version 38 ci-dessous) continue de
+    // référencer le même id de projet, désormais côté serveur. Consommé
+    // et envoyé au serveur par `migrerSectionsLocalesVersServeur`
+    // (`useSectionsStore`).
     this.version(37)
       .stores({
         sections: null,
@@ -693,6 +722,20 @@ export class ValidaPharmDatabase extends Dexie {
       .upgrade(async (tx) => {
         const sections = await tx.table<Section>('sections').toArray()
         sectionsAMigrer.push(...sections)
+      })
+
+    // ProjectDocument : migré vers le Worker/D1+R2 (Phase 3c du chantier
+    // de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même
+    // technique de capture avant suppression physique que la version 37
+    // ci-dessus. Consommé et envoyé au serveur par
+    // `migrerDocumentsLocauxVersServeur` (`useProjectDocumentsStore`).
+    this.version(38)
+      .stores({
+        projectDocuments: null,
+      })
+      .upgrade(async (tx) => {
+        const projectDocuments = await tx.table<ProjectDocumentAncien>('projectDocuments').toArray()
+        projectDocumentsAMigrer.push(...projectDocuments)
       })
   }
 }

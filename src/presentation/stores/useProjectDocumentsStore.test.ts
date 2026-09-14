@@ -1,7 +1,6 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -27,7 +26,6 @@ async function creerProjetMinimal(): Promise<string> {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.projectDocuments.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
@@ -51,11 +49,11 @@ describe('useProjectDocumentsStore — importerDocument', () => {
     expect(document.status).toBe('reference_de_travail_non_maitre')
     expect(document.filename).toBe('manuel-fournisseur.pdf')
     expect(document.mime_type).toBe('application/pdf')
-    expect(document.content).not.toBeNull()
+    expect(document.has_binary_content).toBe(true)
     expect(store.documents).toHaveLength(1)
 
-    const relu = await db.projectDocuments.get(document.id)
-    expect(relu?.status).toBe('reference_de_travail_non_maitre')
+    await store.charger(projectId)
+    expect(store.documents[0]?.status).toBe('reference_de_travail_non_maitre')
   })
 
   test('accepte un format sans type MIME connu (mime_type vide, jamais fabriqué)', async () => {
@@ -117,6 +115,7 @@ describe('useProjectDocumentsStore — supprimerDocument', () => {
     await store.supprimerDocument(document.id)
 
     expect(store.documents).toHaveLength(0)
-    expect(await db.projectDocuments.get(document.id)).toBeUndefined()
+    await store.charger(projectId)
+    expect(store.documents).toHaveLength(0)
   })
 })

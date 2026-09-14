@@ -15,6 +15,7 @@ import { ClientsRepoMemoire } from './repos/clientsRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
+import { ProjectDocumentsRepoMemoire } from './repos/projectDocumentsRepo'
 import { ProjectsRepoMemoire } from './repos/projectsRepo'
 import { SectionsRepoMemoire } from './repos/sectionsRepo'
 import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
@@ -40,6 +41,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     organisationRepo: new OrganisationRepoMemoire(),
     projectsRepo: new ProjectsRepoMemoire(),
     sectionsRepo: new SectionsRepoMemoire(),
+    projectDocumentsRepo: new ProjectDocumentsRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -123,6 +125,8 @@ interface CorpsReponse {
   projects: ProjectJson[]
   section: SectionJson
   sections: SectionJson[]
+  documentProjet: ProjectDocumentJson
+  documentsProjet: ProjectDocumentJson[]
 }
 
 interface SectionJson {
@@ -233,6 +237,18 @@ interface DocumentNormatifJson {
   filename: string
   source: string
   sourceRef: string | null
+  extractedText: string
+  mimeType: string
+  hasBinaryContent: boolean
+  uploadedAt: string
+  uploadedBy: string
+}
+
+interface ProjectDocumentJson {
+  id: string
+  projectId: string
+  filename: string
+  status: string
   extractedText: string
   mimeType: string
   hasBinaryContent: boolean
@@ -1610,6 +1626,213 @@ describe('routerRequete — Sections (Phase 3b du chantier de migration D1)', ()
       jeton: admin.jeton,
     })
     expect(obtenirApresRejeu.corps.section.status).toBe('en_verification')
+  })
+})
+
+async function creerDocumentProjet(
+  ctx: Contexte,
+  jeton: string,
+  projectId: string,
+  options: {
+    metadata?: Record<string, unknown>
+    texte?: string
+    contenu?: { octets: Uint8Array; nomFichier: string; typeMime: string }
+  } = {},
+): Promise<{ status: number; corps: CorpsReponse }> {
+  const formData = new FormData()
+  formData.set(
+    'metadata',
+    JSON.stringify({
+      projectId,
+      filename: 'reference.pdf',
+      mimeType: 'application/pdf',
+      ...options.metadata,
+    }),
+  )
+  formData.set('texte', options.texte ?? 'Texte extrait du document.')
+  if (options.contenu) {
+    formData.set(
+      'contenu',
+      new File([options.contenu.octets.buffer as ArrayBuffer], options.contenu.nomFichier, {
+        type: options.contenu.typeMime,
+      }),
+    )
+  }
+  const reponse = await routerRequete(
+    new Request('https://relais.workers.dev/project-documents', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jeton}` },
+      body: formData,
+    }),
+    ctx,
+  )
+  const corps = await reponse.json().catch(() => null)
+  return { status: reponse.status, corps }
+}
+
+describe('routerRequete — ProjectDocument (Phase 3c du chantier de migration D1)', () => {
+  async function creerProjetDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/projects', { jeton, body: { name: 'Projet' } })
+    return creation.corps.projet.id
+  }
+
+  test('création sans contenu binaire -> hasBinaryContent=false, texte relu tel quel, listé sous le projet', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectId = await creerProjetDeTest(ctx, admin.jeton)
+
+    const { status, corps } = await creerDocumentProjet(ctx, admin.jeton, projectId, {
+      metadata: { filename: 'notes.md' },
+      texte: 'Contenu de référence.',
+    })
+    expect(status).toBe(201)
+    expect(corps.documentProjet.hasBinaryContent).toBe(false)
+    expect(corps.documentProjet.extractedText).toBe('Contenu de référence.')
+    expect(corps.documentProjet.status).toBe('reference_de_travail_non_maitre')
+
+    const liste = await requete(ctx, 'GET', `/projects/${projectId}/documents`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.documentsProjet).toHaveLength(1)
+    expect(liste.corps.documentsProjet[0]?.extractedText).toBe('Contenu de référence.')
+  })
+
+  test('création avec contenu binaire -> contenu relu identique via /contenu', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectId = await creerProjetDeTest(ctx, admin.jeton)
+    const octets = new Uint8Array([1, 2, 3, 4, 5])
+
+    const { status, corps } = await creerDocumentProjet(ctx, admin.jeton, projectId, {
+      contenu: { octets, nomFichier: 'reference.pdf', typeMime: 'application/pdf' },
+    })
+    expect(status).toBe(201)
+    expect(corps.documentProjet.hasBinaryContent).toBe(true)
+
+    const reponseContenu = await routerRequete(
+      new Request(
+        `https://relais.workers.dev/project-documents/${corps.documentProjet.id}/contenu`,
+        { headers: { Authorization: `Bearer ${admin.jeton}` } },
+      ),
+      ctx,
+    )
+    expect(reponseContenu.status).toBe(200)
+    expect(reponseContenu.headers.get('Content-Type')).toBe('application/pdf')
+    expect(new Uint8Array(await reponseContenu.arrayBuffer())).toEqual(octets)
+  })
+
+  test('création avec un contenu binaire vide (0 octet) -> hasBinaryContent=false, /contenu -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectId = await creerProjetDeTest(ctx, admin.jeton)
+
+    const { corps } = await creerDocumentProjet(ctx, admin.jeton, projectId, {
+      contenu: { octets: new Uint8Array([]), nomFichier: 'vide.pdf', typeMime: 'application/pdf' },
+    })
+    expect(corps.documentProjet.hasBinaryContent).toBe(false)
+
+    const reponseContenu = await routerRequete(
+      new Request(
+        `https://relais.workers.dev/project-documents/${corps.documentProjet.id}/contenu`,
+        { headers: { Authorization: `Bearer ${admin.jeton}` } },
+      ),
+      ctx,
+    )
+    expect(reponseContenu.status).toBe(404)
+  })
+
+  test('liste scopée à un projet, jamais celle d’un autre', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectA = await creerProjetDeTest(ctx, admin.jeton)
+    const projectB = await creerProjetDeTest(ctx, admin.jeton)
+    await creerDocumentProjet(ctx, admin.jeton, projectA, { metadata: { filename: 'a.pdf' } })
+    await creerDocumentProjet(ctx, admin.jeton, projectB, { metadata: { filename: 'b.pdf' } })
+
+    const listeA = await requete(ctx, 'GET', `/projects/${projectA}/documents`, {
+      jeton: admin.jeton,
+    })
+    expect(listeA.corps.documentsProjet.map((d) => d.filename)).toEqual(['a.pdf'])
+  })
+
+  test('obtention par id -> 404 si introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const introuvable = await requete(ctx, 'GET', '/project-documents/inconnu', {
+      jeton: admin.jeton,
+    })
+    expect(introuvable.status).toBe(404)
+  })
+
+  test('suppression retire le document de la liste', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectId = await creerProjetDeTest(ctx, admin.jeton)
+    const { corps } = await creerDocumentProjet(ctx, admin.jeton, projectId)
+
+    const suppression = await requete(
+      ctx,
+      'DELETE',
+      `/project-documents/${corps.documentProjet.id}`,
+      { jeton: admin.jeton },
+    )
+    expect(suppression.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/projects/${projectId}/documents`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.documentsProjet).toEqual([])
+  })
+
+  test('migration locale (filet de sécurité projectDocumentsAMigrer) : crée le document avec l’id imposé, idempotente au rejeu (l’existant côté serveur gagne toujours)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectId = await creerProjetDeTest(ctx, admin.jeton)
+
+    const formData = new FormData()
+    formData.set(
+      'metadata',
+      JSON.stringify({ id: 'doc-locale', projectId, filename: 'locale.pdf' }),
+    )
+    formData.set('texte', 'Texte capturé localement.')
+    const migration = await routerRequete(
+      new Request('https://relais.workers.dev/project-documents/migration-locale', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+        body: formData,
+      }),
+      ctx,
+    )
+    const corpsMigration = (await migration.json()) as CorpsReponse
+    expect(migration.status).toBe(201)
+    expect(corpsMigration.documentProjet.id).toBe('doc-locale')
+    expect(corpsMigration.documentProjet.extractedText).toBe('Texte capturé localement.')
+
+    // Rejeu avec un texte différent : l'enregistrement déjà migré gagne toujours, jamais un écrasement.
+    const formDataRejeu = new FormData()
+    formDataRejeu.set(
+      'metadata',
+      JSON.stringify({ id: 'doc-locale', projectId, filename: 'locale.pdf' }),
+    )
+    formDataRejeu.set('texte', 'Texte different, jamais appliqué.')
+    const migrationRejouee = await routerRequete(
+      new Request('https://relais.workers.dev/project-documents/migration-locale', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+        body: formDataRejeu,
+      }),
+      ctx,
+    )
+    const corpsRejeu = (await migrationRejouee.json()) as CorpsReponse
+    expect(migrationRejouee.status).toBe(201)
+    expect(corpsRejeu.documentProjet.extractedText).toBe('Texte capturé localement.')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const projectId = 'un-projet'
+    const liste = await requete(ctx, 'GET', `/projects/${projectId}/documents`)
+    expect(liste.status).toBe(401)
   })
 })
 

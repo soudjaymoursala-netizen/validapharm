@@ -4,6 +4,7 @@ import type { RouteLocationRaw } from 'vue-router'
 import type { Client } from '../../logique-metier/domaine/types'
 import { correspondPourRecherche } from '../../logique-metier/recherche/correspondPourRecherche'
 import { db } from '../../persistance/db'
+import { documentProjetWireVersDomaine } from './useProjectDocumentsStore'
 import { useAuthStore } from './useAuthStore'
 import { sectionWireVersDomaine } from './useSectionsStore'
 
@@ -80,13 +81,19 @@ export const useRechercheGlobaleStore = defineStore('rechercheGlobale', () => {
       const projetsDuClient = resultatProjets?.ok ? resultatProjets.donnees.projects : []
       const idsProjets = projetsDuClient.map((p) => p.id)
       const idsProjetsSet = new Set(idsProjets)
-      const [sectionsToutClient, documents] =
+      const [sectionsToutClient, documentsParProjet] =
         idsProjets.length > 0
           ? await Promise.all([
               api && authStore.jeton
                 ? api.listerToutesLesSections(authStore.jeton)
                 : Promise.resolve(null),
-              db.projectDocuments.where('project_id').anyOf(idsProjets).toArray(),
+              api && authStore.jeton
+                ? Promise.all(
+                    idsProjets.map((id) =>
+                      api.listerDocumentsProjet(authStore.jeton as string, id),
+                    ),
+                  )
+                : Promise.resolve([]),
             ])
           : [null, []]
       const sections = (
@@ -94,6 +101,9 @@ export const useRechercheGlobaleStore = defineStore('rechercheGlobale', () => {
           ? sectionsToutClient.donnees.sections.map(sectionWireVersDomaine)
           : []
       ).filter((s) => idsProjetsSet.has(s.project_id))
+      const documents = documentsParProjet.flatMap((resultat) =>
+        resultat.ok ? resultat.donnees.documentsProjet.map(documentProjetWireVersDomaine) : [],
+      )
 
       const nomProjet = (projectId: string) =>
         projetsDuClient.find((p) => p.id === projectId)?.name ?? projectId

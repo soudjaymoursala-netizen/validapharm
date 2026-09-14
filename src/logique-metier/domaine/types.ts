@@ -204,18 +204,21 @@ export interface ProjectDocument {
    */
   extracted_text: string
   /**
-   * Contenu binaire réel du fichier — absent (`null`) pour un document créé
-   * par le seul besoin ponctuel de §4.1bis avant l'ajout de la section
-   * "Documents" générique (ajouté v20 — le champ
-   * `extracted_text` seul ne permettait ni de retélécharger ni de
+   * Un fichier binaire d'origine existe côté serveur (R2) et peut être
+   * téléchargé — jamais chargé eagerly avec la liste, voir
+   * `useProjectDocumentsStore.telechargerContenu` (Phase 3c du chantier de
+   * migration D1, même patron que `NormativeDocument.has_binary_content`).
+   * `false` pour un document créé par le seul besoin ponctuel de §4.1bis
+   * avant l'ajout de la section "Documents" générique (ajouté v20 — le
+   * champ `extracted_text` seul ne permettait ni de retélécharger ni de
    * prévisualiser le fichier d'origine, contrairement à ce que l'exigence
    * "section Documents pour charger des fichiers de référence" impose).
    * Jamais synchronisé vers GitHub (portée de `useSynchronisationStore`
-   * limitée aux projets/sections) — IndexedDB local uniquement,
-   * même régime que `GabaritExportClient.fichier`.
+   * limitée aux projets/sections) — même régime que
+   * `GabaritExportClient.fichier`.
    */
-  content: Blob | null
-  /** Type MIME déclaré par le navigateur au moment du chargement — chaîne vide si absent du document (même limite que `content`). */
+  has_binary_content: boolean
+  /** Type MIME déclaré par le navigateur au moment du chargement — chaîne vide si absent du document (même limite que `has_binary_content`). */
   mime_type: string
 }
 

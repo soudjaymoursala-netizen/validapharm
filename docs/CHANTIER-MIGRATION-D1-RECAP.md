@@ -89,8 +89,8 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `assetHierarchySchemas`, `assetNodes` (Structure Système) | D1 | ✅ **Phase 1 terminée (14/09/2026)** — PR #39 mergée, migration 0004 appliquée en production D1, déploiement Worker vérifié |
 | `organizations`, `workspaces` | D1 | ✅ **Phase 2 terminée (14/09/2026)** — PR #40 mergée, migration 0005 appliquée en production D1, déploiement Worker vérifié |
 | `projects` | D1 (+ GitHub déjà en place, à conserver) | ✅ **Phase 3a terminée (14/09/2026)** — voir §6 |
-| `sections` | D1 (+ GitHub déjà en place, à conserver) | 🔧 **Phase 3b — code complet, PR en cours** — voir §7 |
-| `projectDocuments` (D1+R2, contenu binaire) | D1+R2 | ⬜ Phase 3c |
+| `sections` | D1 (+ GitHub déjà en place, à conserver) | ✅ **Phase 3b terminée (14/09/2026)** — voir §7 |
+| `projectDocuments` (D1+R2, contenu binaire) | D1+R2 | ✅ **Phase 3c terminée (14/09/2026)** — voir §8 |
 | `methodProfilesACFC`, `evaluationsACFC` | D1 | ⬜ Phase 4 |
 | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ⬜ Phase 4 |
 | `methodProfilesImpactAssessment`, `evaluationsImpactAssessment`, `evaluationsCSVAssessment` | D1 | ⬜ Phase 4 |
@@ -580,25 +580,42 @@ adaptation IA, discipline ALCOA+ complète sur `audit_log`/`revisions`.
     rencontré cette fois (contrairement à la Phase 3a) — les 11 fichiers
     utilisaient déjà ou utilisent désormais systématiquement
     `installerFauxWorkerAuth()`/`connecterAdminDeTest()`.
-12. **Validation complète** (14/09/2026) : `npx vue-tsc --noEmit -p
-    tsconfig.app.json` (0 erreur — **`-p .` seul sous-rapporte les erreurs
-    dans ce dépôt, toujours utiliser `tsconfig.app.json` explicitement**),
-    `npx eslint src/ --max-warnings 0` (0 erreur/warning), `npx vitest run`
-    racine (**1237/1237 tests verts**),
-    `cd workers/auth-worker && npx vitest run` (**103/103 tests verts**,
-    dont 2 nouveaux tests pour `/sections/:id/restauration` et
-    `/sections/migration-locale`).
+12. **Validation complète** (14/09/2026) : `npm run typecheck` racine
+    (`vue-tsc -b --noEmit`, 0 erreur), `npm run lint` (0 erreur/warning),
+    `npm run format` (0 erreur), `npx vitest run` racine (**1237/1237 tests
+    verts**), `cd workers/auth-worker && npx vitest run` (**103/103 tests
+    verts**, dont 2 nouveaux tests pour `/sections/:id/restauration` et
+    `/sections/migration-locale`). **Piège découvert pendant cette
+    validation** : `npx vue-tsc --noEmit -p tsconfig.app.json` (frontend
+    seul) et `npx vue-tsc --noEmit -p .` (racine, mode non-build) passent
+    tous les deux à tort sans erreur même quand `workers/auth-worker`
+    contient une vraie erreur de type — seul `npm run typecheck` (mode
+    `-b`, celui réellement exécuté par la CI, "Lint, typecheck, tests")
+    vérifie les deux ensemble avec les project references. A fait
+    échouer une première passe de CI (voir §7.2 point 1bis) — toujours
+    utiliser `npm run typecheck` pour valider localement avant de pousser,
+    jamais un `vue-tsc` isolé sur un seul sous-projet.
 
-### 7.2 Phase 3b — en cours de clôture (14/09/2026)
+### 7.2 Phase 3b — terminée (14/09/2026)
 
-1. ⬜ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
-2. ⬜ PR ouverte, CI verte (même panne connue `Workers Builds:
-   validapharm-auth-worker` hors `main` attendue, commentaire de statu quo
-   à reposter si nécessaire), à merger sur `main`.
-3. ⬜ Migration `0007_sections.sql` à appliquer en production D1
-   (`validapharm-auth`, database_id `5fb762ef-fe99-4e68-9086-e57126c5c2aa`).
-4. ⬜ Code déployé à vérifier sur le Worker en production
-   (`workers_get_worker_code`, `validapharm-auth-worker`).
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #42 ouverte. Premier passage CI rouge sur `Lint, typecheck, tests` —
+   pas la panne connue `Workers Builds` mais une vraie erreur de type dans
+   le test de migration locale ajouté cette session
+   (`corps.sections[0]` possiblement `undefined`,
+   `noUncheckedIndexedAccess`, jamais détectée localement faute d'avoir
+   utilisé `npm run typecheck`, voir §7.1 point 12) — corrigée (accès
+   chaîné en optionnel) et repoussée. CI verte (`Lint, typecheck, tests`),
+   même panne connue `Workers Builds: validapharm-auth-worker` hors `main`
+   confirmée (commentaire de statu quo posté, même précédent que
+   #19/#24-28/#39/#40/#41), mergée sur `main` (squash, commit `77ece5c`).
+3. ✅ Migration `0007_sections.sql` appliquée en production D1
+   (`validapharm-auth`) — table `sections` et ses trois index confirmés
+   présents (`sqlite_master`).
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : `D1SectionsRepo`,
+   les 8 routes `/sections/...` (dont `migration-locale` et
+   `:id/restauration`) et `ctx.sectionsRepo` bien présents.
 5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
    qu'en Phases 1/2/3a) — `sections` a déjà sa synchronisation (préexistante,
    adaptée ci-dessus, §7.1 point 8), seul le reste des domaines migrés en
@@ -606,9 +623,122 @@ adaptation IA, discipline ALCOA+ complète sur `audit_log`/`revisions`.
 
 ### 7.3 Prochaine action
 
-Terminer la clôture de la Phase 3b (§7.2), puis enchaîner directement sur
-la Phase 3c (`projectDocuments` + R2, contenu binaire `Blob`, miroir du
-patron déjà construit pour la Bibliothèque de normes) — même consigne de
-l'utilisateur (14/09/2026) : enchaîner sur toutes les phases sans
-s'arrêter pour demander confirmation entre chacune, le sujet des nœuds
-(import SAP) reste repoussé à plus tard.
+Phase 3b close. Enchaîner directement sur la Phase 3c (`projectDocuments`
++ R2, contenu binaire `Blob`, miroir du patron déjà construit pour la
+Bibliothèque de normes) — même consigne de l'utilisateur (14/09/2026) :
+enchaîner sur toutes les phases sans s'arrêter pour demander confirmation
+entre chacune, le sujet des nœuds (import SAP) reste repoussé à plus tard.
+
+---
+
+## 8. État détaillé — Phase 3c (`ProjectDocument`), au 14/09/2026
+
+`ProjectDocument` clôt la Phase 3 (`projects`/`sections`/`projectDocuments`)
+— même répartition D1(métadonnées)/R2(texte extrait + contenu binaire) que
+la Bibliothèque de normes (`NormativeDocument`), jamais de contenu binaire
+préchargé avec la liste.
+
+### 8.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0008_project_documents.sql`
+   crée `project_documents` (id, project_id, filename, status, mime_type,
+   has_binary_content, uploaded_at, uploaded_by — texte extrait et contenu
+   binaire vivent en R2, jamais en D1) + un index sur `project_id`.
+   **Pas encore appliquée en production à l'écriture de cette section.**
+2. **Repo D1+R2** : `workers/auth-worker/src/repos/projectDocumentsRepo.ts`
+   (interface + `ProjectDocumentsRepoMemoire`) et
+   `.../repos/d1/d1ProjectDocumentsRepo.ts` (implémentation D1) — réutilise
+   le `R2StockageBinaireRepo(env.BUCKET)` déjà partagé avec la Bibliothèque
+   de normes, aucun nouveau câblage R2 nécessaire.
+3. **Collision de route évitée** : `POST /projects/:id/documents` existait
+   déjà depuis la Phase 3a (`gererAjouterDocumentProjet` — référence un id
+   de document dans `Project.documents[]`, jamais le contenu du document) —
+   la création réelle d'un document utilise donc `POST /project-documents`
+   (id de projet dans le corps), un chemin distinct.
+4. **6 routes `auth-worker`** sous `/project-documents/...` (+ 1 route
+   `GET /projects/:id/documents` pour lister par projet) : lister par
+   projet, créer (`multipart/form-data`), migration locale (idempotente,
+   l'existant côté serveur gagne toujours), obtenir le contenu binaire à la
+   demande (`GET .../:id/contenu`, vérifiée avant la route générique `:id`),
+   obtenir les métadonnées + texte extrait, supprimer. Corps
+   `multipart/form-data` (jamais JSON) pour la création/migration locale —
+   `metadata` (JSON) + `texte` + `contenu` (Blob optionnel) — même garde-fou
+   "jamais `instanceof Blob`, structure + `size > 0`" que
+   `gererCreerDocumentNormatif` (protège contre un jeton Drive expiré
+   produisant un Blob présent mais vide, bug de production réel déjà
+   rencontré).
+5. **Clés de réponse dédiées** : `documentProjet`/`documentsProjet` (jamais
+   `document`/`documents`, déjà pris par les routes de documents normatifs
+   préexistantes) — erreur de nommage initiale détectée par une collision de
+   type sur `CorpsReponse` dans les tests, corrigée avant validation.
+6. **8 nouveaux tests Worker** (`routeur.test.ts`) : création sans/avec
+   contenu binaire, cas limite Blob vide, listing scopé par projet, 404 sur
+   id inconnu, suppression, idempotence de la migration locale,
+   non-authentifié → 401.
+7. **`AuthApiClient`** : `ProjectDocumentWire` + `SaisieCreationDocumentProjet`
+   + 6 méthodes (liste par projet/obtention/création/suppression/contenu
+   binaire à la demande/migration locale), toutes vérifiées
+   `npm run typecheck` propre.
+8. **Type domaine `ProjectDocument`** (`logique-metier/domaine/types.ts`) :
+   `content: Blob | null` retiré, `has_binary_content: boolean` ajouté
+   (doc-comment miroir de `NormativeDocument.has_binary_content`,
+   référençant `useProjectDocumentsStore.telechargerContenu`).
+9. **`useProjectDocumentsStore` entièrement réécrit** (même API publique
+   `{ documents, enChargement, charger, importerDocument, supprimerDocument }`
+   + nouvelle méthode `telechargerContenu(documentId): Promise<Blob>`,
+   même patron que `useNormativeDocumentsStore.telechargerContenu` —
+   contenu jamais préchargé avec la liste). `obtenirApi()` lève si le relais
+   n'est pas configuré (mutations), `obtenirApiProjet()` dégrade
+   silencieusement vers `null` (appel de référence
+   `Project.documents[]`, jamais consommé en production). `charger` dégrade
+   gracieusement vers `[]` sur toute erreur.
+10. **Ripple effect côté production** : `useSectionsStore` (création de la
+    référence de document dans `genererBrouillonIA` via
+    `api.creerDocumentProjet`, `obtenirDocumentReference` dégradé vers
+    `undefined` sur échec), `FicheProjet.vue` (`telechargerDocument`
+    devenue asynchrone, appelle `telechargerContenu` à la demande au clic,
+    nouvel état d'erreur `erreurTelechargementDocument`, bouton désactivé
+    sur `!document.has_binary_content` au lieu de `!document.content`),
+    `useRechercheGlobaleStore.rechercherPourClient` (documents par ensemble
+    de projets d'un client via un appel API parallèle par projet, même
+    patron que la recherche transverse de sections).
+11. **Filet de sécurité de migration locale** : capture Dexie v38
+    (`persistance/db.ts`, table `projectDocuments` supprimée, données
+    capturées dans `projectDocumentsAMigrer`) +
+    `migrerDocumentsLocauxVersServeur()` — appelée au début de `charger`.
+    Contrairement à `migrerSectionsLocalesVersServeur` (un seul appel
+    groupé, route acceptant un tableau), la route Worker
+    `/project-documents/migration-locale` traite un document à la fois
+    (corps `multipart/form-data`, contenu binaire potentiellement
+    volumineux) : chaque document n'est retiré de la file qu'après
+    confirmation serveur individuelle, jamais avant.
+12. **3 fichiers de test corrigés** (stray `db.projectDocuments.clear()`
+    dans leur `beforeEach`, import `db` retiré quand devenu inutilisé) :
+    `FicheProjet.test.ts`, `sections.test.ts`,
+    `useRechercheGlobaleStore.test.ts`. `useProjectDocumentsStore.test.ts`
+    adapté pour lire `has_binary_content` au lieu de `content` et re-charger
+    via le store plutôt qu'interroger Dexie directement.
+13. **Validation complète** (14/09/2026, avec la leçon de la Phase 3b déjà
+    appliquée dès le départ — uniquement `npm run typecheck`, jamais un
+    `vue-tsc` isolé) : `npm run typecheck` (0 erreur), `npm run lint`
+    (0 erreur/warning), `npm run format` (0 erreur), `npx vitest run`
+    racine (**1245/1245 tests verts**), `cd workers/auth-worker && npx
+    vitest run` (**119/119 tests verts**, dont les 8 nouveaux tests
+    `ProjectDocument`).
+
+### 8.2 Phase 3c — terminée
+
+_À compléter après commit/push/PR/merge/migration-apply/déploiement — voir
+§8.3._
+
+### 8.3 Prochaine action
+
+Phase 3 entièrement close (`projects`/`sections`/`projectDocuments` tous
+sur D1, `projectDocuments` sur D1+R2). Enchaîner directement sur la Phase 4
+(`methodProfilesACFC`/`evaluationsACFC`/`parameters`/
+`classificationsCriticiteParametre`/`cpps`/`cqas`/
+`methodProfilesImpactAssessment`/`evaluationsImpactAssessment`/
+`evaluationsCSVAssessment`/`methodProfilesRiskAssessment`/
+`risksAssessment`, voir §3) — même consigne de l'utilisateur : enchaîner
+sur toutes les phases sans s'arrêter pour demander confirmation entre
+chacune, le sujet des nœuds (import SAP) reste repoussé à plus tard.
