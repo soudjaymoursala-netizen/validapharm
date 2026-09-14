@@ -249,6 +249,17 @@ export const workspacesAMigrer: Workspace[] = []
 export const projectsAMigrer: Project[] = []
 
 /**
+ * `Section` capturées depuis l'ancienne table locale `sections` juste avant
+ * sa suppression (version 37, Phase 3b du chantier de migration D1,
+ * docs/CHANTIER-MIGRATION-D1-RECAP.md) — même filet de sécurité que
+ * `projectsAMigrer` ci-dessus : vide sur un navigateur déjà passé par
+ * cette version. Consommé et envoyé au serveur par
+ * `migrerSectionsLocalesVersServeur` (`useSectionsStore`) au premier
+ * `chargerSectionsDuProjet()`.
+ */
+export const sectionsAMigrer: Section[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -258,7 +269,6 @@ export const projectsAMigrer: Project[] = []
  */
 export class ValidaPharmDatabase extends Dexie {
   clients!: EntityTable<Client, 'id'>
-  sections!: EntityTable<Section, 'id'>
   projectDocuments!: EntityTable<ProjectDocument, 'id'>
   clientConfigs!: EntityTable<ClientConfig, 'client_id'>
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
@@ -655,12 +665,11 @@ export class ValidaPharmDatabase extends Dexie {
 
     // Project : migré vers le Worker/D1 (Phase 3a du chantier de migration
     // D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique de capture
-    // avant suppression physique que la version 35 ci-dessus. `sections`/
-    // `projectDocuments` restent en IndexedDB local pour l'instant (Phases
-    // 3b/3c) : leur `project_id` continue de référencer le même id de
-    // projet, désormais côté serveur plutôt que dans cette table.
-    // Consommé et envoyé au serveur par `migrerProjetsLocauxVersServeur`
-    // (`useProjectsStore`).
+    // avant suppression physique que la version 35 ci-dessus. `sections`
+    // (Phase 3b, version 37 ci-dessous) et `projectDocuments` (Phase 3c,
+    // à venir) continuent de référencer le même id de projet, désormais
+    // côté serveur plutôt que dans cette table. Consommé et envoyé au
+    // serveur par `migrerProjetsLocauxVersServeur` (`useProjectsStore`).
     this.version(36)
       .stores({
         projects: null,
@@ -668,6 +677,22 @@ export class ValidaPharmDatabase extends Dexie {
       .upgrade(async (tx) => {
         const projects = await tx.table<Project>('projects').toArray()
         projectsAMigrer.push(...projects)
+      })
+
+    // Section : migrée vers le Worker/D1 (Phase 3b du chantier de
+    // migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique
+    // de capture avant suppression physique que la version 36 ci-dessus.
+    // `projectDocuments` reste en IndexedDB local pour l'instant (Phase
+    // 3c) : son `project_id` continue de référencer le même id de projet,
+    // désormais côté serveur. Consommé et envoyé au serveur par
+    // `migrerSectionsLocalesVersServeur` (`useSectionsStore`).
+    this.version(37)
+      .stores({
+        sections: null,
+      })
+      .upgrade(async (tx) => {
+        const sections = await tx.table<Section>('sections').toArray()
+        sectionsAMigrer.push(...sections)
       })
   }
 }

@@ -3,17 +3,37 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { Section } from '../../logique-metier/domaine/types'
+import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
-import { db } from '../../persistance/db'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientActifStore } from '../stores/useClientActifStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useEpinglageStore } from '../stores/useEpinglageStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
+import { sectionDomaineVersWire } from '../stores/useSectionsStore'
 import AccueilQueVoulezVousFaire from './AccueilQueVoulezVousFaire.vue'
+
+/**
+ * `Section` vit désormais dans le Worker/D1 (Phase 3b du chantier de
+ * migration D1) — remplace l'ancien `db.sections.bulkAdd(...)` direct de
+ * préparation de test, même pattern que `synchronisation.test.ts`.
+ */
+async function seedSection(section: Section): Promise<void> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) throw new Error('session absente en préparation de test')
+  const resultat = await api.restaurerSection(
+    authStore.jeton,
+    section.id,
+    sectionDomaineVersWire(section),
+  )
+  if (!resultat.ok) throw new Error(`échec de préparation de test : ${resultat.erreur}`)
+}
 
 function routeurDeTest() {
   return createRouter({
@@ -58,7 +78,6 @@ beforeEach(async () => {
   setActivePinia(createPinia())
   localStorage.clear()
   await reinitialiserAuthDeTest()
-  await db.sections.clear()
   await db.knowledgeItems.clear()
   await db.conflicts.clear()
   demonter = installerFauxWorkerAuth().demonter
@@ -103,10 +122,8 @@ describe('AccueilQueVoulezVousFaire — Continuer mon travail', () => {
       language_default: 'fr',
       client_id: null,
     })
-    await db.sections.bulkAdd([
-      sectionMinimale(projet.id, 's1', 'valide_en_interne'),
-      sectionMinimale(projet.id, 's2', 'brouillon_aide'),
-    ])
+    await seedSection(sectionMinimale(projet.id, 's1', 'valide_en_interne'))
+    await seedSection(sectionMinimale(projet.id, 's2', 'brouillon_aide'))
 
     const router = routeurDeTest()
     await router.push('/')

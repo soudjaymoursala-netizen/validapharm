@@ -16,6 +16,7 @@ import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
 import { ProjectsRepoMemoire } from './repos/projectsRepo'
+import { SectionsRepoMemoire } from './repos/sectionsRepo'
 import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
 import { StructureSystemeRepoMemoire } from './repos/structureSystemeRepo'
 import { UtilisateursRepoMemoire } from './repos/utilisateursRepo'
@@ -38,6 +39,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     structureSystemeRepo: new StructureSystemeRepoMemoire(),
     organisationRepo: new OrganisationRepoMemoire(),
     projectsRepo: new ProjectsRepoMemoire(),
+    sectionsRepo: new SectionsRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -119,6 +121,39 @@ interface CorpsReponse {
   workspaces: WorkspaceJson[]
   projet: ProjectJson
   projects: ProjectJson[]
+  section: SectionJson
+  sections: SectionJson[]
+}
+
+interface SectionJson {
+  id: string
+  projectId: string
+  templateType: string
+  templateEngineVersion: string
+  ownerId: string
+  sharedWith: { userId: string; accessLevel: string }[]
+  language: string
+  status: string
+  meta: { ref: string; titre: string; version: string; site?: string }
+  workflow: {
+    authors: string[]
+    reviewers: { userId: string; avis: string; date: string }[]
+    approverFinal: string | null
+  }
+  signatures: {
+    redacteur: { userId?: string; date?: string }
+    verificateur: { userId?: string; date?: string }
+    approbateur: { userId?: string; date?: string }
+  }
+  revisions: { version: string; date: string; auteur: string; motif: string }[]
+  values: Record<string, string | number | null>
+  tables: Record<string, Record<string, string | number | null>[]>
+  generationSource: { sourceDocumentId: string | null; generatedFields: string[] }
+  procedureId: string | null
+  assetNodeId: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
 }
 
 interface ProjectJson {
@@ -1385,6 +1420,196 @@ describe('routerRequete — Projects (Phase 3a du chantier de migration D1)', ()
     expect(migrationRejouee.status).toBe(201)
     const liste = await requete(ctx, 'GET', '/projects', { jeton: admin.jeton })
     expect(liste.corps.projects.filter((p) => p.id === projetLocal.id)).toHaveLength(1)
+  })
+})
+
+describe('routerRequete — Sections (Phase 3b du chantier de migration D1)', () => {
+  function sectionMinimale(id: string, projectId: string): SectionJson {
+    return {
+      id,
+      projectId,
+      templateType: 'oq',
+      templateEngineVersion: '0.1.0',
+      ownerId: 'admin@pharmatech.example',
+      sharedWith: [],
+      language: 'fr',
+      status: 'brouillon_aide',
+      meta: { ref: '', titre: 'OQ presse P-200', version: '0.1' },
+      workflow: { authors: ['admin@pharmatech.example'], reviewers: [], approverFinal: null },
+      signatures: { redacteur: {}, verificateur: {}, approbateur: {} },
+      revisions: [],
+      values: {},
+      tables: {},
+      generationSource: { sourceDocumentId: null, generatedFields: [] },
+      procedureId: null,
+      assetNodeId: null,
+      auditLog: [
+        {
+          timestamp: '2026-01-01T00:00:00.000Z',
+          actor: 'admin@pharmatech.example',
+          action: 'création',
+        },
+      ],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+  }
+
+  async function creerProjetDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/projects', { jeton, body: { name: 'Projet' } })
+    return creation.corps.projet.id
+  }
+
+  test('crée une section (POST /sections, jamais le même chemin que la référence Project.sections[])', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectId = await creerProjetDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', '/sections', {
+      jeton: admin.jeton,
+      body: sectionMinimale('s1', projectId),
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.section.projectId).toBe(projectId)
+    expect(creation.corps.section.templateType).toBe('oq')
+
+    const obtenir = await requete(ctx, 'GET', `/sections/s1`, { jeton: admin.jeton })
+    expect(obtenir.corps.section.id).toBe('s1')
+  })
+
+  test('liste les sections d’un projet, jamais celles d’un autre', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectA = await creerProjetDeTest(ctx, admin.jeton)
+    const projectB = await creerProjetDeTest(ctx, admin.jeton)
+    await requete(ctx, 'POST', '/sections', {
+      jeton: admin.jeton,
+      body: sectionMinimale('sa', projectA),
+    })
+    await requete(ctx, 'POST', '/sections', {
+      jeton: admin.jeton,
+      body: sectionMinimale('sb', projectB),
+    })
+
+    const listeA = await requete(ctx, 'GET', `/projects/${projectA}/sections`, {
+      jeton: admin.jeton,
+    })
+    expect(listeA.corps.sections.map((s) => s.id)).toEqual(['sa'])
+
+    const toutes = await requete(ctx, 'GET', '/sections', { jeton: admin.jeton })
+    expect(toutes.corps.sections.map((s) => s.id).sort()).toEqual(['sa', 'sb'])
+  })
+
+  test('remplace une section — le projet d’origine et l’id restent figés, jamais écrasables par le corps', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectId = await creerProjetDeTest(ctx, admin.jeton)
+    await requete(ctx, 'POST', '/sections', {
+      jeton: admin.jeton,
+      body: sectionMinimale('s1', projectId),
+    })
+
+    const sectionModifiee = {
+      ...sectionMinimale('id-different-ignoré', 'projet-different-ignoré'),
+      status: 'en_verification',
+      auditLog: [
+        ...sectionMinimale('s1', projectId).auditLog,
+        {
+          timestamp: '2026-01-02T00:00:00.000Z',
+          actor: 'admin@pharmatech.example',
+          action: 'changement_statut',
+        },
+      ],
+    }
+    const remplacement = await requete(ctx, 'PUT', `/sections/s1`, {
+      jeton: admin.jeton,
+      body: sectionModifiee,
+    })
+    expect(remplacement.status).toBe(200)
+    expect(remplacement.corps.section.id).toBe('s1')
+    expect(remplacement.corps.section.projectId).toBe(projectId)
+    expect(remplacement.corps.section.status).toBe('en_verification')
+    expect(remplacement.corps.section.auditLog).toHaveLength(2)
+  })
+
+  test('remplacer une section introuvable -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const remplacement = await requete(ctx, 'PUT', `/sections/inconnue`, {
+      jeton: admin.jeton,
+      body: sectionMinimale('inconnue', 'un-projet'),
+    })
+    expect(remplacement.status).toBe(404)
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const liste = await requete(ctx, 'GET', '/sections')
+    expect(liste.status).toBe(401)
+  })
+
+  test('restaure (filet de récupération GitHub) : crée si absente, remplace si déjà présente, jamais une fusion', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectId = await creerProjetDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'PUT', '/sections/s1/restauration', {
+      jeton: admin.jeton,
+      body: sectionMinimale('id-ignoré-par-lurl', projectId),
+    })
+    expect(creation.status).toBe(200)
+    expect(creation.corps.section.id).toBe('s1')
+    const obtenirApresCreation = await requete(ctx, 'GET', '/sections/s1', { jeton: admin.jeton })
+    expect(obtenirApresCreation.corps.section.templateType).toBe('oq')
+
+    const remplacement = await requete(ctx, 'PUT', '/sections/s1/restauration', {
+      jeton: admin.jeton,
+      body: { ...sectionMinimale('s1', projectId), status: 'valide_en_interne' },
+    })
+    expect(remplacement.status).toBe(200)
+    const obtenirApresRemplacement = await requete(ctx, 'GET', '/sections/s1', {
+      jeton: admin.jeton,
+    })
+    expect(obtenirApresRemplacement.corps.section.status).toBe('valide_en_interne')
+  })
+
+  test('migration locale (filet de sécurité sectionsAMigrer) : crée la section telle quelle, idempotente au rejeu', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const projectId = await creerProjetDeTest(ctx, admin.jeton)
+    const sectionLocale = {
+      ...sectionMinimale('s-locale', projectId),
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    }
+
+    const migration = await requete(ctx, 'POST', '/sections/migration-locale', {
+      jeton: admin.jeton,
+      body: { sections: [sectionLocale] },
+    })
+    expect(migration.status).toBe(201)
+    expect(migration.corps.sections).toEqual([sectionLocale])
+
+    const obtenir = await requete(ctx, 'GET', '/sections/s-locale', { jeton: admin.jeton })
+    expect(obtenir.corps.section.createdAt).toBe('2025-01-01T00:00:00.000Z')
+
+    const remplacement = await requete(ctx, 'PUT', '/sections/s-locale', {
+      jeton: admin.jeton,
+      body: { ...sectionLocale, status: 'en_verification' },
+    })
+    expect(remplacement.status).toBe(200)
+
+    const migrationRejouee = await requete(ctx, 'POST', '/sections/migration-locale', {
+      jeton: admin.jeton,
+      body: { sections: [sectionLocale] },
+    })
+    expect(migrationRejouee.status).toBe(201)
+    expect(migrationRejouee.corps.sections[0].status).toBe('en_verification')
+
+    const obtenirApresRejeu = await requete(ctx, 'GET', '/sections/s-locale', {
+      jeton: admin.jeton,
+    })
+    expect(obtenirApresRejeu.corps.section.status).toBe('en_verification')
   })
 })
 

@@ -16,15 +16,15 @@
 // indépendants.
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { db } from '../../persistance/db'
 import type { Project, TemplateType } from '../../logique-metier/domaine/types'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useMethodProfileACFCStore } from '../stores/useMethodProfileACFCStore'
 import { useProcedureStore } from '../stores/useProcedureStore'
 import { useProcessContextStore } from '../stores/useProcessContextStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useRiskAssessmentStore } from '../stores/useRiskAssessmentStore'
-import { useSectionsStore } from '../stores/useSectionsStore'
+import { sectionWireVersDomaine, useSectionsStore } from '../stores/useSectionsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 
 defineOptions({ name: 'EcranAssistantCreationLivrable' })
@@ -128,10 +128,13 @@ async function chargerPrecedents(): Promise<void> {
   }
   const projetsDuClient = await projetsStore.listerProjetsClient(projet.value.client_id)
   const idsProjetsDuClient = new Set(projetsDuClient.map((p) => p.id))
-  const sectionsMemeType = await db.sections
-    .where('template_type')
-    .equals(templateChoisi.value)
-    .toArray()
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  const resultatSections =
+    api && authStore.jeton ? await api.listerToutesLesSections(authStore.jeton) : null
+  const sectionsMemeType = (
+    resultatSections?.ok ? resultatSections.donnees.sections.map(sectionWireVersDomaine) : []
+  ).filter((s) => s.template_type === templateChoisi.value)
   precedents.value = sectionsMemeType
     .filter((s) => idsProjetsDuClient.has(s.project_id) && s.project_id !== props.projectId)
     .map((s) => ({

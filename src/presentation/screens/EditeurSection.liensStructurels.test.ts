@@ -3,18 +3,34 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { Section } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useProcedureStore } from '../stores/useProcedureStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
-import { useSectionsStore } from '../stores/useSectionsStore'
+import { sectionWireVersDomaine, useSectionsStore } from '../stores/useSectionsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import EditeurSection from './EditeurSection.vue'
+
+/**
+ * `Section` vit désormais dans le Worker/D1 (Phase 3b du chantier de
+ * migration D1) — remplace l'ancien `db.sections.get(...)` direct de
+ * relecture d'état persisté, même pattern que `synchronisation.test.ts`.
+ */
+async function obtenirSectionDeTest(id: string): Promise<Section | undefined> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) return undefined
+  const resultat = await api.obtenirSection(authStore.jeton, id)
+  if (!resultat.ok) return undefined
+  return sectionWireVersDomaine(resultat.donnees.section)
+}
 
 function routeurDeTest() {
   return createRouter({
@@ -65,7 +81,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.sections.clear()
   await db.procedures.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
@@ -196,7 +211,7 @@ describe('EditeurSection — liens structurels réels (tâche #118)', () => {
     await boutonLier?.trigger('click')
     await attendreQue(() => wrapper.text().includes('Délier'))
 
-    const sectionEnBase = await db.sections.get(section.id)
+    const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.procedure_id).toBe(procedure.id)
 
     const boutonDelier = wrapper
@@ -205,7 +220,7 @@ describe('EditeurSection — liens structurels réels (tâche #118)', () => {
     await boutonDelier?.trigger('click')
     await attendreQue(() => wrapper.text().includes('Lier à une procédure'))
 
-    const sectionApresDelien = await db.sections.get(section.id)
+    const sectionApresDelien = await obtenirSectionDeTest(section.id)
     expect(sectionApresDelien?.procedure_id).toBeNull()
     await laisserSettlerMontageComplet()
   })

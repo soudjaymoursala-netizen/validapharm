@@ -3,15 +3,33 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
+import type { Section } from '../../logique-metier/domaine/types'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
-import { useSectionsStore } from '../stores/useSectionsStore'
+import { sectionDomaineVersWire, useSectionsStore } from '../stores/useSectionsStore'
 import EditeurSection from './EditeurSection.vue'
+
+/**
+ * `Section` vit désormais dans le Worker/D1 (Phase 3b du chantier de
+ * migration D1) — remplace l'ancien `db.sections.put(...)` direct de
+ * préparation de test, même pattern que `synchronisation.test.ts`.
+ */
+async function seedSection(section: Section): Promise<void> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) throw new Error('session absente en préparation de test')
+  const resultat = await api.restaurerSection(
+    authStore.jeton,
+    section.id,
+    sectionDomaineVersWire(section),
+  )
+  if (!resultat.ok) throw new Error(`échec de préparation de test : ${resultat.erreur}`)
+}
 
 function routeurDeTest() {
   return createRouter({
@@ -52,7 +70,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.sections.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
@@ -89,7 +106,7 @@ describe('EditeurSection — transitions de workflow non vérifiées', () => {
     // Pré-positionne le statut requis pour "Rejeter" sans passer par la
     // machine à états réelle (hors périmètre de ce test) — même technique
     // que les autres chantiers de cette session (pré-semer Dexie).
-    await db.sections.put({ ...section, status: 'en_verification' })
+    await seedSection({ ...section, status: 'en_verification' })
 
     const router = routeurDeTest()
     await router.push({
@@ -132,7 +149,7 @@ describe('EditeurSection — transitions de workflow non vérifiées', () => {
       titre: 'URS presse P-200',
       owner_id: 'admin@pharmatech.example',
     })
-    await db.sections.put({ ...section, status: 'propose_par_ia_non_valide' })
+    await seedSection({ ...section, status: 'propose_par_ia_non_valide' })
 
     const router = routeurDeTest()
     await router.push({

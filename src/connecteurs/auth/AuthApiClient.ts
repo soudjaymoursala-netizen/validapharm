@@ -143,6 +143,37 @@ export interface ProjectWire {
   updatedAt: string
 }
 
+export interface SectionWire {
+  id: string
+  projectId: string
+  templateType: string
+  templateEngineVersion: string
+  ownerId: string
+  sharedWith: { userId: string; accessLevel: 'lecture' | 'édition' }[]
+  language: 'fr' | 'en' | 'de'
+  status: string
+  meta: { ref: string; titre: string; version: string; site?: string }
+  workflow: {
+    authors: string[]
+    reviewers: { userId: string; avis: string; date: string }[]
+    approverFinal: string | null
+  }
+  signatures: {
+    redacteur: { userId?: string; date?: string }
+    verificateur: { userId?: string; date?: string }
+    approbateur: { userId?: string; date?: string }
+  }
+  revisions: { version: string; date: string; auteur: string; motif: string }[]
+  values: Record<string, string | number | null>
+  tables: Record<string, Array<Record<string, string | number | null>>>
+  generationSource: { sourceDocumentId: string | null; generatedFields: string[] }
+  procedureId: string | null
+  assetNodeId: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
 export interface SaisieCreationDocumentNormatif {
   category: string
   titre: string
@@ -553,6 +584,55 @@ export class AuthApiClient {
       jeton,
       body: { fromSectionId, toSectionId },
     })
+  }
+
+  // --- Sections (Phase 3b du chantier de migration D1) ---
+
+  listerToutesLesSections(jeton: string): Promise<ResultatApi<{ sections: SectionWire[] }>> {
+    return this.requete('GET', '/sections', { jeton })
+  }
+
+  listerSectionsProjet(
+    jeton: string,
+    projectId: string,
+  ): Promise<ResultatApi<{ sections: SectionWire[] }>> {
+    return this.requete('GET', `/projects/${projectId}/sections`, { jeton })
+  }
+
+  obtenirSection(jeton: string, id: string): Promise<ResultatApi<{ section: SectionWire }>> {
+    return this.requete('GET', `/sections/${id}`, { jeton })
+  }
+
+  creerSection(
+    jeton: string,
+    section: SectionWire,
+  ): Promise<ResultatApi<{ section: SectionWire }>> {
+    return this.requete('POST', '/sections', { jeton, body: section })
+  }
+
+  remplacerSection(
+    jeton: string,
+    id: string,
+    section: SectionWire,
+  ): Promise<ResultatApi<{ section: SectionWire }>> {
+    return this.requete('PUT', `/sections/${id}`, { jeton, body: section })
+  }
+
+  /** Filet de récupération après conflit GitHub — écrase par la version fournie (création ou remplacement selon existence), jamais une fusion. */
+  restaurerSection(
+    jeton: string,
+    id: string,
+    section: SectionWire,
+  ): Promise<ResultatApi<{ section: SectionWire }>> {
+    return this.requete('PUT', `/sections/${id}/restauration`, { jeton, body: section })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerSectionsLocales` : seule voie qui accepte une section déjà complète (id/owner_id/shared_with/audit_log/horodatages d'origine), jamais fabriqués ici. */
+  migrerSectionsLocales(
+    jeton: string,
+    sections: SectionWire[],
+  ): Promise<ResultatApi<{ sections: SectionWire[] }>> {
+    return this.requete('POST', '/sections/migration-locale', { jeton, body: { sections } })
   }
 
   // --- Paramètres d'installation (dépôt GitHub, Relais IA, Drive normes — globaux, partagés par tous les comptes) ---

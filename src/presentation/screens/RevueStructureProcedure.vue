@@ -14,12 +14,13 @@ import type {
   Section,
   TableauDocx,
 } from '../../logique-metier/domaine/types'
-import { db } from '../../persistance/db'
 import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientConfigStore } from '../stores/useClientConfigStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 import { libelleFournisseurAffiche } from '../stores/usePanneauChatStore'
 import { useProcedureStore } from '../stores/useProcedureStore'
+import { sectionWireVersDomaine } from '../stores/useSectionsStore'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -108,9 +109,15 @@ onMounted(async () => {
     configStore.charger(props.clientId),
     relaisStore.charger(),
   ])
-  const idsProcedures = procedureExistantes.value.map((p) => p.id)
-  if (idsProcedures.length > 0) {
-    const sections = await db.sections.where('procedure_id').anyOf(idsProcedures).toArray()
+  const idsProcedures = new Set(procedureExistantes.value.map((p) => p.id))
+  if (idsProcedures.size > 0) {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    const resultatSections =
+      api && authStore.jeton ? await api.listerToutesLesSections(authStore.jeton) : null
+    const sections = (
+      resultatSections?.ok ? resultatSections.donnees.sections.map(sectionWireVersDomaine) : []
+    ).filter((s) => s.procedure_id !== null && idsProcedures.has(s.procedure_id))
     const groupes: Record<string, Section[]> = {}
     for (const section of sections) {
       const id = section.procedure_id

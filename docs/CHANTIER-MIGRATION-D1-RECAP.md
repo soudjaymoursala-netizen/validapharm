@@ -89,7 +89,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `assetHierarchySchemas`, `assetNodes` (Structure Système) | D1 | ✅ **Phase 1 terminée (14/09/2026)** — PR #39 mergée, migration 0004 appliquée en production D1, déploiement Worker vérifié |
 | `organizations`, `workspaces` | D1 | ✅ **Phase 2 terminée (14/09/2026)** — PR #40 mergée, migration 0005 appliquée en production D1, déploiement Worker vérifié |
 | `projects` | D1 (+ GitHub déjà en place, à conserver) | ✅ **Phase 3a terminée (14/09/2026)** — voir §6 |
-| `sections` | D1 (+ GitHub déjà en place, à conserver) | ⬜ Phase 3b |
+| `sections` | D1 (+ GitHub déjà en place, à conserver) | 🔧 **Phase 3b — code complet, PR en cours** — voir §7 |
 | `projectDocuments` (D1+R2, contenu binaire) | D1+R2 | ⬜ Phase 3c |
 | `methodProfilesACFC`, `evaluationsACFC` | D1 | ⬜ Phase 4 |
 | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ⬜ Phase 4 |
@@ -467,3 +467,148 @@ la Phase 3c (`projectDocuments` + R2) — même consigne de l'utilisateur
 (14/09/2026) : enchaîner sur toutes les phases sans s'arrêter pour
 demander confirmation entre chacune, le sujet des nœuds (import SAP) reste
 repoussé à plus tard.
+
+---
+
+## 7. État détaillé — Phase 3b (`Section`), au 14/09/2026
+
+`Section` est le domaine le plus complexe migré jusqu'ici dans ce chantier :
+689 lignes de store (`useSectionsStore.ts`), machine à états du cycle de
+vie, garde-fous de finalisation (liens Contexte procédé/Plan métrologie/
+Plan maintenance), moteur de gabarits, génération de brouillon par
+adaptation IA, discipline ALCOA+ complète sur `audit_log`/`revisions`.
+
+### 7.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0007_sections.sql`
+   crée `sections` (20 colonnes — `shared_with`/`meta`/`workflow`/
+   `signatures`/`revisions`/`values_json`/`tables_json`/
+   `generation_source`/`audit_log` en JSON, `values`/`tables` renommées
+   `values_json`/`tables_json` pour écarter toute ambiguïté avec ces
+   mots-clés SQL ; index sur `project_id`, `procedure_id`, `asset_node_id`).
+   **Pas encore appliquée en production.**
+2. **Décision de visibilité délibérément différente de `Project`** :
+   contrairement à la Phase 3a (`peutVoirProjetServeur`/
+   `peutModifierProjetServeur`, réellement appliqués), les routes
+   `/sections/...` n'exigent qu'une authentification, jamais un contrôle
+   d'appartenance à un projet précis — `Section.owner_id`/`shared_with`
+   restent, comme avant cette migration, jamais une frontière de sécurité
+   réelle (voir `permissionsProjet.ts`). Décision assumée plutôt qu'un
+   oubli : retrouver une scoping cohérente à travers ~5 formes de requête
+   différentes (par `project_id`, `procedure_id`, `asset_node_id`,
+   `template_type`, ou un ensemble arbitraire d'id de projets) aurait été
+   un chantier de durcissement spéculatif distinct de ce qui était demandé,
+   et le régime d'accès reste identique à l'ancienne table Dexie unique
+   (accessible sans restriction à quiconque avait accès à l'application) —
+   pas une régression.
+3. **Repo Worker** : `workers/auth-worker/src/repos/sectionsRepo.ts`
+   (interface + `SectionsRepoMemoire`) et
+   `.../repos/d1/d1SectionsRepo.ts` (implémentation D1).
+4. **Collision de route évitée** : `POST /projects/:id/sections` existait
+   déjà depuis la Phase 3a (`gererAjouterSectionProjet` — référence un id
+   de section dans `Project.sections[]`, jamais le contenu de la section,
+   consommé par `TableauDeBord.vue`) — la création réelle d'une section
+   utilise donc `POST /sections` (id de projet dans le corps), un chemin
+   distinct, jamais de collision avec la route Phase 3a inchangée.
+5. **8 routes `auth-worker`** sous `/sections/...` (lister toutes/lister
+   par projet/obtenir/créer/remplacer) + 2 routes de service :
+   `PUT /sections/:id/restauration` (écrasement sans fusion, réservée à
+   `useSynchronisationStore` — même patron que
+   `PUT /projects/:id/restauration`) et
+   `POST /sections/migration-locale` (filet de sécurité, idempotente par
+   id — l'existant côté serveur gagne toujours, contrairement à la route
+   de restauration qui écrase toujours ; même patron que
+   `POST /projects/migration-locale`).
+6. **`AuthApiClient`** : `SectionWire` + 6 méthodes (liste toutes/liste par
+   projet/obtention/création/remplacement/restauration/migration locale).
+7. **`useSectionsStore` entièrement réécrit** (même API publique) : toute
+   la logique métier déjà testée (machine à états, garde-fous de
+   finalisation, discipline ALCOA+ sur `audit_log`/`revisions`) reste côté
+   client, seule la persistance passe par l'API.
+   `sectionWireVersDomaine`/`sectionDomaineVersWire` (exportées) font la
+   conversion camelCase ↔ snake_case. `chargerSectionsDuProjet` dégrade
+   gracieusement vers un tableau vide (jamais une exception non gérée),
+   même discipline que `useProjectsStore.chargerProjets` ; les mutations
+   lèvent si le relais n'est pas configuré, même discipline que
+   `useProjectsStore` pour ses propres mutations.
+8. **`useSynchronisationStore` entièrement réécrit** : la moitié
+   `sections` de `synchroniser`/`recupererDepuisGitHub`/`analyserConflit`/
+   `confirmerResolutionConflits` passe désormais par l'API
+   (`listerToutesLesSections`/`restaurerSection`/`obtenirSection`) — les
+   deux moitiés (`projects`/`sections`) passent maintenant par l'API,
+   Dexie n'intervient plus que pour `etatSynchronisation` (métadonnées
+   locales de synchronisation, jamais une donnée métier).
+9. **Ripple effect côté production** : `usePanneauChatStore` (sections
+   joignables au chat + lecture d'une section précise),
+   `useRechercheGlobaleStore.rechercherPourClient` (sections par ensemble
+   de projets d'un client), `AssistantCreationLivrable.vue` (précédents du
+   même gabarit, toutes sections puis filtrage client-side par
+   `template_type`), `AccueilQueVoulezVousFaire.vue` (compte de sections du
+   dernier projet actif, via le store), `RevueStructureProcedure.vue`
+   (sections liées par `procedure_id`), `DossierVivantActif.vue` (sections
+   liées par `asset_node_id`). Les 4 derniers utilisent
+   `listerToutesLesSections` + filtrage client-side (cohérent avec la
+   décision de visibilité du point 2 : aucune route scopée dédiée à ces
+   requêtes transverses).
+10. **Filet de sécurité de migration locale** : capture Dexie v37
+    (`persistance/db.ts`, table `sections` supprimée, données capturées
+    dans `sectionsAMigrer`) + `migrerSectionsLocalesVersServeur()` — appelée
+    au début de `chargerSectionsDuProjet` (seul point d'entrée
+    systématiquement exercé par les écrans), flushe l'intégralité de la
+    file en un seul appel batch quel que soit le projet consulté.
+11. **11 fichiers de test corrigés** (sur les ~14 référençant encore
+    `db.sections` au début de cet incrément — `synchronisation.test.ts` et
+    le commentaire historique de `RenduGabarit.vue` étaient déjà à jour) :
+    `RechercheGlobale.test.ts`, `FicheProjet.test.ts`,
+    `useRechercheGlobaleStore.test.ts`,
+    `PipelineQualification.test.ts` n'exigeaient qu'un retrait de
+    `db.sections.clear()` ; `DossierVivantActif.test.ts`,
+    `EditeurSection.mutationsNonVerifiees.test.ts`,
+    `EditeurSection.liensStructurels.test.ts`,
+    `AccueilQueVoulezVousFaire.test.ts`,
+    `RevueStructureProcedure.livrablesLies.test.ts` (celui-ci a en plus
+    nécessité l'ajout de `installerFauxWorkerAuth()`/
+    `connecterAdminDeTest()`, absents jusqu'ici), `AssistantCreationLivrable.
+    test.ts` ont demandé l'ajout d'un helper de préparation
+    (`seedSection`/`obtenirSectionDeTest`/`sectionsDuProjetDeTest`, tous via
+    `AuthApiClient`) ; `sections.test.ts` (~640 lignes, le plus gros fichier
+    de test du chantier) a été mécaniquement converti
+    `db.sections.put(...)` → `seedSection(...)` et
+    `db.sections.get(...)` → `obtenirSectionDeTest(...)`, chaque assertion
+    ALCOA+/`audit_log`/`revisions` vérifiée comme lisant exactement la même
+    forme de donnée qu'avant. Aucun scénario "hors session authentifiée"
+    rencontré cette fois (contrairement à la Phase 3a) — les 11 fichiers
+    utilisaient déjà ou utilisent désormais systématiquement
+    `installerFauxWorkerAuth()`/`connecterAdminDeTest()`.
+12. **Validation complète** (14/09/2026) : `npx vue-tsc --noEmit -p
+    tsconfig.app.json` (0 erreur — **`-p .` seul sous-rapporte les erreurs
+    dans ce dépôt, toujours utiliser `tsconfig.app.json` explicitement**),
+    `npx eslint src/ --max-warnings 0` (0 erreur/warning), `npx vitest run`
+    racine (**1237/1237 tests verts**),
+    `cd workers/auth-worker && npx vitest run` (**103/103 tests verts**,
+    dont 2 nouveaux tests pour `/sections/:id/restauration` et
+    `/sections/migration-locale`).
+
+### 7.2 Phase 3b — en cours de clôture (14/09/2026)
+
+1. ⬜ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ⬜ PR ouverte, CI verte (même panne connue `Workers Builds:
+   validapharm-auth-worker` hors `main` attendue, commentaire de statu quo
+   à reposter si nécessaire), à merger sur `main`.
+3. ⬜ Migration `0007_sections.sql` à appliquer en production D1
+   (`validapharm-auth`, database_id `5fb762ef-fe99-4e68-9086-e57126c5c2aa`).
+4. ⬜ Code déployé à vérifier sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`).
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   qu'en Phases 1/2/3a) — `sections` a déjà sa synchronisation (préexistante,
+   adaptée ci-dessus, §7.1 point 8), seul le reste des domaines migrés en
+   manque encore.
+
+### 7.3 Prochaine action
+
+Terminer la clôture de la Phase 3b (§7.2), puis enchaîner directement sur
+la Phase 3c (`projectDocuments` + R2, contenu binaire `Blob`, miroir du
+patron déjà construit pour la Bibliothèque de normes) — même consigne de
+l'utilisateur (14/09/2026) : enchaîner sur toutes les phases sans
+s'arrêter pour demander confirmation entre chacune, le sujet des nœuds
+(import SAP) reste repoussé à plus tard.

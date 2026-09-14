@@ -3,19 +3,36 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { Section } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useProcedureStore } from '../stores/useProcedureStore'
 import { useProcessContextStore } from '../stores/useProcessContextStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
-import { useSectionsStore } from '../stores/useSectionsStore'
+import { sectionWireVersDomaine, useSectionsStore } from '../stores/useSectionsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import AssistantCreationLivrable from './AssistantCreationLivrable.vue'
+
+/**
+ * `Section` vit désormais dans le Worker/D1 (Phase 3b du chantier de
+ * migration D1) — remplace l'ancien `db.sections.where('project_id')...`
+ * direct de relecture d'état persisté, même pattern que
+ * `synchronisation.test.ts`.
+ */
+async function sectionsDuProjetDeTest(projectId: string): Promise<Section[]> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) return []
+  const resultat = await api.listerSectionsProjet(authStore.jeton, projectId)
+  if (!resultat.ok) return []
+  return resultat.donnees.sections.map(sectionWireVersDomaine)
+}
 
 function routeurDeTest() {
   return createRouter({
@@ -50,7 +67,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.sections.clear()
   await db.processes.clear()
   await db.procedures.clear()
   await reinitialiserAuthDeTest()
@@ -192,10 +208,10 @@ describe('AssistantCreationLivrable — chaîne de création de livrable assembl
     await boutonVierge?.trigger('click')
 
     await attendreQue(async () => {
-      const sections = await db.sections.where('project_id').equals(projet.id).toArray()
+      const sections = await sectionsDuProjetDeTest(projet.id)
       return (sections[0]?.audit_log.length ?? 0) > 1
     })
-    const sectionCreee = (await db.sections.where('project_id').equals(projet.id).toArray())[0]
+    const sectionCreee = (await sectionsDuProjetDeTest(projet.id))[0]
     expect(sectionCreee?.template_type).toBe('oq')
     expect(sectionCreee?.meta.titre).toBe('OQ presse P-200')
     // Liens structurels réels (tâche #118) — plus seulement une phrase dans audit_log.
