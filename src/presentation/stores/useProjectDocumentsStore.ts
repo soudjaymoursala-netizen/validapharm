@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ProjectDocument } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 
 /**
  * Section "Documents" d'un projet (Must) —
@@ -49,17 +50,10 @@ export const useProjectDocumentsStore = defineStore('projectDocuments', () => {
     await db.projectDocuments.put(document)
     documents.value = [...documents.value, document]
 
-    const projet = await db.projects.get(projectId)
-    if (projet) {
-      await db.projects.put({
-        ...projet,
-        documents: [...projet.documents, document.id],
-        updated_at: maintenant,
-        audit_log: [
-          ...projet.audit_log,
-          { timestamp: maintenant, actor, action: 'ajout_document' },
-        ],
-      })
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (api && authStore.jeton) {
+      await api.ajouterDocumentProjet(authStore.jeton, projectId, document.id)
     }
     return document
   }

@@ -1,16 +1,29 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useProjectsStore } from './useProjectsStore'
 import { useSectionsStore } from './useSectionsStore'
 
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.projects.clear()
   await db.sections.clear()
   await db.projectDocuments.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
+})
+
+afterEach(() => {
+  demonter()
 })
 
 function providerRepondant(texte: string): ProviderAdapter {
@@ -73,7 +86,7 @@ describe('useProjectsStore', () => {
     })
 
     await projets.ajouterLien(projet.id, oq.id, contexte.id)
-    const projetApresAjout = await db.projects.get(projet.id)
+    const projetApresAjout = await projets.obtenirProjet(projet.id)
     expect(projetApresAjout?.links).toHaveLength(1)
     expect(projetApresAjout?.links[0]).toMatchObject({
       from_section_id: oq.id,
@@ -82,11 +95,11 @@ describe('useProjectsStore', () => {
 
     // Idempotent : rejouer dans l'autre sens ne duplique pas le lien.
     await projets.ajouterLien(projet.id, contexte.id, oq.id)
-    const projetApresDoublon = await db.projects.get(projet.id)
+    const projetApresDoublon = await projets.obtenirProjet(projet.id)
     expect(projetApresDoublon?.links).toHaveLength(1)
 
     await projets.retirerLien(projet.id, oq.id, contexte.id)
-    const projetApresRetrait = await db.projects.get(projet.id)
+    const projetApresRetrait = await projets.obtenirProjet(projet.id)
     expect(projetApresRetrait?.links).toHaveLength(0)
   })
 
@@ -115,10 +128,10 @@ describe('useProjectsStore', () => {
 
 describe('useSectionsStore — création', () => {
   test('creerSection persiste, lie la section au projet, statut initial brouillon_aide', async () => {
-    const { sections, projet, section } = await creerProjetEtSection()
+    const { projets, sections, projet, section } = await creerProjetEtSection()
     expect(section.status).toBe('brouillon_aide')
 
-    const projetMisAJour = await db.projects.get(projet.id)
+    const projetMisAJour = await projets.obtenirProjet(projet.id)
     expect(projetMisAJour?.sections).toContain(section.id)
     expect(sections.sectionsParProjet[projet.id]).toHaveLength(1)
   })
@@ -263,20 +276,7 @@ describe('useSectionsStore — engagerVerification (garde-fou U-01)', () => {
       titre: 'Contexte procédé',
       owner_id: 'user-1',
     })
-    const maintenant = new Date().toISOString()
-    const projetAvecLien = await projets.obtenirProjet(projet.id)
-    if (projetAvecLien === undefined) throw new Error('projet introuvable dans le test')
-    await db.projects.put({
-      ...projetAvecLien,
-      links: [
-        {
-          from_section_id: section.id,
-          to_section_id: contexte.id,
-          created_by: 'user-1',
-          created_at: maintenant,
-        },
-      ],
-    })
+    await projets.ajouterLien(projet.id, section.id, contexte.id)
     await db.sections.put({
       ...section,
       workflow: { authors: ['user-1'], reviewers: [], approver_final: 'user-2' },
@@ -392,7 +392,7 @@ describe('useSectionsStore — journaliserContexteAssemble (assistant guidé, t�
 
 describe('useSectionsStore — importerSection', () => {
   test('crée une section nouvelle (id distinct), rattachée au projet cible, avec entrée "import"', async () => {
-    const { sections, projet } = await creerProjetEtSection('contexte_procede')
+    const { projets, sections, projet } = await creerProjetEtSection('contexte_procede')
     const donnees = {
       template_type: 'dq' as const,
       template_engine_version: '0.1.0',
@@ -426,7 +426,7 @@ describe('useSectionsStore — importerSection', () => {
     expect(sectionEnBase?.audit_log[0]?.action).toBe('création')
     expect(sectionEnBase?.audit_log[1]).toMatchObject({ actor: 'u-local', action: 'import' })
 
-    const projetEnBase = await db.projects.get(projet.id)
+    const projetEnBase = await projets.obtenirProjet(projet.id)
     expect(projetEnBase?.sections).toContain(importee.id)
   })
 })
@@ -469,7 +469,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis)', () => {
   })
 
   test('cas nominal : crée le document de référence, remplit les champs, statut propose_par_ia_non_valide, filiation et journal complets', async () => {
-    const { sections, projet, section } = await creerProjetEtSection('contexte_procede')
+    const { projets, sections, projet, section } = await creerProjetEtSection('contexte_procede')
     const resultat = await sections.genererBrouillonIA(
       section.id,
       {
@@ -519,7 +519,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis)', () => {
       auteur: 'système (Fournisseur test)',
     })
 
-    const projetEnBase = await db.projects.get(projet.id)
+    const projetEnBase = await projets.obtenirProjet(projet.id)
     expect(projetEnBase?.documents).toContain(sectionEnBase?.generation_source.source_document_id)
   })
 

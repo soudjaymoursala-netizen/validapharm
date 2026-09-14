@@ -1,17 +1,30 @@
 import 'fake-indexeddb/auto'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useSectionsStore } from '../stores/useSectionsStore'
 import PipelineQualification from './PipelineQualification.vue'
 
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.projects.clear()
   await db.sections.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
+})
+
+afterEach(() => {
+  demonter()
 })
 
 function routeurDeTest(): Router {

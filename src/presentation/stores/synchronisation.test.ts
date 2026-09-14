@@ -1,14 +1,46 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import type { Project } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
+import { useAuthStore } from './useAuthStore'
 import { useConnexionGitHubStore } from './useConnexionGitHubStore'
+import { projetDomaineVersWireComplet, projetWireVersDomaine } from './useProjectsStore'
 import { useSynchronisationStore } from './useSynchronisationStore'
+
+/**
+ * `Project` vit désormais dans le Worker/D1 (Phase 3a du chantier de
+ * migration D1) — remplace les anciens `db.projects.put(...)` directs de
+ * préparation de test : utilise la même route `restaurerProjet` (écrasement
+ * sans fusion) que `useSynchronisationStore.recupererDepuisGitHub`, seule
+ * voie qui accepte un enregistrement déjà complet avec un id choisi par
+ * l'appelant.
+ */
+async function seedProjet(projet: Project): Promise<void> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) throw new Error('session absente en préparation de test')
+  const resultat = await api.restaurerProjet(
+    authStore.jeton,
+    projet.id,
+    projetDomaineVersWireComplet(projet),
+  )
+  if (!resultat.ok) throw new Error(`échec de préparation de test : ${resultat.erreur}`)
+}
+
+async function obtenirProjetDeTest(id: string): Promise<Project | undefined> {
+  const authStore = useAuthStore()
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) return undefined
+  const resultat = await api.obtenirProjet(authStore.jeton, id)
+  if (!resultat.ok) return undefined
+  return projetWireVersDomaine(resultat.donnees.projet)
+}
 
 function reponseMock(
   corps: unknown,
@@ -40,7 +72,6 @@ beforeEach(async () => {
   setActivePinia(createPinia())
   await reinitialiserAuthDeTest()
   await db.etatSynchronisation.clear()
-  await db.projects.clear()
   await db.sections.clear()
   fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
@@ -89,7 +120,7 @@ describe('useSynchronisationStore — synchroniser', () => {
 
   test("premier sync (aucun SHA connu) : lit le SHA de branche avant d'écrire", async () => {
     await configurerConnexion()
-    await db.projects.put({
+    await seedProjet({
       id: 'p1',
       name: 'Projet',
       context: '',
@@ -103,7 +134,7 @@ describe('useSynchronisationStore — synchroniser', () => {
       links: [],
       statut: 'actif',
       phase: 'concept',
-      owner_id: 'utilisateur-local-phase1',
+      owner_id: 'admin@pharmatech.example',
       shared_with: [],
       archived_at: null,
       archived_by: null,
@@ -179,7 +210,7 @@ describe('useSynchronisationStore — synchroniser', () => {
       shaBrancheConnue: 'sha-perimee',
       derniereSynchronisation: null,
     })
-    await db.projects.put({
+    await seedProjet({
       id: 'p1',
       name: 'x',
       context: '',
@@ -220,7 +251,7 @@ describe('useSynchronisationStore — analyserConflit', () => {
 
   test('enregistrement jamais encore poussé (404 distant) : jamais un conflit', async () => {
     await configurerConnexion()
-    await db.projects.put({
+    await seedProjet({
       id: 'p1',
       name: 'Projet local',
       context: '',
@@ -251,7 +282,7 @@ describe('useSynchronisationStore — analyserConflit', () => {
 
   test('champ de contenu divergent : signalé ; updated_at/audit_log seuls divergents : pas signalé', async () => {
     await configurerConnexion()
-    await db.projects.put({
+    await seedProjet({
       id: 'p1',
       name: 'Nom local',
       context: '',
@@ -273,7 +304,7 @@ describe('useSynchronisationStore — analyserConflit', () => {
       created_at: '2026-01-01',
       updated_at: '2026-01-02',
     })
-    await db.projects.put({
+    await seedProjet({
       id: 'p2',
       name: 'Identique',
       context: '',
@@ -358,7 +389,7 @@ describe('useSynchronisationStore — analyserConflit', () => {
 describe('useSynchronisationStore — confirmerResolutionConflits', () => {
   test('applique le choix par champ, journalise le motif structuré, puis repousse via synchroniser()', async () => {
     await configurerConnexion()
-    await db.projects.put({
+    await seedProjet({
       id: 'p1',
       name: 'Nom local',
       context: 'contexte local',
@@ -395,6 +426,8 @@ describe('useSynchronisationStore — confirmerResolutionConflits', () => {
       links: [],
       statut: 'actif',
       phase: 'concept',
+      owner_id: 'admin@pharmatech.example',
+      shared_with: [],
       archived_at: null,
       archived_by: null,
       audit_log: [],
@@ -435,7 +468,7 @@ describe('useSynchronisationStore — confirmerResolutionConflits', () => {
 
     expect(resultat).toEqual({ ok: true, nbFichiers: 1 })
 
-    const fusionne = await db.projects.get('p1')
+    const fusionne = await obtenirProjetDeTest('p1')
     expect(fusionne?.name).toBe('Nom local')
     expect(fusionne?.context).toBe('contexte distant')
     expect(fusionne?.audit_log.at(-1)?.action).toBe(
@@ -450,7 +483,28 @@ describe('useSynchronisationStore — confirmerResolutionConflits', () => {
 describe('useSynchronisationStore — recupererDepuisGitHub', () => {
   test('filtre aux chemins data/projects et data/sections, ignore le reste', async () => {
     await configurerConnexion()
-    const projetJson = JSON.stringify({ id: 'p1', name: 'Récupéré' })
+    const projetJson = JSON.stringify({
+      id: 'p1',
+      name: 'Récupéré',
+      context: '',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+      sections: [],
+      documents: [],
+      links: [],
+      statut: 'actif',
+      phase: 'concept',
+      owner_id: 'admin@pharmatech.example',
+      shared_with: [],
+      archived_at: null,
+      archived_by: null,
+      audit_log: [],
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    })
 
     fetchMock
       .mockResolvedValueOnce(
@@ -468,7 +522,7 @@ describe('useSynchronisationStore — recupererDepuisGitHub', () => {
     const resultat = await store.recupererDepuisGitHub()
     expect(resultat).toEqual({ ok: true, nbFichiers: 1 })
 
-    const projetEnBase = await db.projects.get('p1')
+    const projetEnBase = await obtenirProjetDeTest('p1')
     expect(projetEnBase?.name).toBe('Récupéré')
     expect((await db.etatSynchronisation.get('unique'))?.shaBrancheConnue).toBe('sha-post-pull')
   })

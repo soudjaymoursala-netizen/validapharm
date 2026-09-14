@@ -6,20 +6,19 @@ import {
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
-import { db } from '../../persistance/db'
 import { useProjectsStore } from './useProjectsStore'
 
-let demonter: (() => void) | undefined
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.projects.clear()
   await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
 })
 
 afterEach(() => {
-  demonter?.()
-  demonter = undefined
+  demonter()
 })
 
 async function creerProjet() {
@@ -49,16 +48,21 @@ describe('useProjectsStore — archivage (§4.31)', () => {
     const store = useProjectsStore()
     const projet = await creerProjet()
 
+    // `identiteDeclaree` (ci-dessous) reste accepté pour compatibilité
+    // d'appel mais n'est plus l'acteur consigné — voir la documentation de
+    // `useProjectsStore.archiverProjet` : c'est toujours l'identité
+    // authentifiée (JWT) qui est tracée, jamais une valeur déclarée par
+    // l'appelant.
     const resultat = await store.archiverProjet(projet.id, 'QLD (q.lead@pharmatech.example)')
     expect('erreur' in resultat).toBe(false)
     if ('erreur' in resultat) return
 
     expect(resultat.statut).toBe('archive')
     expect(resultat.archived_at).not.toBeNull()
-    expect(resultat.archived_by).toBe('QLD (q.lead@pharmatech.example)')
+    expect(resultat.archived_by).toBe('admin@pharmatech.example')
     expect(resultat.audit_log.at(-1)?.action).toBe('archivage')
 
-    const enBase = await db.projects.get(projet.id)
+    const enBase = await store.obtenirProjet(projet.id)
     expect(enBase).toBeDefined()
     expect(enBase?.statut).toBe('archive')
 
@@ -173,7 +177,7 @@ describe('useProjectsStore — suspension et suppression (§4.31, tâche #111)',
     expect(store.projetsArchives.map((p) => p.id)).not.toContain(projet.id)
     expect(store.projetsSupprimes.map((p) => p.id)).toContain(projet.id)
 
-    const enBase = await db.projects.get(projet.id)
+    const enBase = await store.obtenirProjet(projet.id)
     expect(enBase).toBeDefined()
     expect(enBase?.statut).toBe('supprime')
   })
@@ -189,20 +193,11 @@ describe('useProjectsStore — suspension et suppression (§4.31, tâche #111)',
 })
 
 describe('useProjectsStore — partage de projet', () => {
-  test("un projet créé hors session authentifiée a pour owner_id l'espace réservé local", async () => {
-    const projet = await creerProjet()
-    expect(projet.owner_id).toBe('utilisateur-local-phase1')
-    expect(projet.shared_with).toEqual([])
-  })
-
   test('un projet créé par un compte réel connecté a pour owner_id et acteur d’audit son email réel', async () => {
-    demonter = installerFauxWorkerAuth().demonter
-    await connecterAdminDeTest('qa.lead@pharmatech.example', 'CoffreFort!2026')
-
     const projet = await creerProjet()
 
-    expect(projet.owner_id).toBe('qa.lead@pharmatech.example')
-    expect(projet.audit_log.at(0)?.actor).toBe('qa.lead@pharmatech.example')
+    expect(projet.owner_id).toBe('admin@pharmatech.example')
+    expect(projet.audit_log.at(0)?.actor).toBe('admin@pharmatech.example')
   })
 
   test('partagerProjet ajoute un utilisateur avec un niveau d’accès, tracé dans audit_log', async () => {
@@ -265,7 +260,7 @@ describe('useProjectsStore — phase du cycle de vie (ISPE Baseline, tâche #112
     expect(resultat.phase).toBe('realisation')
     expect(resultat.audit_log.at(-1)?.action).toBe('changement_phase (realisation)')
 
-    const enBase = await db.projects.get(projet.id)
+    const enBase = await store.obtenirProjet(projet.id)
     expect(enBase?.phase).toBe('realisation')
   })
 

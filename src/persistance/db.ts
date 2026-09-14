@@ -238,6 +238,17 @@ export const organizationsAMigrer: Organization[] = []
 export const workspacesAMigrer: Workspace[] = []
 
 /**
+ * `Project` capturés depuis l'ancienne table locale `projects` juste avant
+ * sa suppression (version 36, Phase 3a du chantier de migration D1,
+ * docs/CHANTIER-MIGRATION-D1-RECAP.md) — même filet de sécurité que
+ * `organizationsAMigrer` ci-dessus : vide sur un navigateur déjà passé par
+ * cette version. Consommé et envoyé au serveur par
+ * `migrerProjetsLocauxVersServeur` (`useProjectsStore`) au premier
+ * `chargerProjets()`.
+ */
+export const projectsAMigrer: Project[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -247,7 +258,6 @@ export const workspacesAMigrer: Workspace[] = []
  */
 export class ValidaPharmDatabase extends Dexie {
   clients!: EntityTable<Client, 'id'>
-  projects!: EntityTable<Project, 'id'>
   sections!: EntityTable<Section, 'id'>
   projectDocuments!: EntityTable<ProjectDocument, 'id'>
   clientConfigs!: EntityTable<ClientConfig, 'client_id'>
@@ -641,6 +651,23 @@ export class ValidaPharmDatabase extends Dexie {
         ])
         organizationsAMigrer.push(...organizations)
         workspacesAMigrer.push(...workspaces)
+      })
+
+    // Project : migré vers le Worker/D1 (Phase 3a du chantier de migration
+    // D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique de capture
+    // avant suppression physique que la version 35 ci-dessus. `sections`/
+    // `projectDocuments` restent en IndexedDB local pour l'instant (Phases
+    // 3b/3c) : leur `project_id` continue de référencer le même id de
+    // projet, désormais côté serveur plutôt que dans cette table.
+    // Consommé et envoyé au serveur par `migrerProjetsLocauxVersServeur`
+    // (`useProjectsStore`).
+    this.version(36)
+      .stores({
+        projects: null,
+      })
+      .upgrade(async (tx) => {
+        const projects = await tx.table<Project>('projects').toArray()
+        projectsAMigrer.push(...projects)
       })
   }
 }

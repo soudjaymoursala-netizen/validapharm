@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { AuthApiClient } from '../../connecteurs/auth/AuthApiClient'
 import { GitHubConnector, type FichierAEcrire } from '../../connecteurs/github/GitHubConnector'
 import { ConflitShaError, FichierIntrouvableError } from '../../connecteurs/github/erreurs'
 import {
@@ -9,8 +10,11 @@ import {
   type ChampDivergent,
   type ChoixResolutionChamp,
 } from '../../logique-metier/resolution-conflit/diffChamps'
+import type { Project } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 import { useConnexionGitHubStore } from './useConnexionGitHubStore'
+import { projetDomaineVersWireComplet, projetWireVersDomaine } from './useProjectsStore'
 
 export type ResultatSynchronisation =
   | { ok: true; nbFichiers: number }
@@ -54,6 +58,33 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
   const synchronisationEnCours = ref(false)
   const derniereSynchronisation = ref<string | null>(null)
 
+  /**
+   * `Project` vit désormais dans le Worker/D1 (Phase 3a du chantier de
+   * migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — `null` si le
+   * relais n'est pas configuré, cette moitié de la synchronisation est
+   * alors silencieusement ignorée (même dégradation gracieuse que le
+   * reste de l'application). `sections` reste en IndexedDB local pour
+   * l'instant (Phase 3b) : son traitement ci-dessous n'a pas changé. Le
+   * format JSON déjà poussé sur GitHub reste au format domaine
+   * (snake_case) — conversion via `projetWireVersDomaine`/
+   * `projetDomaineVersWireComplet`, jamais un renommage de champ dans les
+   * fichiers déjà synchronisés.
+   */
+  async function obtenirApiProjets(): Promise<{ api: AuthApiClient; jeton: string } | null> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return null
+    return { api, jeton: authStore.jeton }
+  }
+
+  async function listerTousLesProjets(): Promise<Project[]> {
+    const apiProjets = await obtenirApiProjets()
+    if (!apiProjets) return []
+    const resultat = await apiProjets.api.listerProjets(apiProjets.jeton)
+    if (!resultat.ok) return []
+    return resultat.donnees.projects.map(projetWireVersDomaine)
+  }
+
   async function obtenirConnecteur(): Promise<GitHubConnector | null> {
     const githubStore = useConnexionGitHubStore()
     await githubStore.charger()
@@ -94,7 +125,7 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
         shaBrancheConnue = await connecteur.shaBrancheActuel()
       }
 
-      const [projets, sections] = await Promise.all([db.projects.toArray(), db.sections.toArray()])
+      const [projets, sections] = await Promise.all([listerTousLesProjets(), db.sections.toArray()])
       const fichiers: FichierAEcrire[] = [
         ...projets.map((projet) => ({
           chemin: `data/projects/${projet.id}.json`,
@@ -149,9 +180,17 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
       const entreesProjets = arborescence.filter((e) => e.chemin.startsWith('data/projects/'))
       const entreesSections = arborescence.filter((e) => e.chemin.startsWith('data/sections/'))
 
+      const apiProjets = await obtenirApiProjets()
       for (const entree of entreesProjets) {
         const contenu = await connecteur.lireBlob(entree.sha)
-        await db.projects.put(JSON.parse(contenu))
+        const projet = JSON.parse(contenu) as Project
+        if (apiProjets) {
+          await apiProjets.api.restaurerProjet(
+            apiProjets.jeton,
+            projet.id,
+            projetDomaineVersWireComplet(projet),
+          )
+        }
       }
       for (const entree of entreesSections) {
         const contenu = await connecteur.lireBlob(entree.sha)
@@ -186,7 +225,7 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
     const connecteur = await obtenirConnecteur()
     if (connecteur === null) return []
 
-    const [projets, sections] = await Promise.all([db.projects.toArray(), db.sections.toArray()])
+    const [projets, sections] = await Promise.all([listerTousLesProjets(), db.sections.toArray()])
     const conflits: ConflitEnregistrement[] = []
 
     for (const projet of projets) {
@@ -246,14 +285,17 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
     for (const { conflit, choix } of resolutions) {
       const motif = construireMotifResolution(choix)
       if (conflit.type === 'project') {
-        const local = await db.projects.get(conflit.id)
-        if (local === undefined) continue
+        const apiProjets = await obtenirApiProjets()
+        if (!apiProjets) continue
+        const resultatLocal = await apiProjets.api.obtenirProjet(apiProjets.jeton, conflit.id)
+        if (!resultatLocal.ok) continue
+        const local = projetWireVersDomaine(resultatLocal.donnees.projet)
         const fusionne = appliquerResolutions(
           local,
           conflit.distant as unknown as typeof local,
           choix,
         )
-        await db.projects.put({
+        const projetFinal: Project = {
           ...fusionne,
           updated_at: maintenant,
           audit_log: [
@@ -264,7 +306,12 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
               action: motif,
             },
           ],
-        })
+        }
+        await apiProjets.api.restaurerProjet(
+          apiProjets.jeton,
+          conflit.id,
+          projetDomaineVersWireComplet(projetFinal),
+        )
       } else {
         const local = await db.sections.get(conflit.id)
         if (local === undefined) continue

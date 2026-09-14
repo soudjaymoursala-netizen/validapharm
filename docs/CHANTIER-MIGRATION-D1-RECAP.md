@@ -87,8 +87,10 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | Config dépôt GitHub/Relais IA/Drive normes (`parametres_installation`) | D1 (déjà fait) | ✅ |
 | Documents Bibliothèque de normes (D1+R2, déjà fait) | D1+R2 | ✅ |
 | `assetHierarchySchemas`, `assetNodes` (Structure Système) | D1 | ✅ **Phase 1 terminée (14/09/2026)** — PR #39 mergée, migration 0004 appliquée en production D1, déploiement Worker vérifié |
-| `organizations`, `workspaces` | D1 | 🔧 **Phase 2 — code complet (14/09/2026), migration 0005 pas encore appliquée en prod, PR pas encore ouverte** |
-| `projects`, `sections`, `projectDocuments` | D1 (+ GitHub déjà en place, à conserver) | ⬜ Phase 3 |
+| `organizations`, `workspaces` | D1 | ✅ **Phase 2 terminée (14/09/2026)** — PR #40 mergée, migration 0005 appliquée en production D1, déploiement Worker vérifié |
+| `projects` | D1 (+ GitHub déjà en place, à conserver) | ✅ **Phase 3a terminée (14/09/2026)** — voir §6 |
+| `sections` | D1 (+ GitHub déjà en place, à conserver) | ⬜ Phase 3b |
+| `projectDocuments` (D1+R2, contenu binaire) | D1+R2 | ⬜ Phase 3c |
 | `methodProfilesACFC`, `evaluationsACFC` | D1 | ⬜ Phase 4 |
 | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ⬜ Phase 4 |
 | `methodProfilesImpactAssessment`, `evaluationsImpactAssessment`, `evaluationsCSVAssessment` | D1 | ⬜ Phase 4 |
@@ -312,24 +314,150 @@ SAP) reste repoussé à plus tard, à sa demande explicite (14/09/2026 :
    (**1218/1218 tests verts**), `cd workers/auth-worker && npx vitest run`
    (**91/91 tests verts**).
 
-### 5.2 Ce qui reste à faire avant de considérer la Phase 2 terminée
+### 5.2 Phase 2 — terminée (14/09/2026)
 
-1. Commit + push de l'incrément.
-2. Ouvrir la PR, suivre CI jusqu'au vert (même réflexe qu'en Phase 1 pour
-   la panne connue `Workers Builds: validapharm-auth-worker` hors `main`),
-   merger.
-3. Appliquer la migration `0005_organization_workspace.sql` en production D1.
-4. Vérifier le code réellement déployé sur le Worker en production.
-5. Marquer la ligne Organization/Workspace de §3 ✅ une fois les points
-   1-4 ci-dessus faits.
-6. GitHub sync généralisée : toujours reportée (même manque assumé qu'en
-   Phase 1, §4.2 point 5) — à traiter une fois plusieurs domaines migrés.
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #40 ouverte, CI verte (même panne connue `Workers Builds:
+   validapharm-auth-worker` hors `main`, commentaire de statu quo posté,
+   même précédent que #19/#24-28/#39), mergée sur `main` (squash, commit
+   `f62ee4e`).
+3. ✅ Migration `0005_organization_workspace.sql` appliquée en production
+   D1 (`validapharm-auth`) — tables `organizations`/`workspaces`
+   confirmées présentes (`sqlite_master`).
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : routes
+   `/clients/:clientId/organisation/...` et
+   `organisationRepo: new D1OrganisationRepo(env.DB)` bien présents.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   qu'en Phase 1, §4.2 point 5) — à traiter une fois plusieurs domaines
+   migrés.
 
-### 5.3 Prochaine action immédiate
+### 5.3 Prochaine action
 
-Commit/push de l'incrément Phase 2, puis ouverture de la PR et suivi
-CI/merge/migration prod/vérification déploiement — reprendre directement à
-cette étape si la session s'interrompt ici. Une fois clos, enchaîner sur
-la Phase 3 (`projects`/`sections`/`projectDocuments`, §3) — consigne de
-l'utilisateur : enchaîner sur toutes les phases sans s'arrêter pour
-demander confirmation entre chacune.
+Phase 2 close. Enchaîner directement sur la Phase 3
+(`projects`/`sections`/`projectDocuments`, §3) — consigne de l'utilisateur
+(14/09/2026) : enchaîner sur toutes les phases sans s'arrêter pour
+demander confirmation entre chacune, le sujet des nœuds (import SAP) reste
+repoussé à plus tard.
+
+---
+
+## 6. État détaillé — Phase 3a (`Project`), au 14/09/2026
+
+Phase 3 (`projects`/`sections`/`projectDocuments`) est découpée en trois
+sous-phases (**jamais de Big Bang**, §2) : **3a `projects`** (ce qui suit),
+**3b `sections`** (store de 689 lignes, domaine le plus complexe de
+l'application — révisions/workflow/signatures/generation_source/moteur de
+gabarits), **3c `projectDocuments`** (contenu binaire `Blob`, nécessite R2
+en miroir du patron déjà construit pour la Bibliothèque de normes). `db.projects`
+était référencé directement dans 21 fichiers (vs. 12 en Phase 1, 6 en
+Phase 2) — l'incrément le plus large de ce chantier à ce jour.
+
+### 6.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0006_projects.sql`
+   crée `projects` (20 colonnes — `sections`/`documents`/`links`/
+   `shared_with`/`audit_log` en JSON, index sur `client_id` et `owner_id`).
+   **Pas encore appliquée en production.**
+2. **Modèle de visibilité différent des domaines déjà migrés** :
+   `owner_id`/`shared_with[].userId` stockent l'**email** du compte
+   (`identifiantActeurCourant()`), jamais l'id interne — un `Project` est
+   visible par son propriétaire ou par partage explicite, jamais
+   seulement par `client_id` (un projet peut avoir `client_id: null`).
+   `ProjectsRepo.listerVisiblesPar`/`listerParClient` couvrent les deux
+   usages réels (liste principale par propriété/partage ;
+   `usePanneauChatStore.listerSectionsDisponibles` par client).
+3. **Repo Worker** : `workers/auth-worker/src/repos/projectsRepo.ts`
+   (interface + `ProjectsRepoMemoire`) et `.../repos/d1/d1ProjectsRepo.ts`
+   (implémentation D1, `listerVisiblesPar` filtre côté application après
+   lecture complète — même choix que `clientsRepo.listerVisiblesPar`,
+   volume attendu modeste).
+4. **Durcissement assumé** : contrairement à l'ancien commentaire
+   `permissionsProjet.ts` (« jamais une frontière de sécurité réelle », vrai
+   tant que GitHub restait la seule persistance partagée), le Worker
+   applique désormais réellement `peutVoirProjetServeur`/
+   `peutModifierProjetServeur` — D1 étant la seule source de vérité, c'est
+   ici que l'enforcement a du sens (même durcissement que
+   `peutModifierClient` en Phase 39).
+5. **13 routes `auth-worker`** sous `/projects/...` (lister/obtenir/créer/
+   phase/archiver/désarchiver/suspendre/reprendre/supprimer/partage
+   ajout-retrait/liens ajout-retrait) + 3 routes de service :
+   `POST /projects/:id/documents` et `POST /projects/:id/sections`
+   (référencent un `ProjectDocument`/une `Section`, encore en IndexedDB
+   local, dans `Project.documents[]`/`sections[]`) et
+   `PUT /projects/:id/restauration` (écrasement sans fusion, réservée à
+   `useSynchronisationStore` — restauration GitHub/conflit déjà résolu
+   côté client) et `POST /projects/migration-locale` (filet de sécurité,
+   idempotente par id). Toutes les mutations consignent l'acteur réel
+   (JWT), **jamais** une valeur déclarée par l'appelant — les fonctions du
+   store gardent leur paramètre `identiteDeclaree` par compatibilité
+   d'appel (garde de confirmation UI) mais ne le transmettent plus au
+   serveur.
+6. **`AuthApiClient`** : `ProjectWire` + 15 méthodes (liste/obtention/
+   création/cycle de vie/partage/liens/documents/sections/restauration/
+   migration locale).
+7. **`useProjectsStore` entièrement réécrit** (même API publique) : toutes
+   les mutations passent par l'API, `projetWireVersDomaine`/
+   `projetDomaineVersWireComplet` (exportées) font la conversion
+   camelCase ↔ snake_case — le format déjà poussé sur GitHub reste
+   snake_case, jamais renommé par cette migration.
+8. **`useSynchronisationStore` partiellement réécrit** : la moitié
+   `projects` de `synchroniser`/`recupererDepuisGitHub`/`analyserConflit`/
+   `confirmerResolutionConflits` passe désormais par l'API
+   (`listerProjets`/`restaurerProjet`/`obtenirProjet`) ; la moitié
+   `sections` reste sur Dexie jusqu'à la Phase 3b.
+9. **Ripple effect côté production** : `usePanneauChatStore.
+   listerSectionsDisponibles` (client-scopé, via `listerProjetsClient`),
+   `useProjectDocumentsStore.importerDocument` (référence désormais via
+   `ajouterDocumentProjet`), `useRechercheGlobaleStore.rechercherPourClient`
+   (idem), `useSectionsStore` (3 call sites : ajout de section/document au
+   projet, lecture des liens pour les garde-fous de finalisation),
+   `AssistantCreationLivrable.vue` (précédents du même client via
+   `useProjectsStore.listerProjetsClient`, nouvelle méthode exposée).
+10. **Filet de sécurité de migration locale** : capture Dexie v36
+    (`projects` supprimée, données capturées dans `projectsAMigrer`) +
+    `migrerProjetsLocauxVersServeur()` — envoi en un seul appel batch
+    (`POST /projects/migration-locale`, idempotent par id, jamais un
+    doublon même rejouée), contrairement à Organization/Workspace (Phase 2)
+    aucune dépendance topologique entre projets, pas besoin de boucle
+    d'ordre.
+11. **21 fichiers de test corrigés** (le lot le plus large de ce chantier) :
+    la majorité n'exigeait qu'un retrait de `db.projects.clear()`
+    (`AccueilQueVoulezVousFaire`/`AssistantCreationLivrable`/
+    `EditeurSection.liensStructurels`/`EditeurSection.
+    mutationsNonVerifiees`/`FicheClient`/`FicheProjet`/`RechercheGlobale`/
+    `PipelineQualification`) une fois `installerFauxWorkerAuth`/
+    `connecterAdminDeTest` déjà câblés ; `sections.test.ts` et
+    `synchronisation.test.ts` ont demandé une réécriture plus profonde
+    (helpers `seedProjet`/`obtenirProjetDeTest` via la route
+    `restaurerProjet`, seule voie qui préserve un id choisi par
+    l'appelant) ; `projets-archivage.test.ts` et
+    `useProjectsStore.isolation.test.ts` ont perdu leur scénario « projet
+    créé hors session authentifiée » (`owner_id` replié sur l'espace
+    réservé local) — devenu impossible à reproduire une fois `creerProjet`
+    exigeant systématiquement un relais configuré, comme pour Structure
+    Système/Organization (Phases 1/2).
+12. **Validation complète** (14/09/2026) : `npm run typecheck`,
+    `npm run lint` (0 erreur/warning), `npx vitest run` racine
+    (**1230/1230 tests verts**), `cd workers/auth-worker && npx vitest run`
+    (**104/104 tests verts**).
+
+### 6.2 Phase 3a — reste à faire après le merge
+
+1. ⬜ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ⬜ PR ouverte, CI verte, mergée sur `main`.
+3. ⬜ Migration `0006_projects.sql` appliquée en production D1
+   (`validapharm-auth`).
+4. ⬜ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`).
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   qu'en Phases 1/2, §4.2/§5.2 point 5) — `projects` a déjà sa
+   synchronisation (préexistante, adaptée ci-dessus), seul le reste des
+   domaines migrés en manque encore.
+
+### 6.3 Prochaine action
+
+Une fois la Phase 3a déployée : Phase 3b (`sections`) puis Phase 3c
+(`projectDocuments` + R2) — même consigne de l'utilisateur (14/09/2026) :
+enchaîner sur toutes les phases sans s'arrêter pour demander confirmation
+entre chacune, le sujet des nœuds (import SAP) reste repoussé à plus tard.

@@ -5,6 +5,7 @@ import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
 import { aLienVersTypeSection } from '../../logique-metier/detection-liens/aLienVersTypeSection'
 import type {
   Langue,
+  LienProjet,
   ProjectDocument,
   Section,
   TemplateType,
@@ -22,6 +23,7 @@ import {
   type RaisonBlocageTransition,
 } from '../../logique-metier/machine-etats/transitionSection'
 import { db } from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 
 export interface NouvelleSectionInput {
   project_id: string
@@ -75,6 +77,14 @@ const VERSION_MOTEUR_GABARITS = '0.1.0'
 export const useSectionsStore = defineStore('sections', () => {
   const sectionsParProjet = ref<Record<string, Section[]>>({})
 
+  /** `null` si le relais n'est pas configuré — appels au Worker liés au projet (`Project.sections[]`/`documents[]`) alors silencieusement ignorés, même dégradation gracieuse que le reste de l'application. */
+  async function obtenirApiProjet() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return null
+    return { api, jeton: authStore.jeton }
+  }
+
   async function chargerSectionsDuProjet(projectId: string): Promise<void> {
     const sections = await db.sections.where('project_id').equals(projectId).toArray()
     sectionsParProjet.value = { ...sectionsParProjet.value, [projectId]: sections }
@@ -106,17 +116,9 @@ export const useSectionsStore = defineStore('sections', () => {
     }
     await db.sections.put(section)
 
-    const projet = await db.projects.get(input.project_id)
-    if (projet) {
-      await db.projects.put({
-        ...projet,
-        sections: [...projet.sections, section.id],
-        updated_at: maintenant,
-        audit_log: [
-          ...projet.audit_log,
-          { timestamp: maintenant, actor: input.owner_id, action: 'ajout_section' },
-        ],
-      })
+    const apiProjet = await obtenirApiProjet()
+    if (apiProjet) {
+      await apiProjet.api.ajouterSectionProjet(apiProjet.jeton, input.project_id, section.id)
     }
 
     await chargerSectionsDuProjet(input.project_id)
@@ -179,17 +181,13 @@ export const useSectionsStore = defineStore('sections', () => {
     }
     await db.projectDocuments.put(documentReference)
 
-    const projet = await db.projects.get(section.project_id)
-    if (projet) {
-      await db.projects.put({
-        ...projet,
-        documents: [...projet.documents, documentReference.id],
-        updated_at: maintenant,
-        audit_log: [
-          ...projet.audit_log,
-          { timestamp: maintenant, actor: entrees.actor, action: 'ajout_document' },
-        ],
-      })
+    const apiProjetDocument = await obtenirApiProjet()
+    if (apiProjetDocument) {
+      await apiProjetDocument.api.ajouterDocumentProjet(
+        apiProjetDocument.jeton,
+        section.project_id,
+        documentReference.id,
+      )
     }
 
     const proposition = await genererBrouillonSection(
@@ -305,14 +303,9 @@ export const useSectionsStore = defineStore('sections', () => {
     }
     await db.sections.put(section)
 
-    const projet = await db.projects.get(projectId)
-    if (projet) {
-      await db.projects.put({
-        ...projet,
-        sections: [...projet.sections, section.id],
-        updated_at: maintenant,
-        audit_log: [...projet.audit_log, { timestamp: maintenant, actor, action: 'ajout_section' }],
-      })
+    const apiProjetImport = await obtenirApiProjet()
+    if (apiProjetImport) {
+      await apiProjetImport.api.ajouterSectionProjet(apiProjetImport.jeton, projectId, section.id)
     }
 
     await chargerSectionsDuProjet(projectId)
@@ -565,8 +558,19 @@ export const useSectionsStore = defineStore('sections', () => {
     forcerMotif: string | undefined,
   ): Promise<ResultatActionSection> {
     const section = await chargerSection(sectionId)
-    const projet = await db.projects.get(section.project_id)
-    if (!projet) throw new Error(`Projet introuvable pour la section ${sectionId}`)
+    const apiProjetGarde = await obtenirApiProjet()
+    if (!apiProjetGarde) throw new Error(`Projet introuvable pour la section ${sectionId}`)
+    const resultatProjet = await apiProjetGarde.api.obtenirProjet(
+      apiProjetGarde.jeton,
+      section.project_id,
+    )
+    if (!resultatProjet.ok) throw new Error(`Projet introuvable pour la section ${sectionId}`)
+    const liensProjet: LienProjet[] = resultatProjet.donnees.projet.links.map((l) => ({
+      from_section_id: l.fromSectionId,
+      to_section_id: l.toSectionId,
+      created_by: l.createdBy,
+      created_at: l.createdAt,
+    }))
     const sectionsDuProjet = await db.sections
       .where('project_id')
       .equals(section.project_id)
@@ -578,19 +582,19 @@ export const useSectionsStore = defineStore('sections', () => {
         aLienVersContextProcede: aLienVersTypeSection(
           sectionId,
           'contexte_procede',
-          projet.links,
+          liensProjet,
           sectionsDuProjet,
         ),
         aLienVersPlanMetrologie: aLienVersTypeSection(
           sectionId,
           'plan_metrologie',
-          projet.links,
+          liensProjet,
           sectionsDuProjet,
         ),
         aLienVersPlanMaintenance: aLienVersTypeSection(
           sectionId,
           'plan_maintenance',
-          projet.links,
+          liensProjet,
           sectionsDuProjet,
         ),
       },

@@ -1,8 +1,14 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import type { Client } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
+import { useClientsStore } from './useClientsStore'
 import { useProcedureStore } from './useProcedureStore'
 import { useProcessContextStore } from './useProcessContextStore'
 import { useProjectsStore } from './useProjectsStore'
@@ -10,14 +16,22 @@ import { useRechercheGlobaleStore } from './useRechercheGlobaleStore'
 import { useSectionsStore } from './useSectionsStore'
 import { useSourceIntelligenceStore } from './useSourceIntelligenceStore'
 
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.projects.clear()
   await db.sections.clear()
   await db.projectDocuments.clear()
   await db.processes.clear()
   await db.procedures.clear()
   await db.knowledgeItems.clear()
+  await reinitialiserAuthDeTest()
+  demonter = installerFauxWorkerAuth().demonter
+  await connecterAdminDeTest()
+})
+
+afterEach(() => {
+  demonter()
 })
 
 function clientDeTest(nom: string, statut: 'actif' | 'archive' = 'actif'): Client {
@@ -58,8 +72,13 @@ describe('useRechercheGlobaleStore — rechercherClients', () => {
 
 describe('useRechercheGlobaleStore — rechercherPourClient (tâche #116)', () => {
   test('trouve sections, documents, procédures, process et connaissances du bon client uniquement', async () => {
-    const clientId = 'client-1'
-    const autreClientId = 'client-2'
+    const clientsStore = useClientsStore()
+    const creationClient = await clientsStore.creerClient({ name: 'Client 1' })
+    if ('erreur' in creationClient) throw creationClient
+    const creationAutreClient = await clientsStore.creerClient({ name: 'Client 2' })
+    if ('erreur' in creationAutreClient) throw creationAutreClient
+    const clientId = creationClient.id
+    const autreClientId = creationAutreClient.id
 
     const projetsStore = useProjectsStore()
     const sectionsStore = useSectionsStore()

@@ -58,7 +58,6 @@ beforeEach(async () => {
   setActivePinia(createPinia())
   localStorage.clear()
   await reinitialiserAuthDeTest()
-  await db.projects.clear()
   await db.sections.clear()
   await db.knowledgeItems.clear()
   await db.conflicts.clear()
@@ -93,6 +92,7 @@ describe('AccueilQueVoulezVousFaire — Continuer mon travail', () => {
   })
 
   test('avec un projet actif : affiche son nom et le compte réel de sections validées', async () => {
+    await connecterAdminDeTest()
     const projetsStore = useProjectsStore()
     const projet = await projetsStore.creerProjet({
       name: 'Qualification STICK002',
