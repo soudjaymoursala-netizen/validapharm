@@ -16,6 +16,7 @@ import type {
   ParametresInstallationRepo,
   ValeurParametreInstallation,
 } from './repos/parametresInstallationRepo'
+import type { ProjectDocumentEnregistre, ProjectDocumentsRepo } from './repos/projectDocumentsRepo'
 import type {
   LienProjetEnregistre,
   PartageProjetEnregistre,
@@ -54,6 +55,7 @@ export interface Contexte {
   organisationRepo: OrganisationRepo
   projectsRepo: ProjectsRepo
   sectionsRepo: SectionsRepo
+  projectDocumentsRepo: ProjectDocumentsRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -87,6 +89,14 @@ function cleTexteDocument(id: string): string {
 
 function cleContenuDocument(id: string): string {
   return `documents/${id}/contenu`
+}
+
+function cleTexteDocumentProjet(id: string): string {
+  return `project-documents/${id}/texte.txt`
+}
+
+function cleContenuDocumentProjet(id: string): string {
+  return `project-documents/${id}/contenu`
 }
 
 const LONGUEUR_MIN_MOT_DE_PASSE = 8
@@ -418,6 +428,42 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   const matchSectionRestauration = chemin.match(/^\/sections\/([^/]+)\/restauration$/)
   if (matchSectionRestauration && request.method === 'PUT') {
     return gererRestaurerSection(request, ctx, entetes, matchSectionRestauration[1] as string)
+  }
+
+  // --- ProjectDocument (Phase 3c du chantier de migration D1) ---
+  //
+  // Une route `POST /projects/:id/documents` existe déjà depuis la Phase 3a
+  // (`gererAjouterDocumentProjet` — référence un id de document dans
+  // `Project.documents[]`, jamais le contenu du document, toujours
+  // consommé par la section "Documents" de `FicheProjet.vue`) : la
+  // création réelle d'un document utilise donc `POST /project-documents`
+  // (id de projet dans le corps multipart), même patron que `sections`
+  // face à la même collision.
+  const matchDocumentsProjet = chemin.match(/^\/projects\/([^/]+)\/documents$/)
+  if (matchDocumentsProjet && request.method === 'GET') {
+    return gererListerDocumentsProjet(request, ctx, entetes, matchDocumentsProjet[1] as string)
+  }
+  if (chemin === '/project-documents' && request.method === 'POST') {
+    return gererCreerDocumentProjet(request, ctx, entetes)
+  }
+  if (chemin === '/project-documents/migration-locale' && request.method === 'POST') {
+    return gererMigrerDocumentProjetLocal(request, ctx, entetes)
+  }
+  const matchContenuDocumentProjet = chemin.match(/^\/project-documents\/([^/]+)\/contenu$/)
+  if (matchContenuDocumentProjet && request.method === 'GET') {
+    return gererObtenirContenuDocumentProjet(
+      request,
+      ctx,
+      entetes,
+      matchContenuDocumentProjet[1] as string,
+    )
+  }
+  const matchDocumentProjetId = chemin.match(/^\/project-documents\/([^/]+)$/)
+  if (matchDocumentProjetId && request.method === 'GET') {
+    return gererObtenirDocumentProjet(request, ctx, entetes, matchDocumentProjetId[1] as string)
+  }
+  if (matchDocumentProjetId && request.method === 'DELETE') {
+    return gererSupprimerDocumentProjet(request, ctx, entetes, matchDocumentProjetId[1] as string)
   }
 
   // --- Paramètres d'installation (dépôt GitHub dédié, Relais IA, Drive normes) ---
@@ -2177,6 +2223,290 @@ async function gererRestaurerSection(
     await ctx.sectionsRepo.creerSection(section)
   }
   return reponseJson({ section }, 200, entetes)
+}
+
+// --- Handlers : ProjectDocument (Phase 3c du chantier de migration D1) ---
+//
+// Même répartition D1 (métadonnées)/R2 (texte extrait + contenu binaire)
+// que les documents normatifs, même absence de frontière de sécurité par
+// projet que `sections` (authentification seule, voir en-tête des routes
+// ci-dessus) — `ProjectDocument.content` n'était déjà synchronisé nulle
+// part avant cette migration (portée de `useSynchronisationStore` limitée
+// à projects/sections), donc aucune perte de fonctionnalité de partage à
+// combler.
+
+interface ProjectDocumentWire {
+  id: string
+  projectId: string
+  filename: string
+  status: string
+  extractedText: string
+  mimeType: string
+  hasBinaryContent: boolean
+  uploadedAt: string
+  uploadedBy: string
+}
+
+/** Assemble la réponse complète (métadonnées D1 + texte extrait R2) — jamais le contenu binaire, récupéré séparément via `/contenu` pour ne pas alourdir la liste. */
+async function assemblerDocumentProjet(
+  ctx: Contexte,
+  d: ProjectDocumentEnregistre,
+): Promise<ProjectDocumentWire> {
+  const texte = await ctx.stockageBinaireRepo.lire(cleTexteDocumentProjet(d.id))
+  return {
+    id: d.id,
+    projectId: d.projectId,
+    filename: d.filename,
+    status: d.status,
+    extractedText: texte ? new TextDecoder().decode(texte.contenu) : '',
+    mimeType: d.mimeType,
+    hasBinaryContent: d.hasBinaryContent,
+    uploadedAt: d.uploadedAt,
+    uploadedBy: d.uploadedBy,
+  }
+}
+
+async function gererListerDocumentsProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  projectId: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const metadonnees = await ctx.projectDocumentsRepo.listerParProjet(projectId)
+  const documentsProjet = await Promise.all(metadonnees.map((d) => assemblerDocumentProjet(ctx, d)))
+  return reponseJson({ documentsProjet }, 200, entetes)
+}
+
+interface CorpsCreationDocumentProjet {
+  /** Réservé à la migration locale (`gererMigrerDocumentProjetLocal`) — voir sa documentation pour pourquoi le client impose l'identifiant dans ce cas précis. Ignoré par `gererCreerDocumentProjet` (création normale). */
+  id?: string
+  projectId?: string
+  filename?: string
+  status?: string
+  mimeType?: string
+}
+
+/** Lit et valide le `FormData` commun à la création et à la migration locale — seule la gestion de l'id (fabriqué ici / imposé par l'appelant là-bas) diffère entre les deux appelants. */
+async function lireFormDataDocumentProjet(request: Request): Promise<
+  | {
+      ok: true
+      corps: CorpsCreationDocumentProjet
+      extractedText: string
+      contenuBlob: Blob | null
+    }
+  | { ok: false }
+> {
+  let formData: FormData
+  try {
+    formData = await request.formData()
+  } catch {
+    return { ok: false }
+  }
+
+  const metadataBrut = formData.get('metadata')
+  if (typeof metadataBrut !== 'string') return { ok: false }
+  let corps: CorpsCreationDocumentProjet
+  try {
+    corps = JSON.parse(metadataBrut) as CorpsCreationDocumentProjet
+  } catch {
+    return { ok: false }
+  }
+
+  const texteValeur = formData.get('texte')
+  const extractedText = typeof texteValeur === 'string' ? texteValeur : ''
+
+  const contenuValeur = formData.get('contenu')
+  // Même vérification structurelle (jamais `instanceof Blob`) et même
+  // exigence `size > 0` que `gererCreerDocumentNormatif` — voir sa
+  // docstring pour le bug réel (Blob présent mais vide) qu'elle évite.
+  const contenuBlob =
+    contenuValeur !== null &&
+    typeof contenuValeur === 'object' &&
+    typeof (contenuValeur as Blob).arrayBuffer === 'function' &&
+    (contenuValeur as Blob).size > 0
+      ? (contenuValeur as Blob)
+      : null
+
+  return { ok: true, corps, extractedText, contenuBlob }
+}
+
+async function gererCreerDocumentProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const lecture = await lireFormDataDocumentProjet(request)
+  if (!lecture.ok) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const { corps, extractedText, contenuBlob } = lecture
+  if (!corps.projectId) return reponseJson({ erreur: 'projectId_obligatoire' }, 400, entetes)
+  if (!corps.filename || corps.filename.trim().length === 0) {
+    return reponseJson({ erreur: 'filename_obligatoire' }, 400, entetes)
+  }
+  const mimeType = corps.mimeType ?? 'application/octet-stream'
+  const status = corps.status ?? 'reference_de_travail_non_maitre'
+
+  const id = genererId()
+  await ctx.stockageBinaireRepo.enregistrer(
+    cleTexteDocumentProjet(id),
+    new TextEncoder().encode(extractedText).buffer as ArrayBuffer,
+    'text/plain; charset=utf-8',
+  )
+  if (contenuBlob) {
+    await ctx.stockageBinaireRepo.enregistrer(
+      cleContenuDocumentProjet(id),
+      await contenuBlob.arrayBuffer(),
+      mimeType,
+    )
+  }
+
+  const document: ProjectDocumentEnregistre = {
+    id,
+    projectId: corps.projectId,
+    filename: corps.filename.trim(),
+    status,
+    mimeType,
+    hasBinaryContent: contenuBlob !== null,
+    uploadedAt: horodatage(),
+    uploadedBy: utilisateur.id,
+  }
+  await ctx.projectDocumentsRepo.creer(document)
+  await consignerAudit(ctx, utilisateur, 'import_document_projet', 'project_document', id, null)
+
+  return reponseJson({ documentProjet: await assemblerDocumentProjet(ctx, document) }, 201, entetes)
+}
+
+/**
+ * Migration ponctuelle (filet de sécurité `projectDocumentsAMigrer`,
+ * `useProjectDocumentsStore.migrerDocumentsLocauxVersServeur`) — même
+ * patron d'idempotence que `gererMigrerSectionsLocales`
+ * (l'existant côté serveur gagne toujours, jamais un écrasement), mais en
+ * `multipart/form-data` (jamais du JSON, comme `gererCreerDocumentProjet`)
+ * et un seul document par appel : `ProjectDocument.content` étant un
+ * `Blob`, le lot ne peut pas être sérialisé dans un unique corps JSON
+ * comme pour `projects`/`sections`. L'id est imposé par l'appelant
+ * (référencé par `Project.documents[]`/`Section.generation_source.
+ * source_document_id`, jamais fabriqué ici).
+ */
+async function gererMigrerDocumentProjetLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const lecture = await lireFormDataDocumentProjet(request)
+  if (!lecture.ok) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const { corps, extractedText, contenuBlob } = lecture
+  const id = corps.id
+  if (!id || !corps.projectId || !corps.filename) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const existant = await ctx.projectDocumentsRepo.parId(id)
+  if (existant) {
+    return reponseJson(
+      { documentProjet: await assemblerDocumentProjet(ctx, existant) },
+      201,
+      entetes,
+    )
+  }
+
+  const mimeType = corps.mimeType ?? 'application/octet-stream'
+  const status = corps.status ?? 'reference_de_travail_non_maitre'
+  await ctx.stockageBinaireRepo.enregistrer(
+    cleTexteDocumentProjet(id),
+    new TextEncoder().encode(extractedText).buffer as ArrayBuffer,
+    'text/plain; charset=utf-8',
+  )
+  if (contenuBlob) {
+    await ctx.stockageBinaireRepo.enregistrer(
+      cleContenuDocumentProjet(id),
+      await contenuBlob.arrayBuffer(),
+      mimeType,
+    )
+  }
+  const document: ProjectDocumentEnregistre = {
+    id,
+    projectId: corps.projectId,
+    filename: corps.filename.trim(),
+    status,
+    mimeType,
+    hasBinaryContent: contenuBlob !== null,
+    uploadedAt: horodatage(),
+    uploadedBy: utilisateur.id,
+  }
+  await ctx.projectDocumentsRepo.creer(document)
+  return reponseJson({ documentProjet: await assemblerDocumentProjet(ctx, document) }, 201, entetes)
+}
+
+async function gererObtenirDocumentProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const document = await ctx.projectDocumentsRepo.parId(id)
+  if (!document) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  return reponseJson({ documentProjet: await assemblerDocumentProjet(ctx, document) }, 200, entetes)
+}
+
+async function gererObtenirContenuDocumentProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const document = await ctx.projectDocumentsRepo.parId(id)
+  if (!document || !document.hasBinaryContent) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const contenu = await ctx.stockageBinaireRepo.lire(cleContenuDocumentProjet(id))
+  if (!contenu) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+
+  return new Response(contenu.contenu, {
+    status: 200,
+    headers: {
+      ...entetes,
+      'Content-Type': contenu.typeContenu,
+      'Content-Disposition': `attachment; filename="${document.filename.replace(/"/g, '')}"`,
+    },
+  })
+}
+
+async function gererSupprimerDocumentProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  await ctx.stockageBinaireRepo.supprimer(cleTexteDocumentProjet(id))
+  await ctx.stockageBinaireRepo.supprimer(cleContenuDocumentProjet(id))
+  await ctx.projectDocumentsRepo.supprimer(id)
+  await consignerAudit(
+    ctx,
+    utilisateur,
+    'suppression_document_projet',
+    'project_document',
+    id,
+    null,
+  )
+  return reponseJson({ ok: true }, 200, entetes)
 }
 
 // --- Handlers : paramètres d'installation ---

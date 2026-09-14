@@ -34,6 +34,7 @@ const erreurImport = ref<string | null>(null)
 const modaleArchivageOuverte = ref(false)
 const modaleSuppressionOuverte = ref(false)
 const erreurImportDocument = ref<string | null>(null)
+const erreurTelechargementDocument = ref<string | null>(null)
 const nouvelUtilisateurPartage = ref('')
 const nouveauNiveauPartage = ref<'lecture' | 'édition'>('lecture')
 const erreurAction = ref<string | null>(null)
@@ -242,15 +243,26 @@ async function importerDocument(evenement: Event): Promise<void> {
   }
 }
 
-/** Retélécharge le fichier tel que chargé — jamais une reconstruction à partir du texte extrait. */
-function telechargerDocument(document: { filename: string; content: Blob | null }): void {
-  if (!document.content) return
-  const url = URL.createObjectURL(document.content)
-  const lien = window.document.createElement('a')
-  lien.href = url
-  lien.download = document.filename
-  lien.click()
-  URL.revokeObjectURL(url)
+/**
+ * Retélécharge le fichier tel que chargé — jamais une reconstruction à
+ * partir du texte extrait. Le contenu binaire n'est jamais préchargé avec
+ * la liste (voir `ProjectDocument.has_binary_content`, Phase 3c du
+ * chantier de migration D1) : récupéré à la demande ici.
+ */
+async function telechargerDocument(document: { id: string; filename: string }): Promise<void> {
+  erreurTelechargementDocument.value = null
+  try {
+    const contenu = await documentsStore.telechargerContenu(document.id)
+    const url = URL.createObjectURL(contenu)
+    const lien = window.document.createElement('a')
+    lien.href = url
+    lien.download = document.filename
+    lien.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    erreurTelechargementDocument.value =
+      e instanceof Error ? e.message : 'Échec du téléchargement — réessayez.'
+  }
 }
 
 /** Pré-remplit et ouvre le formulaire depuis un clic sur une étape non démarrée du pipeline. */
@@ -566,6 +578,9 @@ async function importerFichier(evenement: Event): Promise<void> {
       <p v-if="erreurImportDocument" class="erreur-import" role="alert">
         {{ erreurImportDocument }}
       </p>
+      <p v-if="erreurTelechargementDocument" class="erreur-import" role="alert">
+        {{ erreurTelechargementDocument }}
+      </p>
       <p v-if="documentsStore.documents.length === 0" class="etat-vide">
         Aucun document chargé pour l'instant.
       </p>
@@ -585,7 +600,7 @@ async function importerFichier(evenement: Event): Promise<void> {
             <button
               type="button"
               class="bouton-secondaire"
-              :disabled="!document.content"
+              :disabled="!document.has_binary_content"
               @click="telechargerDocument(document)"
             >
               Télécharger

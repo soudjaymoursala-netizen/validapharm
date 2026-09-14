@@ -20,7 +20,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.projectDocuments.clear()
   await db.processes.clear()
   await db.procedures.clear()
   await db.knowledgeItems.clear()

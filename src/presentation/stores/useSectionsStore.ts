@@ -24,8 +24,9 @@ import {
   appliquerTransition,
   type RaisonBlocageTransition,
 } from '../../logique-metier/machine-etats/transitionSection'
-import { db, sectionsAMigrer } from '../../persistance/db'
+import { sectionsAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { documentProjetWireVersDomaine } from './useProjectDocumentsStore'
 
 export interface NouvelleSectionInput {
   project_id: string
@@ -302,18 +303,17 @@ export const useSectionsStore = defineStore('sections', () => {
     }
 
     const maintenant = new Date().toISOString()
-    const documentReference: ProjectDocument = {
-      id: crypto.randomUUID(),
-      project_id: section.project_id,
+    const { api: apiDocument, jeton: jetonDocument } = await obtenirApiSection()
+    const resultatDocument = await apiDocument.creerDocumentProjet(jetonDocument, {
+      projectId: section.project_id,
       filename: entrees.nomDocumentReference,
-      status: 'reference_de_travail_non_maitre',
-      uploaded_at: maintenant,
-      uploaded_by: entrees.actor,
-      extracted_text: entrees.texteDocumentReference,
-      content: null,
-      mime_type: '',
+      mimeType: '',
+      texte: entrees.texteDocumentReference,
+    })
+    if (!resultatDocument.ok) {
+      throw new Error(`Échec de la création du document de référence : ${resultatDocument.erreur}`)
     }
-    await db.projectDocuments.put(documentReference)
+    const documentReference = documentProjetWireVersDomaine(resultatDocument.donnees.documentProjet)
 
     const apiProjetDocument = await obtenirApiProjet()
     if (apiProjetDocument) {
@@ -409,9 +409,17 @@ export const useSectionsStore = defineStore('sections', () => {
     }
   }
 
-  /** Filiation : nom du document de référence utilisé pour une génération de brouillon donnée. */
+  /** Filiation : nom du document de référence utilisé pour une génération de brouillon donnée — `undefined` si le relais n'est pas configuré ou en cas de panne réseau, jamais une exception non gérée (usage purement informatif à l'écran). */
   async function obtenirDocumentReference(id: string): Promise<ProjectDocument | undefined> {
-    return db.projectDocuments.get(id)
+    try {
+      const { api, jeton } = await obtenirApiSection()
+      const resultat = await api.obtenirDocumentProjet(jeton, id)
+      return resultat.ok
+        ? documentProjetWireVersDomaine(resultat.donnees.documentProjet)
+        : undefined
+    } catch {
+      return undefined
+    }
   }
 
   /**

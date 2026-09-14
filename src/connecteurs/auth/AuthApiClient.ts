@@ -174,6 +174,29 @@ export interface SectionWire {
   updatedAt: string
 }
 
+export interface ProjectDocumentWire {
+  id: string
+  projectId: string
+  filename: string
+  status: string
+  extractedText: string
+  mimeType: string
+  hasBinaryContent: boolean
+  uploadedAt: string
+  uploadedBy: string
+}
+
+export interface SaisieCreationDocumentProjet {
+  /** Réservé au filet de sécurité de migration locale (`migrerDocumentsLocaux`) — jamais fabriqué par un appel de création normal. */
+  id?: string
+  projectId: string
+  filename: string
+  status?: string
+  mimeType: string
+  texte: string
+  contenu?: Blob
+}
+
 export interface SaisieCreationDocumentNormatif {
   category: string
   titre: string
@@ -633,6 +656,99 @@ export class AuthApiClient {
     sections: SectionWire[],
   ): Promise<ResultatApi<{ sections: SectionWire[] }>> {
     return this.requete('POST', '/sections/migration-locale', { jeton, body: { sections } })
+  }
+
+  // --- ProjectDocument (section "Documents" d'un projet, §4.9 — Phase 3c du chantier de migration D1) ---
+
+  listerDocumentsProjet(
+    jeton: string,
+    projectId: string,
+  ): Promise<ResultatApi<{ documentsProjet: ProjectDocumentWire[] }>> {
+    return this.requete('GET', `/projects/${projectId}/documents`, { jeton })
+  }
+
+  obtenirDocumentProjet(
+    jeton: string,
+    id: string,
+  ): Promise<ResultatApi<{ documentProjet: ProjectDocumentWire }>> {
+    return this.requete('GET', `/project-documents/${id}`, { jeton })
+  }
+
+  /** Corps `multipart/form-data` (jamais JSON) — même contrainte que `creerDocumentNormatif` (texte extrait et contenu binaire potentiellement volumineux). */
+  creerDocumentProjet(
+    jeton: string,
+    saisie: SaisieCreationDocumentProjet,
+  ): Promise<ResultatApi<{ documentProjet: ProjectDocumentWire }>> {
+    const formData = new FormData()
+    formData.set(
+      'metadata',
+      JSON.stringify({
+        id: saisie.id ?? undefined,
+        projectId: saisie.projectId,
+        filename: saisie.filename,
+        status: saisie.status ?? undefined,
+        mimeType: saisie.mimeType,
+      }),
+    )
+    formData.set('texte', saisie.texte)
+    if (saisie.contenu) formData.set('contenu', saisie.contenu, saisie.filename)
+    return this.requeteFormData('POST', '/project-documents', jeton, formData)
+  }
+
+  supprimerDocumentProjet(jeton: string, id: string): Promise<ResultatApi<{ ok: true }>> {
+    return this.requete('DELETE', `/project-documents/${id}`, { jeton })
+  }
+
+  /** Contenu binaire brut d'un document — jamais du JSON, contourne `requete()` (même patron que `obtenirContenuDocumentNormatif`). */
+  async obtenirContenuDocumentProjet(
+    jeton: string,
+    id: string,
+  ): Promise<{ ok: true; blob: Blob } | { ok: false; erreur: string }> {
+    const controleur = new AbortController()
+    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
+    let reponse: Response
+    try {
+      reponse = await fetch(`${this.relayUrl}/project-documents/${id}/contenu`, {
+        signal: controleur.signal,
+        headers: { Authorization: `Bearer ${jeton}` },
+      })
+    } catch (erreur) {
+      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
+      throw new IndisponibleAuthError()
+    } finally {
+      clearTimeout(minuteur)
+    }
+    if (reponse.status >= 500) throw new IndisponibleAuthError()
+    if (!reponse.ok) {
+      const corps = await reponse.json().catch(() => null)
+      const erreur =
+        corps && typeof corps === 'object' && 'erreur' in corps && typeof corps.erreur === 'string'
+          ? corps.erreur
+          : 'erreur_inconnue'
+      return { ok: false, erreur }
+    }
+    return { ok: true, blob: await reponse.blob() }
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerDocumentProjetLocal` : idempotente, l'existant côté serveur gagne toujours (jamais un écrasement). Même corps `multipart/form-data` que `creerDocumentProjet`, avec `saisie.id` imposé. */
+  migrerDocumentProjetLocal(
+    jeton: string,
+    saisie: SaisieCreationDocumentProjet & { id: string },
+  ): Promise<ResultatApi<{ documentProjet: ProjectDocumentWire }>> {
+    const formData = new FormData()
+    formData.set(
+      'metadata',
+      JSON.stringify({
+        id: saisie.id,
+        projectId: saisie.projectId,
+        filename: saisie.filename,
+        status: saisie.status ?? undefined,
+        mimeType: saisie.mimeType,
+      }),
+    )
+    formData.set('texte', saisie.texte)
+    if (saisie.contenu) formData.set('contenu', saisie.contenu, saisie.filename)
+    return this.requeteFormData('POST', '/project-documents/migration-locale', jeton, formData)
   }
 
   // --- Paramètres d'installation (dépôt GitHub, Relais IA, Drive normes — globaux, partagés par tous les comptes) ---
