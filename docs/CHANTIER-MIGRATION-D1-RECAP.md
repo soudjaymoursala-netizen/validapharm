@@ -243,6 +243,8 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 
 ### 4.3 Prochaine action immédiate
 
-Commit/push de l'incrément Phase 1 (point 1 de §4.2), puis ouverture de la
-PR et suivi CI — reprendre directement à cette étape si la session
-s'interrompt ici.
+Commit/push fait. **PR #39 ouverte** (`claude/contexte-reprise-session-tin77u`
+→ `main`, session abonnée aux événements GitHub) — reprendre directement au
+suivi CI/merge de cette PR si la session s'interrompt ici, puis enchaîner
+sur les points 3-6 de §4.2 (migration D1 appliquée en prod, vérification du
+déploiement, GitHub sync, mise à jour de §3).
