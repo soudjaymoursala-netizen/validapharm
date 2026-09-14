@@ -151,6 +151,28 @@ dashboard, indépendamment de la méthode de déploiement). `main` redéploie
 désormais ce Worker automatiquement à chaque changement dans ce
 répertoire, comme `ia-relay`.
 
+**Panne résolue le 14/09/2026 — check `Workers Builds: validapharm-auth-worker`
+rouge sur toutes les branches non-production (PR #19 à #44)** : le
+déploiement de production (`main`, commande `npx wrangler deploy`)
+fonctionnait toujours ; seul le déploiement de prévisualisation des PR
+(commande "Version command" par défaut `npx wrangler versions upload`,
+sans argument) échouait systématiquement avec `✘ [ERROR] Missing
+entry-point to Worker script`, alors que `wrangler.toml` (avec
+`main = "src/index.ts"`) existe bel et bien dans ce répertoire et que
+`Settings → Build → Root directory` affichait pourtant la bonne valeur
+(`workers/auth-worker`) — `npm install` s'exécutait bien au bon endroit
+(332 paquets, cohérent avec les seules dépendances de ce Worker), mais le
+répertoire de travail réel utilisé par Cloudflare au moment d'exécuter la
+"Version command" ne correspondait pas à celui affiché dans les réglages
+(incohérence côté plateforme Cloudflare Workers Builds, pas un problème de
+ce dépôt). **Corrigé en rendant la "Version command" indépendante du
+répertoire de travail réel** : `Settings → Build → Version command` réglée
+sur `npx wrangler versions upload --config workers/auth-worker/wrangler.toml`
+(chemin explicite depuis la racine du dépôt) au lieu de la commande par
+défaut sans argument. Si ce check redevient rouge après une modification
+future de ce réglage, revérifier d'abord que ce `--config` explicite est
+toujours en place avant de supposer une régression de code.
+
 ## Limites assumées
 
 - **Pas de révocation immédiate de session** — le JWT expire après 12h,

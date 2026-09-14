@@ -746,6 +746,26 @@ préchargé avec la liste.
    été synchronisé vers GitHub, même avant cette migration (portée de
    `useSynchronisationStore` limitée à projects/sections) : pas une
    régression introduite ici.
+6. ✅ **Panne `Workers Builds: validapharm-auth-worker` (hors `main`)
+   résolue pour de bon** — cette session (14/09/2026), sur un incrément
+   documentaire de suivi (PR #44), l'utilisateur a creusé la vraie cause
+   avec les logs réels du tableau de bord Cloudflare (jusqu'ici jamais
+   accessibles à aucun outil MCP disponible) : le déploiement de
+   prévisualisation (`Settings → Build → Version command`, par défaut
+   `npx wrangler versions upload` sans argument) échouait avec `✘ [ERROR]
+   Missing entry-point to Worker script`, alors que `Root directory`
+   affichait pourtant la bonne valeur (`workers/auth-worker`) — le
+   répertoire de travail réel utilisé par Cloudflare au moment d'exécuter
+   cette commande ne correspondait pas à celui affiché dans les réglages
+   (incohérence côté plateforme Cloudflare, pas ce dépôt). **Corrigé** en
+   réglant `Version command` sur `npx wrangler versions upload --config
+   workers/auth-worker/wrangler.toml` (chemin explicite depuis la racine
+   du dépôt, indépendant du répertoire de travail réel) — confirmé vert
+   sur le build suivant, PR #44 mergée sans aucun contournement. Détails
+   complets dans `workers/auth-worker/README.md`. **Ne plus reproduire le
+   réflexe "panne connue, on merge quand même" pour ce check à l'avenir**
+   — s'il redevient rouge, vérifier d'abord que ce réglage `--config`
+   n'a pas été perdu avant de supposer une régression de code.
 
 ### 8.3 Prochaine action
 
