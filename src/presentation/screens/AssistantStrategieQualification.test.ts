@@ -3,8 +3,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import type { MethodProfileACFC } from '../../logique-metier/domaine/types'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -43,33 +43,42 @@ async function attendreQue(condition: () => boolean): Promise<void> {
 const CLIENT_ID = 'client-1'
 
 async function creerProfilDeTest(): Promise<MethodProfileACFC> {
-  const profil: MethodProfileACFC = {
-    id: 'profil-1',
-    client_id: CLIENT_ID,
-    version: 'v1',
-    effective_date: '2026-01-01T00:00:00.000Z',
+  const store = useMethodProfileACFCStore()
+  await store.charger(CLIENT_ID)
+  return store.creerNouvelleVersion(CLIENT_ID, {
+    questions: [
+      { texte: 'Le composant est-il en contact direct avec le produit ?' },
+      { texte: "Une défaillance impacte-t-elle la qualité de l'unité ?" },
+    ],
     source: 'Procédure interne QD-00098219',
     origin: 'procedure_client',
-    questions: [
-      { id: 'q1', texte: { fr: 'Le composant est-il en contact direct avec le produit ?' } },
-      { id: 'q2', texte: { fr: "Une défaillance impacte-t-elle la qualité de l'unité ?" } },
-    ],
-    decision_rule: 'au_moins_un_oui_critique',
-    created_at: '2026-01-01T00:00:00.000Z',
-  }
-  await db.methodProfilesACFC.put(profil)
-  return profil
+  })
 }
 
+let ctx: Contexte
 let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.methodProfilesACFC.clear()
-  await db.evaluationsACFC.clear()
   await reinitialiserAuthDeTest()
-  demonter = installerFauxWorkerAuth().demonter
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
   await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: CLIENT_ID,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
 })
 
 afterEach(() => {

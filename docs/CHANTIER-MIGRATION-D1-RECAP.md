@@ -91,7 +91,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `projects` | D1 (+ GitHub déjà en place, à conserver) | ✅ **Phase 3a terminée (14/09/2026)** — voir §6 |
 | `sections` | D1 (+ GitHub déjà en place, à conserver) | ✅ **Phase 3b terminée (14/09/2026)** — voir §7 |
 | `projectDocuments` (D1+R2, contenu binaire) | D1+R2 | ✅ **Phase 3c terminée (14/09/2026)** — voir §8 |
-| `methodProfilesACFC`, `evaluationsACFC` | D1 | ⬜ Phase 4 |
+| `methodProfilesACFC`, `evaluationsACFC` | D1 | ✅ **Phase 4a terminée** — voir §9 |
 | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ⬜ Phase 4 |
 | `methodProfilesImpactAssessment`, `evaluationsImpactAssessment`, `evaluationsCSVAssessment` | D1 | ⬜ Phase 4 |
 | `methodProfilesRiskAssessment`, `risksAssessment` | D1 | ⬜ Phase 4 |
@@ -778,3 +778,93 @@ sur D1, `projectDocuments` sur D1+R2). Enchaîner directement sur la Phase 4
 `risksAssessment`, voir §3) — même consigne de l'utilisateur : enchaîner
 sur toutes les phases sans s'arrêter pour demander confirmation entre
 chacune, le sujet des nœuds (import SAP) reste repoussé à plus tard.
+
+---
+
+## 9. État détaillé — Phase 4a (`ACFC`), au 17/09/2026
+
+Première brique de la Phase 4 (méthodologie de qualification). `ACFC`
+(F2 du catalogue §10) est scopé `client_id` simple — **pas** de
+`owner_id`/`shared_with` (jamais eu cette notion) — même patron que
+Structure Système (Phase 1), pas celui de `Project` (Phase 3a).
+
+### 9.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0009_acfc.sql` crée
+   `method_profiles_acfc` (9 colonnes, `questions` en JSON — structure
+   imbriquée modeste, jamais interrogée par son contenu côté serveur,
+   même choix que `levels` sur Structure Système) et `evaluations_acfc`
+   (11 colonnes, `reponses`/`audit_log` en JSON) + un index par table sur
+   `client_id`. **Pas encore appliquée en production.**
+2. **Repo Worker** : `workers/auth-worker/src/repos/acfcRepo.ts`
+   (interface + `ACFCRepoMemoire`) et `.../repos/d1/d1AcfcRepo.ts`
+   (implémentation D1) — `creerProfil`/`creerEvaluation` utilisent
+   `ON CONFLICT(id) DO NOTHING` côté D1 (et un test `Map.has` côté
+   mémoire) pour être nativement idempotents, réutilisés tels quels par
+   la création normale (id toujours neuf, jamais de conflit) et par la
+   migration locale (id imposé, existant gagne toujours).
+3. **4 routes `auth-worker`** sous `/clients/:clientId/acfc/...` (obtenir
+   profils+évaluations/créer un profil/créer une évaluation/migration
+   locale), toutes via `exigerAccesClient` (même garde que Structure
+   Système). La logique métier (numéro de version suivant, calcul du
+   verdict via `evaluerVerdictACFC`) reste côté store frontend, déjà
+   testée — ces handlers ne font que persister l'état qu'on leur donne,
+   dérivant uniquement `id`/`effectiveDate`/`createdAt` (création) ou
+   `id`/`auditLog`/timestamps (évaluation), jamais une identité d'acteur
+   fournie par l'appelant.
+4. **8 nouveaux tests Worker** (`routeur.test.ts`) : liste vide sans
+   profil, création de profil (dérivation serveur), corps invalide,
+   création d'évaluation (audit_log dérivé), migration locale idempotente
+   (l'existant gagne), non-authentifié → 401.
+5. **`AuthApiClient`** : `MethodProfileACFCWire`/`EvaluationACFCWire` +
+   4 méthodes (obtenir/créer profil/créer évaluation/migration locale).
+6. **`useMethodProfileACFCStore` entièrement réécrit** (même API publique
+   `{ profils, evaluations, enChargement, profilActif, charger,
+   creerNouvelleVersion, creerEvaluation }`) : toute la logique métier déjà
+   testée (calcul du verdict, numéro de version suivant, tri par numéro de
+   version jamais par `created_at`) reste côté client, seule la
+   persistance passe par l'API. `profilAcfcWireVersDomaine`/
+   `evaluationAcfcWireVersDomaine` (exportées) font la conversion
+   camelCase ↔ snake_case. `charger` dégrade gracieusement vers `[]` sur
+   toute erreur, même discipline que `useStructureSystemeStore.charger`.
+7. **Ripple effect côté production** : aucun — `DossierVivantActif.vue`/
+   `AssistantCreationLivrable.vue` ne consomment que l'API publique
+   inchangée du store (`profilActif`, `evaluations` filtrées par
+   `asset_node_id`), aucune référence directe à Dexie.
+8. **Filet de sécurité de migration locale** : capture Dexie v39
+   (`persistance/db.ts`, tables `methodProfilesACFC`/`evaluationsACFC`
+   supprimées, données capturées dans `methodProfilesACFCAMigrer`/
+   `evaluationsACFCAMigrer` — la forme de ces deux types domaine n'a pas
+   changé, contrairement à `ProjectDocument`, donc pas de type "Ancien"
+   séparé) + `migrerAcfcLocalVersServeur(clientId)` — appelée au début de
+   `charger`, flushe en un seul appel groupé les entrées du client
+   consulté (filtrage par `client_id` sur les deux files avant l'appel,
+   contrairement au flush global de `useSectionsStore` — nécessaire ici
+   car `charger` est scopé par client, jamais un appel global tous
+   clients confondus).
+9. **2 fichiers de test corrigés** (accès Dexie direct remplacé par de
+   vrais appels store, client de test créé via `ctx.clientsRepo.creer`,
+   même patron que `structureSysteme.test.ts`) :
+   `methodProfileACFC.test.ts` (entièrement réécrit) et
+   `AssistantStrategieQualification.test.ts` (`creerProfilDeTest` bascule
+   sur `store.creerNouvelleVersion` au lieu de `db.methodProfilesACFC.put`).
+10. **Validation complète** (17/09/2026, uniquement `npm run typecheck`,
+    jamais un `vue-tsc` isolé — leçon de la Phase 3b) : `npm run typecheck`
+    (0 erreur), `npm run lint` (0 erreur/warning), `npm run format`
+    (0 erreur), `npx vitest run` racine (**1251/1251 tests verts**),
+    `cd workers/auth-worker && npx vitest run` (**125/125 tests verts**,
+    dont les 8 nouveaux tests ACFC).
+
+### 9.2 Phase 4a — terminée
+
+_À compléter après commit/push/PR/merge/migration-apply/déploiement._
+
+### 9.3 Prochaine action
+
+Une fois la Phase 4a fermée, enchaîner sur la Phase 4b
+(`parameters`/`classificationsCriticiteParametre`/`cpps`/`cqas`) — même
+méthodologie, même patron client_id-scopé — puis 4c
+(`methodProfilesImpactAssessment`/`evaluationsImpactAssessment`/
+`evaluationsCSVAssessment`) et 4d (`methodProfilesRiskAssessment`/
+`risksAssessment`), sans s'arrêter pour confirmation entre chacune,
+conformément à la consigne permanente de l'utilisateur.

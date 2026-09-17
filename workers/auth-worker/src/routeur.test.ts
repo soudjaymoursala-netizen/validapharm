@@ -10,6 +10,7 @@
 // les classes natives Node, seules réellement compatibles entre elles.
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { EnvoyeurEmailMemoire } from './notifications/envoyeurEmail'
+import { ACFCRepoMemoire } from './repos/acfcRepo'
 import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
@@ -42,6 +43,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     projectsRepo: new ProjectsRepoMemoire(),
     sectionsRepo: new SectionsRepoMemoire(),
     projectDocumentsRepo: new ProjectDocumentsRepoMemoire(),
+    acfcRepo: new ACFCRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -127,6 +129,36 @@ interface CorpsReponse {
   sections: SectionJson[]
   documentProjet: ProjectDocumentJson
   documentsProjet: ProjectDocumentJson[]
+  profil: MethodProfileACFCJson
+  profils: MethodProfileACFCJson[]
+  evaluation: EvaluationACFCJson
+  evaluations: EvaluationACFCJson[]
+}
+
+interface MethodProfileACFCJson {
+  id: string
+  clientId: string
+  version: string
+  effectiveDate: string
+  source: string
+  origin: string
+  questions: { id: string; texte: Record<string, string>; famille?: string }[]
+  decisionRule: string
+  createdAt: string
+}
+
+interface EvaluationACFCJson {
+  id: string
+  clientId: string
+  methodProfileId: string
+  methodProfileVersion: string
+  assetNodeId: string | null
+  nomElement: string
+  reponses: Record<string, string>
+  verdict: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
 }
 
 interface SectionJson {
@@ -973,6 +1005,142 @@ describe('routerRequete — Structure Système (référentiel d’actifs, D1 = s
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/structure-systeme`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — ACFC (méthode configurable par client, Phase 4a du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans profil configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/acfc`, { jeton: admin.jeton })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.profils).toEqual([])
+    expect(obtenir.corps.evaluations).toEqual([])
+  })
+
+  test('créer un profil : id/effectiveDate/createdAt dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton: admin.jeton,
+      body: {
+        version: 'v1',
+        source: 'Procédure interne QP-042',
+        origin: 'procedure_client',
+        questions: [{ id: 'q-1', texte: { fr: 'Le composant a-t-il un contact produit ?' } }],
+        decisionRule: 'au_moins_un_oui_critique',
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.profil.clientId).toBe(clientId)
+    expect(creation.corps.profil.id).toEqual(expect.any(String))
+    expect(creation.corps.profil.effectiveDate).toEqual(expect.any(String))
+    expect(creation.corps.profil.questions).toHaveLength(1)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/acfc`, { jeton: admin.jeton })
+    expect(liste.corps.profils.map((p) => p.id)).toContain(creation.corps.profil.id)
+  })
+
+  test('créer un profil sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton: admin.jeton,
+      body: { version: 'v1' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('créer une évaluation : id/audit_log/horodatages dérivés côté serveur, jamais acceptés depuis le corps', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton: admin.jeton,
+      body: {
+        version: 'v1',
+        source: 'Procédure interne QP-042',
+        origin: 'procedure_client',
+        questions: [{ id: 'q-1', texte: { fr: 'Contact produit ?' } }],
+        decisionRule: 'au_moins_un_oui_critique',
+      },
+    })
+
+    const evaluation = await requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, {
+      jeton: admin.jeton,
+      body: {
+        methodProfileId: profil.corps.profil.id,
+        methodProfileVersion: profil.corps.profil.version,
+        assetNodeId: null,
+        nomElement: 'Vanne à membrane V-101',
+        reponses: { 'q-1': 'oui' },
+        verdict: 'critique',
+      },
+    })
+    expect(evaluation.status).toBe(201)
+    expect(evaluation.corps.evaluation.clientId).toBe(clientId)
+    expect(evaluation.corps.evaluation.verdict).toBe('critique')
+    expect(evaluation.corps.evaluation.auditLog).toEqual([
+      { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
+    ])
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/acfc`, { jeton: admin.jeton })
+    expect(liste.corps.evaluations.map((e) => e.id)).toContain(evaluation.corps.evaluation.id)
+  })
+
+  test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const profilLocal = {
+      id: 'profil-local-1',
+      clientId,
+      version: 'v1',
+      effectiveDate: '2026-01-01T00:00:00.000Z',
+      source: 'Ancienne procédure',
+      origin: 'procedure_client',
+      questions: [{ id: 'q-1', texte: { fr: 'Contact produit ?' } }],
+      decisionRule: 'au_moins_un_oui_critique',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    const premiere = await requete(ctx, 'POST', `/clients/${clientId}/acfc/migration-locale`, {
+      jeton: admin.jeton,
+      body: { profils: [profilLocal], evaluations: [] },
+    })
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(ctx, 'POST', `/clients/${clientId}/acfc/migration-locale`, {
+      jeton: admin.jeton,
+      body: { profils: [{ ...profilLocal, source: 'Tentative d’écrasement' }], evaluations: [] },
+    })
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/acfc`, { jeton: admin.jeton })
+    expect(liste.corps.profils).toHaveLength(1)
+    expect(liste.corps.profils[0]?.source).toBe('Ancienne procédure')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/acfc`)
     expect(obtenir.status).toBe(401)
   })
 })
