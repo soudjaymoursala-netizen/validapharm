@@ -92,7 +92,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `sections` | D1 (+ GitHub déjà en place, à conserver) | ✅ **Phase 3b terminée (14/09/2026)** — voir §7 |
 | `projectDocuments` (D1+R2, contenu binaire) | D1+R2 | ✅ **Phase 3c terminée (14/09/2026)** — voir §8 |
 | `methodProfilesACFC`, `evaluationsACFC` | D1 | ✅ **Phase 4a terminée** — voir §9 |
-| `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ⬜ Phase 4 |
+| `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ✅ **Phase 4b terminée** — voir §10 |
 | `methodProfilesImpactAssessment`, `evaluationsImpactAssessment`, `evaluationsCSVAssessment` | D1 | ⬜ Phase 4 |
 | `methodProfilesRiskAssessment`, `risksAssessment` | D1 | ⬜ Phase 4 |
 | `processes`, `fonctionsActif`, `associationsFonctionAssetNode`, `associationsFonctionProcess`, `manufacturingContexts` | D1 | ⬜ Phase 5 |
@@ -878,12 +878,109 @@ Structure Système (Phase 1), pas celui de `Project` (Phase 3a).
    depuis les phases précédentes) — `ACFC` n'a jamais été synchronisé
    vers GitHub, même avant cette migration : pas une régression.
 
-### 9.3 Prochaine action
+### 9.3 Phase 4a — clôturée
 
-Une fois la Phase 4a fermée, enchaîner sur la Phase 4b
-(`parameters`/`classificationsCriticiteParametre`/`cpps`/`cqas`) — même
-méthodologie, même patron client_id-scopé — puis 4c
+PR #47 (doc-only, complétant ce §9 avec les faits réels de merge/migration/
+déploiement) ouverte, CI verte (y compris les deux `Workers Builds` sans
+aucun contournement), mergée (squash, commit `1d0aa7c`). Phase 4a
+définitivement close, enchaînement immédiat sur la Phase 4b ci-dessous.
+
+---
+
+## 10. État détaillé — Phase 4b (`Parameter`/`ClassificationCriticiteParametre`/`CPP`/`CQA`), au 17/09/2026
+
+Deuxième brique de la Phase 4. Même patron client_id-scopé que ACFC
+(Phase 4a)/Structure Système (Phase 1) — **pas** de `owner_id`/
+`shared_with` sur ces 4 types (jamais eu cette notion). Garde-fou central
+du domaine (Target Architecture §10, `docs/convergence/GAP.md`) inchangé :
+un `CPP`/`CQA` ne peut être créé que par une déclaration humaine explicite,
+jamais dérivé automatiquement d'une `ClassificationCriticiteParametre` —
+vérifié par un test dédié côté Worker et côté store.
+
+### 10.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0010_parameters.sql`
+   crée 4 tables (`parameters`, `classifications_criticite_parametre`,
+   `cpps`, `cqas`) + un index par table sur `client_id`. `actif` (CPP/CQA)
+   stocké en `INTEGER` (0/1), même convention que
+   `has_binary_content`/etc. sur les dépôts D1 existants
+   (`Boolean(l.actif)` à la lecture, `c.actif ? 1 : 0` à l'écriture).
+   **Pas encore appliquée en production.**
+2. **Repo Worker** : `workers/auth-worker/src/repos/parametersRepo.ts`
+   (interface `ParametersRepo` + `ParametersRepoMemoire`) et
+   `.../repos/d1/d1ParametersRepo.ts` (implémentation D1) — les 4
+   créations utilisent `ON CONFLICT(id) DO NOTHING` côté D1 (idempotence
+   création normale/migration locale, même patron qu'ACFC) ; `CPP`/`CQA`
+   ont en plus `cppParId`/`remplacerCPP` et `cqaParId`/`remplacerCQA`
+   (l'`UPDATE` de la désactivation, seule mutation du domaine — aucun
+   autre type de ce chantier n'en avait eu besoin jusqu'ici).
+3. **9 routes `auth-worker`** sous `/clients/:clientId/parameters/...`
+   (obtenir les 4 listes / créer un paramètre / créer une classification /
+   créer+désactiver un CPP / créer+désactiver un CQA / migration locale),
+   toutes via `exigerAccesClient`. Clé JSON `parametreProcede`/
+   `parametresProcede` (jamais `parametre`/`parametres`) : `parametre`
+   désigne déjà une entrée `parametres_installation` (config technique
+   clé/valeur, `/parametres-installation/:cle`) — une collision de nom
+   aurait rendu les deux réponses JSON ambiguës pour le frontend, repérée
+   avant l'écriture des tests plutôt qu'après.
+4. **8 nouveaux tests Worker** (`routeur.test.ts`) : listes vides sans
+   rien configuré, création de paramètre (dérivation serveur), corps
+   invalide, classification ne crée jamais de CPP/CQA (garde-fou),
+   déclaration+désactivation CPP (historique conservé), déclaration+
+   désactivation CQA, migration locale idempotente, non-authentifié → 401.
+   Suite Worker au complet : **133/133 tests verts**.
+5. **Bug de validation trouvé et corrigé en écrivant les tests** :
+   `gererCreerParametre`/`gererCreerCQA` rejetaient à tort une
+   `description`/`contexte` **vide** (`''`) comme `corps_invalide`
+   (`!corps.description` traite `''` comme absent) — repéré par le test
+   d'isolation par client (`description: ''`) et par le formulaire réel
+   (`ParametresCritiques.vue` soumet une description vide par défaut).
+   Corrigé en testant `corps.description === undefined` (absent) plutôt
+   que la valeur falsy — seul `nom`/`contexte`/`justification` restent
+   réellement requis.
+6. **`AuthApiClient`** : `ParameterWire`/`ClassificationCriticiteParametreWire`/
+   `CPPWire`/`CQAWire` + 7 méthodes (obtenir/créer paramètre/créer
+   classification/déclarer+désactiver CPP/déclarer+désactiver CQA/
+   migration locale).
+7. **`useParameterStore` entièrement réécrit** (même API publique
+   `{ parametres, classifications, cpps, cqas, enChargement, cppsActifs,
+   cqasActifs, charger, creerParametre, classifierParametre, declarerCPP,
+   desactiverCPP, declarerCQA, desactiverCQA }`) : le garde-fou central
+   (aucune fonction ne crée de CPP/CQA depuis une classification) reste
+   intégralement dans le store, seule la persistance passe par l'API.
+   `charger` dégrade gracieusement vers 4 listes vides sur toute erreur,
+   même discipline qu'ACFC/Structure Système.
+8. **Ripple effect côté production** : aucun en dehors de
+   `ParametresCritiques.vue`, qui ne consommait déjà que l'API publique du
+   store (aucune référence directe à Dexie).
+9. **Filet de sécurité de migration locale** : capture Dexie v40
+   (`persistance/db.ts`, 4 tables supprimées, données capturées dans
+   `parametersAMigrer`/`classificationsCriticiteParametreAMigrer`/
+   `cppsAMigrer`/`cqasAMigrer` — formes domaine inchangées, pas de type
+   "Ancien") + `migrerParametersLocalVersServeur(clientId)`, filtrage par
+   client sur les 4 files avant un seul appel groupé, même patron qu'ACFC.
+10. **2 fichiers de test corrigés** (accès Dexie direct remplacé par de
+    vrais appels store/`ctx.parametersRepo`, client de test créé via
+    `ctx.clientsRepo.creer`, même patron que `methodProfileACFC.test.ts`) :
+    `useParameterStore.test.ts` (entièrement réécrit) et
+    `ParametresCritiques.test.ts` (idem, plus la découverte du bug de
+    validation ci-dessus).
+11. **Validation complète** (17/09/2026, uniquement `npm run typecheck`,
+    jamais un `vue-tsc` isolé) : `npm run typecheck` (0 erreur), `npm run
+    lint` (0 erreur/warning), `npm run format` (0 erreur), `npx vitest
+    run` racine (**1259/1259 tests verts**), `cd workers/auth-worker &&
+    npx vitest run` (**133/133 tests verts**, dont les 8 nouveaux tests
+    Parameter/CPP/CQA).
+
+### 10.2 Prochaine action
+
+Une fois cette PR mergée : appliquer `0010_parameters.sql` en production
+D1, vérifier via `sqlite_master` (4 tables + 4 index — **ne pas oublier
+aucun des 4 `CREATE INDEX`**, leçon de l'étourderie Phase 4a §9.2 point 3),
+vérifier le déploiement Worker (`workers_get_worker_code`), puis compléter
+ce §10 avec les faits réels (PR/commit/migration/déploiement), même
+patron doc-only en 2 temps que Phase 4a. Enchaîner ensuite sur la Phase 4c
 (`methodProfilesImpactAssessment`/`evaluationsImpactAssessment`/
-`evaluationsCSVAssessment`) et 4d (`methodProfilesRiskAssessment`/
+`evaluationsCSVAssessment`) puis 4d (`methodProfilesRiskAssessment`/
 `risksAssessment`), sans s'arrêter pour confirmation entre chacune,
 conformément à la consigne permanente de l'utilisateur.

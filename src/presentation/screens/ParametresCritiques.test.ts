@@ -1,9 +1,14 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import ParametresCritiques from './ParametresCritiques.vue'
 
 function routeurDeTest() {
@@ -29,18 +34,42 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+const CLIENT_ID = 'client-1'
+
+let ctx: Contexte
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.parameters.clear()
-  await db.classificationsCriticiteParametre.clear()
-  await db.cpps.clear()
-  await db.cqas.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: CLIENT_ID,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('ParametresCritiques', () => {
   test('crée un paramètre, le classifie, déclare un CPP et un CQA séparément', async () => {
     const wrapper = mount(ParametresCritiques, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await flushPromises()
@@ -49,15 +78,13 @@ describe('ParametresCritiques', () => {
     const formParametre = wrapper.find('.bloc-parametres form')
     await formParametre.find('input[type="text"]').setValue('Température')
     await formParametre.trigger('submit.prevent')
-    await attendreQue(
-      async () => (await db.parameters.where('client_id').equals('client-1').count()) > 0,
-    )
+    await attendreQue(async () => (await ctx.parametersRepo.listerParametres(CLIENT_ID)).length > 0)
 
-    const parametre = (await db.parameters.toArray())[0]
+    const parametre = (await ctx.parametersRepo.listerParametres(CLIENT_ID))[0]
     expect(parametre?.nom).toBe('Température')
 
     // Le paramètre doit apparaître dans les sélecteurs avant qu'on interagisse
-    // avec eux (chargement IndexedDB asynchrone dans onMounted — même leçon
+    // avec eux (chargement asynchrone dans onMounted — même leçon
     // que ExecutionTests.test.ts).
     await attendreQue(() =>
       wrapper
@@ -73,9 +100,11 @@ describe('ParametresCritiques', () => {
     await selectsClassification[1]?.setValue('critique')
     await formClassification.find('textarea').setValue('Impact direct sur la stérilité')
     await formClassification.trigger('submit.prevent')
-    await attendreQue(async () => (await db.classificationsCriticiteParametre.count()) > 0)
-    expect(await db.cpps.count()).toBe(0)
-    expect(await db.cqas.count()).toBe(0)
+    await attendreQue(
+      async () => (await ctx.parametersRepo.listerClassifications(CLIENT_ID)).length > 0,
+    )
+    expect(await ctx.parametersRepo.listerCPPs(CLIENT_ID)).toHaveLength(0)
+    expect(await ctx.parametersRepo.listerCQAs(CLIENT_ID)).toHaveLength(0)
 
     // CPP — déclaration humaine explicite, distincte de la classification
     const formCPP = wrapper.find('.bloc-cpp form')
@@ -84,10 +113,10 @@ describe('ParametresCritiques', () => {
     await inputsCPP[0]?.setValue('Recette lot A')
     await formCPP.find('textarea').setValue('Justification CPP')
     await formCPP.trigger('submit.prevent')
-    await attendreQue(async () => (await db.cpps.count()) > 0)
+    await attendreQue(async () => (await ctx.parametersRepo.listerCPPs(CLIENT_ID)).length > 0)
 
-    const cpp = (await db.cpps.toArray())[0]
-    expect(cpp?.parameter_id).toBe(parametre?.id)
+    const cpp = (await ctx.parametersRepo.listerCPPs(CLIENT_ID))[0]
+    expect(cpp?.parameterId).toBe(parametre?.id)
     expect(cpp?.actif).toBe(true)
 
     // CQA — indépendant, pas de parameter_id
@@ -98,9 +127,9 @@ describe('ParametresCritiques', () => {
     const textareasCQA = formCQA.findAll('textarea')
     await textareasCQA[1]?.setValue('Justification CQA')
     await formCQA.trigger('submit.prevent')
-    await attendreQue(async () => (await db.cqas.count()) > 0)
+    await attendreQue(async () => (await ctx.parametersRepo.listerCQAs(CLIENT_ID)).length > 0)
 
-    const cqa = (await db.cqas.toArray())[0]
+    const cqa = (await ctx.parametersRepo.listerCQAs(CLIENT_ID))[0]
     expect(cqa?.nom).toBe('Stérilité')
 
     // Désactivation du CPP — jamais une suppression, un événement tracé
@@ -108,27 +137,29 @@ describe('ParametresCritiques', () => {
     const ligneCPP = wrapper.find('.liste-cpp li')
     await ligneCPP.find('input[type="text"]').setValue('Changement de recette')
     await ligneCPP.find('button').trigger('click')
-    await attendreQue(async () => (await db.cpps.toArray())[0]?.actif === false)
+    await attendreQue(
+      async () => (await ctx.parametersRepo.listerCPPs(CLIENT_ID))[0]?.actif === false,
+    )
 
-    const cppDesactive = (await db.cpps.toArray())[0]
+    const cppDesactive = (await ctx.parametersRepo.listerCPPs(CLIENT_ID))[0]
     expect(cppDesactive?.actif).toBe(false)
-    expect(cppDesactive?.audit_log.at(-1)?.action).toContain('Changement de recette')
+    expect(cppDesactive?.auditLog.at(-1)?.action).toContain('Changement de recette')
   })
 
   test('une classification "important" ne crée jamais de CPP (garde-fou)', async () => {
-    await db.parameters.put({
+    await ctx.parametersRepo.creerParametre({
       id: 'param-1',
-      client_id: 'client-1',
-      asset_node_id: null,
+      clientId: CLIENT_ID,
+      assetNodeId: null,
       nom: 'Pression',
       description: '',
       unite: 'bar',
-      audit_log: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      auditLog: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     })
     const wrapper = mount(ParametresCritiques, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await flushPromises()
@@ -145,9 +176,11 @@ describe('ParametresCritiques', () => {
     await selects[1]?.setValue('important')
     await formClassification.find('textarea').setValue('Justification')
     await formClassification.trigger('submit.prevent')
-    await attendreQue(async () => (await db.classificationsCriticiteParametre.count()) > 0)
+    await attendreQue(
+      async () => (await ctx.parametersRepo.listerClassifications(CLIENT_ID)).length > 0,
+    )
 
-    expect(await db.cpps.count()).toBe(0)
-    expect(await db.cqas.count()).toBe(0)
+    expect(await ctx.parametersRepo.listerCPPs(CLIENT_ID)).toHaveLength(0)
+    expect(await ctx.parametersRepo.listerCQAs(CLIENT_ID)).toHaveLength(0)
   })
 })

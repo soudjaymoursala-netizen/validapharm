@@ -5,6 +5,7 @@ import { D1AuditRepo } from './repos/d1/d1AuditRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
 import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
 import { D1OrganisationRepo } from './repos/d1/d1OrganisationRepo'
+import { D1ParametersRepo } from './repos/d1/d1ParametersRepo'
 import { D1ParametresInstallationRepo } from './repos/d1/d1ParametresInstallationRepo'
 import { D1ProjectDocumentsRepo } from './repos/d1/d1ProjectDocumentsRepo'
 import { D1ProjectsRepo } from './repos/d1/d1ProjectsRepo'
@@ -52,6 +53,7 @@ export default {
       sectionsRepo: new D1SectionsRepo(env.DB),
       projectDocumentsRepo: new D1ProjectDocumentsRepo(env.DB),
       acfcRepo: new D1AcfcRepo(env.DB),
+      parametersRepo: new D1ParametersRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

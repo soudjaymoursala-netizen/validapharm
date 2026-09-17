@@ -154,6 +154,81 @@ export interface SaisieCreationEvaluationAcfcWire {
   verdict: string | null
 }
 
+export interface ParameterWire {
+  id: string
+  clientId: string
+  assetNodeId: string | null
+  nom: string
+  description: string
+  unite: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ClassificationCriticiteParametreWire {
+  id: string
+  clientId: string
+  parameterId: string
+  niveau: string
+  contexte: string | null
+  justification: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+}
+
+export interface CPPWire {
+  id: string
+  clientId: string
+  parameterId: string
+  contexte: string
+  justification: string
+  actif: boolean
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CQAWire {
+  id: string
+  clientId: string
+  nom: string
+  description: string
+  contexte: string
+  justification: string
+  actif: boolean
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaisieCreationParametreWire {
+  nom: string
+  description: string
+  unite: string | null
+  assetNodeId: string | null
+}
+
+export interface SaisieCreationClassificationWire {
+  parameterId: string
+  niveau: string
+  contexte: string | null
+  justification: string
+}
+
+export interface SaisieCreationCPPWire {
+  parameterId: string
+  contexte: string
+  justification: string
+}
+
+export interface SaisieCreationCQAWire {
+  nom: string
+  description: string
+  contexte: string
+  justification: string
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -527,6 +602,108 @@ export class AuthApiClient {
     donnees: { profils: MethodProfileACFCWire[]; evaluations: EvaluationACFCWire[] },
   ): Promise<ResultatApi<{ profils: MethodProfileACFCWire[]; evaluations: EvaluationACFCWire[] }>> {
     return this.requete('POST', `/clients/${clientId}/acfc/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Parameter/ClassificationCriticiteParametre/CPP/CQA (Target Architecture §10, Phase 4b du chantier de migration D1) ---
+
+  obtenirParameters(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      parametresProcede: ParameterWire[]
+      classifications: ClassificationCriticiteParametreWire[]
+      cpps: CPPWire[]
+      cqas: CQAWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/parameters`, { jeton })
+  }
+
+  creerParametre(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationParametreWire,
+  ): Promise<ResultatApi<{ parametreProcede: ParameterWire }>> {
+    return this.requete('POST', `/clients/${clientId}/parameters/parametres`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerClassificationCriticiteParametre(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationClassificationWire,
+  ): Promise<ResultatApi<{ classification: ClassificationCriticiteParametreWire }>> {
+    return this.requete('POST', `/clients/${clientId}/parameters/classifications`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  declarerCPP(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationCPPWire,
+  ): Promise<ResultatApi<{ cpp: CPPWire }>> {
+    return this.requete('POST', `/clients/${clientId}/parameters/cpps`, { jeton, body: saisie })
+  }
+
+  desactiverCPP(
+    jeton: string,
+    clientId: string,
+    cppId: string,
+    motif: string,
+  ): Promise<ResultatApi<{ cpp: CPPWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/parameters/cpps/${cppId}`, {
+      jeton,
+      body: { motif },
+    })
+  }
+
+  declarerCQA(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationCQAWire,
+  ): Promise<ResultatApi<{ cqa: CQAWire }>> {
+    return this.requete('POST', `/clients/${clientId}/parameters/cqas`, { jeton, body: saisie })
+  }
+
+  desactiverCQA(
+    jeton: string,
+    clientId: string,
+    cqaId: string,
+    motif: string,
+  ): Promise<ResultatApi<{ cqa: CQAWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/parameters/cqas/${cqaId}`, {
+      jeton,
+      body: { motif },
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerParametersLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerParametersLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      parametresProcede: ParameterWire[]
+      classifications: ClassificationCriticiteParametreWire[]
+      cpps: CPPWire[]
+      cqas: CQAWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      parametresProcede: ParameterWire[]
+      classifications: ClassificationCriticiteParametreWire[]
+      cpps: CPPWire[]
+      cqas: CQAWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/parameters/migration-locale`, {
       jeton,
       body: donnees,
     })
