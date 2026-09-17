@@ -175,7 +175,13 @@ describe('DossierVivantActif', () => {
       props: { clientId: CLIENT_ID, noeudId: 'noeud-1' },
       global: { plugins: [routeurDeTest()] },
     })
-    await attendreQue(() => wrapper.text().includes('Autoclave AUT-042'))
+    // Attendre uniquement le nom du nœud ne suffit pas : Structure Système
+    // et CSV Assessment/Quality Events se chargent via des `charger()`
+    // concurrents distincts (voir le commentaire d'`attendreQue` en tête de
+    // fichier) — un « PLC autoclave » pas encore arrivé a fait échouer ce
+    // test en CI (jamais reproduit en local) tant que la condition
+    // n'attendait que le nom du nœud.
+    await attendreQue(() => wrapper.text().includes('PLC autoclave'))
 
     expect(wrapper.text()).toContain('Qualifié')
     expect(wrapper.text()).toContain('2027-01-01')
