@@ -12,6 +12,7 @@ import {
   evaluerReglesConformite,
   type RegleConformite,
 } from '../../logique-metier/conformite/evaluerReglesConformite'
+import { useQualityEventStore } from './useQualityEventStore'
 
 export interface NouveauContentPlanInput {
   templateId: TemplateType
@@ -77,15 +78,19 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
    * fournie par l'appelant.
    */
   async function calculerReadiness(clientId: string, assetNodeId: string | null) {
-    const [requirements, couvertures, tests, executions, evidences, qualityEvents] =
-      await Promise.all([
-        db.requirements.where('client_id').equals(clientId).toArray(),
-        db.couvertures.where('client_id').equals(clientId).toArray(),
-        db.tests.where('client_id').equals(clientId).toArray(),
-        db.executions.where('client_id').equals(clientId).toArray(),
-        db.evidences.where('client_id').equals(clientId).toArray(),
-        db.qualityEvents.where('client_id').equals(clientId).toArray(),
-      ])
+    // QualityEvent migré vers le Worker/D1 (Phase 5b du chantier de
+    // migration D1) — chargé via le store dédié plutôt qu'un accès Dexie
+    // direct, devenu impossible depuis cette migration.
+    const qualityEventStore = useQualityEventStore()
+    await qualityEventStore.charger(clientId)
+    const [requirements, couvertures, tests, executions, evidences] = await Promise.all([
+      db.requirements.where('client_id').equals(clientId).toArray(),
+      db.couvertures.where('client_id').equals(clientId).toArray(),
+      db.tests.where('client_id').equals(clientId).toArray(),
+      db.executions.where('client_id').equals(clientId).toArray(),
+      db.evidences.where('client_id').equals(clientId).toArray(),
+    ])
+    const qualityEvents = qualityEventStore.evenements
     return construireReadinessContentPlan({
       assetNodeId,
       requirements,

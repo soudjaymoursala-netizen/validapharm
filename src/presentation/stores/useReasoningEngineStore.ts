@@ -14,6 +14,7 @@ import { executerBoucleRaisonnement } from '../../logique-metier/raisonnement/bo
 import { CATALOGUE_OUTILS_RAISONNEMENT } from '../../logique-metier/raisonnement/outilsRaisonnement'
 import { db } from '../../persistance/db'
 import { useProcessContextStore } from './useProcessContextStore'
+import { useQualityEventStore } from './useQualityEventStore'
 import { useStructureSystemeStore } from './useStructureSystemeStore'
 
 const VERSION_CONFIGURATION_ACTUELLE = 'v1'
@@ -107,6 +108,10 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
     // de migration D1) — même patron que Structure Système ci-dessus.
     const processContextStore = useProcessContextStore()
     await processContextStore.charger(clientId)
+    // QualityEvent migré vers le Worker/D1 (Phase 5b du chantier de
+    // migration D1) — même patron que Process/ManufacturingContext ci-dessus.
+    const qualityEventStore = useQualityEventStore()
+    await qualityEventStore.charger(clientId)
 
     const [
       requirements,
@@ -117,7 +122,6 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       knowledgeItems,
       procedures,
       procedureSteps,
-      qualityEvents,
       knowledgeRelations,
       contextSnapshotItems,
     ] = await Promise.all([
@@ -129,7 +133,6 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       db.knowledgeItems.where('client_id').equals(clientId).toArray(),
       db.procedures.where('client_id').equals(clientId).toArray(),
       db.procedureSteps.where('client_id').equals(clientId).toArray(),
-      db.qualityEvents.where('client_id').equals(clientId).toArray(),
       db.knowledgeRelations.where('client_id').equals(clientId).toArray(),
       entrees.contextSnapshotId
         ? db.contextSnapshotItems
@@ -139,6 +142,7 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
         : Promise.resolve([]),
     ])
     const manufacturingContexts = processContextStore.manufacturingContexts
+    const qualityEvents = qualityEventStore.evenements
     const assetNodes = structureStore.noeuds
     const relationsTechniques = structureStore.relationsTechniques
 

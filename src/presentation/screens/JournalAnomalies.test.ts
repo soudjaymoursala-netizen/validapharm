@@ -3,9 +3,16 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useQualityEventStore } from '../stores/useQualityEventStore'
 import JournalAnomalies from './JournalAnomalies.vue'
+
+const CLIENT_ID = 'client-1'
 
 // `flushPromises` seul ne suffit pas toujours à attendre la fin d'une
 // transaction IndexedDB (fake-indexeddb) déclenchée par un handler
@@ -33,10 +40,30 @@ function routeurDeTest() {
   })
 }
 
+let ctx: Contexte
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.qualityEvents.clear()
-  await db.referencesQualityEvent.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: 'Client de test',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
 })
 
 // L'écran charge deux stores en `Promise.all` dans `onMounted` — même
@@ -49,12 +76,13 @@ afterEach(async () => {
     await flushPromises()
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
+  demonter()
 })
 
 describe('JournalAnomalies', () => {
   test('le bouton de création reste désactivé tant que le type et le titre ne sont pas renseignés', async () => {
     const wrapper = mount(JournalAnomalies, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await flushPromises()
@@ -64,7 +92,7 @@ describe('JournalAnomalies', () => {
 
   test('crée une déviation, la liste immédiatement, jamais un verrou sur un autre module', async () => {
     const wrapper = mount(JournalAnomalies, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await flushPromises()
@@ -77,9 +105,9 @@ describe('JournalAnomalies', () => {
     await wrapper.find('.formulaire').trigger('submit.prevent')
 
     await attendreQue(
-      async () => (await db.qualityEvents.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.qualityEventRepo.listerEvenements(CLIENT_ID)).length > 0,
     )
-    const evenements = await db.qualityEvents.where('client_id').equals('client-1').toArray()
+    const evenements = await ctx.qualityEventRepo.listerEvenements(CLIENT_ID)
     expect(evenements).toHaveLength(1)
     expect(evenements[0]).toMatchObject({
       type: 'deviation',
@@ -94,25 +122,25 @@ describe('JournalAnomalies', () => {
     // avant ce correctif, l'écran affichait à tort « Aucun événement pour
     // l'instant » tant que le onMounted n'avait pas terminé.
     const maintenant = new Date().toISOString()
-    await db.qualityEvents.put({
+    await ctx.qualityEventRepo.creerEvenement({
       id: crypto.randomUUID(),
-      client_id: 'client-1',
+      clientId: CLIENT_ID,
       type: 'deviation',
       titre: 'Événement déjà en base',
       description: '',
       origine: 'interne',
-      reference_externe: null,
-      asset_node_id: null,
-      process_id: null,
-      manufacturing_context_id: null,
+      referenceExterne: null,
+      assetNodeId: null,
+      processId: null,
+      manufacturingContextId: null,
       statut: 'ouvert',
-      audit_log: [],
-      created_at: maintenant,
-      updated_at: maintenant,
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
     })
 
     const wrapper = mount(JournalAnomalies, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
 
@@ -124,7 +152,7 @@ describe('JournalAnomalies', () => {
 
   test('un changement de statut bloqué (événement supprimé entre-temps) affiche un message, ne casse pas silencieusement', async () => {
     const wrapper = mount(JournalAnomalies, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await flushPromises()
@@ -133,7 +161,7 @@ describe('JournalAnomalies', () => {
     await wrapper.find('input[type="text"]').setValue('Fuite détectée cuve B12')
     await wrapper.find('.formulaire').trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.qualityEvents.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.qualityEventRepo.listerEvenements(CLIENT_ID)).length > 0,
     )
     await attendreQue(() => wrapper.find('.liste-evenements select').exists())
 
@@ -150,7 +178,7 @@ describe('JournalAnomalies', () => {
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
 
     expect(wrapper.find('.bandeau-erreur').text()).toContain('supprimé entre-temps')
-    const evenement = (await db.qualityEvents.toArray())[0]
-    expect(evenement?.statut).toBe('ouvert')
+    const evenements = await ctx.qualityEventRepo.listerEvenements(CLIENT_ID)
+    expect(evenements[0]?.statut).toBe('ouvert')
   })
 })

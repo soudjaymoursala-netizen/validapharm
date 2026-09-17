@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import type { QualityEvent } from '../../logique-metier/domaine/types'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
@@ -78,25 +78,23 @@ async function creerMissionDeTest(): Promise<void> {
   })
 }
 
-async function creerQualityEventDeTest(): Promise<QualityEvent> {
-  const evenement: QualityEvent = {
+async function creerQualityEventDeTest(): Promise<void> {
+  await ctx.qualityEventRepo.creerEvenement({
     id: 'qe-1',
-    client_id: CLIENT_ID,
+    clientId: CLIENT_ID,
     type: 'deviation',
     titre: 'Déviation débit granulateur',
     description: '',
     origine: 'interne',
-    reference_externe: null,
-    asset_node_id: null,
-    process_id: null,
-    manufacturing_context_id: null,
+    referenceExterne: null,
+    assetNodeId: null,
+    processId: null,
+    manufacturingContextId: null,
     statut: 'ouvert',
-    audit_log: [],
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z',
-  }
-  await db.qualityEvents.put(evenement)
-  return evenement
+    auditLog: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  })
 }
 
 async function monter() {
@@ -110,6 +108,9 @@ async function monter() {
   return wrapper
 }
 
+let ctx: Contexte
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
   fournisseurEnvoyerMessage.mockReset()
@@ -117,7 +118,6 @@ beforeEach(async () => {
   await db.activities.clear()
   await db.dependencies.clear()
   await db.associationsMissionQualityEvent.clear()
-  await db.qualityEvents.clear()
   await db.contextSnapshots.clear()
   await db.contextSnapshotItems.clear()
   await db.aiConfigurations.clear()
@@ -128,6 +128,30 @@ beforeEach(async () => {
   await db.requirements.clear()
   await db.couvertures.clear()
   await db.tests.clear()
+  // QualityEvent migré vers le Worker/D1 (Phase 5b du chantier de
+  // migration D1) — un client réel doit exister pour que
+  // `qualityEventStore.charger` (appelé par `onMounted`) soit autorisé par
+  // `exigerAccesClient`, même patron que les autres domaines déjà migrés
+  // consommés par cet écran (structure système, process context, ...).
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: 'Client de test',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
   await creerMissionDeTest()
 })
 
@@ -148,6 +172,7 @@ afterEach(async () => {
     await flushPromises()
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
+  demonter()
 })
 
 describe('MissionWorkspace — Activités et dépendances', () => {

@@ -466,6 +466,47 @@ export interface SaisieCreationManufacturingContextWire {
   configuration: string | null
 }
 
+export interface QualityEventWire {
+  id: string
+  clientId: string
+  type: string
+  titre: string
+  description: string
+  origine: string
+  referenceExterne: { systeme: string; identifiant: string } | null
+  assetNodeId: string | null
+  processId: string | null
+  manufacturingContextId: string | null
+  statut: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReferenceQualityEventWire {
+  id: string
+  clientId: string
+  qualityEventSourceId: string
+  qualityEventCibleId: string
+  createdAt: string
+}
+
+export interface SaisieCreationQualityEventWire {
+  type: string
+  titre: string
+  description: string
+  origine: string
+  referenceExterne: { systeme: string; identifiant: string } | null
+  assetNodeId: string | null
+  processId: string | null
+  manufacturingContextId: string | null
+}
+
+export interface SaisieCreationReferenceQualityEventWire {
+  sourceId: string
+  cibleId: string
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -1198,6 +1239,66 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/process-context/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- QualityEvent/ReferenceQualityEvent (URS catalogue §10 famille H/I, Phase 5b du chantier de migration D1) ---
+
+  obtenirQualityEvents(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{ evenements: QualityEventWire[]; references: ReferenceQualityEventWire[] }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/quality-events`, { jeton })
+  }
+
+  creerEvenementQualityEvent(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationQualityEventWire,
+  ): Promise<ResultatApi<{ evenement: QualityEventWire }>> {
+    return this.requete('POST', `/clients/${clientId}/quality-events/evenements`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  changerStatutQualityEvent(
+    jeton: string,
+    clientId: string,
+    evenementId: string,
+    statut: string,
+  ): Promise<ResultatApi<{ evenement: QualityEventWire }>> {
+    return this.requete(
+      'PATCH',
+      `/clients/${clientId}/quality-events/evenements/${evenementId}/statut`,
+      { jeton, body: { statut } },
+    )
+  }
+
+  creerReferenceQualityEvent(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationReferenceQualityEventWire,
+  ): Promise<ResultatApi<{ reference: ReferenceQualityEventWire }>> {
+    return this.requete('POST', `/clients/${clientId}/quality-events/references`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerQualityEventsLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerQualityEventsLocal(
+    jeton: string,
+    clientId: string,
+    donnees: { evenements: QualityEventWire[]; references: ReferenceQualityEventWire[] },
+  ): Promise<
+    ResultatApi<{ evenements: QualityEventWire[]; references: ReferenceQualityEventWire[] }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/quality-events/migration-locale`, {
       jeton,
       body: donnees,
     })

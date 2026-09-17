@@ -2,7 +2,6 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -14,7 +13,7 @@ import { useProcessContextStore } from './useProcessContextStore'
 let ctx: Contexte
 let demonter: () => void
 
-/** Process/ManufacturingContext migrés vers le Worker/D1 (Phase 5a) — un client doit réellement exister pour que `exigerAccesClient` l'autorise, même si `QualityEvent` lui-même reste local (Phase 5b pas encore faite). */
+/** QualityEvent/Process/ManufacturingContext migrés vers le Worker/D1 (Phases 5a/5b) — un client doit réellement exister pour que `exigerAccesClient` l'autorise. */
 async function creerClientDeTest(id: string): Promise<void> {
   await ctx.clientsRepo.creer({
     id,
@@ -34,8 +33,6 @@ async function creerClientDeTest(id: string): Promise<void> {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.qualityEvents.clear()
-  await db.referencesQualityEvent.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   ctx = installation.ctx
@@ -43,6 +40,7 @@ beforeEach(async () => {
   await connecterAdminDeTest()
   await creerClientDeTest('client-1')
   await creerClientDeTest('client-A')
+  await creerClientDeTest('client-B')
 })
 
 afterEach(() => {
