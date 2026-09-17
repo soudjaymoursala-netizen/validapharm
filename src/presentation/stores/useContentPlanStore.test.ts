@@ -1,17 +1,48 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useContentPlanStore } from './useContentPlanStore'
+
+let ctx: Contexte
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.contentPlans.clear()
-  await db.requirements.clear()
-  await db.couvertures.clear()
-  await db.tests.clear()
   await db.executions.clear()
   await db.evidences.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  for (const id of ['client-1', 'client-A', 'client-B']) {
+    await ctx.clientsRepo.creer({
+      id,
+      name: id,
+      adresse: null,
+      secteur: null,
+      details: null,
+      statut: 'actif',
+      archivedAt: null,
+      archivedBy: null,
+      createdByUserId: 'admin-test',
+      sharedWith: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }
+})
+
+afterEach(() => {
+  demonter()
 })
 
 /**
@@ -26,36 +57,36 @@ async function semerChaineComplete(
   requirementId: string = `req-${clientId}`,
 ) {
   const maintenant = '2026-01-01T00:00:00.000Z'
-  await db.requirements.put({
+  await ctx.testDefinitionRepo.creerRequirement({
     id: requirementId,
-    client_id: clientId,
+    clientId,
     reference: 'REQ-1',
     titre: 'Débit stable',
     description: '',
-    asset_node_id: assetNodeId,
-    process_id: null,
-    audit_log: [],
-    created_at: maintenant,
-    updated_at: maintenant,
+    assetNodeId: assetNodeId,
+    processId: null,
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
   })
-  await db.tests.put({
+  await ctx.testDefinitionRepo.creerTest({
     id: `test-${clientId}`,
-    client_id: clientId,
-    test_candidate_id: 'tc-1',
+    clientId,
+    testCandidateId: 'tc-1',
     titre: 'Test débit',
     description: '',
     etapes: [],
     statut: 'approuve',
-    audit_log: [],
-    created_at: maintenant,
-    updated_at: maintenant,
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
   })
-  await db.couvertures.put({
+  await ctx.testDefinitionRepo.creerCouverture({
     id: `cov-${clientId}`,
-    client_id: clientId,
-    requirement_id: requirementId,
-    test_id: `test-${clientId}`,
-    created_at: maintenant,
+    clientId,
+    requirementId: requirementId,
+    testId: `test-${clientId}`,
+    createdAt: maintenant,
   })
   await db.executions.put({
     id: `exec-${clientId}`,
@@ -131,17 +162,17 @@ describe('useContentPlanStore — readiness calculée automatiquement', () => {
 
   test('recalculerReadiness reflète une nouvelle Evidence apparue après la création', async () => {
     const store = useContentPlanStore()
-    await db.requirements.put({
+    await ctx.testDefinitionRepo.creerRequirement({
       id: 'req-x',
-      client_id: 'client-1',
+      clientId: 'client-1',
       reference: 'REQ-X',
       titre: 'Débit stable',
       description: '',
-      asset_node_id: 'n1',
-      process_id: null,
-      audit_log: [],
-      created_at: '2026-01-01T00:00:00.000Z',
-      updated_at: '2026-01-01T00:00:00.000Z',
+      assetNodeId: 'n1',
+      processId: null,
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     })
     const plan = await store.creerContentPlan('client-1', {
       templateId: 'urs',

@@ -68,6 +68,14 @@ import type {
 import type { SectionEnregistree, SectionsRepo } from './repos/sectionsRepo'
 import type { StockageBinaireRepo } from './repos/stockageBinaireRepo'
 import type {
+  CouvertureEnregistree,
+  RequirementEnregistre,
+  TestCandidateEnregistre,
+  TestDefinitionRepo,
+  TestEnregistre,
+  TestObjectiveEnregistre,
+} from './repos/testDefinitionRepo'
+import type {
   AssetHierarchySchemaEnregistre,
   AssetNodeEnregistre,
   NiveauHierarchieEnregistre,
@@ -104,6 +112,7 @@ export interface Contexte {
   riskAssessmentRepo: RiskAssessmentRepo
   processContextRepo: ProcessContextRepo
   qualityEventRepo: QualityEventRepo
+  testDefinitionRepo: TestDefinitionRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -654,6 +663,102 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchQualityEventsMigrationLocale[1] as string,
+    )
+  }
+
+  // --- Requirement/TestObjective/TestCandidate/Test/Couverture (Target
+  // Architecture, domaine "Test", Phase 6a du chantier de migration D1) ---
+  const matchTestDefinition = chemin.match(/^\/clients\/([^/]+)\/test-definition$/)
+  if (matchTestDefinition && request.method === 'GET') {
+    return gererObtenirTestDefinition(request, ctx, entetes, matchTestDefinition[1] as string)
+  }
+  const matchTestDefinitionRequirements = chemin.match(
+    /^\/clients\/([^/]+)\/test-definition\/requirements$/,
+  )
+  if (matchTestDefinitionRequirements && request.method === 'POST') {
+    return gererCreerRequirement(
+      request,
+      ctx,
+      entetes,
+      matchTestDefinitionRequirements[1] as string,
+    )
+  }
+  const matchTestDefinitionTestObjectives = chemin.match(
+    /^\/clients\/([^/]+)\/test-definition\/test-objectives$/,
+  )
+  if (matchTestDefinitionTestObjectives && request.method === 'POST') {
+    return gererCreerTestObjective(
+      request,
+      ctx,
+      entetes,
+      matchTestDefinitionTestObjectives[1] as string,
+    )
+  }
+  const matchTestDefinitionTestCandidates = chemin.match(
+    /^\/clients\/([^/]+)\/test-definition\/test-candidates$/,
+  )
+  if (matchTestDefinitionTestCandidates && request.method === 'POST') {
+    return gererCreerTestCandidate(
+      request,
+      ctx,
+      entetes,
+      matchTestDefinitionTestCandidates[1] as string,
+    )
+  }
+  const matchTestDefinitionTestCandidatsDepuisRisques = chemin.match(
+    /^\/clients\/([^/]+)\/test-definition\/test-candidates\/depuis-risques$/,
+  )
+  if (matchTestDefinitionTestCandidatsDepuisRisques && request.method === 'POST') {
+    return gererCreerTestCandidatsDepuisRisques(
+      request,
+      ctx,
+      entetes,
+      matchTestDefinitionTestCandidatsDepuisRisques[1] as string,
+    )
+  }
+  const matchTestDefinitionTestCandidatStatut = chemin.match(
+    /^\/clients\/([^/]+)\/test-definition\/test-candidates\/([^/]+)\/statut$/,
+  )
+  if (matchTestDefinitionTestCandidatStatut && request.method === 'PATCH') {
+    return gererChangerStatutTestCandidate(
+      request,
+      ctx,
+      entetes,
+      matchTestDefinitionTestCandidatStatut[1] as string,
+      matchTestDefinitionTestCandidatStatut[2] as string,
+    )
+  }
+  const matchTestDefinitionTests = chemin.match(/^\/clients\/([^/]+)\/test-definition\/tests$/)
+  if (matchTestDefinitionTests && request.method === 'POST') {
+    return gererCreerTest(request, ctx, entetes, matchTestDefinitionTests[1] as string)
+  }
+  const matchTestDefinitionTestApprouver = chemin.match(
+    /^\/clients\/([^/]+)\/test-definition\/tests\/([^/]+)\/approuver$/,
+  )
+  if (matchTestDefinitionTestApprouver && request.method === 'PATCH') {
+    return gererApprouverTest(
+      request,
+      ctx,
+      entetes,
+      matchTestDefinitionTestApprouver[1] as string,
+      matchTestDefinitionTestApprouver[2] as string,
+    )
+  }
+  const matchTestDefinitionCouvertures = chemin.match(
+    /^\/clients\/([^/]+)\/test-definition\/couvertures$/,
+  )
+  if (matchTestDefinitionCouvertures && request.method === 'POST') {
+    return gererCreerCouverture(request, ctx, entetes, matchTestDefinitionCouvertures[1] as string)
+  }
+  const matchTestDefinitionMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/test-definition\/migration-locale$/,
+  )
+  if (matchTestDefinitionMigrationLocale && request.method === 'POST') {
+    return gererMigrerTestDefinitionLocal(
+      request,
+      ctx,
+      entetes,
+      matchTestDefinitionMigrationLocale[1] as string,
     )
   }
 
@@ -3143,6 +3248,454 @@ async function gererMigrerQualityEventsLocal(
   }
   return reponseJson(
     { evenements: corps.evenements ?? [], references: corps.references ?? [] },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : Requirement/TestObjective/TestCandidate/Test/Couverture
+// (Target Architecture, domaine "Test", Phase 6a du chantier de
+// migration D1) ---
+//
+// Première brique du Test/Execution/Evidence engine : uniquement la
+// chaîne de définition. La logique métier (génération de candidats depuis
+// les risques, rapport de couverture des risques) reste côté store
+// frontend (`useTestDefinitionStore.ts`, déjà testée) — ces handlers ne
+// font qu'authentifier, vérifier l'accès au client concerné et persister
+// l'état qu'on leur donne, même discipline que les autres handlers de ce
+// chantier.
+
+async function gererObtenirTestDefinition(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [requirements, testObjectives, testCandidates, tests, couvertures] = await Promise.all([
+    ctx.testDefinitionRepo.listerRequirements(clientId),
+    ctx.testDefinitionRepo.listerTestObjectives(clientId),
+    ctx.testDefinitionRepo.listerTestCandidates(clientId),
+    ctx.testDefinitionRepo.listerTests(clientId),
+    ctx.testDefinitionRepo.listerCouvertures(clientId),
+  ])
+  return reponseJson(
+    { requirements, testObjectives, testCandidates, tests, couvertures },
+    200,
+    entetes,
+  )
+}
+
+interface SaisieCreationRequirement {
+  reference?: string
+  titre?: string
+  description?: string
+  assetNodeId?: string | null
+  processId?: string | null
+}
+
+async function gererCreerRequirement(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationRequirement>(request)
+  if (!corps?.reference || !corps.titre || corps.description === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const requirement: RequirementEnregistre = {
+    id: genererId(),
+    clientId,
+    reference: corps.reference,
+    titre: corps.titre,
+    description: corps.description,
+    assetNodeId: corps.assetNodeId ?? null,
+    processId: corps.processId ?? null,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.testDefinitionRepo.creerRequirement(requirement)
+  return reponseJson({ requirement }, 201, entetes)
+}
+
+interface SaisieCreationTestObjective {
+  requirementId?: string
+  titre?: string
+  description?: string
+}
+
+async function gererCreerTestObjective(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationTestObjective>(request)
+  if (!corps?.requirementId || !corps.titre || corps.description === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const testObjective: TestObjectiveEnregistre = {
+    id: genererId(),
+    clientId,
+    requirementId: corps.requirementId,
+    titre: corps.titre,
+    description: corps.description,
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.testDefinitionRepo.creerTestObjective(testObjective)
+  return reponseJson({ testObjective }, 201, entetes)
+}
+
+interface SaisieCreationTestCandidate {
+  testObjectiveId?: string
+  titre?: string
+  description?: string
+}
+
+async function gererCreerTestCandidate(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationTestCandidate>(request)
+  if (!corps?.testObjectiveId || !corps.titre || corps.description === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const testCandidate: TestCandidateEnregistre = {
+    id: genererId(),
+    clientId,
+    testObjectiveId: corps.testObjectiveId,
+    riskAssessmentId: null,
+    titre: corps.titre,
+    description: corps.description,
+    statut: 'propose',
+    motifRejet: null,
+    dupliqueDeId: null,
+    remplaceParId: null,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.testDefinitionRepo.creerTestCandidate(testCandidate)
+  return reponseJson({ testCandidate }, 201, entetes)
+}
+
+interface SaisieCandidatDepuisRisques {
+  testObjectiveId?: string
+  riskAssessmentId?: string | null
+  titre?: string
+  description?: string
+}
+
+interface SaisieCreationTestCandidatsDepuisRisques {
+  candidats?: SaisieCandidatDepuisRisques[]
+}
+
+/**
+ * Persiste des candidats déjà proposés côté store frontend
+ * (`genererCandidatsDepuisRisques`, Test Design Engine) — id/statut
+ * ('propose')/audit_log/horodatages toujours dérivés côté serveur, jamais
+ * fournis par l'appelant, même discipline que `gererCreerTestCandidate`.
+ */
+async function gererCreerTestCandidatsDepuisRisques(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationTestCandidatsDepuisRisques>(request)
+  if (!corps || !Array.isArray(corps.candidats)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const c of corps.candidats) {
+    if (!c.testObjectiveId || !c.titre || c.description === undefined) {
+      return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    }
+  }
+
+  const maintenant = horodatage()
+  const testCandidates: TestCandidateEnregistre[] = corps.candidats.map((c) => ({
+    id: genererId(),
+    clientId,
+    testObjectiveId: c.testObjectiveId as string,
+    riskAssessmentId: c.riskAssessmentId ?? null,
+    titre: c.titre as string,
+    description: c.description as string,
+    statut: 'propose',
+    motifRejet: null,
+    dupliqueDeId: null,
+    remplaceParId: null,
+    auditLog: [
+      {
+        timestamp: maintenant,
+        actor: acteur.email,
+        action: 'création (proposé depuis analyse de risque)',
+      },
+    ],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }))
+  await ctx.testDefinitionRepo.creerTestCandidats(testCandidates)
+  return reponseJson({ testCandidates }, 201, entetes)
+}
+
+interface SaisieChangementStatutTestCandidate {
+  statut?: string
+  motifRejet?: string | null
+  dupliqueDeId?: string | null
+  remplaceParId?: string | null
+}
+
+async function gererChangerStatutTestCandidate(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  testCandidateId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const existant = await ctx.testDefinitionRepo.testCandidateParId(testCandidateId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const corps = await lireCorpsJson<SaisieChangementStatutTestCandidate>(request)
+  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const maintenant = horodatage()
+  const motifRejet = corps.motifRejet ?? null
+  const testCandidate: TestCandidateEnregistre = {
+    ...existant,
+    statut: corps.statut,
+    motifRejet,
+    dupliqueDeId: corps.dupliqueDeId ?? null,
+    remplaceParId: corps.remplaceParId ?? null,
+    updatedAt: maintenant,
+    auditLog: [
+      ...existant.auditLog,
+      {
+        timestamp: maintenant,
+        actor: acteur.email,
+        action: `changement de statut : ${corps.statut}${motifRejet ? ` (${motifRejet})` : ''}`,
+      },
+    ],
+  }
+  await ctx.testDefinitionRepo.remplacerTestCandidate(testCandidate)
+  return reponseJson({ testCandidate }, 200, entetes)
+}
+
+interface SaisieCreationTest {
+  testCandidateId?: string
+  titre?: string
+  description?: string
+  etapes?: { ordre: number; action: string; resultatAttendu: string }[]
+}
+
+/** Un `Test` ne peut être créé qu'à partir d'un candidat accepté — même garde-fou que côté store avant la migration, revérifié ici côté serveur. */
+async function gererCreerTest(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationTest>(request)
+  if (
+    !corps?.testCandidateId ||
+    !corps.titre ||
+    corps.description === undefined ||
+    !Array.isArray(corps.etapes)
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const candidat = await ctx.testDefinitionRepo.testCandidateParId(corps.testCandidateId)
+  if (!candidat || candidat.clientId !== clientId) {
+    return reponseJson({ erreur: 'candidat_introuvable' }, 404, entetes)
+  }
+  if (candidat.statut !== 'accepte') {
+    return reponseJson({ erreur: 'candidat_non_accepte' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const test: TestEnregistre = {
+    id: genererId(),
+    clientId,
+    testCandidateId: corps.testCandidateId,
+    titre: corps.titre,
+    description: corps.description,
+    etapes: corps.etapes.map((e, index) => ({
+      id: genererId(),
+      ordre: index + 1,
+      action: e.action,
+      resultatAttendu: e.resultatAttendu,
+    })),
+    statut: 'brouillon',
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.testDefinitionRepo.creerTest(test)
+  return reponseJson({ test }, 201, entetes)
+}
+
+async function gererApprouverTest(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  testId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const existant = await ctx.testDefinitionRepo.testParId(testId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+
+  const maintenant = horodatage()
+  const test: TestEnregistre = {
+    ...existant,
+    statut: 'approuve',
+    updatedAt: maintenant,
+    auditLog: [
+      ...existant.auditLog,
+      { timestamp: maintenant, actor: acteur.email, action: 'approbation' },
+    ],
+  }
+  await ctx.testDefinitionRepo.remplacerTest(test)
+  return reponseJson({ test }, 200, entetes)
+}
+
+interface SaisieCreationCouverture {
+  requirementId?: string
+  testId?: string
+}
+
+async function gererCreerCouverture(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationCouverture>(request)
+  if (!corps?.requirementId || !corps.testId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const existantes = await ctx.testDefinitionRepo.listerCouvertures(clientId)
+  const dejaExistante = existantes.find(
+    (c) => c.requirementId === corps.requirementId && c.testId === corps.testId,
+  )
+  if (dejaExistante) return reponseJson({ couverture: dejaExistante }, 200, entetes)
+
+  const couverture: CouvertureEnregistree = {
+    id: genererId(),
+    clientId,
+    requirementId: corps.requirementId,
+    testId: corps.testId,
+    createdAt: horodatage(),
+  }
+  await ctx.testDefinitionRepo.creerCouverture(couverture)
+  return reponseJson({ couverture }, 201, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale
+ * (`requirementsAMigrer`/`testObjectivesAMigrer`/etc.,
+ * `useTestDefinitionStore.migrerTestDefinitionLocalVersServeur`) —
+ * idempotente, l'existant côté serveur gagne toujours (`ON CONFLICT(id) DO
+ * NOTHING` dans `D1TestDefinitionRepo`), même discipline que les autres
+ * migrations locales de ce chantier.
+ */
+interface SaisieMigrationTestDefinition {
+  requirements?: RequirementEnregistre[]
+  testObjectives?: TestObjectiveEnregistre[]
+  testCandidates?: TestCandidateEnregistre[]
+  tests?: TestEnregistre[]
+  couvertures?: CouvertureEnregistree[]
+}
+
+async function gererMigrerTestDefinitionLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationTestDefinition>(request)
+  if (
+    !corps ||
+    (!Array.isArray(corps.requirements) &&
+      !Array.isArray(corps.testObjectives) &&
+      !Array.isArray(corps.testCandidates) &&
+      !Array.isArray(corps.tests) &&
+      !Array.isArray(corps.couvertures))
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const r of corps.requirements ?? []) {
+    if (r.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.testDefinitionRepo.creerRequirement(r)
+  }
+  for (const o of corps.testObjectives ?? []) {
+    if (o.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.testDefinitionRepo.creerTestObjective(o)
+  }
+  for (const c of corps.testCandidates ?? []) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.testDefinitionRepo.creerTestCandidate(c)
+  }
+  for (const t of corps.tests ?? []) {
+    if (t.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.testDefinitionRepo.creerTest(t)
+  }
+  for (const c of corps.couvertures ?? []) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.testDefinitionRepo.creerCouverture(c)
+  }
+  return reponseJson(
+    {
+      requirements: corps.requirements ?? [],
+      testObjectives: corps.testObjectives ?? [],
+      testCandidates: corps.testCandidates ?? [],
+      tests: corps.tests ?? [],
+      couvertures: corps.couvertures ?? [],
+    },
     200,
     entetes,
   )

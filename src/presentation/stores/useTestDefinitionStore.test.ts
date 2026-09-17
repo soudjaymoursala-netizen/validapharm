@@ -1,7 +1,6 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import type { RiskAssessmentEnregistre } from '../../../workers/auth-worker/src/repos/riskAssessmentRepo'
 import {
@@ -34,11 +33,6 @@ async function creerClientDeTest(id: string): Promise<void> {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.requirements.clear()
-  await db.testObjectives.clear()
-  await db.testCandidates.clear()
-  await db.tests.clear()
-  await db.couvertures.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   ctx = installation.ctx
@@ -188,7 +182,7 @@ describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
     expect(rejete?.audit_log).toHaveLength(2)
     expect(store.testCandidates).toHaveLength(1)
 
-    const relu = await db.testCandidates.get(candidat.id)
+    const relu = await ctx.testDefinitionRepo.testCandidateParId(candidat.id)
     expect(relu?.statut).toBe('rejete')
   })
 

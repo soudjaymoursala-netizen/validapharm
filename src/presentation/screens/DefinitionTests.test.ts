@@ -1,11 +1,18 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useTestDefinitionStore } from '../stores/useTestDefinitionStore'
 import DefinitionTests from './DefinitionTests.vue'
+
+const CLIENT_ID = 'client-1'
 
 function routeurDeTest() {
   return createRouter({
@@ -30,19 +37,40 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+let ctx: Contexte
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.requirements.clear()
-  await db.testObjectives.clear()
-  await db.testCandidates.clear()
-  await db.tests.clear()
-  await db.couvertures.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: 'Client de test',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('DefinitionTests', () => {
   test('chaîne complète Requirement → Objectif → Candidat → Test approuvé → Couverture', async () => {
     const wrapper = mount(DefinitionTests, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.find('.bloc-requirements form').exists())
@@ -54,70 +82,76 @@ describe('DefinitionTests', () => {
     await inputsRequirement[1]?.setValue('F0 minimal du cycle')
     await formRequirement.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.requirements.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerRequirements(CLIENT_ID)).length > 0,
     )
 
     // Objectif de test
     const formObjectif = wrapper.find('.bloc-objectifs form')
-    await formObjectif.find('select').setValue((await db.requirements.toArray())[0]?.id)
+    const requirements = await ctx.testDefinitionRepo.listerRequirements(CLIENT_ID)
+    await formObjectif.find('select').setValue(requirements[0]?.id)
     await formObjectif.find('input[type="text"]').setValue('Vérifier F0 en charge nominale')
     await formObjectif.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.testObjectives.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerTestObjectives(CLIENT_ID)).length > 0,
     )
 
     // Candidat
     const formCandidat = wrapper.find('.bloc-candidats form')
-    await formCandidat.find('select').setValue((await db.testObjectives.toArray())[0]?.id)
+    const testObjectives = await ctx.testDefinitionRepo.listerTestObjectives(CLIENT_ID)
+    await formCandidat.find('select').setValue(testObjectives[0]?.id)
     await formCandidat.find('input[type="text"]').setValue('Cycle en charge maximale')
     await formCandidat.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.testCandidates.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerTestCandidates(CLIENT_ID)).length > 0,
     )
 
     // Accepter le candidat — jamais automatique (garde-fou 7a)
     await wrapper.find('.liste-candidats button').trigger('click')
-    await attendreQue(async () => (await db.testCandidates.toArray())[0]?.statut === 'accepte')
+    await attendreQue(
+      async () =>
+        (await ctx.testDefinitionRepo.listerTestCandidates(CLIENT_ID))[0]?.statut === 'accepte',
+    )
 
     // Test depuis le candidat accepté, 1 étape
     const formTest = wrapper.find('.bloc-tests form')
-    await formTest.find('select').setValue((await db.testCandidates.toArray())[0]?.id)
+    const testCandidates = await ctx.testDefinitionRepo.listerTestCandidates(CLIENT_ID)
+    await formTest.find('select').setValue(testCandidates[0]?.id)
     await formTest.findAll('input[type="text"]')[0]?.setValue('OQ-TEST-01')
     const ligneEtape = formTest.find('.ligne-etape')
     const inputsEtape = ligneEtape.findAll('input')
     await inputsEtape[0]?.setValue('Lancer le cycle')
     await inputsEtape[1]?.setValue('Cycle démarre sans alarme')
     await formTest.trigger('submit.prevent')
-    await attendreQue(
-      async () => (await db.tests.where('client_id').equals('client-1').count()) > 0,
-    )
+    await attendreQue(async () => (await ctx.testDefinitionRepo.listerTests(CLIENT_ID)).length > 0)
 
-    const testCree = (await db.tests.toArray())[0]
+    const testCree = (await ctx.testDefinitionRepo.listerTests(CLIENT_ID))[0]
     expect(testCree?.statut).toBe('brouillon')
     expect(testCree?.etapes).toHaveLength(1)
 
     // Approuver
     await wrapper.find('.liste-tests button').trigger('click')
-    await attendreQue(async () => (await db.tests.toArray())[0]?.statut === 'approuve')
+    await attendreQue(
+      async () => (await ctx.testDefinitionRepo.listerTests(CLIENT_ID))[0]?.statut === 'approuve',
+    )
 
     // Couverture — déclaration explicite, jamais déduite
     const formCouverture = wrapper.find('.bloc-couverture form')
     const selectsCouverture = formCouverture.findAll('select')
-    await selectsCouverture[0]?.setValue((await db.requirements.toArray())[0]?.id)
-    await selectsCouverture[1]?.setValue((await db.tests.toArray())[0]?.id)
+    await selectsCouverture[0]?.setValue(requirements[0]?.id)
+    await selectsCouverture[1]?.setValue(testCree?.id)
     await formCouverture.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.couvertures.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerCouvertures(CLIENT_ID)).length > 0,
     )
 
-    const couverture = (await db.couvertures.toArray())[0]
-    expect(couverture?.requirement_id).toBe((await db.requirements.toArray())[0]?.id)
-    expect(couverture?.test_id).toBe((await db.tests.toArray())[0]?.id)
+    const couverture = (await ctx.testDefinitionRepo.listerCouvertures(CLIENT_ID))[0]
+    expect(couverture?.requirementId).toBe(requirements[0]?.id)
+    expect(couverture?.testId).toBe(testCree?.id)
   })
 
   test('un test ne peut pas être créé depuis un candidat non accepté (garde-fou 7a)', async () => {
     const wrapper = mount(DefinitionTests, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.find('.bloc-requirements form').exists())
@@ -128,23 +162,25 @@ describe('DefinitionTests', () => {
     await inputsRequirement[1]?.setValue('Exigence test')
     await formRequirement.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.requirements.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerRequirements(CLIENT_ID)).length > 0,
     )
 
     const formObjectif = wrapper.find('.bloc-objectifs form')
-    await formObjectif.find('select').setValue((await db.requirements.toArray())[0]?.id)
+    const requirements = await ctx.testDefinitionRepo.listerRequirements(CLIENT_ID)
+    await formObjectif.find('select').setValue(requirements[0]?.id)
     await formObjectif.find('input[type="text"]').setValue('Objectif test')
     await formObjectif.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.testObjectives.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerTestObjectives(CLIENT_ID)).length > 0,
     )
 
     const formCandidat = wrapper.find('.bloc-candidats form')
-    await formCandidat.find('select').setValue((await db.testObjectives.toArray())[0]?.id)
+    const testObjectives = await ctx.testDefinitionRepo.listerTestObjectives(CLIENT_ID)
+    await formCandidat.find('select').setValue(testObjectives[0]?.id)
     await formCandidat.find('input[type="text"]').setValue('Candidat non traité')
     await formCandidat.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.testCandidates.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerTestCandidates(CLIENT_ID)).length > 0,
     )
 
     // Candidat encore "propose" (jamais accepté) : n'apparaît pas dans le
@@ -154,14 +190,14 @@ describe('DefinitionTests', () => {
       .findAll('option')
       .map((o) => o.text())
     expect(optionsTest).not.toContain('Candidat non traité')
-    expect(await db.tests.count()).toBe(0)
+    expect(await ctx.testDefinitionRepo.listerTests(CLIENT_ID)).toHaveLength(0)
   })
 })
 
 describe('DefinitionTests — mutations de statut non vérifiées', () => {
   test('un échec d’acceptation de candidat affiche un message, ne casse pas silencieusement', async () => {
     const wrapper = mount(DefinitionTests, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.find('.bloc-requirements form').exists())
@@ -172,23 +208,25 @@ describe('DefinitionTests — mutations de statut non vérifiées', () => {
     await inputsRequirement[1]?.setValue('Exigence test')
     await formRequirement.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.requirements.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerRequirements(CLIENT_ID)).length > 0,
     )
 
     const formObjectif = wrapper.find('.bloc-objectifs form')
-    await formObjectif.find('select').setValue((await db.requirements.toArray())[0]?.id)
+    const requirements = await ctx.testDefinitionRepo.listerRequirements(CLIENT_ID)
+    await formObjectif.find('select').setValue(requirements[0]?.id)
     await formObjectif.find('input[type="text"]').setValue('Objectif test')
     await formObjectif.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.testObjectives.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerTestObjectives(CLIENT_ID)).length > 0,
     )
 
     const formCandidat = wrapper.find('.bloc-candidats form')
-    await formCandidat.find('select').setValue((await db.testObjectives.toArray())[0]?.id)
+    const testObjectives = await ctx.testDefinitionRepo.listerTestObjectives(CLIENT_ID)
+    await formCandidat.find('select').setValue(testObjectives[0]?.id)
     await formCandidat.find('input[type="text"]').setValue('Candidat à accepter')
     await formCandidat.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.testCandidates.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerTestCandidates(CLIENT_ID)).length > 0,
     )
 
     // Reproduit une réponse métier réelle (candidat supprimé/modifié
@@ -201,12 +239,14 @@ describe('DefinitionTests — mutations de statut non vérifiées', () => {
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
 
     expect(wrapper.find('.bandeau-erreur').text()).toContain("Impossible d'accepter ce candidat")
-    expect((await db.testCandidates.toArray())[0]?.statut).toBe('propose')
+    expect((await ctx.testDefinitionRepo.listerTestCandidates(CLIENT_ID))[0]?.statut).toBe(
+      'propose',
+    )
   })
 
   test('un échec d’approbation de test affiche un message, ne casse pas silencieusement', async () => {
     const wrapper = mount(DefinitionTests, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.find('.bloc-requirements form').exists())
@@ -217,39 +257,43 @@ describe('DefinitionTests — mutations de statut non vérifiées', () => {
     await inputsRequirement[1]?.setValue('Exigence test')
     await formRequirement.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.requirements.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerRequirements(CLIENT_ID)).length > 0,
     )
 
     const formObjectif = wrapper.find('.bloc-objectifs form')
-    await formObjectif.find('select').setValue((await db.requirements.toArray())[0]?.id)
+    const requirements = await ctx.testDefinitionRepo.listerRequirements(CLIENT_ID)
+    await formObjectif.find('select').setValue(requirements[0]?.id)
     await formObjectif.find('input[type="text"]').setValue('Objectif test')
     await formObjectif.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.testObjectives.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerTestObjectives(CLIENT_ID)).length > 0,
     )
 
     const formCandidat = wrapper.find('.bloc-candidats form')
-    await formCandidat.find('select').setValue((await db.testObjectives.toArray())[0]?.id)
+    const testObjectives = await ctx.testDefinitionRepo.listerTestObjectives(CLIENT_ID)
+    await formCandidat.find('select').setValue(testObjectives[0]?.id)
     await formCandidat.find('input[type="text"]').setValue('Candidat à tester')
     await formCandidat.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.testCandidates.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.testDefinitionRepo.listerTestCandidates(CLIENT_ID)).length > 0,
     )
 
     await wrapper.find('.liste-candidats button').trigger('click')
-    await attendreQue(async () => (await db.testCandidates.toArray())[0]?.statut === 'accepte')
+    await attendreQue(
+      async () =>
+        (await ctx.testDefinitionRepo.listerTestCandidates(CLIENT_ID))[0]?.statut === 'accepte',
+    )
 
     const formTest = wrapper.find('.bloc-tests form')
-    await formTest.find('select').setValue((await db.testCandidates.toArray())[0]?.id)
+    const testCandidates = await ctx.testDefinitionRepo.listerTestCandidates(CLIENT_ID)
+    await formTest.find('select').setValue(testCandidates[0]?.id)
     await formTest.findAll('input[type="text"]')[0]?.setValue('OQ-TEST-02')
     const ligneEtape = formTest.find('.ligne-etape')
     const inputsEtape = ligneEtape.findAll('input')
     await inputsEtape[0]?.setValue('Lancer le cycle')
     await inputsEtape[1]?.setValue('Cycle démarre sans alarme')
     await formTest.trigger('submit.prevent')
-    await attendreQue(
-      async () => (await db.tests.where('client_id').equals('client-1').count()) > 0,
-    )
+    await attendreQue(async () => (await ctx.testDefinitionRepo.listerTests(CLIENT_ID)).length > 0)
 
     // Reproduit un test supprimé/modifié entre-temps sur un autre poste —
     // avant ce correctif, le clic sur "Approuver" échouait en silence
@@ -261,6 +305,6 @@ describe('DefinitionTests — mutations de statut non vérifiées', () => {
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
 
     expect(wrapper.find('.bandeau-erreur').text()).toContain('Impossible d’approuver ce test')
-    expect((await db.tests.toArray())[0]?.statut).toBe('brouillon')
+    expect((await ctx.testDefinitionRepo.listerTests(CLIENT_ID))[0]?.statut).toBe('brouillon')
   })
 })

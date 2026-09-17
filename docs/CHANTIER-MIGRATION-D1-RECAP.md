@@ -97,7 +97,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `methodProfilesRiskAssessment`, `risksAssessment` | D1 | ✅ **Phase 4d terminée — voir §12. Phase 4 entièrement close.** |
 | `processes`, `fonctionsActif`, `associationsFonctionAssetNode`, `associationsFonctionProcess`, `manufacturingContexts` | D1 | ✅ **Phase 5a terminée — voir §13** |
 | `qualityEvents`, `referencesQualityEvent` | D1 | ✅ **Phase 5b terminée — voir §14. Phase 5 entièrement close.** |
-| `requirements`, `testObjectives`, `testCandidates`, `tests`, `couvertures` | D1 | ⬜ Phase 6 |
+| `requirements`, `testObjectives`, `testCandidates`, `tests`, `couvertures` | D1 | ✅ **Phase 6a terminée — voir §15** |
 | `executions`, `executionSteps`, `measurements`, `executionEvents` | D1 | ⬜ Phase 6 |
 | `evidences`, `evidenceLocations`, `provenanceLinks` | D1 | ⬜ Phase 6 |
 | `sources`, `sourceVersions`, `sourceLocations`, `extractions`, `extractionItems`, `knowledgeItems`, `confirmations`, `knowledgeRelations`, `conflicts` | D1 | ⬜ Phase 7 |
@@ -1461,3 +1461,135 @@ D1, en production, déploiement vérifié. Enchaîner sur la Phase 6
 s'arrêter pour confirmation, conformément à la consigne permanente de
 l'utilisateur. Le problème des nœuds SAP (bug d'import original) reste
 explicitement reporté, comme depuis le début de ce chantier.
+
+---
+
+## 15. État détaillé — Phase 6a (`Requirement`/`TestObjective`/`TestCandidate`/`Test`/`Couverture`), EN COURS au 17/09/2026
+
+Première brique de la Phase 6 — Test/Execution/Evidence engine
+(`03_DOMAIN_DATA_MODEL.md`, domaine "Test") : uniquement la chaîne de
+**définition** (`Requirement → TestObjective → TestCandidate → Test` +
+déclaration de `Couverture`), jamais l'exécution (Phase 6b :
+`executions`/`executionSteps`/`measurements`/`executionEvents`) ni
+l'Evidence (Phase 6c :
+`evidences`/`evidenceLocations`/`provenanceLinks`) — risque élevé,
+séquencé en étapes distinctes comme prévu depuis l'origine de ce domaine
+(commentaire `qualityEventRepo.ts`/`types.ts`).
+
+### 15.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0015_test_definition.sql`
+   crée 5 tables (`requirements`, `test_objectives`, `test_candidates`,
+   `tests`, `couvertures`) + un index par table sur `client_id`.
+   `test_objectives`/`couvertures` n'ont pas d'audit_log (mêmes raisons
+   que les associations déjà migrées). `etapes` (Test) reste un blob JSON
+   embarqué. **PAS ENCORE APPLIQUÉE EN PRODUCTION D1** (aucun code n'a
+   encore été mergé sur `main` pour cette phase).
+2. **1 dépôt Worker** : `testDefinitionRepo.ts` (interface +
+   `TestDefinitionRepoMemoire`) + son implémentation D1
+   (`d1TestDefinitionRepo.ts`). Création idempotente via
+   `ON CONFLICT(id) DO NOTHING`. `testCandidateParId`/
+   `remplacerTestCandidate` et `testParId`/`remplacerTest` suivent le
+   patron mutable déjà utilisé pour CPP/CQA (Phase 4b) et RiskAssessment
+   (Phase 4d) : `remplacerTestCandidate` ne met à jour que
+   `statut`/`motif_rejet`/`duplique_de_id`/`remplace_par_id`/
+   `audit_log`/`updated_at` ; `remplacerTest` ne met à jour que
+   `statut`/`audit_log`/`updated_at`.
+3. **9 nouvelles routes Worker** sous `/clients/:clientId/test-definition/...`
+   (obtenir, créer requirement/test-objective/test-candidate, créer des
+   candidats en lot depuis une analyse de risque
+   `test-candidates/depuis-risques`, `PATCH .../test-candidates/:id/statut`,
+   créer un Test depuis un candidat **accepté uniquement** (revérifié
+   côté serveur, jamais fait confiance au client), `PATCH .../tests/:id/approuver`,
+   créer une couverture (idempotente), migration locale), toutes via
+   `exigerAccesClient`. Clés JSON `requirement(s)`/`testObjective(s)`/
+   `testCandidate(s)`/`test`/`tests`/`couverture(s)` — noms neufs, aucune
+   collision avec les domaines déjà migrés.
+4. **`index.ts`** : `D1TestDefinitionRepo` câblé dans `routerRequete`.
+5. **13 nouveaux tests Worker** (`routeur.test.ts`) : listes vides,
+   création requirement (+ corps invalide), création test-objective,
+   création test-candidate (statut `propose` par défaut), création en
+   lot depuis risques, changement de statut (audit_log accumulé),
+   changement de statut sur candidat inexistant → 404, création de Test
+   depuis candidat non accepté → `candidat_non_accepte`, création de Test
+   depuis candidat accepté puis approbation, déclaration de couverture
+   idempotente, migration locale idempotente, non-authentifié → 401.
+   Suite Worker au complet : **184/184 tests verts**
+   (`cd workers/auth-worker && npx tsc --noEmit && npx vitest run`).
+6. **`AuthApiClient`** : `RequirementWire`/`TestObjectiveWire`/
+   `TestCandidateWire`/`EtapeTestWire`/`TestWire`/`CouvertureWire` +
+   saisies + 9 méthodes.
+7. **`useTestDefinitionStore` entièrement réécrit** (API publique
+   inchangée : `requirements`, `testObjectives`, `testCandidates`,
+   `tests`, `couvertures`, `risquesAssessment`, `enChargement`,
+   `charger`, `creerRequirement`, `creerTestObjective`,
+   `creerTestCandidate`, `genererCandidatsRisquesPourObjectif` (délègue
+   toujours à la fonction pure `genererCandidatsDepuisRisques`, envoie
+   désormais les suggestions au POST `test-candidates/depuis-risques`),
+   `couvertureRisquesRequirement` (pure, inchangée),
+   `accepterTestCandidate`/`rejeterTestCandidate`/
+   `marquerBesoinInformation`/`marquerBesoinRevue`/`marquerDoublon`/
+   `marquerRemplace` (délèguent au `PATCH test-candidates/:id/statut`),
+   `creerTestDepuisCandidat` (contrôle client-side conservé, revérifié
+   aussi côté serveur), `approuverTest`, `declarerCouverture`
+   (dédoublonnage client-side conservé), `testsCouvrantRequirement`
+   (pure, inchangée). `risquesAssessment` continue de déléguer à
+   `useRiskAssessmentStore` (Phase 4d), inchangé.
+8. **Ripple effect côté production** : `useReasoningEngineStore.ts`
+   (outil `lister_requirements_pour_actif` + narratif) et
+   `useContentPlanStore.ts` (calcul de `readiness`) basculés vers
+   `useTestDefinitionStore().charger(clientId)` plutôt que
+   `db.requirements`/`db.couvertures`/`db.tests` directement.
+   `useExecutionStore.ts` (`demarrerExecution`/
+   `enregistrerResultatEtape`) bascule pareil pour vérifier qu'un Test
+   est `approuve` avant de démarrer une exécution.
+9. **Filet de sécurité de migration locale** : capture Dexie **v45**
+   (`persistance/db.ts`, 5 tables supprimées, données capturées dans
+   `requirementsAMigrer`/`testObjectivesAMigrer`/`testCandidatesAMigrer`/
+   `testsAMigrer`/`couverturesAMigrer` — formes domaine inchangées).
+10. **9 fichiers de test corrigés/réécrits** (accès Dexie direct
+    remplacé par de vrais appels store/`ctx.testDefinitionRepo`, clients
+    de test créés via `ctx.clientsRepo.creer` là où c'était encore
+    manquant) : `useTestDefinitionStore.test.ts`,
+    `useExecutionStore.test.ts`, `useEvidenceStore.test.ts`,
+    `useContentPlanStore.test.ts`, `useReasoningEngineStore.test.ts`,
+    `ContentPlan.test.ts`, `DefinitionTests.test.ts` (réécriture
+    complète au patron `fauxWorkerAuth`), `ExecutionTests.test.ts`,
+    `MissionWorkspace.test.ts` (le crash venait uniquement des
+    `db.requirements/couvertures/tests.clear()` désormais supprimées de
+    son `beforeEach`, ce qui empêchait `ctx`/`demonter` d'être jamais
+    assignés — pas un problème de patron `fauxWorkerAuth`, déjà en place
+    depuis la Phase 5b sur ce fichier).
+11. **Validation complète (17/09/2026)** : `vue-tsc --noEmit`/`tsc
+    --noEmit` (Worker) sans erreur, `eslint`/`prettier --check` (src +
+    workers/auth-worker/src) sans erreur ni avertissement, `npx vitest
+    run` racine (**1310/1310 tests verts**), `cd workers/auth-worker &&
+    npx vitest run` (**184/184 tests verts**).
+
+### 15.2 Ce qui RESTE À FAIRE
+
+1. ⬜ **Commit + push + PR** (mirroir exact du process 4a-4d/5a/5b) + CI
+   verte + merge squash sur `main`.
+2. ⬜ **Appliquer `0015_test_definition.sql` en production D1**
+   (`validapharm-auth`, requêtes séparées CREATE TABLE/INDEX + vérification
+   `sqlite_master`).
+3. ⬜ **Vérifier le déploiement Worker en production**
+   (`workers_get_worker_code`, chercher `test-definition`/
+   `D1TestDefinitionRepo`).
+4. ⬜ **Redémarrer la branche depuis `main`** + PR doc-only complétant
+   cette section §15 avec les faits réels post-merge/déploiement (même
+   format que §14.2), puis merger cette PR doc-only aussi.
+11. ⬜ Seulement après tout ceci : enchaîner sur la Phase 6b
+    (`executions`/`executionSteps`/`measurements`/`executionEvents`),
+    sans s'arrêter pour confirmation.
+
+### 15.3 Pourquoi la mise à jour maintenant plutôt qu'à la clôture
+
+Contrairement aux phases précédentes (dont cette section n'était écrite
+qu'une fois entièrement close, code mergé + migration appliquée +
+déploiement vérifié), cette section est rédigée **en plein milieu du
+travail**, sur demande explicite de l'utilisateur ("Met à jour le fichier
+de suivis") — pour qu'une coupure de session (limite d'utilisation) ne
+perde pas le fil : tout ce qui précède (§15.1) est réellement fait et
+vérifié (184 tests verts) ; tout ce qui suit (§15.2) reste à faire dans
+l'ordre indiqué, en reprenant très exactement au point 1 (`AuthApiClient.ts`).

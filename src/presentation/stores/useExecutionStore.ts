@@ -11,6 +11,7 @@ import type {
 } from '../../logique-metier/domaine/types'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
+import { useTestDefinitionStore } from './useTestDefinitionStore'
 
 export interface NouvelleExecutionInput {
   testId: string
@@ -73,7 +74,12 @@ export const useExecutionStore = defineStore('execution', () => {
     clientId: string,
     input: NouvelleExecutionInput,
   ): Promise<Execution | ErreurDemarrageExecution> {
-    const test = await db.tests.get(input.testId)
+    // Test migré vers le Worker/D1 (Phase 6a du chantier de migration D1)
+    // — chargé via le store dédié plutôt qu'un accès Dexie direct, devenu
+    // impossible depuis cette migration.
+    const testDefinitionStore = useTestDefinitionStore()
+    await testDefinitionStore.charger(clientId)
+    const test = testDefinitionStore.tests.find((t) => t.id === input.testId)
     if (!test || test.client_id !== clientId) return { erreur: 'test_introuvable' }
     if (test.statut !== 'approuve') return { erreur: 'test_non_approuve' }
 
@@ -109,7 +115,9 @@ export const useExecutionStore = defineStore('execution', () => {
     if (!execution || execution.client_id !== clientId) return { erreur: 'execution_introuvable' }
     if (execution.statut === 'terminee') return { erreur: 'execution_deja_cloturee' }
 
-    const test = await db.tests.get(execution.test_id)
+    const testDefinitionStore = useTestDefinitionStore()
+    await testDefinitionStore.charger(clientId)
+    const test = testDefinitionStore.tests.find((t) => t.id === execution.test_id)
     const etapeConnue = test?.etapes.some((e) => e.id === input.testStepId) ?? false
     if (!etapeConnue) return { erreur: 'etape_inconnue' }
 

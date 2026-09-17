@@ -16,6 +16,7 @@ import { D1QualityEventRepo } from './repos/d1/d1QualityEventRepo'
 import { D1RiskAssessmentRepo } from './repos/d1/d1RiskAssessmentRepo'
 import { D1SectionsRepo } from './repos/d1/d1SectionsRepo'
 import { D1StructureSystemeRepo } from './repos/d1/d1StructureSystemeRepo'
+import { D1TestDefinitionRepo } from './repos/d1/d1TestDefinitionRepo'
 import { D1UtilisateursRepo } from './repos/d1/d1UtilisateursRepo'
 import { R2StockageBinaireRepo } from './repos/r2/r2StockageBinaireRepo'
 import { routerRequete } from './routeur'
@@ -64,6 +65,7 @@ export default {
       riskAssessmentRepo: new D1RiskAssessmentRepo(env.DB),
       processContextRepo: new D1ProcessContextRepo(env.DB),
       qualityEventRepo: new D1QualityEventRepo(env.DB),
+      testDefinitionRepo: new D1TestDefinitionRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

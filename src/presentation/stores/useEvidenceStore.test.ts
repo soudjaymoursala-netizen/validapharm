@@ -1,18 +1,20 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useEvidenceStore } from './useEvidenceStore'
 import { useExecutionStore } from './useExecutionStore'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
 
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.requirements.clear()
-  await db.testObjectives.clear()
-  await db.testCandidates.clear()
-  await db.tests.clear()
-  await db.couvertures.clear()
   await db.executions.clear()
   await db.executionSteps.clear()
   await db.measurements.clear()
@@ -20,6 +22,30 @@ beforeEach(async () => {
   await db.evidences.clear()
   await db.evidenceLocations.clear()
   await db.provenanceLinks.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  for (const id of ['client-1', 'client-A', 'client-B']) {
+    await installation.ctx.clientsRepo.creer({
+      id,
+      name: id,
+      adresse: null,
+      secteur: null,
+      details: null,
+      statut: 'actif',
+      archivedAt: null,
+      archivedBy: null,
+      createdByUserId: 'admin-test',
+      sharedWith: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }
+})
+
+afterEach(() => {
+  demonter()
 })
 
 /** Construit la chaîne complète jusqu'à un ExecutionStep constaté, sur une Execution non clôturée. */

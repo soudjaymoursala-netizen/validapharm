@@ -16,6 +16,7 @@ import { db } from '../../persistance/db'
 import { useProcessContextStore } from './useProcessContextStore'
 import { useQualityEventStore } from './useQualityEventStore'
 import { useStructureSystemeStore } from './useStructureSystemeStore'
+import { useTestDefinitionStore } from './useTestDefinitionStore'
 
 const VERSION_CONFIGURATION_ACTUELLE = 'v1'
 
@@ -112,11 +113,12 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
     // migration D1) — même patron que Process/ManufacturingContext ci-dessus.
     const qualityEventStore = useQualityEventStore()
     await qualityEventStore.charger(clientId)
+    // Requirement/Couverture/Test migrés vers le Worker/D1 (Phase 6a du
+    // chantier de migration D1) — même patron que ci-dessus.
+    const testDefinitionStore = useTestDefinitionStore()
+    await testDefinitionStore.charger(clientId)
 
     const [
-      requirements,
-      couvertures,
-      tests,
       executions,
       evidences,
       knowledgeItems,
@@ -125,9 +127,6 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       knowledgeRelations,
       contextSnapshotItems,
     ] = await Promise.all([
-      db.requirements.where('client_id').equals(clientId).toArray(),
-      db.couvertures.where('client_id').equals(clientId).toArray(),
-      db.tests.where('client_id').equals(clientId).toArray(),
       db.executions.where('client_id').equals(clientId).toArray(),
       db.evidences.where('client_id').equals(clientId).toArray(),
       db.knowledgeItems.where('client_id').equals(clientId).toArray(),
@@ -141,6 +140,9 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
             .toArray()
         : Promise.resolve([]),
     ])
+    const requirements = testDefinitionStore.requirements
+    const couvertures = testDefinitionStore.couvertures
+    const tests = testDefinitionStore.tests
     const manufacturingContexts = processContextStore.manufacturingContexts
     const qualityEvents = qualityEventStore.evenements
     const assetNodes = structureStore.noeuds

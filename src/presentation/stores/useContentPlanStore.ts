@@ -13,6 +13,7 @@ import {
   type RegleConformite,
 } from '../../logique-metier/conformite/evaluerReglesConformite'
 import { useQualityEventStore } from './useQualityEventStore'
+import { useTestDefinitionStore } from './useTestDefinitionStore'
 
 export interface NouveauContentPlanInput {
   templateId: TemplateType
@@ -83,13 +84,17 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     // direct, devenu impossible depuis cette migration.
     const qualityEventStore = useQualityEventStore()
     await qualityEventStore.charger(clientId)
-    const [requirements, couvertures, tests, executions, evidences] = await Promise.all([
-      db.requirements.where('client_id').equals(clientId).toArray(),
-      db.couvertures.where('client_id').equals(clientId).toArray(),
-      db.tests.where('client_id').equals(clientId).toArray(),
+    // Requirement/Couverture/Test migrés vers le Worker/D1 (Phase 6a du
+    // chantier de migration D1) — même patron que ci-dessus.
+    const testDefinitionStore = useTestDefinitionStore()
+    await testDefinitionStore.charger(clientId)
+    const [executions, evidences] = await Promise.all([
       db.executions.where('client_id').equals(clientId).toArray(),
       db.evidences.where('client_id').equals(clientId).toArray(),
     ])
+    const requirements = testDefinitionStore.requirements
+    const couvertures = testDefinitionStore.couvertures
+    const tests = testDefinitionStore.tests
     const qualityEvents = qualityEventStore.evenements
     return construireReadinessContentPlan({
       assetNodeId,
