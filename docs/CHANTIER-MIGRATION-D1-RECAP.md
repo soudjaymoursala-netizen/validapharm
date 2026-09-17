@@ -95,8 +95,8 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ✅ **Phase 4b terminée** — voir §10 |
 | `methodProfilesImpactAssessment`, `evaluationsImpactAssessment`, `evaluationsCSVAssessment` | D1 | ✅ **Phase 4c terminée** — voir §11 |
 | `methodProfilesRiskAssessment`, `risksAssessment` | D1 | ✅ **Phase 4d terminée — voir §12. Phase 4 entièrement close.** |
-| `processes`, `fonctionsActif`, `associationsFonctionAssetNode`, `associationsFonctionProcess`, `manufacturingContexts` | D1 | ⬜ Phase 5 |
-| `qualityEvents`, `referencesQualityEvent` | D1 | ⬜ Phase 5 |
+| `processes`, `fonctionsActif`, `associationsFonctionAssetNode`, `associationsFonctionProcess`, `manufacturingContexts` | D1 | ✅ **Phase 5a terminée — voir §13** |
+| `qualityEvents`, `referencesQualityEvent` | D1 | ⬜ Phase 5b |
 | `requirements`, `testObjectives`, `testCandidates`, `tests`, `couvertures` | D1 | ⬜ Phase 6 |
 | `executions`, `executionSteps`, `measurements`, `executionEvents` | D1 | ⬜ Phase 6 |
 | `evidences`, `evidenceLocations`, `provenanceLinks` | D1 | ⬜ Phase 6 |
@@ -1243,3 +1243,113 @@ production, déploiement vérifié. Enchaîner sur la Phase 5
 confirmation, conformément à la consigne permanente de l'utilisateur. Le
 problème des nœuds SAP (bug d'import original) reste explicitement
 reporté, comme depuis le début de ce chantier.
+
+---
+
+## 13. État détaillé — Phase 5a (`Process`/`FonctionActif`/`ManufacturingContext`), au 17/09/2026
+
+Première brique de la Phase 5 : `Process`/`FonctionActif` (Target
+Architecture §4/§5) et `ManufacturingContext` (§7), plus leurs 2 tables
+d'association N:M (`AssociationFonctionAssetNode`/
+`AssociationFonctionProcess`). Contrairement aux phases 4a-4d (un seul
+"domaine d'assessment" par phase), ce sous-domaine regroupe directement 5
+types dans un seul dépôt Worker (`ProcessContextRepo`), même patron que
+`ParametersRepo` en Phase 4b — ils partagent le même cycle de vie simple
+(création seule, pas de version, pas de désactivation) et le même
+store frontend (`useProcessContextStore`) déjà.
+
+### 13.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0013_process_context.sql`
+   crée 5 tables (`processes`, `fonctions_actif`,
+   `associations_fonction_asset_node`, `associations_fonction_process`,
+   `manufacturing_contexts`) + un index par table sur `client_id`. Les 2
+   tables d'association n'ont ni `audit_log` ni `updated_at` (simples
+   relations créées une fois, jamais mutées — même discipline que
+   `relations_techniques`, Phase 1).
+2. **1 dépôt Worker** : `processContextRepo.ts` (interface +
+   `ProcessContextRepoMemoire`) + son implémentation D1
+   (`d1ProcessContextRepo.ts`). Création idempotente via
+   `ON CONFLICT(id) DO NOTHING` pour les 5 types — le dédoublonnage
+   client-side d'une association déjà chargée (paire
+   fonction/asset_node ou fonction/process) reste entièrement côté store
+   frontend, comme avant la migration.
+3. **6 nouvelles routes Worker** sous `/clients/:clientId/process-context/...`
+   (obtenir, créer process/fonction/association-fonction-asset-node/
+   association-fonction-process/manufacturing-context, migration locale),
+   toutes via `exigerAccesClient`. Clés JSON `process`/`fonction`/
+   `associationFonctionAssetNode`/`associationFonctionProcess`/
+   `manufacturingContext` — noms neufs, aucune collision avec les
+   domaines déjà migrés, décidés avant l'écriture du code (méthode
+   reprise des Phases 4c/4d).
+4. **9 nouveaux tests Worker** (`routeur.test.ts`) : listes vides,
+   création de process/fonction (dérivation serveur), corps invalide,
+   association fonction/asset-node, association fonction/process,
+   création de manufacturing context (+ corps invalide), migration locale
+   idempotente, non-authentifié → 401. Suite Worker au complet :
+   **163/163 tests verts**.
+5. **`AuthApiClient`** : `ProcessWire`/`FonctionActifWire`/
+   `AssociationFonctionAssetNodeWire`/`AssociationFonctionProcessWire`/
+   `ManufacturingContextWire` + 6 méthodes.
+6. **`useProcessContextStore` entièrement réécrit** (API publique
+   inchangée : `processes`, `fonctions`, `associationsFonctionAssetNode`,
+   `associationsFonctionProcess`, `manufacturingContexts`, `charger`,
+   `creerProcess`, `creerFonction`, `associerFonctionAAssetNode`,
+   `associerFonctionAProcess`, `creerManufacturingContext`,
+   `contextesPourAssetNode`) : logique métier (dédoublonnage
+   d'association) intégralement côté client, seule la persistance passe
+   par l'API.
+7. **Ripple effect côté production** : `useReasoningEngineStore.ts`
+   (lecture de `ManufacturingContext` pour le narratif de
+   `ContextSnapshot`) et `useRechercheGlobaleStore.ts` (lecture de
+   `Process` pour la recherche transverse) basculés vers
+   `useProcessContextStore().charger(clientId)` plutôt que `db.processes`/
+   `db.manufacturingContexts` directement — même patron que
+   `useTestDefinitionStore`→`useRiskAssessmentStore` en Phase 4d.
+8. **Filet de sécurité de migration locale** : capture Dexie v43
+   (`persistance/db.ts`, 5 tables supprimées, données capturées dans
+   `processesAMigrer`/`fonctionsActifAMigrer`/
+   `associationsFonctionAssetNodeAMigrer`/
+   `associationsFonctionProcessAMigrer`/`manufacturingContextsAMigrer` —
+   formes domaine inchangées, pas de type "Ancien").
+9. **6 fichiers de test corrigés/réécrits** (accès Dexie direct remplacé
+   par de vrais appels store/`ctx.processContextRepo`, client de test créé
+   via `ctx.clientsRepo.creer`) : `useProcessContextStore.test.ts`,
+   `Process.test.ts` (entièrement réécrits au patron `fauxWorkerAuth`,
+   dont le test "Worker injoignable" dont la sémantique a changé — les
+   données ne sont plus purement locales, même discipline que
+   `StructureSysteme.test.ts`), `useQualityEventStore.test.ts`,
+   `useReasoningEngineStore.test.ts`, `useRechercheGlobaleStore.test.ts`,
+   `AssistantCreationLivrable.test.ts` (retrait des `.clear()` Dexie
+   devenus obsolètes, ajout de `fauxWorkerAuth` où nécessaire).
+10. **Validation complète (17/09/2026)** : `vue-tsc --noEmit`/`tsc
+    --noEmit` (Worker) sans erreur, `eslint` (src + workers/auth-worker/src)
+    sans erreur ni avertissement, `npx vitest run` racine (**1289/1289
+    tests verts**), `cd workers/auth-worker && npx vitest run` (**163/163
+    tests verts**, dont les 9 nouveaux tests Process Context).
+
+### 13.2 Phase 5a — terminée (17/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #54 ouverte. CI verte du premier coup (Workers Builds
+   `ia-relay`/`auth-worker` + `Lint, typecheck, tests`) — aucun incident.
+   Mergée sur `main` (squash, commit `15cf306`).
+3. ✅ Migration `0013_process_context.sql` appliquée en production D1
+   (`validapharm-auth`) en 10 requêtes séparées, toutes réussies du
+   premier coup. Vérification `sqlite_master` confirmant les 5 tables +
+   leurs 5 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `D1ProcessContextRepo` bien câblé dans le contexte, toutes les routes
+   `ctx.processContextRepo.*` présentes dans le bundle.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — Process/FonctionActif/
+   ManufacturingContext n'ont jamais été synchronisés vers GitHub, même
+   avant cette migration : pas une régression.
+
+### 13.3 Prochaine action
+
+Phase 5a définitivement close. Enchaîner sur la Phase 5b, dernière brique
+de la Phase 5 (`qualityEvents`/`referencesQualityEvent`, famille H/I du
+catalogue), sans s'arrêter pour confirmation, conformément à la consigne
+permanente de l'utilisateur.
