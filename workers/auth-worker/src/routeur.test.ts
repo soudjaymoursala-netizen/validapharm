@@ -21,6 +21,7 @@ import { ParametersRepoMemoire } from './repos/parametersRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
 import { ProjectDocumentsRepoMemoire } from './repos/projectDocumentsRepo'
 import { ProjectsRepoMemoire } from './repos/projectsRepo'
+import { RiskAssessmentRepoMemoire } from './repos/riskAssessmentRepo'
 import { SectionsRepoMemoire } from './repos/sectionsRepo'
 import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
 import { StructureSystemeRepoMemoire } from './repos/structureSystemeRepo'
@@ -50,6 +51,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     parametersRepo: new ParametersRepoMemoire(),
     impactAssessmentRepo: new ImpactAssessmentRepoMemoire(),
     csvAssessmentRepo: new CSVAssessmentRepoMemoire(),
+    riskAssessmentRepo: new RiskAssessmentRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -153,6 +155,54 @@ interface CorpsReponse {
   profilsImpact: MethodProfileImpactAssessmentJson[]
   evaluationImpact: EvaluationImpactAssessmentJson
   evaluationsImpact: EvaluationImpactAssessmentJson[]
+  profilRisque: MethodProfileRiskAssessmentJson
+  profilsRisque: MethodProfileRiskAssessmentJson[]
+  evaluationRisque: RiskAssessmentJson
+  evaluationsRisque: RiskAssessmentJson[]
+}
+
+interface MethodProfileRiskAssessmentJson {
+  id: string
+  clientId: string
+  version: string
+  effectiveDate: string
+  source: string
+  origin: string
+  echelleMin: number
+  echelleMax: number
+  seuilAction: number
+  createdAt: string
+}
+
+interface RiskAssessmentJson {
+  id: string
+  clientId: string
+  methodProfileId: string
+  methodProfileVersion: string
+  assetNodeId: string | null
+  parameterId: string | null
+  etapeProcessus: string
+  modeDefaillance: string
+  effetDefaillance: string
+  causePotentielle: string
+  controleActuel: string
+  severiteInitiale: number | null
+  occurrenceInitiale: number | null
+  detectabiliteInitiale: number | null
+  iprInitial: number | null
+  verdictInitial: string | null
+  recommandation: string | null
+  responsable: string | null
+  dateCible: string | null
+  actionsMenees: string | null
+  severiteResiduelle: number | null
+  occurrenceResiduelle: number | null
+  detectabiliteResiduelle: number | null
+  iprResiduel: number | null
+  verdictResiduel: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
 }
 
 interface MethodProfileImpactAssessmentJson {
@@ -1734,6 +1784,283 @@ describe('routerRequete — Computer System Assessment (F3 du catalogue §10, Ph
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/csv-assessment`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Risk Assessment / AMDEC (Target Architecture §10, Phase 4d du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans profil configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/risk-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.profilsRisque).toEqual([])
+    expect(obtenir.corps.evaluationsRisque).toEqual([])
+  })
+
+  test('créer un profil : id/effectiveDate/createdAt dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/risk-assessment/profils`, {
+      jeton: admin.jeton,
+      body: {
+        version: 'v1',
+        source: 'Processus_AMDEC.xlsx',
+        origin: 'procedure_client',
+        echelleMin: 1,
+        echelleMax: 5,
+        seuilAction: 50,
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.profilRisque.clientId).toBe(clientId)
+    expect(creation.corps.profilRisque.id).toEqual(expect.any(String))
+    expect(creation.corps.profilRisque.effectiveDate).toEqual(expect.any(String))
+    expect(creation.corps.profilRisque.echelleMax).toBe(5)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/risk-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.profilsRisque.map((p) => p.id)).toContain(creation.corps.profilRisque.id)
+  })
+
+  test('créer un profil sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/risk-assessment/profils`, {
+      jeton: admin.jeton,
+      body: { version: 'v1' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('créer une évaluation : id/audit_log/horodatages dérivés côté serveur, résiduel nul', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/risk-assessment/profils`, {
+      jeton: admin.jeton,
+      body: {
+        version: 'v1',
+        source: 'Processus_AMDEC.xlsx',
+        origin: 'procedure_client',
+        echelleMin: 1,
+        echelleMax: 5,
+        seuilAction: 50,
+      },
+    })
+
+    const evaluation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/evaluations`,
+      {
+        jeton: admin.jeton,
+        body: {
+          methodProfileId: profil.corps.profilRisque.id,
+          methodProfileVersion: profil.corps.profilRisque.version,
+          assetNodeId: null,
+          parameterId: null,
+          etapeProcessus: 'Remplissage',
+          modeDefaillance: 'Sous-dosage',
+          effetDefaillance: 'Produit non conforme',
+          causePotentielle: 'Dérive du capteur de débit',
+          controleActuel: 'Contrôle en ligne toutes les 30 min',
+          severiteInitiale: 4,
+          occurrenceInitiale: 3,
+          detectabiliteInitiale: 2,
+          iprInitial: 24,
+          verdictInitial: 'acceptable',
+        },
+      },
+    )
+    expect(evaluation.status).toBe(201)
+    expect(evaluation.corps.evaluationRisque.clientId).toBe(clientId)
+    expect(evaluation.corps.evaluationRisque.iprInitial).toBe(24)
+    expect(evaluation.corps.evaluationRisque.verdictInitial).toBe('acceptable')
+    expect(evaluation.corps.evaluationRisque.iprResiduel).toBeNull()
+    expect(evaluation.corps.evaluationRisque.verdictResiduel).toBeNull()
+    expect(evaluation.corps.evaluationRisque.auditLog).toEqual([
+      { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
+    ])
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/risk-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.evaluationsRisque.map((e) => e.id)).toContain(
+      evaluation.corps.evaluationRisque.id,
+    )
+  })
+
+  test('créer une évaluation sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/evaluations`,
+      { jeton: admin.jeton, body: { methodProfileId: 'profil-1' } },
+    )
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('enregistrer l’action résiduelle : deuxième temps du cycle AMDEC, sans muter l’initial', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/risk-assessment/profils`, {
+      jeton: admin.jeton,
+      body: {
+        version: 'v1',
+        source: 'Processus_AMDEC.xlsx',
+        origin: 'procedure_client',
+        echelleMin: 1,
+        echelleMax: 5,
+        seuilAction: 50,
+      },
+    })
+    const evaluation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/evaluations`,
+      {
+        jeton: admin.jeton,
+        body: {
+          methodProfileId: profil.corps.profilRisque.id,
+          methodProfileVersion: profil.corps.profilRisque.version,
+          assetNodeId: null,
+          parameterId: null,
+          etapeProcessus: 'Remplissage',
+          modeDefaillance: 'Sous-dosage',
+          effetDefaillance: 'Produit non conforme',
+          causePotentielle: 'Dérive du capteur de débit',
+          controleActuel: 'Contrôle en ligne toutes les 30 min',
+          severiteInitiale: 4,
+          occurrenceInitiale: 4,
+          detectabiliteInitiale: 4,
+          iprInitial: 64,
+          verdictInitial: 'action_requise',
+        },
+      },
+    )
+
+    const action = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/risk-assessment/evaluations/${evaluation.corps.evaluationRisque.id}/action-residuelle`,
+      {
+        jeton: admin.jeton,
+        body: {
+          recommandation: 'Recalibrer le capteur de débit',
+          responsable: 'Ingénieur procédé',
+          dateCible: '2026-12-01',
+          actionsMenees: 'Recalibration effectuée le 2026-11-15',
+          severiteResiduelle: 4,
+          occurrenceResiduelle: 2,
+          detectabiliteResiduelle: 2,
+          iprResiduel: 16,
+          verdictResiduel: 'acceptable',
+        },
+      },
+    )
+    expect(action.status).toBe(200)
+    expect(action.corps.evaluationRisque.iprResiduel).toBe(16)
+    expect(action.corps.evaluationRisque.verdictResiduel).toBe('acceptable')
+    // L'initial ne bouge jamais lors de l'enregistrement de l'action résiduelle.
+    expect(action.corps.evaluationRisque.iprInitial).toBe(64)
+    expect(action.corps.evaluationRisque.verdictInitial).toBe('action_requise')
+    expect(action.corps.evaluationRisque.auditLog).toHaveLength(2)
+    expect(action.corps.evaluationRisque.auditLog[1]).toEqual({
+      timestamp: expect.any(String),
+      actor: 'admin@pharmatech.example',
+      action: 'action résiduelle enregistrée',
+    })
+  })
+
+  test('enregistrer l’action résiduelle sur une évaluation introuvable -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const action = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/risk-assessment/evaluations/id-inconnu/action-residuelle`,
+      { jeton: admin.jeton, body: { recommandation: 'x' } },
+    )
+    expect(action.status).toBe(404)
+  })
+
+  test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const profilLocal = {
+      id: 'profil-risque-local-1',
+      clientId,
+      version: 'v1',
+      effectiveDate: '2026-01-01T00:00:00.000Z',
+      source: 'Ancien classeur AMDEC',
+      origin: 'procedure_client',
+      echelleMin: 1,
+      echelleMax: 5,
+      seuilAction: 50,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/migration-locale`,
+      { jeton: admin.jeton, body: { profilsRisque: [profilLocal], evaluationsRisque: [] } },
+    )
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: {
+          profilsRisque: [{ ...profilLocal, source: 'Tentative d’écrasement' }],
+          evaluationsRisque: [],
+        },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/risk-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.profilsRisque).toHaveLength(1)
+    expect(liste.corps.profilsRisque[0]?.source).toBe('Ancien classeur AMDEC')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/risk-assessment`)
     expect(obtenir.status).toBe(401)
   })
 })

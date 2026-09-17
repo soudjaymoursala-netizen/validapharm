@@ -335,6 +335,18 @@ export const evaluationsImpactAssessmentAMigrer: EvaluationImpactAssessment[] = 
 export const evaluationsCSVAssessmentAMigrer: EvaluationCSVAssessment[] = []
 
 /**
+ * Filet de sécurité de migration locale pour `MethodProfileRiskAssessment`/
+ * `RiskAssessment` (AMDEC, Target Architecture §10, Phase 4d du chantier
+ * de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même principe
+ * que `methodProfilesImpactAssessmentAMigrer` ci-dessus : formes domaine
+ * inchangées, pas de type "Ancien". Consommés et envoyés au serveur par
+ * `migrerRiskAssessmentLocalVersServeur` (`useRiskAssessmentStore`) au
+ * premier `charger()`.
+ */
+export const methodProfilesRiskAssessmentAMigrer: MethodProfileRiskAssessment[] = []
+export const risksAssessmentAMigrer: RiskAssessment[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -396,8 +408,6 @@ export class ValidaPharmDatabase extends Dexie {
   procedures!: EntityTable<Procedure, 'id'>
   procedureSteps!: EntityTable<ProcedureStep, 'id'>
   gabaritsExportClient!: EntityTable<GabaritExportClient, 'id'>
-  methodProfilesRiskAssessment!: EntityTable<MethodProfileRiskAssessment, 'id'>
-  risksAssessment!: EntityTable<RiskAssessment, 'id'>
   profilLocal!: EntityTable<EnregistrementProfilLocal, 'id'>
   connexionAuthentification!: EntityTable<EnregistrementConnexionAuthentification, 'id'>
   sessionAuthentification!: EntityTable<EnregistrementSessionAuthentification, 'id'>
@@ -838,6 +848,24 @@ export class ValidaPharmDatabase extends Dexie {
           .table<EvaluationCSVAssessment>('evaluationsCSVAssessment')
           .toArray()
         evaluationsCSVAssessmentAMigrer.push(...evaluationsCsv)
+      })
+
+    // MethodProfileRiskAssessment/RiskAssessment (AMDEC) : migrés vers le
+    // Worker/D1 (Target Architecture §10, Phase 4d du chantier de
+    // migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique
+    // de capture avant suppression physique que la version 41 ci-dessus.
+    this.version(42)
+      .stores({
+        methodProfilesRiskAssessment: null,
+        risksAssessment: null,
+      })
+      .upgrade(async (tx) => {
+        const profils = await tx
+          .table<MethodProfileRiskAssessment>('methodProfilesRiskAssessment')
+          .toArray()
+        methodProfilesRiskAssessmentAMigrer.push(...profils)
+        const evaluations = await tx.table<RiskAssessment>('risksAssessment').toArray()
+        risksAssessmentAMigrer.push(...evaluations)
       })
   }
 }

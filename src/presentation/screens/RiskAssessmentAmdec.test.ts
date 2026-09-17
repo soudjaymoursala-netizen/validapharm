@@ -1,9 +1,14 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useRiskAssessmentStore } from '../stores/useRiskAssessmentStore'
 import RiskAssessmentAmdec from './RiskAssessmentAmdec.vue'
 
@@ -30,16 +35,42 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+const CLIENT_ID = 'client-1'
+
+let ctx: Contexte
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.methodProfilesRiskAssessment.clear()
-  await db.risksAssessment.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: CLIENT_ID,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('RiskAssessmentAmdec', () => {
   test('configure un profil, crée une ligne AMDEC avec IPR calculé, enregistre une action résiduelle', async () => {
     const wrapper = mount(RiskAssessmentAmdec, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.find('.bloc-config form').exists())
@@ -53,14 +84,13 @@ describe('RiskAssessmentAmdec', () => {
     await inputsNombre[2]?.setValue(50)
     await formConfig.trigger('submit.prevent')
     await attendreQue(
-      async () =>
-        (await db.methodProfilesRiskAssessment.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.riskAssessmentRepo.listerProfils(CLIENT_ID)).length > 0,
     )
 
-    const profil = (await db.methodProfilesRiskAssessment.toArray())[0]
-    expect(profil?.echelle_min).toBe(1)
-    expect(profil?.echelle_max).toBe(5)
-    expect(profil?.seuil_action).toBe(50)
+    const profil = (await ctx.riskAssessmentRepo.listerProfils(CLIENT_ID))[0]
+    expect(profil?.echelleMin).toBe(1)
+    expect(profil?.echelleMax).toBe(5)
+    expect(profil?.seuilAction).toBe(50)
 
     // Le formulaire de config se referme, celui de nouvelle ligne apparaît
     await attendreQue(() => wrapper.find('.bloc-nouvelle-ligne form').exists())
@@ -73,11 +103,13 @@ describe('RiskAssessmentAmdec', () => {
     await inputsNombreLigne[1]?.setValue(2)
     await inputsNombreLigne[2]?.setValue(3)
     await formLigne.trigger('submit.prevent')
-    await attendreQue(async () => (await db.risksAssessment.count()) > 0)
+    await attendreQue(
+      async () => (await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID)).length > 0,
+    )
 
-    const ligne = (await db.risksAssessment.toArray())[0]
-    expect(ligne?.ipr_initial).toBe(30) // 5*2*3, sur échelle 1-5 → non normalisé, valeur brute
-    expect(ligne?.verdict_initial).toBe('acceptable') // 30 < seuil 50
+    const ligne = (await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID))[0]
+    expect(ligne?.iprInitial).toBe(30) // 5*2*3, sur échelle 1-5 → non normalisé, valeur brute
+    expect(ligne?.verdictInitial).toBe('acceptable') // 30 < seuil 50
 
     // Action résiduelle — jamais déduite, toujours une saisie explicite
     await attendreQue(() => wrapper.find('.carte-evaluation .ligne-formulaire').exists())
@@ -90,10 +122,13 @@ describe('RiskAssessmentAmdec', () => {
     await inputsNombreAction[1]?.setValue(1)
     await inputsNombreAction[2]?.setValue(2)
     await zoneAction.find('button').trigger('click')
-    await attendreQue(async () => (await db.risksAssessment.toArray())[0]?.ipr_residuel !== null)
+    await attendreQue(
+      async () =>
+        (await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID))[0]?.iprResiduel !== null,
+    )
 
-    const ligneAvecAction = (await db.risksAssessment.toArray())[0]
-    expect(ligneAvecAction?.ipr_residuel).toBe(10)
+    const ligneAvecAction = (await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID))[0]
+    expect(ligneAvecAction?.iprResiduel).toBe(10)
     expect(ligneAvecAction?.recommandation).toBe('Ajouter une sonde de contrôle')
 
     // La recommandation et le responsable saisis doivent rester visibles une
@@ -106,14 +141,14 @@ describe('RiskAssessmentAmdec', () => {
     // Seed direct d'une ligne pour vérifier qu'aucune écriture n'a lieu sans profil actif —
     // le formulaire "nouvelle ligne" ne s'affiche même pas tant qu'aucun profil n'existe.
     const wrapper = mount(RiskAssessmentAmdec, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.find('.bloc-config').exists())
 
     expect(wrapper.find('.bloc-config').exists()).toBe(true)
     expect(wrapper.find('.bloc-nouvelle-ligne').exists()).toBe(false)
-    expect(await db.risksAssessment.count()).toBe(0)
+    expect(await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID)).toHaveLength(0)
   })
 
   test('affiche un état de chargement avant que le profil ne soit résolu', async () => {
@@ -121,21 +156,21 @@ describe('RiskAssessmentAmdec', () => {
     // avant ce correctif, l'écran affichait à tort « Aucun profil AMDEC
     // n'est configuré » tant que le onMounted n'avait pas terminé.
     const maintenant = new Date().toISOString()
-    await db.methodProfilesRiskAssessment.put({
+    await ctx.riskAssessmentRepo.creerProfil({
       id: crypto.randomUUID(),
-      client_id: 'client-1',
+      clientId: CLIENT_ID,
       version: 'v1',
-      effective_date: maintenant,
+      effectiveDate: maintenant,
       source: 'Processus_AMDEC.xlsx',
       origin: 'procedure_client',
-      echelle_min: 1,
-      echelle_max: 5,
-      seuil_action: 50,
-      created_at: maintenant,
+      echelleMin: 1,
+      echelleMax: 5,
+      seuilAction: 50,
+      createdAt: maintenant,
     })
 
     const wrapper = mount(RiskAssessmentAmdec, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
 
@@ -150,7 +185,7 @@ describe('RiskAssessmentAmdec', () => {
 describe('RiskAssessmentAmdec — mutations non vérifiées', () => {
   test("un enregistrement d'action résiduelle bloqué (ligne supprimée entre-temps) affiche un message", async () => {
     const wrapper = mount(RiskAssessmentAmdec, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.find('.bloc-config form').exists())
@@ -169,7 +204,9 @@ describe('RiskAssessmentAmdec — mutations non vérifiées', () => {
     await inputsTexte[0]?.setValue('Cycle de stérilisation')
     await inputsTexte[1]?.setValue('Sous-charge thermique')
     await formLigne.trigger('submit.prevent')
-    await attendreQue(async () => (await db.risksAssessment.count()) > 0)
+    await attendreQue(
+      async () => (await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID)).length > 0,
+    )
     await attendreQue(() => wrapper.find('.carte-evaluation .ligne-formulaire').exists())
 
     // Reproduit une ligne AMDEC supprimée entre-temps sur un autre poste —
@@ -183,6 +220,6 @@ describe('RiskAssessmentAmdec — mutations non vérifiées', () => {
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
 
     expect(wrapper.find('.bandeau-erreur').text()).toContain('introuvable')
-    expect((await db.risksAssessment.toArray())[0]?.ipr_residuel).toBeNull()
+    expect((await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID))[0]?.iprResiduel).toBeNull()
   })
 })

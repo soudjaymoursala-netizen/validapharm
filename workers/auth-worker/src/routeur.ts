@@ -47,6 +47,11 @@ import type {
   ProjectEnregistre,
   ProjectsRepo,
 } from './repos/projectsRepo'
+import type {
+  MethodProfileRiskAssessmentEnregistre,
+  RiskAssessmentEnregistre,
+  RiskAssessmentRepo,
+} from './repos/riskAssessmentRepo'
 import type { SectionEnregistree, SectionsRepo } from './repos/sectionsRepo'
 import type { StockageBinaireRepo } from './repos/stockageBinaireRepo'
 import type {
@@ -83,6 +88,7 @@ export interface Contexte {
   parametersRepo: ParametersRepo
   impactAssessmentRepo: ImpactAssessmentRepo
   csvAssessmentRepo: CSVAssessmentRepo
+  riskAssessmentRepo: RiskAssessmentRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -468,6 +474,56 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchCsvAssessmentEvaluations[1] as string,
+    )
+  }
+
+  // --- Risk Assessment / AMDEC (Target Architecture §10, Phase 4d du
+  // chantier de migration D1) ---
+  const matchRiskAssessment = chemin.match(/^\/clients\/([^/]+)\/risk-assessment$/)
+  if (matchRiskAssessment && request.method === 'GET') {
+    return gererObtenirRiskAssessment(request, ctx, entetes, matchRiskAssessment[1] as string)
+  }
+  const matchRiskAssessmentProfils = chemin.match(/^\/clients\/([^/]+)\/risk-assessment\/profils$/)
+  if (matchRiskAssessmentProfils && request.method === 'POST') {
+    return gererCreerProfilRiskAssessment(
+      request,
+      ctx,
+      entetes,
+      matchRiskAssessmentProfils[1] as string,
+    )
+  }
+  const matchRiskAssessmentMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/risk-assessment\/migration-locale$/,
+  )
+  if (matchRiskAssessmentMigrationLocale && request.method === 'POST') {
+    return gererMigrerRiskAssessmentLocal(
+      request,
+      ctx,
+      entetes,
+      matchRiskAssessmentMigrationLocale[1] as string,
+    )
+  }
+  const matchRiskAssessmentEvaluations = chemin.match(
+    /^\/clients\/([^/]+)\/risk-assessment\/evaluations$/,
+  )
+  if (matchRiskAssessmentEvaluations && request.method === 'POST') {
+    return gererCreerEvaluationRiskAssessment(
+      request,
+      ctx,
+      entetes,
+      matchRiskAssessmentEvaluations[1] as string,
+    )
+  }
+  const matchRiskAssessmentActionResiduelle = chemin.match(
+    /^\/clients\/([^/]+)\/risk-assessment\/evaluations\/([^/]+)\/action-residuelle$/,
+  )
+  if (matchRiskAssessmentActionResiduelle && request.method === 'PATCH') {
+    return gererEnregistrerActionResiduelleRiskAssessment(
+      request,
+      ctx,
+      entetes,
+      matchRiskAssessmentActionResiduelle[1] as string,
+      matchRiskAssessmentActionResiduelle[2] as string,
     )
   }
 
@@ -2231,6 +2287,261 @@ async function gererMigrerCsvAssessmentLocal(
     await ctx.csvAssessmentRepo.creerEvaluation(e)
   }
   return reponseJson({ evaluationsCsv: corps.evaluationsCsv }, 200, entetes)
+}
+
+// --- Handlers : Risk Assessment / AMDEC (Target Architecture §10, Phase
+// 4d du chantier de migration D1) ---
+//
+// La logique métier (numéro de version suivant, calcul IPR, verdict) reste
+// côté store frontend (`useRiskAssessmentStore.ts`, déjà testée) — ces
+// handlers ne font qu'authentifier, vérifier l'accès au client concerné et
+// persister l'état qu'on leur donne, même discipline que les handlers
+// Impact Assessment/Parameters. Clés JSON `profilRisque`/`evaluationRisque`
+// (jamais `profil`/`evaluation`, déjà pris par ACFC, ni `profilImpact`/
+// `evaluationImpact`/`evaluationCsv`) — même discipline de désambiguïsation
+// que `parametreProcede`.
+
+async function gererObtenirRiskAssessment(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [profilsRisque, evaluationsRisque] = await Promise.all([
+    ctx.riskAssessmentRepo.listerProfils(clientId),
+    ctx.riskAssessmentRepo.listerEvaluations(clientId),
+  ])
+  return reponseJson({ profilsRisque, evaluationsRisque }, 200, entetes)
+}
+
+interface SaisieCreationProfilRiskAssessment {
+  version?: string
+  source?: string
+  origin?: string
+  echelleMin?: number
+  echelleMax?: number
+  seuilAction?: number
+}
+
+async function gererCreerProfilRiskAssessment(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationProfilRiskAssessment>(request)
+  if (
+    !corps?.version ||
+    !corps.source ||
+    !corps.origin ||
+    corps.echelleMin === undefined ||
+    corps.echelleMax === undefined ||
+    corps.seuilAction === undefined
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const profilRisque: MethodProfileRiskAssessmentEnregistre = {
+    id: genererId(),
+    clientId,
+    version: corps.version,
+    effectiveDate: maintenant,
+    source: corps.source,
+    origin: corps.origin,
+    echelleMin: corps.echelleMin,
+    echelleMax: corps.echelleMax,
+    seuilAction: corps.seuilAction,
+    createdAt: maintenant,
+  }
+  await ctx.riskAssessmentRepo.creerProfil(profilRisque)
+  return reponseJson({ profilRisque }, 201, entetes)
+}
+
+interface SaisieCreationEvaluationRiskAssessment {
+  methodProfileId?: string
+  methodProfileVersion?: string
+  assetNodeId?: string | null
+  parameterId?: string | null
+  etapeProcessus?: string
+  modeDefaillance?: string
+  effetDefaillance?: string
+  causePotentielle?: string
+  controleActuel?: string
+  severiteInitiale?: number | null
+  occurrenceInitiale?: number | null
+  detectabiliteInitiale?: number | null
+  iprInitial?: number | null
+  verdictInitial?: string | null
+}
+
+async function gererCreerEvaluationRiskAssessment(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationEvaluationRiskAssessment>(request)
+  // `effetDefaillance`/`causePotentielle`/`controleActuel` peuvent être des
+  // chaînes vides (champs non `required` dans `RiskAssessmentAmdec.vue`) sans
+  // être invalides — même discipline que `gererCreerParametre`/`gererCreerCQA`
+  // pour `description`.
+  if (
+    !corps?.methodProfileId ||
+    !corps.methodProfileVersion ||
+    !corps.etapeProcessus ||
+    !corps.modeDefaillance ||
+    corps.effetDefaillance === undefined ||
+    corps.causePotentielle === undefined ||
+    corps.controleActuel === undefined
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const evaluationRisque: RiskAssessmentEnregistre = {
+    id: genererId(),
+    clientId,
+    methodProfileId: corps.methodProfileId,
+    methodProfileVersion: corps.methodProfileVersion,
+    assetNodeId: corps.assetNodeId ?? null,
+    parameterId: corps.parameterId ?? null,
+    etapeProcessus: corps.etapeProcessus,
+    modeDefaillance: corps.modeDefaillance,
+    effetDefaillance: corps.effetDefaillance,
+    causePotentielle: corps.causePotentielle,
+    controleActuel: corps.controleActuel,
+    severiteInitiale: corps.severiteInitiale ?? null,
+    occurrenceInitiale: corps.occurrenceInitiale ?? null,
+    detectabiliteInitiale: corps.detectabiliteInitiale ?? null,
+    iprInitial: corps.iprInitial ?? null,
+    verdictInitial: corps.verdictInitial ?? null,
+    recommandation: null,
+    responsable: null,
+    dateCible: null,
+    actionsMenees: null,
+    severiteResiduelle: null,
+    occurrenceResiduelle: null,
+    detectabiliteResiduelle: null,
+    iprResiduel: null,
+    verdictResiduel: null,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.riskAssessmentRepo.creerEvaluation(evaluationRisque)
+  return reponseJson({ evaluationRisque }, 201, entetes)
+}
+
+interface SaisieActionResiduelleRiskAssessment {
+  recommandation?: string | null
+  responsable?: string | null
+  dateCible?: string | null
+  actionsMenees?: string | null
+  severiteResiduelle?: number | null
+  occurrenceResiduelle?: number | null
+  detectabiliteResiduelle?: number | null
+  iprResiduel?: number | null
+  verdictResiduel?: string | null
+}
+
+/**
+ * Enregistre l'action corrective et l'évaluation résiduelle (deuxième
+ * temps du cycle AMDEC) sans muter les champs de l'évaluation initiale —
+ * même principe que `gererDesactiverCPP` : l'historique reste lisible tel
+ * qu'il a été produit. Le calcul IPR résiduel/verdict reste côté store
+ * frontend (`calculerIPR`/`evaluerVerdictRiskAssessment`, déjà testés) —
+ * ce handler ne persiste que ce qu'on lui donne.
+ */
+async function gererEnregistrerActionResiduelleRiskAssessment(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  evaluationId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const existant = await ctx.riskAssessmentRepo.evaluationParId(evaluationId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const corps = await lireCorpsJson<SaisieActionResiduelleRiskAssessment>(request)
+  if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const maintenant = horodatage()
+  const evaluationRisque: RiskAssessmentEnregistre = {
+    ...existant,
+    recommandation: corps.recommandation ?? null,
+    responsable: corps.responsable ?? null,
+    dateCible: corps.dateCible ?? null,
+    actionsMenees: corps.actionsMenees ?? null,
+    severiteResiduelle: corps.severiteResiduelle ?? null,
+    occurrenceResiduelle: corps.occurrenceResiduelle ?? null,
+    detectabiliteResiduelle: corps.detectabiliteResiduelle ?? null,
+    iprResiduel: corps.iprResiduel ?? null,
+    verdictResiduel: corps.verdictResiduel ?? null,
+    updatedAt: maintenant,
+    auditLog: [
+      ...existant.auditLog,
+      { timestamp: maintenant, actor: acteur.email, action: 'action résiduelle enregistrée' },
+    ],
+  }
+  await ctx.riskAssessmentRepo.remplacerEvaluation(evaluationRisque)
+  return reponseJson({ evaluationRisque }, 200, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale
+ * (`methodProfilesRiskAssessmentAMigrer`/`risksAssessmentAMigrer`,
+ * `useRiskAssessmentStore.migrerRiskAssessmentLocalVersServeur`) —
+ * idempotente, l'existant côté serveur gagne toujours (`ON CONFLICT(id) DO
+ * NOTHING` dans `D1RiskAssessmentRepo`), même discipline que les autres
+ * migrations locales de ce chantier.
+ */
+interface SaisieMigrationRiskAssessment {
+  profilsRisque?: MethodProfileRiskAssessmentEnregistre[]
+  evaluationsRisque?: RiskAssessmentEnregistre[]
+}
+
+async function gererMigrerRiskAssessmentLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationRiskAssessment>(request)
+  if (!corps || (!Array.isArray(corps.profilsRisque) && !Array.isArray(corps.evaluationsRisque))) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const p of corps.profilsRisque ?? []) {
+    if (p.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.riskAssessmentRepo.creerProfil(p)
+  }
+  for (const e of corps.evaluationsRisque ?? []) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.riskAssessmentRepo.creerEvaluation(e)
+  }
+  return reponseJson(
+    { profilsRisque: corps.profilsRisque ?? [], evaluationsRisque: corps.evaluationsRisque ?? [] },
+    200,
+    entetes,
+  )
 }
 
 // --- Handlers : Organization/Workspace (Phase 2 du chantier de migration D1) ---

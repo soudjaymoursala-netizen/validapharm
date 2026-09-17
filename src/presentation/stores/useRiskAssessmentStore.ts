@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type {
+  MethodProfileRiskAssessmentWire,
+  RiskAssessmentWire,
+} from '../../connecteurs/auth/AuthApiClient'
+import type {
   MethodProfileRiskAssessment,
   OrigineMethodeRiskAssessment,
   RiskAssessment,
@@ -8,8 +12,108 @@ import type {
 import { calculerIPR } from '../../logique-metier/moteur-calcul/calculerIPR'
 import { evaluerVerdictRiskAssessment } from '../../logique-metier/risque/evaluerVerdictRiskAssessment'
 import { numeroVersion } from '../../logique-metier/versionnage/numeroVersion'
-import { identifiantActeurCourant } from '../identite/identiteLocale'
-import { db } from '../../persistance/db'
+import { methodProfilesRiskAssessmentAMigrer, risksAssessmentAMigrer } from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
+
+export function profilRisqueWireVersDomaine(
+  wire: MethodProfileRiskAssessmentWire,
+): MethodProfileRiskAssessment {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    version: wire.version,
+    effective_date: wire.effectiveDate,
+    source: wire.source,
+    origin: wire.origin as OrigineMethodeRiskAssessment,
+    echelle_min: wire.echelleMin,
+    echelle_max: wire.echelleMax,
+    seuil_action: wire.seuilAction,
+    created_at: wire.createdAt,
+  }
+}
+
+export function evaluationRisqueWireVersDomaine(wire: RiskAssessmentWire): RiskAssessment {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    method_profile_id: wire.methodProfileId,
+    method_profile_version: wire.methodProfileVersion,
+    asset_node_id: wire.assetNodeId,
+    parameter_id: wire.parameterId,
+    etape_processus: wire.etapeProcessus,
+    mode_defaillance: wire.modeDefaillance,
+    effet_defaillance: wire.effetDefaillance,
+    cause_potentielle: wire.causePotentielle,
+    controle_actuel: wire.controleActuel,
+    severite_initiale: wire.severiteInitiale,
+    occurrence_initiale: wire.occurrenceInitiale,
+    detectabilite_initiale: wire.detectabiliteInitiale,
+    ipr_initial: wire.iprInitial,
+    verdict_initial: wire.verdictInitial as RiskAssessment['verdict_initial'],
+    recommandation: wire.recommandation,
+    responsable: wire.responsable,
+    date_cible: wire.dateCible,
+    actions_menees: wire.actionsMenees,
+    severite_residuelle: wire.severiteResiduelle,
+    occurrence_residuelle: wire.occurrenceResiduelle,
+    detectabilite_residuelle: wire.detectabiliteResiduelle,
+    ipr_residuel: wire.iprResiduel,
+    verdict_residuel: wire.verdictResiduel as RiskAssessment['verdict_residuel'],
+    audit_log: wire.auditLog,
+    created_at: wire.createdAt,
+    updated_at: wire.updatedAt,
+  }
+}
+
+function profilRisqueDomaineVersWire(
+  p: MethodProfileRiskAssessment,
+): MethodProfileRiskAssessmentWire {
+  return {
+    id: p.id,
+    clientId: p.client_id,
+    version: p.version,
+    effectiveDate: p.effective_date,
+    source: p.source,
+    origin: p.origin,
+    echelleMin: p.echelle_min,
+    echelleMax: p.echelle_max,
+    seuilAction: p.seuil_action,
+    createdAt: p.created_at,
+  }
+}
+
+function evaluationRisqueDomaineVersWire(e: RiskAssessment): RiskAssessmentWire {
+  return {
+    id: e.id,
+    clientId: e.client_id,
+    methodProfileId: e.method_profile_id,
+    methodProfileVersion: e.method_profile_version,
+    assetNodeId: e.asset_node_id,
+    parameterId: e.parameter_id,
+    etapeProcessus: e.etape_processus,
+    modeDefaillance: e.mode_defaillance,
+    effetDefaillance: e.effet_defaillance,
+    causePotentielle: e.cause_potentielle,
+    controleActuel: e.controle_actuel,
+    severiteInitiale: e.severite_initiale,
+    occurrenceInitiale: e.occurrence_initiale,
+    detectabiliteInitiale: e.detectabilite_initiale,
+    iprInitial: e.ipr_initial,
+    verdictInitial: e.verdict_initial,
+    recommandation: e.recommandation,
+    responsable: e.responsable,
+    dateCible: e.date_cible,
+    actionsMenees: e.actions_menees,
+    severiteResiduelle: e.severite_residuelle,
+    occurrenceResiduelle: e.occurrence_residuelle,
+    detectabiliteResiduelle: e.detectabilite_residuelle,
+    iprResiduel: e.ipr_residuel,
+    verdictResiduel: e.verdict_residuel,
+    auditLog: e.audit_log,
+    createdAt: e.created_at,
+    updatedAt: e.updated_at,
+  }
+}
 
 export interface NouveauProfilRiskAssessmentInput {
   echelleMin: number
@@ -51,12 +155,28 @@ export type ErreurEcritureRiskAssessment = { erreur: 'introuvable' }
  * version de méthode ne mute jamais la précédente ; une évaluation figée
  * reste lisible avec l'échelle/le seuil de sa propre version.
  *
+ * **Phase 4d du chantier de migration D1**
+ * (docs/CHANTIER-MIGRATION-D1-RECAP.md) : Cloudflare D1 devient la source
+ * de vérité — mêmes routes authentifiées scopées par client que les
+ * autres domaines de la Phase 4, la logique métier (numéro de version
+ * suivant, calcul IPR, verdict) reste entièrement côté client.
+ *
  * @requirement Target Architecture §10, ICH Q9
  */
 export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
   const profils = ref<MethodProfileRiskAssessment[]>([])
   const evaluations = ref<RiskAssessment[]>([])
   const enChargement = ref(false)
+
+  /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que `useMethodProfileACFCStore`. */
+  async function obtenirApi() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    return { api, jeton: authStore.jeton }
+  }
 
   /** Tri sur le numéro de version (`vN`), jamais sur `created_at` — voir `useMethodProfileACFCStore.ts`. */
   const profilActif = computed<MethodProfileRiskAssessment | null>(() => {
@@ -67,14 +187,60 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
     )
   })
 
+  /**
+   * Envoie au serveur les enregistrements capturés depuis les anciennes
+   * tables IndexedDB locales juste avant leur suppression — n'a d'effet
+   * réel qu'une seule fois (voir migration Dexie v42, `persistance/db.ts`).
+   * Filtre par client avant envoi, même patron que les autres domaines de
+   * la Phase 4.
+   */
+  async function migrerRiskAssessmentLocalVersServeur(clientId: string): Promise<void> {
+    const profilsDuClient = methodProfilesRiskAssessmentAMigrer.filter(
+      (p) => p.client_id === clientId,
+    )
+    const evaluationsDuClient = risksAssessmentAMigrer.filter((e) => e.client_id === clientId)
+    if (profilsDuClient.length === 0 && evaluationsDuClient.length === 0) return
+
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.migrerRiskAssessmentLocal(jeton, clientId, {
+      profilsRisque: profilsDuClient.map(profilRisqueDomaineVersWire),
+      evaluationsRisque: evaluationsDuClient.map(evaluationRisqueDomaineVersWire),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la migration Risk Assessment : ${resultat.erreur}`)
+    }
+    for (const p of profilsDuClient) {
+      const index = methodProfilesRiskAssessmentAMigrer.indexOf(p)
+      if (index !== -1) methodProfilesRiskAssessmentAMigrer.splice(index, 1)
+    }
+    for (const e of evaluationsDuClient) {
+      const index = risksAssessmentAMigrer.indexOf(e)
+      if (index !== -1) risksAssessmentAMigrer.splice(index, 1)
+    }
+  }
+
   async function charger(clientId: string): Promise<void> {
     enChargement.value = true
     try {
-      profils.value = await db.methodProfilesRiskAssessment
-        .where('client_id')
-        .equals(clientId)
-        .toArray()
-      evaluations.value = await db.risksAssessment.where('client_id').equals(clientId).toArray()
+      try {
+        await migrerRiskAssessmentLocalVersServeur(clientId)
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
+      }
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.obtenirRiskAssessment(jeton, clientId)
+      if (resultat.ok) {
+        profils.value = resultat.donnees.profilsRisque.map(profilRisqueWireVersDomaine)
+        evaluations.value = resultat.donnees.evaluationsRisque.map(evaluationRisqueWireVersDomaine)
+      } else {
+        profils.value = []
+        evaluations.value = []
+      }
+    } catch {
+      // Panne réseau réelle ou relais non configuré : jamais une exception
+      // non gérée, même discipline que `useMethodProfileACFCStore.charger`.
+      profils.value = []
+      evaluations.value = []
     } finally {
       enChargement.value = false
     }
@@ -88,20 +254,19 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
     clientId: string,
     input: NouveauProfilRiskAssessmentInput,
   ): Promise<MethodProfileRiskAssessment> {
-    const maintenant = new Date().toISOString()
-    const profil: MethodProfileRiskAssessment = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerProfilRiskAssessment(jeton, clientId, {
       version: prochaineVersion(),
-      effective_date: maintenant,
       source: input.source,
       origin: input.origin,
-      echelle_min: input.echelleMin,
-      echelle_max: input.echelleMax,
-      seuil_action: input.seuilAction,
-      created_at: maintenant,
+      echelleMin: input.echelleMin,
+      echelleMax: input.echelleMax,
+      seuilAction: input.seuilAction,
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la création du profil Risk Assessment : ${resultat.erreur}`)
     }
-    await db.methodProfilesRiskAssessment.put(profil)
+    const profil = profilRisqueWireVersDomaine(resultat.donnees.profilRisque)
     profils.value = [...profils.value, profil]
     return profil
   }
@@ -113,7 +278,6 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
     const profil = profilActif.value
     if (!profil) return { erreur: 'aucun_profil_configure' }
 
-    const maintenant = new Date().toISOString()
     const echelle = { min: profil.echelle_min, max: profil.echelle_max }
     const resultatIPR = calculerIPR(
       input.severiteInitiale,
@@ -121,37 +285,27 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
       input.detectabiliteInitiale,
       echelle,
     )
-    const evaluation: RiskAssessment = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      method_profile_id: profil.id,
-      method_profile_version: profil.version,
-      asset_node_id: input.assetNodeId,
-      parameter_id: input.parameterId,
-      etape_processus: input.etapeProcessus,
-      mode_defaillance: input.modeDefaillance,
-      effet_defaillance: input.effetDefaillance,
-      cause_potentielle: input.causePotentielle,
-      controle_actuel: input.controleActuel,
-      severite_initiale: input.severiteInitiale,
-      occurrence_initiale: input.occurrenceInitiale,
-      detectabilite_initiale: input.detectabiliteInitiale,
-      ipr_initial: resultatIPR.calcule ? resultatIPR.valeur : null,
-      verdict_initial: evaluerVerdictRiskAssessment(resultatIPR, profil.seuil_action),
-      recommandation: null,
-      responsable: null,
-      date_cible: null,
-      actions_menees: null,
-      severite_residuelle: null,
-      occurrence_residuelle: null,
-      detectabilite_residuelle: null,
-      ipr_residuel: null,
-      verdict_residuel: null,
-      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
-      created_at: maintenant,
-      updated_at: maintenant,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerEvaluationRiskAssessment(jeton, clientId, {
+      methodProfileId: profil.id,
+      methodProfileVersion: profil.version,
+      assetNodeId: input.assetNodeId,
+      parameterId: input.parameterId,
+      etapeProcessus: input.etapeProcessus,
+      modeDefaillance: input.modeDefaillance,
+      effetDefaillance: input.effetDefaillance,
+      causePotentielle: input.causePotentielle,
+      controleActuel: input.controleActuel,
+      severiteInitiale: input.severiteInitiale,
+      occurrenceInitiale: input.occurrenceInitiale,
+      detectabiliteInitiale: input.detectabiliteInitiale,
+      iprInitial: resultatIPR.calcule ? resultatIPR.valeur : null,
+      verdictInitial: evaluerVerdictRiskAssessment(resultatIPR, profil.seuil_action),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la création de l'évaluation Risk Assessment : ${resultat.erreur}`)
     }
-    await db.risksAssessment.put(evaluation)
+    const evaluation = evaluationRisqueWireVersDomaine(resultat.donnees.evaluationRisque)
     evaluations.value = [...evaluations.value, evaluation]
     return evaluation
   }
@@ -168,14 +322,14 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
     riskAssessmentId: string,
     input: ActionResiduelleRiskAssessmentInput,
   ): Promise<RiskAssessment | ErreurEcritureRiskAssessment> {
-    const existant = await db.risksAssessment.get(riskAssessmentId)
+    const existant = evaluations.value.find((e) => e.id === riskAssessmentId)
     if (!existant || existant.client_id !== clientId) return { erreur: 'introuvable' }
 
-    const profil = await db.methodProfilesRiskAssessment.get(existant.method_profile_id)
-    const echelle = profil
-      ? { min: profil.echelle_min, max: profil.echelle_max }
+    const profilFige = profils.value.find((p) => p.id === existant.method_profile_id)
+    const echelle = profilFige
+      ? { min: profilFige.echelle_min, max: profilFige.echelle_max }
       : { min: 1, max: 5 }
-    const seuilAction = profil?.seuil_action ?? Infinity
+    const seuilAction = profilFige?.seuil_action ?? Infinity
     const resultatIPR = calculerIPR(
       input.severiteResiduelle,
       input.occurrenceResiduelle,
@@ -183,29 +337,28 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
       echelle,
     )
 
-    const maintenant = new Date().toISOString()
-    const miseAJour: RiskAssessment = {
-      ...existant,
-      recommandation: input.recommandation,
-      responsable: input.responsable,
-      date_cible: input.dateCible,
-      actions_menees: input.actionsMenees,
-      severite_residuelle: input.severiteResiduelle,
-      occurrence_residuelle: input.occurrenceResiduelle,
-      detectabilite_residuelle: input.detectabiliteResiduelle,
-      ipr_residuel: resultatIPR.calcule ? resultatIPR.valeur : null,
-      verdict_residuel: evaluerVerdictRiskAssessment(resultatIPR, seuilAction),
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: 'action résiduelle enregistrée',
-        },
-      ],
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.enregistrerActionResiduelleRiskAssessment(
+      jeton,
+      clientId,
+      riskAssessmentId,
+      {
+        recommandation: input.recommandation,
+        responsable: input.responsable,
+        dateCible: input.dateCible,
+        actionsMenees: input.actionsMenees,
+        severiteResiduelle: input.severiteResiduelle,
+        occurrenceResiduelle: input.occurrenceResiduelle,
+        detectabiliteResiduelle: input.detectabiliteResiduelle,
+        iprResiduel: resultatIPR.calcule ? resultatIPR.valeur : null,
+        verdictResiduel: evaluerVerdictRiskAssessment(resultatIPR, seuilAction),
+      },
+    )
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable') return { erreur: 'introuvable' }
+      throw new Error(`Échec de l'enregistrement de l'action résiduelle : ${resultat.erreur}`)
     }
-    await db.risksAssessment.put(miseAJour)
+    const miseAJour = evaluationRisqueWireVersDomaine(resultat.donnees.evaluationRisque)
     evaluations.value = evaluations.value.map((e) => (e.id === existant.id ? miseAJour : e))
     return miseAJour
   }
