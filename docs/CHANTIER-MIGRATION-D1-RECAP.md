@@ -96,7 +96,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `methodProfilesImpactAssessment`, `evaluationsImpactAssessment`, `evaluationsCSVAssessment` | D1 | ✅ **Phase 4c terminée** — voir §11 |
 | `methodProfilesRiskAssessment`, `risksAssessment` | D1 | ✅ **Phase 4d terminée — voir §12. Phase 4 entièrement close.** |
 | `processes`, `fonctionsActif`, `associationsFonctionAssetNode`, `associationsFonctionProcess`, `manufacturingContexts` | D1 | ✅ **Phase 5a terminée — voir §13** |
-| `qualityEvents`, `referencesQualityEvent` | D1 | ⬜ Phase 5b |
+| `qualityEvents`, `referencesQualityEvent` | D1 | ✅ **Phase 5b terminée — voir §14. Phase 5 entièrement close.** |
 | `requirements`, `testObjectives`, `testCandidates`, `tests`, `couvertures` | D1 | ⬜ Phase 6 |
 | `executions`, `executionSteps`, `measurements`, `executionEvents` | D1 | ⬜ Phase 6 |
 | `evidences`, `evidenceLocations`, `provenanceLinks` | D1 | ⬜ Phase 6 |
@@ -1347,9 +1347,117 @@ store frontend (`useProcessContextStore`) déjà.
    ManufacturingContext n'ont jamais été synchronisés vers GitHub, même
    avant cette migration : pas une régression.
 
-### 13.3 Prochaine action
+### 13.3 Phase 5a — clôturée
 
-Phase 5a définitivement close. Enchaîner sur la Phase 5b, dernière brique
-de la Phase 5 (`qualityEvents`/`referencesQualityEvent`, famille H/I du
-catalogue), sans s'arrêter pour confirmation, conformément à la consigne
-permanente de l'utilisateur.
+Phase 5a définitivement close, enchaînée sans confirmation sur la Phase
+5b (voir §14 ci-dessous), conformément à la consigne permanente de
+l'utilisateur.
+
+---
+
+## 14. État détaillé — Phase 5b (`QualityEvent`/`ReferenceQualityEvent`), au 17/09/2026
+
+Dernière brique de la Phase 5 (URS catalogue §10 famille H : Change
+Control/Deviation/CAPA/Investigation/Audit Finding, famille I : Periodic
+Review). Même méthodologie que 4a-4d/5a : migration SQL → dépôt Worker
+(mémoire+D1) → routes → tests Worker → `AuthApiClient` → réécriture du
+store → filet de sécurité de migration locale Dexie → correction des
+consommateurs.
+
+### 14.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0014_quality_events.sql`
+   crée 2 tables (`quality_events`, `references_quality_event`) + un index
+   par table sur `client_id`. `references_quality_event` n'a ni
+   `audit_log` ni `updated_at` (simple relation créée une fois, jamais
+   mutée — même discipline que `associations_fonction_process`, Phase 5a).
+   `reference_externe` stocké en blob JSON (`null` si absent).
+2. **1 dépôt Worker** : `qualityEventRepo.ts` (interface +
+   `QualityEventRepoMemoire`) + son implémentation D1
+   (`d1QualityEventRepo.ts`). Création idempotente via
+   `ON CONFLICT(id) DO NOTHING`. `evenementParId`/`remplacerEvenement`
+   suivent le patron mutable déjà utilisé pour CPP/CQA (Phase 4b) et
+   RiskAssessment (Phase 4d) : `remplacerEvenement` ne met à jour que
+   `statut`/`audit_log`/`updated_at` (la seule mutation réelle,
+   `changerStatut`), jamais les autres champs.
+3. **5 nouvelles routes Worker** sous `/clients/:clientId/quality-events/...`
+   (obtenir, créer événement, `PATCH .../evenements/:id/statut`,
+   référencer, migration locale), toutes via `exigerAccesClient`. Clés
+   JSON `evenement`/`evenements`/`reference`/`references` — noms neufs,
+   aucune collision avec les domaines déjà migrés.
+4. **8 nouveaux tests Worker** (`routeur.test.ts`) : liste vide, création
+   d'événement (dérivation serveur du `statut='ouvert'` et de
+   l'`auditLog`), corps invalide, changement de statut (audit_log
+   accumulé), changement de statut sur événement inexistant → 404,
+   référence entre deux événements + test de régression dédié au
+   garde-fou central (un Change Control externe ouvert référençant un
+   événement n'empêche pas la création d'un `ManufacturingContext`
+   indépendant), migration locale idempotente, non-authentifié → 401.
+   Suite Worker au complet : **171/171 tests verts**.
+5. **`AuthApiClient`** : `QualityEventWire`/`ReferenceQualityEventWire` +
+   5 méthodes.
+6. **`useQualityEventStore` entièrement réécrit** (API publique
+   inchangée : `evenements`, `references`, `enChargement`, `charger`,
+   `creerEvenement`, `changerStatut`, `referencerEvenement`,
+   `referencesDepuis`) : le garde-fou central (aucun blocage automatique
+   d'une opération d'un autre module à partir d'un `QualityEvent`
+   externe) reste entièrement porté côté store/Worker, inchangé par la
+   migration.
+7. **Ripple effect côté production** : `useReasoningEngineStore.ts`
+   (narratif de `ContextSnapshot`) et `useContentPlanStore.ts` (calcul de
+   `readiness`) basculés vers `useQualityEventStore().charger(clientId)`
+   plutôt que `db.qualityEvents` directement — même patron que
+   `useProcessContextStore` en Phase 5a.
+8. **Filet de sécurité de migration locale** : capture Dexie v44
+   (`persistance/db.ts`, 2 tables supprimées, données capturées dans
+   `qualityEventsAMigrer`/`referencesQualityEventAMigrer` — formes
+   domaine inchangées, pas de type "Ancien").
+9. **7 fichiers de test corrigés/réécrits** (accès Dexie direct remplacé
+   par de vrais appels store/`ctx.qualityEventRepo`, clients de test créés
+   via `ctx.clientsRepo.creer` là où c'était encore manquant) :
+   `useQualityEventStore.test.ts`, `DossierVivantActif.test.ts`,
+   `JournalAnomalies.test.ts` (entièrement réécrit au patron
+   `fauxWorkerAuth`, n'avait jamais eu de session/client de test avant
+   cette migration), `MissionWorkspace.test.ts` (ajout de la session/client
+   de test en tête de fichier), `ContentPlan.test.ts`,
+   `useReasoningEngineStore.test.ts`, `useExecutionStore.test.ts`
+   (assertion `db.qualityEvents` devenue un garde-fou structurel commenté
+   plutôt qu'une lecture Dexie, `useExecutionStore` n'ayant de toute façon
+   aucun code créant un `QualityEvent`).
+10. **Validation complète (17/09/2026)** : `vue-tsc --noEmit`/`tsc
+    --noEmit` (Worker) sans erreur, `eslint`/`prettier --check` (src +
+    workers/auth-worker/src) sans erreur ni avertissement, `npx vitest
+    run` racine (**1297/1297 tests verts**), `cd workers/auth-worker &&
+    npx vitest run` (**171/171 tests verts**, dont les 8 nouveaux tests
+    QualityEvent).
+
+### 14.2 Phase 5b — terminée (17/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #56 ouverte. CI verte du premier coup (Workers Builds
+   `ia-relay`/`auth-worker` + `Lint, typecheck, tests`) — aucun incident.
+   Mergée sur `main` (squash, commit `f8eb9d2`).
+3. ✅ Migration `0014_quality_events.sql` appliquée en production D1
+   (`validapharm-auth`) en 4 requêtes séparées, toutes réussies du
+   premier coup. Vérification `sqlite_master` confirmant les 2 tables +
+   leurs 2 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : les routes et
+   handlers `quality-events`/`D1QualityEventRepo` présents dans le
+   bundle.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `QualityEvent`/`ReferenceQualityEvent`
+   n'ont jamais été synchronisés vers GitHub, même avant cette migration :
+   pas une régression.
+
+### 14.3 Phase 5 — entièrement close
+
+Les 2 briques (5a Process/FonctionActif/ManufacturingContext, 5b
+QualityEvent/ReferenceQualityEvent) sont maintenant toutes migrées vers
+D1, en production, déploiement vérifié. Enchaîner sur la Phase 6
+(`requirements`/`testObjectives`/`testCandidates`/`tests`/`couvertures` +
+`executions`/`executionSteps`/`measurements`/`executionEvents` +
+`evidences`/`evidenceLocations`/`provenanceLinks`, voir §3), sans
+s'arrêter pour confirmation, conformément à la consigne permanente de
+l'utilisateur. Le problème des nœuds SAP (bug d'import original) reste
+explicitement reporté, comme depuis le début de ce chantier.
