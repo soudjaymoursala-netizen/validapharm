@@ -1464,7 +1464,7 @@ explicitement reporté, comme depuis le début de ce chantier.
 
 ---
 
-## 15. État détaillé — Phase 6a (`Requirement`/`TestObjective`/`TestCandidate`/`Test`/`Couverture`), EN COURS au 17/09/2026
+## 15. État détaillé — Phase 6a (`Requirement`/`TestObjective`/`TestCandidate`/`Test`/`Couverture`), au 17/09/2026
 
 Première brique de la Phase 6 — Test/Execution/Evidence engine
 (`03_DOMAIN_DATA_MODEL.md`, domaine "Test") : uniquement la chaîne de
@@ -1566,30 +1566,36 @@ séquencé en étapes distinctes comme prévu depuis l'origine de ce domaine
     run` racine (**1310/1310 tests verts**), `cd workers/auth-worker &&
     npx vitest run` (**184/184 tests verts**).
 
-### 15.2 Ce qui RESTE À FAIRE
+### 15.2 Phase 6a — terminée (17/09/2026)
 
-1. ⬜ **Commit + push + PR** (mirroir exact du process 4a-4d/5a/5b) + CI
-   verte + merge squash sur `main`.
-2. ⬜ **Appliquer `0015_test_definition.sql` en production D1**
-   (`validapharm-auth`, requêtes séparées CREATE TABLE/INDEX + vérification
-   `sqlite_master`).
-3. ⬜ **Vérifier le déploiement Worker en production**
-   (`workers_get_worker_code`, chercher `test-definition`/
-   `D1TestDefinitionRepo`).
-4. ⬜ **Redémarrer la branche depuis `main`** + PR doc-only complétant
-   cette section §15 avec les faits réels post-merge/déploiement (même
-   format que §14.2), puis merger cette PR doc-only aussi.
-11. ⬜ Seulement après tout ceci : enchaîner sur la Phase 6b
-    (`executions`/`executionSteps`/`measurements`/`executionEvents`),
-    sans s'arrêter pour confirmation.
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #58 ouverte. CI verte du premier coup (Workers Builds
+   `ia-relay`/`auth-worker` + `Lint, typecheck, tests`) — aucun incident.
+   Mergée sur `main` (squash, commit `5a2c260`).
+3. ✅ Migration `0015_test_definition.sql` appliquée en production D1
+   (`validapharm-auth`) en 10 requêtes séparées (5 `CREATE TABLE` + 5
+   `CREATE INDEX`), toutes réussies du premier coup. Vérification
+   `sqlite_master` confirmant les 5 tables + leurs 5 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : les routes et
+   handlers `test-definition`/`D1TestDefinitionRepo` présents dans le
+   bundle (13 occurrences).
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `Requirement`/`TestObjective`/
+   `TestCandidate`/`Test`/`Couverture` n'ont jamais été synchronisés vers
+   GitHub, même avant cette migration : pas une régression.
 
-### 15.3 Pourquoi la mise à jour maintenant plutôt qu'à la clôture
+### 15.3 Phase 6a — close ; suite du chantier
 
-Contrairement aux phases précédentes (dont cette section n'était écrite
-qu'une fois entièrement close, code mergé + migration appliquée +
-déploiement vérifié), cette section est rédigée **en plein milieu du
-travail**, sur demande explicite de l'utilisateur ("Met à jour le fichier
-de suivis") — pour qu'une coupure de session (limite d'utilisation) ne
-perde pas le fil : tout ce qui précède (§15.1) est réellement fait et
-vérifié (184 tests verts) ; tout ce qui suit (§15.2) reste à faire dans
-l'ordre indiqué, en reprenant très exactement au point 1 (`AuthApiClient.ts`).
+Seule la chaîne de **définition** de tests est migrée. Restent, dans la
+Phase 6 (voir §3) :
+
+- **Phase 6b** : `executions`/`executionSteps`/`measurements`/
+  `executionEvents` (moteur d'exécution).
+- **Phase 6c** : `evidences`/`evidenceLocations`/`provenanceLinks`
+  (Evidence).
+
+Enchaîner sur la Phase 6b sans s'arrêter pour confirmation, conformément
+à la consigne permanente de l'utilisateur. Le problème des nœuds SAP (bug
+d'import original) reste explicitement reporté, comme depuis le début de
+ce chantier.
