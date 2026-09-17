@@ -6,6 +6,7 @@ import { correspondPourRecherche } from '../../logique-metier/recherche/correspo
 import { db } from '../../persistance/db'
 import { documentProjetWireVersDomaine } from './useProjectDocumentsStore'
 import { useAuthStore } from './useAuthStore'
+import { useProcessContextStore } from './useProcessContextStore'
 import { sectionWireVersDomaine } from './useSectionsStore'
 
 export type TypeResultatRecherche =
@@ -70,14 +71,19 @@ export const useRechercheGlobaleStore = defineStore('rechercheGlobale', () => {
     try {
       const authStore = useAuthStore()
       const api = await authStore.client()
-      const [resultatProjets, procedures, processes, knowledgeItems] = await Promise.all([
+      // Process migré vers le Worker/D1 (Phase 5a du chantier de
+      // migration D1) — chargé via le store dédié plutôt qu'un accès
+      // Dexie direct, devenu impossible depuis cette migration.
+      const processContextStore = useProcessContextStore()
+      const [resultatProjets, procedures, , knowledgeItems] = await Promise.all([
         api && authStore.jeton
           ? api.listerProjetsClient(authStore.jeton, clientId)
           : Promise.resolve(null),
         db.procedures.where('client_id').equals(clientId).toArray(),
-        db.processes.where('client_id').equals(clientId).toArray(),
+        processContextStore.charger(clientId),
         db.knowledgeItems.where('client_id').equals(clientId).toArray(),
       ])
+      const processes = processContextStore.processes
       const projetsDuClient = resultatProjets?.ok ? resultatProjets.donnees.projects : []
       const idsProjets = projetsDuClient.map((p) => p.id)
       const idsProjetsSet = new Set(idsProjets)

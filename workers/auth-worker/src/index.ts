@@ -10,6 +10,7 @@ import { D1OrganisationRepo } from './repos/d1/d1OrganisationRepo'
 import { D1ParametersRepo } from './repos/d1/d1ParametersRepo'
 import { D1ParametresInstallationRepo } from './repos/d1/d1ParametresInstallationRepo'
 import { D1ProjectDocumentsRepo } from './repos/d1/d1ProjectDocumentsRepo'
+import { D1ProcessContextRepo } from './repos/d1/d1ProcessContextRepo'
 import { D1ProjectsRepo } from './repos/d1/d1ProjectsRepo'
 import { D1RiskAssessmentRepo } from './repos/d1/d1RiskAssessmentRepo'
 import { D1SectionsRepo } from './repos/d1/d1SectionsRepo'
@@ -60,6 +61,7 @@ export default {
       impactAssessmentRepo: new D1ImpactAssessmentRepo(env.DB),
       csvAssessmentRepo: new D1CsvAssessmentRepo(env.DB),
       riskAssessmentRepo: new D1RiskAssessmentRepo(env.DB),
+      processContextRepo: new D1ProcessContextRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

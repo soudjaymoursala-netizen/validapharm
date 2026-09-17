@@ -39,6 +39,14 @@ import type {
   ParametresInstallationRepo,
   ValeurParametreInstallation,
 } from './repos/parametresInstallationRepo'
+import type {
+  AssociationFonctionAssetNodeEnregistree,
+  AssociationFonctionProcessEnregistree,
+  FonctionActifEnregistree,
+  ManufacturingContextEnregistre,
+  ProcessContextRepo,
+  ProcessEnregistre,
+} from './repos/processContextRepo'
 import type { ProjectDocumentEnregistre, ProjectDocumentsRepo } from './repos/projectDocumentsRepo'
 import type {
   LienProjetEnregistre,
@@ -89,6 +97,7 @@ export interface Contexte {
   impactAssessmentRepo: ImpactAssessmentRepo
   csvAssessmentRepo: CSVAssessmentRepo
   riskAssessmentRepo: RiskAssessmentRepo
+  processContextRepo: ProcessContextRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -524,6 +533,69 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       entetes,
       matchRiskAssessmentActionResiduelle[1] as string,
       matchRiskAssessmentActionResiduelle[2] as string,
+    )
+  }
+
+  // --- Process/FonctionActif/ManufacturingContext (Target Architecture
+  // §4/§5/§7, Phase 5a du chantier de migration D1) ---
+  const matchProcessContext = chemin.match(/^\/clients\/([^/]+)\/process-context$/)
+  if (matchProcessContext && request.method === 'GET') {
+    return gererObtenirProcessContext(request, ctx, entetes, matchProcessContext[1] as string)
+  }
+  const matchProcessContextProcesses = chemin.match(
+    /^\/clients\/([^/]+)\/process-context\/processes$/,
+  )
+  if (matchProcessContextProcesses && request.method === 'POST') {
+    return gererCreerProcess(request, ctx, entetes, matchProcessContextProcesses[1] as string)
+  }
+  const matchProcessContextFonctions = chemin.match(
+    /^\/clients\/([^/]+)\/process-context\/fonctions$/,
+  )
+  if (matchProcessContextFonctions && request.method === 'POST') {
+    return gererCreerFonction(request, ctx, entetes, matchProcessContextFonctions[1] as string)
+  }
+  const matchProcessContextAssocFonctionAssetNode = chemin.match(
+    /^\/clients\/([^/]+)\/process-context\/associations-fonction-asset-node$/,
+  )
+  if (matchProcessContextAssocFonctionAssetNode && request.method === 'POST') {
+    return gererCreerAssociationFonctionAssetNode(
+      request,
+      ctx,
+      entetes,
+      matchProcessContextAssocFonctionAssetNode[1] as string,
+    )
+  }
+  const matchProcessContextAssocFonctionProcess = chemin.match(
+    /^\/clients\/([^/]+)\/process-context\/associations-fonction-process$/,
+  )
+  if (matchProcessContextAssocFonctionProcess && request.method === 'POST') {
+    return gererCreerAssociationFonctionProcess(
+      request,
+      ctx,
+      entetes,
+      matchProcessContextAssocFonctionProcess[1] as string,
+    )
+  }
+  const matchProcessContextManufacturingContexts = chemin.match(
+    /^\/clients\/([^/]+)\/process-context\/manufacturing-contexts$/,
+  )
+  if (matchProcessContextManufacturingContexts && request.method === 'POST') {
+    return gererCreerManufacturingContext(
+      request,
+      ctx,
+      entetes,
+      matchProcessContextManufacturingContexts[1] as string,
+    )
+  }
+  const matchProcessContextMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/process-context\/migration-locale$/,
+  )
+  if (matchProcessContextMigrationLocale && request.method === 'POST') {
+    return gererMigrerProcessContextLocal(
+      request,
+      ctx,
+      entetes,
+      matchProcessContextMigrationLocale[1] as string,
     )
   }
 
@@ -2539,6 +2611,290 @@ async function gererMigrerRiskAssessmentLocal(
   }
   return reponseJson(
     { profilsRisque: corps.profilsRisque ?? [], evaluationsRisque: corps.evaluationsRisque ?? [] },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : Process/FonctionActif/ManufacturingContext (Target
+// Architecture §4/§5/§7, Phase 5a du chantier de migration D1) ---
+//
+// La logique métier (dédoublonnage client-side d'une association déjà
+// chargée) reste côté store frontend (`useProcessContextStore.ts`, déjà
+// testée) — ces handlers ne font qu'authentifier, vérifier l'accès au
+// client concerné et persister l'état qu'on leur donne, même discipline
+// que les autres handlers de ce chantier.
+
+async function gererObtenirProcessContext(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [
+    processes,
+    fonctions,
+    associationsFonctionAssetNode,
+    associationsFonctionProcess,
+    manufacturingContexts,
+  ] = await Promise.all([
+    ctx.processContextRepo.listerProcesses(clientId),
+    ctx.processContextRepo.listerFonctions(clientId),
+    ctx.processContextRepo.listerAssociationsFonctionAssetNode(clientId),
+    ctx.processContextRepo.listerAssociationsFonctionProcess(clientId),
+    ctx.processContextRepo.listerManufacturingContexts(clientId),
+  ])
+  return reponseJson(
+    {
+      processes,
+      fonctions,
+      associationsFonctionAssetNode,
+      associationsFonctionProcess,
+      manufacturingContexts,
+    },
+    200,
+    entetes,
+  )
+}
+
+interface SaisieCreationProcess {
+  nom?: string
+  description?: string
+  type?: string
+  sourceId?: string | null
+}
+
+async function gererCreerProcess(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationProcess>(request)
+  // `description` peut être vide sans être invalide, même discipline que
+  // `gererCreerParametre`.
+  if (!corps?.nom || corps.description === undefined || !corps.type) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const maintenant = horodatage()
+  const process: ProcessEnregistre = {
+    id: genererId(),
+    clientId,
+    nom: corps.nom,
+    description: corps.description,
+    type: corps.type,
+    sourceId: corps.sourceId ?? null,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.processContextRepo.creerProcess(process)
+  return reponseJson({ process }, 201, entetes)
+}
+
+interface SaisieCreationFonction {
+  nom?: string
+  description?: string
+}
+
+async function gererCreerFonction(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationFonction>(request)
+  if (!corps?.nom || corps.description === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const maintenant = horodatage()
+  const fonction: FonctionActifEnregistree = {
+    id: genererId(),
+    clientId,
+    nom: corps.nom,
+    description: corps.description,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.processContextRepo.creerFonction(fonction)
+  return reponseJson({ fonction }, 201, entetes)
+}
+
+interface SaisieCreationAssociationFonctionAssetNode {
+  functionId?: string
+  assetNodeId?: string
+}
+
+async function gererCreerAssociationFonctionAssetNode(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationAssociationFonctionAssetNode>(request)
+  if (!corps?.functionId || !corps.assetNodeId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const associationFonctionAssetNode: AssociationFonctionAssetNodeEnregistree = {
+    id: genererId(),
+    clientId,
+    functionId: corps.functionId,
+    assetNodeId: corps.assetNodeId,
+    createdAt: horodatage(),
+  }
+  await ctx.processContextRepo.creerAssociationFonctionAssetNode(associationFonctionAssetNode)
+  return reponseJson({ associationFonctionAssetNode }, 201, entetes)
+}
+
+interface SaisieCreationAssociationFonctionProcess {
+  functionId?: string
+  processId?: string
+}
+
+async function gererCreerAssociationFonctionProcess(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationAssociationFonctionProcess>(request)
+  if (!corps?.functionId || !corps.processId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const associationFonctionProcess: AssociationFonctionProcessEnregistree = {
+    id: genererId(),
+    clientId,
+    functionId: corps.functionId,
+    processId: corps.processId,
+    createdAt: horodatage(),
+  }
+  await ctx.processContextRepo.creerAssociationFonctionProcess(associationFonctionProcess)
+  return reponseJson({ associationFonctionProcess }, 201, entetes)
+}
+
+interface SaisieCreationManufacturingContext {
+  assetNodeId?: string
+  processId?: string
+  produit?: string
+  recette?: string | null
+  format?: string | null
+  configuration?: string | null
+}
+
+async function gererCreerManufacturingContext(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationManufacturingContext>(request)
+  if (!corps?.assetNodeId || !corps.processId || !corps.produit) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const maintenant = horodatage()
+  const manufacturingContext: ManufacturingContextEnregistre = {
+    id: genererId(),
+    clientId,
+    assetNodeId: corps.assetNodeId,
+    processId: corps.processId,
+    produit: corps.produit,
+    recette: corps.recette ?? null,
+    format: corps.format ?? null,
+    configuration: corps.configuration ?? null,
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.processContextRepo.creerManufacturingContext(manufacturingContext)
+  return reponseJson({ manufacturingContext }, 201, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale
+ * (`processesAMigrer`/`fonctionsActifAMigrer`/etc.,
+ * `useProcessContextStore.migrerProcessContextLocalVersServeur`) —
+ * idempotente, l'existant côté serveur gagne toujours (`ON CONFLICT(id) DO
+ * NOTHING` dans `D1ProcessContextRepo`), même discipline que les autres
+ * migrations locales de ce chantier.
+ */
+interface SaisieMigrationProcessContext {
+  processes?: ProcessEnregistre[]
+  fonctions?: FonctionActifEnregistree[]
+  associationsFonctionAssetNode?: AssociationFonctionAssetNodeEnregistree[]
+  associationsFonctionProcess?: AssociationFonctionProcessEnregistree[]
+  manufacturingContexts?: ManufacturingContextEnregistre[]
+}
+
+async function gererMigrerProcessContextLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationProcessContext>(request)
+  if (
+    !corps ||
+    (!Array.isArray(corps.processes) &&
+      !Array.isArray(corps.fonctions) &&
+      !Array.isArray(corps.associationsFonctionAssetNode) &&
+      !Array.isArray(corps.associationsFonctionProcess) &&
+      !Array.isArray(corps.manufacturingContexts))
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const p of corps.processes ?? []) {
+    if (p.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.processContextRepo.creerProcess(p)
+  }
+  for (const f of corps.fonctions ?? []) {
+    if (f.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.processContextRepo.creerFonction(f)
+  }
+  for (const a of corps.associationsFonctionAssetNode ?? []) {
+    if (a.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.processContextRepo.creerAssociationFonctionAssetNode(a)
+  }
+  for (const a of corps.associationsFonctionProcess ?? []) {
+    if (a.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.processContextRepo.creerAssociationFonctionProcess(a)
+  }
+  for (const c of corps.manufacturingContexts ?? []) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.processContextRepo.creerManufacturingContext(c)
+  }
+  return reponseJson(
+    {
+      processes: corps.processes ?? [],
+      fonctions: corps.fonctions ?? [],
+      associationsFonctionAssetNode: corps.associationsFonctionAssetNode ?? [],
+      associationsFonctionProcess: corps.associationsFonctionProcess ?? [],
+      manufacturingContexts: corps.manufacturingContexts ?? [],
+    },
     200,
     entetes,
   )

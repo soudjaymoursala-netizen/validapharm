@@ -384,6 +384,88 @@ export interface SaisieActionResiduelleRiskAssessmentWire {
   verdictResiduel: string | null
 }
 
+export interface ProcessWire {
+  id: string
+  clientId: string
+  nom: string
+  description: string
+  type: string
+  sourceId: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FonctionActifWire {
+  id: string
+  clientId: string
+  nom: string
+  description: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AssociationFonctionAssetNodeWire {
+  id: string
+  clientId: string
+  functionId: string
+  assetNodeId: string
+  createdAt: string
+}
+
+export interface AssociationFonctionProcessWire {
+  id: string
+  clientId: string
+  functionId: string
+  processId: string
+  createdAt: string
+}
+
+export interface ManufacturingContextWire {
+  id: string
+  clientId: string
+  assetNodeId: string
+  processId: string
+  produit: string
+  recette: string | null
+  format: string | null
+  configuration: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaisieCreationProcessWire {
+  nom: string
+  description: string
+  type: string
+  sourceId: string | null
+}
+
+export interface SaisieCreationFonctionWire {
+  nom: string
+  description: string
+}
+
+export interface SaisieCreationAssociationFonctionAssetNodeWire {
+  functionId: string
+  assetNodeId: string
+}
+
+export interface SaisieCreationAssociationFonctionProcessWire {
+  functionId: string
+  processId: string
+}
+
+export interface SaisieCreationManufacturingContextWire {
+  assetNodeId: string
+  processId: string
+  produit: string
+  recette: string | null
+  format: string | null
+  configuration: string | null
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -1016,6 +1098,106 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/risk-assessment/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Process/FonctionActif/ManufacturingContext (Target Architecture §4/§5/§7, Phase 5a du chantier de migration D1) ---
+
+  obtenirProcessContext(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      processes: ProcessWire[]
+      fonctions: FonctionActifWire[]
+      associationsFonctionAssetNode: AssociationFonctionAssetNodeWire[]
+      associationsFonctionProcess: AssociationFonctionProcessWire[]
+      manufacturingContexts: ManufacturingContextWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/process-context`, { jeton })
+  }
+
+  creerProcess(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationProcessWire,
+  ): Promise<ResultatApi<{ process: ProcessWire }>> {
+    return this.requete('POST', `/clients/${clientId}/process-context/processes`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerFonction(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationFonctionWire,
+  ): Promise<ResultatApi<{ fonction: FonctionActifWire }>> {
+    return this.requete('POST', `/clients/${clientId}/process-context/fonctions`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerAssociationFonctionAssetNode(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationAssociationFonctionAssetNodeWire,
+  ): Promise<ResultatApi<{ associationFonctionAssetNode: AssociationFonctionAssetNodeWire }>> {
+    return this.requete(
+      'POST',
+      `/clients/${clientId}/process-context/associations-fonction-asset-node`,
+      { jeton, body: saisie },
+    )
+  }
+
+  creerAssociationFonctionProcess(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationAssociationFonctionProcessWire,
+  ): Promise<ResultatApi<{ associationFonctionProcess: AssociationFonctionProcessWire }>> {
+    return this.requete(
+      'POST',
+      `/clients/${clientId}/process-context/associations-fonction-process`,
+      { jeton, body: saisie },
+    )
+  }
+
+  creerManufacturingContext(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationManufacturingContextWire,
+  ): Promise<ResultatApi<{ manufacturingContext: ManufacturingContextWire }>> {
+    return this.requete('POST', `/clients/${clientId}/process-context/manufacturing-contexts`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerProcessContextLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerProcessContextLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      processes: ProcessWire[]
+      fonctions: FonctionActifWire[]
+      associationsFonctionAssetNode: AssociationFonctionAssetNodeWire[]
+      associationsFonctionProcess: AssociationFonctionProcessWire[]
+      manufacturingContexts: ManufacturingContextWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      processes: ProcessWire[]
+      fonctions: FonctionActifWire[]
+      associationsFonctionAssetNode: AssociationFonctionAssetNodeWire[]
+      associationsFonctionProcess: AssociationFonctionProcessWire[]
+      manufacturingContexts: ManufacturingContextWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/process-context/migration-locale`, {
       jeton,
       body: donnees,
     })

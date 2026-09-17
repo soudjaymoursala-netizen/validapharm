@@ -1,16 +1,52 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useQualityEventStore } from './useQualityEventStore'
 import { useProcessContextStore } from './useProcessContextStore'
+
+let ctx: Contexte
+let demonter: () => void
+
+/** Process/ManufacturingContext migrés vers le Worker/D1 (Phase 5a) — un client doit réellement exister pour que `exigerAccesClient` l'autorise, même si `QualityEvent` lui-même reste local (Phase 5b pas encore faite). */
+async function creerClientDeTest(id: string): Promise<void> {
+  await ctx.clientsRepo.creer({
+    id,
+    name: id,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
 
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.qualityEvents.clear()
   await db.referencesQualityEvent.clear()
-  await db.processes.clear()
-  await db.manufacturingContexts.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await creerClientDeTest('client-1')
+  await creerClientDeTest('client-A')
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useQualityEventStore — création de base', () => {

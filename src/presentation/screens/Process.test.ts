@@ -4,6 +4,7 @@ import JSZip from 'jszip'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
@@ -82,20 +83,19 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+let ctx: Contexte
 let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.processes.clear()
-  await db.fonctionsActif.clear()
-  await db.associationsFonctionProcess.clear()
-  await db.associationsFonctionAssetNode.clear()
   await db.sources.clear()
   await db.sourceVersions.clear()
   await db.extractions.clear()
   await db.extractionItems.clear()
   await reinitialiserAuthDeTest()
-  demonter = installerFauxWorkerAuth().demonter
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
   await connecterAdminDeTest()
 })
 
@@ -121,29 +121,38 @@ describe('Process — écran Process/Fonction (§6 du prompt maître)', () => {
     const formulaireProcess = wrapper.find('.bloc-process .formulaire')
     await formulaireProcess.find('input[type="text"]').setValue('Compression')
     await formulaireProcess.trigger('submit.prevent')
-    await attendreQue(async () => (await db.processes.toArray()).length > 0)
+    await attendreQue(
+      async () => (await ctx.processContextRepo.listerProcesses(client.id)).length > 0,
+    )
     expect(wrapper.text()).toContain('Compression')
 
     // Créer une fonction.
     const formulaireFonction = wrapper.find('.bloc-fonctions .formulaire')
     await formulaireFonction.find('input[type="text"]').setValue('Régulation de température')
     await formulaireFonction.trigger('submit.prevent')
-    await attendreQue(async () => (await db.fonctionsActif.toArray()).length > 0)
+    await attendreQue(
+      async () => (await ctx.processContextRepo.listerFonctions(client.id)).length > 0,
+    )
     expect(wrapper.text()).toContain('Régulation de température')
 
     // Rattacher la fonction au process.
-    const fonctionId = (await db.fonctionsActif.toArray())[0]?.id
-    const processId = (await db.processes.toArray())[0]?.id
+    const fonctionId = (await ctx.processContextRepo.listerFonctions(client.id))[0]?.id
+    const processId = (await ctx.processContextRepo.listerProcesses(client.id))[0]?.id
     const selectFonction = wrapper.find('.bloc-rattachement select')
     await selectFonction.setValue(fonctionId)
     const selects = wrapper.findAll('.bloc-rattachement select')
     await selects[1]?.setValue(processId)
     await wrapper.find('.bloc-rattachement button').trigger('click')
 
-    await attendreQue(async () => (await db.associationsFonctionProcess.toArray()).length > 0)
-    const association = (await db.associationsFonctionProcess.toArray())[0]
-    expect(association?.function_id).toBe(fonctionId)
-    expect(association?.process_id).toBe(processId)
+    await attendreQue(
+      async () =>
+        (await ctx.processContextRepo.listerAssociationsFonctionProcess(client.id)).length > 0,
+    )
+    const association = (
+      await ctx.processContextRepo.listerAssociationsFonctionProcess(client.id)
+    )[0]
+    expect(association?.functionId).toBe(fonctionId)
+    expect(association?.processId).toBe(processId)
     expect(wrapper.text()).toContain('process : Compression')
   })
 
@@ -177,10 +186,12 @@ describe('Process — écran Process/Fonction (§6 du prompt maître)', () => {
     expect(sourcesAvantSoumission[0]?.titre).toBe('Process compression.docx')
 
     await wrapper.find('.bloc-process .formulaire').trigger('submit.prevent')
-    await attendreQue(async () => (await db.processes.toArray()).length > 0)
+    await attendreQue(
+      async () => (await ctx.processContextRepo.listerProcesses(client.id)).length > 0,
+    )
 
-    const process = (await db.processes.toArray())[0]
-    expect(process?.source_id).toBe(sourcesAvantSoumission[0]?.id)
+    const process = (await ctx.processContextRepo.listerProcesses(client.id))[0]
+    expect(process?.sourceId).toBe(sourcesAvantSoumission[0]?.id)
     expect(wrapper.text()).toContain('importé de « Process compression.docx »')
   })
 
@@ -201,24 +212,26 @@ describe('Process — écran Process/Fonction (§6 du prompt maître)', () => {
     expect(wrapper.text()).toContain("Aucune fonction pour l'instant.")
   })
 
-  test("un Worker injoignable pour le nom du client n'empêche pas l'affichage des process/fonctions (purement locaux, déjà persistés)", async () => {
+  test("un Worker injoignable n'empêche jamais l'affichage de l'écran (dégradation gracieuse, jamais une exception non gérée)", async () => {
     const clientId = 'client-test-process'
-    await db.processes.put({
+    await ctx.processContextRepo.creerProcess({
       id: 'process-1',
-      client_id: clientId,
+      clientId,
       nom: 'Compression',
       description: '',
       type: 'manufacturing',
-      source_id: null,
-      audit_log: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      sourceId: null,
+      auditLog: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     })
 
-    // Même bug que celui corrigé au niveau de `useClientsStore.obtenirClient`
-    // (voir StructureSysteme.test.ts) : cet écran enchaîne aussi ce même
-    // appel avant trois chargers purement locaux (processStore, structureStore,
-    // sourceStore) dans son onMounted.
+    // Depuis la migration D1 (docs/CHANTIER-MIGRATION-D1-RECAP.md),
+    // Process/FonctionActif ne sont plus purement locaux : une panne
+    // réseau signifie réellement une absence de données pour cet écran
+    // (même les données déjà persistées côté serveur deviennent
+    // temporairement inaccessibles), jamais un crash — même discipline
+    // que `useStructureSystemeStore.charger` (voir `StructureSysteme.test.ts`).
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
 
     const router = routeurDeTest()
@@ -227,9 +240,9 @@ describe('Process — écran Process/Fonction (§6 du prompt maître)', () => {
       props: { clientId },
       global: { plugins: [router] },
     })
-    await attendreQue(() => wrapper.text().includes('Compression'))
+    await attendreQue(() => wrapper.text().includes("Aucun process pour l'instant."))
 
-    expect(wrapper.text()).toContain('Compression')
+    expect(wrapper.text()).toContain("Aucun process pour l'instant.")
     expect(wrapper.find('h1').text()).toContain(clientId)
   })
 })

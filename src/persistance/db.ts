@@ -347,6 +347,22 @@ export const methodProfilesRiskAssessmentAMigrer: MethodProfileRiskAssessment[] 
 export const risksAssessmentAMigrer: RiskAssessment[] = []
 
 /**
+ * Filet de sécurité de migration locale pour `Process`/`FonctionActif`/
+ * `AssociationFonctionAssetNode`/`AssociationFonctionProcess`/
+ * `ManufacturingContext` (Target Architecture §4/§5/§7, Phase 5a du
+ * chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même
+ * principe que `methodProfilesRiskAssessmentAMigrer` ci-dessus : formes
+ * domaine inchangées, pas de type "Ancien". Consommés et envoyés au
+ * serveur par `migrerProcessContextLocalVersServeur`
+ * (`useProcessContextStore`) au premier `charger()`.
+ */
+export const processesAMigrer: Process[] = []
+export const fonctionsActifAMigrer: FonctionActif[] = []
+export const associationsFonctionAssetNodeAMigrer: AssociationFonctionAssetNode[] = []
+export const associationsFonctionProcessAMigrer: AssociationFonctionProcess[] = []
+export const manufacturingContextsAMigrer: ManufacturingContext[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -363,11 +379,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  processes!: EntityTable<Process, 'id'>
-  fonctionsActif!: EntityTable<FonctionActif, 'id'>
-  associationsFonctionAssetNode!: EntityTable<AssociationFonctionAssetNode, 'id'>
-  associationsFonctionProcess!: EntityTable<AssociationFonctionProcess, 'id'>
-  manufacturingContexts!: EntityTable<ManufacturingContext, 'id'>
   qualityEvents!: EntityTable<QualityEvent, 'id'>
   referencesQualityEvent!: EntityTable<ReferenceQualityEvent, 'id'>
   requirements!: EntityTable<Requirement, 'id'>
@@ -866,6 +877,38 @@ export class ValidaPharmDatabase extends Dexie {
         methodProfilesRiskAssessmentAMigrer.push(...profils)
         const evaluations = await tx.table<RiskAssessment>('risksAssessment').toArray()
         risksAssessmentAMigrer.push(...evaluations)
+      })
+
+    // Process/FonctionActif/AssociationFonctionAssetNode/
+    // AssociationFonctionProcess/ManufacturingContext : migrés vers le
+    // Worker/D1 (Target Architecture §4/§5/§7, Phase 5a du chantier de
+    // migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique
+    // de capture avant suppression physique que la version 42 ci-dessus.
+    this.version(43)
+      .stores({
+        processes: null,
+        fonctionsActif: null,
+        associationsFonctionAssetNode: null,
+        associationsFonctionProcess: null,
+        manufacturingContexts: null,
+      })
+      .upgrade(async (tx) => {
+        const processes = await tx.table<Process>('processes').toArray()
+        processesAMigrer.push(...processes)
+        const fonctions = await tx.table<FonctionActif>('fonctionsActif').toArray()
+        fonctionsActifAMigrer.push(...fonctions)
+        const associationsFonctionAssetNode = await tx
+          .table<AssociationFonctionAssetNode>('associationsFonctionAssetNode')
+          .toArray()
+        associationsFonctionAssetNodeAMigrer.push(...associationsFonctionAssetNode)
+        const associationsFonctionProcess = await tx
+          .table<AssociationFonctionProcess>('associationsFonctionProcess')
+          .toArray()
+        associationsFonctionProcessAMigrer.push(...associationsFonctionProcess)
+        const manufacturingContexts = await tx
+          .table<ManufacturingContext>('manufacturingContexts')
+          .toArray()
+        manufacturingContextsAMigrer.push(...manufacturingContexts)
       })
   }
 }
