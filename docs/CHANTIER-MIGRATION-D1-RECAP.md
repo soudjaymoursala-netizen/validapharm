@@ -94,7 +94,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `methodProfilesACFC`, `evaluationsACFC` | D1 | ✅ **Phase 4a terminée** — voir §9 |
 | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ✅ **Phase 4b terminée** — voir §10 |
 | `methodProfilesImpactAssessment`, `evaluationsImpactAssessment`, `evaluationsCSVAssessment` | D1 | ✅ **Phase 4c terminée** — voir §11 |
-| `methodProfilesRiskAssessment`, `risksAssessment` | D1 | ⬜ Phase 4 |
+| `methodProfilesRiskAssessment`, `risksAssessment` | D1 | ✅ **Phase 4d terminée — voir §12. Phase 4 entièrement close.** |
 | `processes`, `fonctionsActif`, `associationsFonctionAssetNode`, `associationsFonctionProcess`, `manufacturingContexts` | D1 | ⬜ Phase 5 |
 | `qualityEvents`, `referencesQualityEvent` | D1 | ⬜ Phase 5 |
 | `requirements`, `testObjectives`, `testCandidates`, `tests`, `couvertures` | D1 | ⬜ Phase 6 |
@@ -1124,3 +1124,122 @@ de la Phase 4 (`methodProfilesRiskAssessment`/`risksAssessment`, AMDEC —
 cycle en deux temps évaluation initiale/résiduelle, seule nuance par
 rapport au patron ACFC/Impact Assessment), sans s'arrêter pour
 confirmation, conformément à la consigne permanente de l'utilisateur.
+
+---
+
+## 12. État détaillé — Phase 4d (`MethodProfileRiskAssessment`/`RiskAssessment`, AMDEC), au 17/09/2026
+
+Quatrième et dernière brique de la Phase 4 : Risk Assessment / AMDEC (ICH
+Q9). Même patron client_id-scopé qu'ACFC/Impact Assessment (Phases
+4a/4c) — méthodologie versionnée par client (`echelle_min`/`echelle_max`/
+`seuil_action` plutôt qu'un questionnaire Oui/Non, mécanisme numérique
+réellement différent, d'où un type volontairement distinct). Nuance
+propre à ce domaine : `RiskAssessment` a un vrai cycle en deux temps
+(évaluation initiale → action corrective → évaluation résiduelle), les
+champs `*_residuel*`/`recommandation`/`responsable`/`date_cible`/
+`actions_menees` restant `null` tant qu'aucune action n'a été
+explicitement enregistrée — jamais une valeur devinée égale à l'initial.
+
+### 12.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0012_risk_assessment.sql`
+   crée 2 tables (`method_profiles_risk_assessment`, `risks_assessment`) +
+   un index par table sur `client_id`.
+2. **1 dépôt Worker** : `riskAssessmentRepo.ts` (interface +
+   `RiskAssessmentRepoMemoire`) + son implémentation D1
+   (`d1RiskAssessmentRepo.ts`). Création idempotente via
+   `ON CONFLICT(id) DO NOTHING` pour profils/évaluations, plus
+   `evaluationParId`/`remplacerEvaluation` (même patron mutable que
+   `cppParId`/`remplacerCPP` en Phase 4b) pour enregistrer l'action
+   résiduelle sans jamais muter les champs de l'évaluation initiale — le
+   `UPDATE` D1 ne touche que les colonnes `recommandation`/`responsable`/
+   `date_cible`/`actions_menees`/`*_residuel*`/`audit_log`/`updated_at`.
+3. **5 nouvelles routes Worker** sous `/clients/:clientId/risk-assessment/...`
+   (obtenir, créer profil, créer évaluation, `PATCH .../evaluations/:id/action-residuelle`,
+   migration locale), toutes via `exigerAccesClient`. Clés JSON
+   `profilRisque`/`profilsRisque`/`evaluationRisque`/`evaluationsRisque`
+   (jamais `profil`/`evaluation`, déjà pris par ACFC, ni `profilImpact`/
+   `evaluationImpact`/`evaluationCsv`) — désambiguïsation décidée
+   **avant** l'écriture du code, méthode reprise de la Phase 4c.
+   Validation `effetDefaillance`/`causePotentielle`/`controleActuel` :
+   chaîne vide acceptée (champs non `required` dans
+   `RiskAssessmentAmdec.vue`), seule l'absence (`undefined`) est rejetée —
+   même discipline que `description` en Phase 4b, trouvée cette fois par
+   un test d'écran réel (formulaire soumettant des champs vides) plutôt
+   qu'en re-découverte a posteriori.
+4. **9 nouveaux tests Worker** (`routeur.test.ts`) : liste vide, création
+   de profil (dérivation serveur), corps invalide (profil et évaluation),
+   création d'évaluation avec résiduel `null`, enregistrement de l'action
+   résiduelle (IPR/verdict résiduels, initial jamais muté, audit_log à 2
+   entrées), action résiduelle sur évaluation introuvable → 404, migration
+   locale idempotente, non-authentifié → 401. Suite Worker au complet :
+   **153/153 tests verts**.
+5. **`AuthApiClient`** : `MethodProfileRiskAssessmentWire`/
+   `RiskAssessmentWire` + 5 méthodes (dont
+   `enregistrerActionResiduelleRiskAssessment`, `PATCH`).
+6. **`useRiskAssessmentStore` entièrement réécrit** (API publique
+   inchangée : `profils`, `evaluations`, `profilActif`, `charger`,
+   `creerNouvelleVersion`, `creerEvaluation`, `enregistrerActionResiduelle`) :
+   logique métier (numéro de version suivant, `calculerIPR`,
+   `evaluerVerdictRiskAssessment`) intégralement côté client, seule la
+   persistance passe par l'API. `enregistrerActionResiduelle` retrouve
+   l'évaluation/le profil figé dans l'état déjà chargé du store (jamais un
+   aller-retour serveur supplémentaire juste pour vérifier l'existence) —
+   nuance par rapport au patron Dexie d'origine qui interrogeait `db`
+   directement, cohérente avec le fait que `charger()` a toujours déjà
+   peuplé `evaluations`/`profils` avant tout appel de mutation depuis
+   l'écran.
+7. **Ripple effect côté production** : `useTestDefinitionStore.ts` (lecture
+   seule de `RiskAssessment` pour le moteur de couverture de tests) a été
+   basculé pour appeler `useRiskAssessmentStore().charger(clientId)` puis
+   lire `.evaluations`, plutôt que `db.risksAssessment` directement — seul
+   fichier de production impacté en dehors du store lui-même, composition
+   store-dans-store déjà précédentée (`useOrganizationStore`→`useClientsStore`,
+   `useReasoningEngineStore`→`useStructureSystemeStore`).
+8. **Filet de sécurité de migration locale** : capture Dexie v42
+   (`persistance/db.ts`, 2 tables supprimées, données capturées dans
+   `methodProfilesRiskAssessmentAMigrer`/`risksAssessmentAMigrer` — formes
+   domaine inchangées, pas de type "Ancien").
+9. **4 fichiers de test corrigés/réécrits** (accès Dexie direct remplacé
+   par de vrais appels store/`ctx.riskAssessmentRepo`, client de test créé
+   via `ctx.clientsRepo.creer`) : `useRiskAssessmentStore.test.ts`,
+   `RiskAssessmentAmdec.test.ts` (entièrement réécrits au patron
+   `fauxWorkerAuth`), `useTestDefinitionStore.test.ts` (ajout de
+   `installerFauxWorkerAuth`/clients de test, 3 seeds `db.risksAssessment.put`
+   remplacés par `ctx.riskAssessmentRepo.creerEvaluation`).
+10. **Validation complète (17/09/2026)** : `vue-tsc --noEmit`/`tsc
+    --noEmit` (Worker) sans erreur, `eslint` (src + workers/auth-worker/src)
+    sans erreur ni avertissement, `npx vitest run` racine (**1279/1279
+    tests verts**), `cd workers/auth-worker && npx vitest run` (**153/153
+    tests verts**, dont les 9 nouveaux tests Risk Assessment).
+
+### 12.2 Phase 4d — terminée (17/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #52 ouverte. CI verte du premier coup (Workers Builds
+   `ia-relay`/`auth-worker` + `Lint, typecheck, tests`) — aucun incident,
+   contrairement aux Phases 4a/4c. Mergée sur `main` (squash, commit `1e8e895`).
+3. ✅ Migration `0012_risk_assessment.sql` appliquée en production D1
+   (`validapharm-auth`) en 4 requêtes séparées, toutes réussies du premier
+   coup — aucun 403 transitoire cette fois. Vérification `sqlite_master`
+   confirmant les 2 tables + leurs 2 index nommés (plus les 2
+   auto-index de clé primaire).
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `D1RiskAssessmentRepo` bien câblé dans le contexte, toutes les routes
+   `ctx.riskAssessmentRepo.*` présentes dans le bundle.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — Risk Assessment n'a jamais été
+   synchronisé vers GitHub, même avant cette migration : pas une régression.
+
+### 12.3 Phase 4 — entièrement close
+
+Les 4 briques (4a ACFC, 4b Parameter/CPP/CQA, 4c Impact/CSV Assessment, 4d
+Risk Assessment/AMDEC) sont maintenant toutes migrées vers D1, en
+production, déploiement vérifié. Enchaîner sur la Phase 5
+(`processes`/`fonctionsActif`/`associationsFonctionAssetNode`/
+`associationsFonctionProcess`/`manufacturingContexts` et
+`qualityEvents`/`referencesQualityEvent`, voir §3), sans s'arrêter pour
+confirmation, conformément à la consigne permanente de l'utilisateur. Le
+problème des nœuds SAP (bug d'import original) reste explicitement
+reporté, comme depuis le début de ce chantier.
