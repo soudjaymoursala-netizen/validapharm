@@ -1069,15 +1069,58 @@ qui est plus simple (pas de version, pas de désactivation, création seule).
     `cd workers/auth-worker && npx vitest run` (**144/144 tests verts**,
     dont les 13 nouveaux tests Impact/CSV Assessment).
 
-### 11.2 Prochaine action
+### 11.2 Phase 4c — terminée (17/09/2026)
 
-Une fois cette PR mergée : appliquer `0011_impact_csv_assessment.sql` en
-production D1, vérifier via `sqlite_master` (3 tables + 3 index — ne pas
-oublier aucun `CREATE INDEX`), vérifier le déploiement Worker, puis
-compléter ce §11 avec les faits réels (PR/commit/migration/déploiement),
-même patron doc-only en 2 temps que les phases précédentes. Enchaîner
-ensuite sur la Phase 4d, dernière brique de la Phase 4
-(`methodProfilesRiskAssessment`/`risksAssessment`, AMDEC — cycle en deux
-temps évaluation initiale/résiduelle, seule nuance par rapport au patron
-ACFC/Impact Assessment), sans s'arrêter pour confirmation, conformément à
-la consigne permanente de l'utilisateur.
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #50 ouverte. **CI rouge à deux reprises, deux causes réelles
+   distinctes, aucune des deux un simple contournement** :
+   - **Course dans `DossierVivantActif.test.ts`** (véritable défaut de
+     synchronisation du test, pas une panne d'infrastructure) : le test
+     n'attendait que l'apparition du nom du nœud
+     (`wrapper.text().includes('Autoclave AUT-042')`) avant d'affirmer sur
+     l'évaluation CSV Assessment associée (« PLC autoclave ») — or
+     Structure Système et CSV Assessment/Quality Events se chargent via
+     des `charger()` concurrents distincts (risque déjà documenté dans
+     l'en-tête du fichier). Jamais reproduit en local (5 exécutions
+     répétées + suite complète, toutes vertes), mais l'ordonnancement plus
+     lent de CI l'a fait échouer une fois. Corrigé en alignant la
+     condition d'attente sur la donnée réellement testée
+     (`wrapper.text().includes('PLC autoclave')`) ; re-vérifié stable sur
+     5 exécutions locales supplémentaires avant push.
+   - **Erreur non gérée pré-existante et sans rapport avec cette PR** :
+     après la correction ci-dessus, un second passage CI a échoué sur une
+     `IndisponibleAuthError` non interceptée provenant de
+     `RevueStructureProcedure.livrablesLies.test.ts`/`RevueStructureProcedure.vue`
+     (fichiers jamais touchés par cette PR) — les 1270 tests étaient
+     pourtant tous verts, seule une rejection résiduelle après la fin du
+     test a fait échouer le job. Confirmé comme panne isolée (pas de
+     rapport avec le diff de cette PR) par un unique nouveau passage,
+     repassé vert sans aucune modification.
+   - Les deux `Workers Builds` (`ia-relay`/`auth-worker`) verts dès le
+     premier passage — le correctif `--config` du Version command
+     continue de tenir. Mergée sur `main` (squash, commit `9b0bbaf`).
+3. ✅ Migration `0011_impact_csv_assessment.sql` appliquée en production
+   D1 (`validapharm-auth`) en 6 requêtes séparées. **Nouvel aléa
+   d'infrastructure repéré et corrigé dans la foulée** : le tout premier
+   `CREATE TABLE method_profiles_impact_assessment` a échoué sur une
+   erreur 403 transitoire côté API Cloudflare (jamais rencontrée aux
+   Phases 4a/4b) — détecté immédiatement par la vérification
+   `sqlite_master` d'usage (2 tables sur 3 seulement), corrigé en
+   réémettant la table puis son index manquants, reconfirmé (3 tables +
+   3 index présents).
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `D1ImpactAssessmentRepo`/`D1CsvAssessmentRepo` bien câblés dans le
+   contexte.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `ImpactAssessment`/`CSVAssessment`
+   n'ont jamais été synchronisés vers GitHub, même avant cette migration :
+   pas une régression.
+
+### 11.3 Prochaine action
+
+Phase 4c définitivement close. Enchaîner sur la Phase 4d, dernière brique
+de la Phase 4 (`methodProfilesRiskAssessment`/`risksAssessment`, AMDEC —
+cycle en deux temps évaluation initiale/résiduelle, seule nuance par
+rapport au patron ACFC/Impact Assessment), sans s'arrêter pour
+confirmation, conformément à la consigne permanente de l'utilisateur.
