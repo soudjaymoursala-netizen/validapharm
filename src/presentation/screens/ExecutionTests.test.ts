@@ -1,12 +1,20 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1 } from '../identite/identiteLocale'
 import { useExecutionStore } from '../stores/useExecutionStore'
 import ExecutionTests from './ExecutionTests.vue'
+
+const CLIENT_ID = 'client-1'
 
 function routeurDeTest() {
   return createRouter({
@@ -33,37 +41,62 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
 
 const maintenant = new Date().toISOString()
 
+let ctx: Contexte
+let demonter: () => void
+
 async function creerTestApprouve(): Promise<string> {
   const testId = crypto.randomUUID()
-  await db.tests.put({
+  await ctx.testDefinitionRepo.creerTest({
     id: testId,
-    client_id: 'client-1',
-    test_candidate_id: 'candidat-1',
+    clientId: CLIENT_ID,
+    testCandidateId: 'candidat-1',
     titre: 'OQ-TEST-01',
     description: '',
     etapes: [
-      { id: 'etape-1', ordre: 1, action: 'Lancer le cycle', resultat_attendu: 'Sans alarme' },
-      { id: 'etape-2', ordre: 2, action: 'Relever F0', resultat_attendu: 'F0 >= 15 min' },
+      { id: 'etape-1', ordre: 1, action: 'Lancer le cycle', resultatAttendu: 'Sans alarme' },
+      { id: 'etape-2', ordre: 2, action: 'Relever F0', resultatAttendu: 'F0 >= 15 min' },
     ],
     statut: 'approuve',
-    audit_log: [
+    auditLog: [
       { timestamp: maintenant, actor: IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1, action: 'création' },
     ],
-    created_at: maintenant,
-    updated_at: maintenant,
+    createdAt: maintenant,
+    updatedAt: maintenant,
   })
   return testId
 }
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.tests.clear()
   await db.executions.clear()
   await db.executionSteps.clear()
   await db.measurements.clear()
   await db.executionEvents.clear()
   await db.evidences.clear()
   await db.evidenceLocations.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: CLIENT_ID,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  })
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('ExecutionTests', () => {
@@ -141,17 +174,17 @@ describe('ExecutionTests', () => {
   })
 
   test("un test non approuvé n'apparaît pas dans la liste de démarrage (garde-fou 7b)", async () => {
-    await db.tests.put({
+    await ctx.testDefinitionRepo.creerTest({
       id: crypto.randomUUID(),
-      client_id: 'client-1',
-      test_candidate_id: 'candidat-2',
+      clientId: CLIENT_ID,
+      testCandidateId: 'candidat-2',
       titre: 'Test brouillon',
       description: '',
       etapes: [],
       statut: 'brouillon',
-      audit_log: [],
-      created_at: maintenant,
-      updated_at: maintenant,
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
     })
     const wrapper = mount(ExecutionTests, {
       props: { clientId: 'client-1' },

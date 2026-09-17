@@ -125,9 +125,6 @@ beforeEach(async () => {
   await db.aiResponses.clear()
   await db.citationsAIResponse.clear()
   await db.clientConfigs.clear()
-  await db.requirements.clear()
-  await db.couvertures.clear()
-  await db.tests.clear()
   // QualityEvent migré vers le Worker/D1 (Phase 5b du chantier de
   // migration D1) — un client réel doit exister pour que
   // `qualityEventStore.charger` (appelé par `onMounted`) soit autorisé par
@@ -268,17 +265,17 @@ describe('MissionWorkspace — Raisonnement', () => {
     // (garde déterministe de `boucleRaisonnement.ts`) — on simule donc un
     // appel d'outil avant la réponse finale, comme dans le scénario réel de
     // `useReasoningEngineStore.test.ts`.
-    await db.requirements.put({
+    await ctx.testDefinitionRepo.creerRequirement({
       id: 'req-1',
-      client_id: CLIENT_ID,
+      clientId: CLIENT_ID,
       reference: 'REQ-1',
       titre: 'Débit stable',
       description: '',
-      asset_node_id: 'granulateur-01',
-      process_id: null,
-      audit_log: [],
-      created_at: '2026-01-01T00:00:00.000Z',
-      updated_at: '2026-01-01T00:00:00.000Z',
+      assetNodeId: 'granulateur-01',
+      processId: null,
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     })
     fournisseurEnvoyerMessage
       .mockResolvedValueOnce(

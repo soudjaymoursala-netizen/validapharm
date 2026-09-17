@@ -24,6 +24,7 @@ import { ProcessContextRepoMemoire } from './repos/processContextRepo'
 import { ProjectsRepoMemoire } from './repos/projectsRepo'
 import { QualityEventRepoMemoire } from './repos/qualityEventRepo'
 import { RiskAssessmentRepoMemoire } from './repos/riskAssessmentRepo'
+import { TestDefinitionRepoMemoire } from './repos/testDefinitionRepo'
 import { SectionsRepoMemoire } from './repos/sectionsRepo'
 import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
 import { StructureSystemeRepoMemoire } from './repos/structureSystemeRepo'
@@ -56,6 +57,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     riskAssessmentRepo: new RiskAssessmentRepoMemoire(),
     processContextRepo: new ProcessContextRepoMemoire(),
     qualityEventRepo: new QualityEventRepoMemoire(),
+    testDefinitionRepo: new TestDefinitionRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -177,6 +179,76 @@ interface CorpsReponse {
   evenements: QualityEventJson[]
   reference: ReferenceQualityEventJson
   references: ReferenceQualityEventJson[]
+  requirement: RequirementJson
+  requirements: RequirementJson[]
+  testObjective: TestObjectiveJson
+  testObjectives: TestObjectiveJson[]
+  testCandidate: TestCandidateJson
+  testCandidates: TestCandidateJson[]
+  test: TestJson
+  tests: TestJson[]
+  couverture: CouvertureJson
+  couvertures: CouvertureJson[]
+}
+
+interface RequirementJson {
+  id: string
+  clientId: string
+  reference: string
+  titre: string
+  description: string
+  assetNodeId: string | null
+  processId: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface TestObjectiveJson {
+  id: string
+  clientId: string
+  requirementId: string
+  titre: string
+  description: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface TestCandidateJson {
+  id: string
+  clientId: string
+  testObjectiveId: string
+  riskAssessmentId: string | null
+  titre: string
+  description: string
+  statut: string
+  motifRejet: string | null
+  dupliqueDeId: string | null
+  remplaceParId: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface TestJson {
+  id: string
+  clientId: string
+  testCandidateId: string
+  titre: string
+  description: string
+  etapes: { id: string; ordre: number; action: string; resultatAttendu: string }[]
+  statut: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface CouvertureJson {
+  id: string
+  clientId: string
+  requirementId: string
+  testId: string
+  createdAt: string
 }
 
 interface QualityEventJson {
@@ -2618,6 +2690,389 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/quality-events`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Requirement/TestObjective/TestCandidate/Test/Couverture (Target Architecture, domaine "Test", Phase 6a du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/test-definition`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.requirements).toEqual([])
+    expect(obtenir.corps.testObjectives).toEqual([])
+    expect(obtenir.corps.testCandidates).toEqual([])
+    expect(obtenir.corps.tests).toEqual([])
+    expect(obtenir.corps.couvertures).toEqual([])
+  })
+
+  test('créer un requirement : id/audit_log/horodatages dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/requirements`,
+      {
+        jeton: admin.jeton,
+        body: {
+          reference: 'REQ-1',
+          titre: 'Débit stable',
+          description: 'x',
+          assetNodeId: null,
+          processId: null,
+        },
+      },
+    )
+    expect(creation.status).toBe(201)
+    expect(creation.corps.requirement.clientId).toBe(clientId)
+    expect(creation.corps.requirement.auditLog).toEqual([
+      { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
+    ])
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/test-definition`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.requirements.map((r) => r.id)).toContain(creation.corps.requirement.id)
+  })
+
+  test('créer un requirement sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/requirements`,
+      { jeton: admin.jeton, body: { reference: 'REQ-1' } },
+    )
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  async function creerRequirementDeTest(ctx: Contexte, jeton: string, clientId: string) {
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/requirements`,
+      {
+        jeton,
+        body: { reference: 'REQ-1', titre: 'Débit stable', description: 'x' },
+      },
+    )
+    return creation.corps.requirement
+  }
+
+  test('créer un test objective : id/horodatages dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const requirement = await creerRequirementDeTest(ctx, admin.jeton, clientId)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-objectives`,
+      {
+        jeton: admin.jeton,
+        body: { requirementId: requirement.id, titre: 'Objectif', description: 'x' },
+      },
+    )
+    expect(creation.status).toBe(201)
+    expect(creation.corps.testObjective.requirementId).toBe(requirement.id)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/test-definition`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.testObjectives.map((o) => o.id)).toContain(creation.corps.testObjective.id)
+  })
+
+  async function creerTestObjectiveDeTest(
+    ctx: Contexte,
+    jeton: string,
+    clientId: string,
+    requirementId: string,
+  ) {
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-objectives`,
+      { jeton, body: { requirementId, titre: 'Objectif', description: 'x' } },
+    )
+    return creation.corps.testObjective
+  }
+
+  test('créer un test candidate : statut "propose" par défaut, dérivé côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const requirement = await creerRequirementDeTest(ctx, admin.jeton, clientId)
+    const objectif = await creerTestObjectiveDeTest(ctx, admin.jeton, clientId, requirement.id)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-candidates`,
+      {
+        jeton: admin.jeton,
+        body: { testObjectiveId: objectif.id, titre: 'Candidat', description: 'x' },
+      },
+    )
+    expect(creation.status).toBe(201)
+    expect(creation.corps.testCandidate.statut).toBe('propose')
+    expect(creation.corps.testCandidate.riskAssessmentId).toBeNull()
+  })
+
+  test('créer des candidats en lot depuis une analyse de risque : id/statut/audit_log dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const requirement = await creerRequirementDeTest(ctx, admin.jeton, clientId)
+    const objectif = await creerTestObjectiveDeTest(ctx, admin.jeton, clientId, requirement.id)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-candidates/depuis-risques`,
+      {
+        jeton: admin.jeton,
+        body: {
+          candidats: [
+            {
+              testObjectiveId: objectif.id,
+              riskAssessmentId: 'risque-1',
+              titre: 'Candidat depuis risque',
+              description: 'x',
+            },
+          ],
+        },
+      },
+    )
+    expect(creation.status).toBe(201)
+    expect(creation.corps.testCandidates).toHaveLength(1)
+    expect(creation.corps.testCandidates[0]?.statut).toBe('propose')
+    expect(creation.corps.testCandidates[0]?.riskAssessmentId).toBe('risque-1')
+    expect(creation.corps.testCandidates[0]?.id).toEqual(expect.any(String))
+  })
+
+  async function creerTestCandidateDeTest(
+    ctx: Contexte,
+    jeton: string,
+    clientId: string,
+    testObjectiveId: string,
+  ) {
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-candidates`,
+      { jeton, body: { testObjectiveId, titre: 'Candidat', description: 'x' } },
+    )
+    return creation.corps.testCandidate
+  }
+
+  test('changer le statut d’un test candidate : audit_log accumulé, jamais réécrit', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const requirement = await creerRequirementDeTest(ctx, admin.jeton, clientId)
+    const objectif = await creerTestObjectiveDeTest(ctx, admin.jeton, clientId, requirement.id)
+    const candidat = await creerTestCandidateDeTest(ctx, admin.jeton, clientId, objectif.id)
+
+    const changement = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${candidat.id}/statut`,
+      { jeton: admin.jeton, body: { statut: 'accepte' } },
+    )
+    expect(changement.status).toBe(200)
+    expect(changement.corps.testCandidate.statut).toBe('accepte')
+    expect(changement.corps.testCandidate.auditLog).toHaveLength(2)
+  })
+
+  test('changer le statut d’un test candidate inexistant -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const changement = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/inconnu/statut`,
+      { jeton: admin.jeton, body: { statut: 'rejete', motifRejet: 'hors périmètre' } },
+    )
+    expect(changement.status).toBe(404)
+  })
+
+  test('créer un Test depuis un candidat non accepté -> candidat_non_accepte', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const requirement = await creerRequirementDeTest(ctx, admin.jeton, clientId)
+    const objectif = await creerTestObjectiveDeTest(ctx, admin.jeton, clientId, requirement.id)
+    const candidat = await creerTestCandidateDeTest(ctx, admin.jeton, clientId, objectif.id)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/test-definition/tests`, {
+      jeton: admin.jeton,
+      body: {
+        testCandidateId: candidat.id,
+        titre: 'Test débit',
+        description: 'x',
+        etapes: [{ ordre: 1, action: 'Démarrer', resultatAttendu: 'Débit stable' }],
+      },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('candidat_non_accepte')
+  })
+
+  test('créer un Test depuis un candidat accepté puis l’approuver', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const requirement = await creerRequirementDeTest(ctx, admin.jeton, clientId)
+    const objectif = await creerTestObjectiveDeTest(ctx, admin.jeton, clientId, requirement.id)
+    const candidat = await creerTestCandidateDeTest(ctx, admin.jeton, clientId, objectif.id)
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${candidat.id}/statut`,
+      {
+        jeton: admin.jeton,
+        body: { statut: 'accepte' },
+      },
+    )
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/test-definition/tests`, {
+      jeton: admin.jeton,
+      body: {
+        testCandidateId: candidat.id,
+        titre: 'Test débit',
+        description: 'x',
+        etapes: [{ ordre: 1, action: 'Démarrer', resultatAttendu: 'Débit stable' }],
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.test.statut).toBe('brouillon')
+    expect(creation.corps.test.etapes).toHaveLength(1)
+
+    const approbation = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/tests/${creation.corps.test.id}/approuver`,
+      { jeton: admin.jeton },
+    )
+    expect(approbation.status).toBe(200)
+    expect(approbation.corps.test.statut).toBe('approuve')
+    expect(approbation.corps.test.auditLog).toHaveLength(2)
+  })
+
+  test('déclarer une couverture : idempotente', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const requirement = await creerRequirementDeTest(ctx, admin.jeton, clientId)
+    const objectif = await creerTestObjectiveDeTest(ctx, admin.jeton, clientId, requirement.id)
+    const candidat = await creerTestCandidateDeTest(ctx, admin.jeton, clientId, objectif.id)
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${candidat.id}/statut`,
+      {
+        jeton: admin.jeton,
+        body: { statut: 'accepte' },
+      },
+    )
+    const test = await requete(ctx, 'POST', `/clients/${clientId}/test-definition/tests`, {
+      jeton: admin.jeton,
+      body: { testCandidateId: candidat.id, titre: 'Test débit', description: 'x', etapes: [] },
+    })
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/couvertures`,
+      {
+        jeton: admin.jeton,
+        body: { requirementId: requirement.id, testId: test.corps.test.id },
+      },
+    )
+    expect(premiere.status).toBe(201)
+
+    const seconde = await requete(ctx, 'POST', `/clients/${clientId}/test-definition/couvertures`, {
+      jeton: admin.jeton,
+      body: { requirementId: requirement.id, testId: test.corps.test.id },
+    })
+    expect(seconde.status).toBe(200)
+    expect(seconde.corps.couverture.id).toBe(premiere.corps.couverture.id)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/test-definition`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.couvertures).toHaveLength(1)
+  })
+
+  test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const requirementLocal = {
+      id: 'requirement-local-1',
+      clientId,
+      reference: 'REQ-LOCAL',
+      titre: 'Ancien titre',
+      description: 'x',
+      assetNodeId: null,
+      processId: null,
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/migration-locale`,
+      { jeton: admin.jeton, body: { requirements: [requirementLocal] } },
+    )
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { requirements: [{ ...requirementLocal, titre: 'Tentative d’écrasement' }] },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/test-definition`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.requirements).toHaveLength(1)
+    expect(liste.corps.requirements[0]?.titre).toBe('Ancien titre')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/test-definition`)
     expect(obtenir.status).toBe(401)
   })
 })

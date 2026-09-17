@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
@@ -39,6 +40,7 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
 const maintenant = new Date().toISOString()
 
 let clientId: string
+let ctx: Contexte
 let demonter: () => void
 
 /** Structure Système migrée vers le Worker/D1 — seedé via le store (le client réel doit exister). */
@@ -64,37 +66,37 @@ async function seedNoeud(id: string): Promise<string> {
 
 /** Seed la chaîne complète Requirement→Couverture→Test→Execution→Evidence, prête. */
 async function seedChainePrete(assetNodeId: string): Promise<void> {
-  await db.requirements.put({
+  await ctx.testDefinitionRepo.creerRequirement({
     id: 'req-1',
-    client_id: clientId,
+    clientId,
     reference: 'URS-001',
     titre: 'F0 minimal',
     description: '',
-    asset_node_id: assetNodeId,
-    process_id: null,
-    audit_log: [],
-    created_at: maintenant,
-    updated_at: maintenant,
-  } as never)
-  await db.tests.put({
+    assetNodeId,
+    processId: null,
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  })
+  await ctx.testDefinitionRepo.creerTest({
     id: 'test-1',
-    client_id: clientId,
-    test_candidate_id: 'candidat-1',
+    clientId,
+    testCandidateId: 'candidat-1',
     titre: 'OQ-TEST-01',
     description: '',
     etapes: [],
     statut: 'approuve',
-    audit_log: [],
-    created_at: maintenant,
-    updated_at: maintenant,
-  } as never)
-  await db.couvertures.put({
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  })
+  await ctx.testDefinitionRepo.creerCouverture({
     id: 'couv-1',
-    client_id: clientId,
-    requirement_id: 'req-1',
-    test_id: 'test-1',
-    created_at: maintenant,
-  } as never)
+    clientId,
+    requirementId: 'req-1',
+    testId: 'test-1',
+    createdAt: maintenant,
+  })
   await db.executions.put({
     id: 'exec-1',
     client_id: clientId,
@@ -126,13 +128,12 @@ async function seedChainePrete(assetNodeId: string): Promise<void> {
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.contentPlans.clear()
-  await db.requirements.clear()
-  await db.couvertures.clear()
-  await db.tests.clear()
   await db.executions.clear()
   await db.evidences.clear()
   await reinitialiserAuthDeTest()
-  demonter = installerFauxWorkerAuth().demonter
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
   await connecterAdminDeTest()
 
   const client = await useClientsStore().creerClient({ name: 'Client ContentPlan' })

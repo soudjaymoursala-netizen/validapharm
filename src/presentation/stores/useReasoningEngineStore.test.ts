@@ -60,9 +60,6 @@ beforeEach(async () => {
   await db.aiRequests.clear()
   await db.aiResponses.clear()
   await db.citationsAIResponse.clear()
-  await db.requirements.clear()
-  await db.couvertures.clear()
-  await db.tests.clear()
   await db.procedures.clear()
   await db.procedureSteps.clear()
   await db.contextSnapshotItems.clear()
@@ -82,48 +79,53 @@ describe('useReasoningEngineStore — assurerConfiguration (versionnée, conditi
 
 describe('useReasoningEngineStore — scénario réel : changement de recette (spec §5)', () => {
   test('exécute le raisonnement, persiste AIRequest/AIResponse/CitationAIResponse', async () => {
-    await db.requirements.put({
-      id: 'req-1',
-      client_id: 'client-1',
-      reference: 'REQ-1',
-      titre: 'Débit stable',
-      description: '',
-      asset_node_id: 'granulateur-01',
-      process_id: null,
-      audit_log: [],
-      created_at: '2026-01-01T00:00:00.000Z',
-      updated_at: '2026-01-01T00:00:00.000Z',
-    })
+    const { ctx, demonter } = await installerAuthEtClient('client-1')
+    try {
+      await ctx.testDefinitionRepo.creerRequirement({
+        id: 'req-1',
+        clientId: 'client-1',
+        reference: 'REQ-1',
+        titre: 'Débit stable',
+        description: '',
+        assetNodeId: 'granulateur-01',
+        processId: null,
+        auditLog: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      })
 
-    const store = useReasoningEngineStore()
-    await store.charger('client-1')
+      const store = useReasoningEngineStore()
+      await store.charger('client-1')
 
-    const fournisseur = fournisseurMock()
-    fournisseur.envoyerMessage
-      .mockResolvedValueOnce(
-        reponse(
-          'APPEL_OUTIL: {"nom": "lister_requirements_pour_actif", "parametres": {"asset_node_id": "granulateur-01"}}',
-        ),
-      )
-      .mockResolvedValueOnce(
-        reponse(
-          'REPONSE_FINALE: {"texte": "REQ-1 est impacté", "etat_confiance": "connu", "citations": ["req-1"]}',
-        ),
-      )
+      const fournisseur = fournisseurMock()
+      fournisseur.envoyerMessage
+        .mockResolvedValueOnce(
+          reponse(
+            'APPEL_OUTIL: {"nom": "lister_requirements_pour_actif", "parametres": {"asset_node_id": "granulateur-01"}}',
+          ),
+        )
+        .mockResolvedValueOnce(
+          reponse(
+            'REPONSE_FINALE: {"texte": "REQ-1 est impacté", "etat_confiance": "connu", "citations": ["req-1"]}',
+          ),
+        )
 
-    const { request, response } = await store.executerRaisonnement('client-1', {
-      objectif: "Évaluer l'impact d'un changement de recette",
-      missionId: null,
-      contextSnapshotId: null,
-      fournisseur,
-      mode: 'chat_normatif',
-    })
+      const { request, response } = await store.executerRaisonnement('client-1', {
+        objectif: "Évaluer l'impact d'un changement de recette",
+        missionId: null,
+        contextSnapshotId: null,
+        fournisseur,
+        mode: 'chat_normatif',
+      })
 
-    expect(request.objectif).toContain('changement de recette')
-    expect(response.etat_confiance).toBe('connu')
-    expect(response.trace_appels_outils).toHaveLength(1)
-    expect(store.citationsDeReponse(response.id)).toHaveLength(1)
-    expect(store.citationsDeReponse(response.id)[0]?.type_objet_cite).toBe('requirement')
+      expect(request.objectif).toContain('changement de recette')
+      expect(response.etat_confiance).toBe('connu')
+      expect(response.trace_appels_outils).toHaveLength(1)
+      expect(store.citationsDeReponse(response.id)).toHaveLength(1)
+      expect(store.citationsDeReponse(response.id)[0]?.type_objet_cite).toBe('requirement')
+    } finally {
+      demonter()
+    }
   })
 
   test("une citation non résolvable n'est pas persistée avec un type deviné", async () => {

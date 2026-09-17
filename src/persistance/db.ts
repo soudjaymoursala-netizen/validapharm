@@ -374,6 +374,20 @@ export const qualityEventsAMigrer: QualityEvent[] = []
 export const referencesQualityEventAMigrer: ReferenceQualityEvent[] = []
 
 /**
+ * Requirement/TestObjective/TestCandidate/Test/Couverture : migrés vers
+ * le Worker/D1 (Target Architecture, domaine "Test", Phase 6a du chantier
+ * de migration D1) — même principe que `qualityEventsAMigrer` ci-dessus :
+ * formes domaine inchangées, pas de type "Ancien". Consommés et envoyés
+ * au serveur par `migrerTestDefinitionLocalVersServeur`
+ * (`useTestDefinitionStore`) au premier `charger()`.
+ */
+export const requirementsAMigrer: Requirement[] = []
+export const testObjectivesAMigrer: TestObjective[] = []
+export const testCandidatesAMigrer: TestCandidate[] = []
+export const testsAMigrer: Test[] = []
+export const couverturesAMigrer: Couverture[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -390,11 +404,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  requirements!: EntityTable<Requirement, 'id'>
-  testObjectives!: EntityTable<TestObjective, 'id'>
-  testCandidates!: EntityTable<TestCandidate, 'id'>
-  tests!: EntityTable<Test, 'id'>
-  couvertures!: EntityTable<Couverture, 'id'>
   executions!: EntityTable<Execution, 'id'>
   executionSteps!: EntityTable<ExecutionStep, 'id'>
   measurements!: EntityTable<Measurement, 'id'>
@@ -934,6 +943,32 @@ export class ValidaPharmDatabase extends Dexie {
         qualityEventsAMigrer.push(...evenements)
         const references = await tx.table<ReferenceQualityEvent>('referencesQualityEvent').toArray()
         referencesQualityEventAMigrer.push(...references)
+      })
+
+    // Requirement/TestObjective/TestCandidate/Test/Couverture : migrés
+    // vers le Worker/D1 (Target Architecture, domaine "Test", Phase 6a du
+    // chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) —
+    // même technique de capture avant suppression physique que la
+    // version 44 ci-dessus.
+    this.version(45)
+      .stores({
+        requirements: null,
+        testObjectives: null,
+        testCandidates: null,
+        tests: null,
+        couvertures: null,
+      })
+      .upgrade(async (tx) => {
+        const requirements = await tx.table<Requirement>('requirements').toArray()
+        requirementsAMigrer.push(...requirements)
+        const testObjectives = await tx.table<TestObjective>('testObjectives').toArray()
+        testObjectivesAMigrer.push(...testObjectives)
+        const testCandidates = await tx.table<TestCandidate>('testCandidates').toArray()
+        testCandidatesAMigrer.push(...testCandidates)
+        const tests = await tx.table<Test>('tests').toArray()
+        testsAMigrer.push(...tests)
+        const couvertures = await tx.table<Couverture>('couvertures').toArray()
+        couverturesAMigrer.push(...couvertures)
       })
   }
 }

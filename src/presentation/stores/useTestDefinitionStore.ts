@@ -1,8 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
+  CouvertureWire,
+  RequirementWire,
+  TestCandidateWire,
+  TestObjectiveWire,
+  TestWire,
+} from '../../connecteurs/auth/AuthApiClient'
+import type {
   Couverture,
-  EtapeTest,
   Requirement,
   RiskAssessment,
   Test,
@@ -14,9 +20,165 @@ import {
   type CouvertureRisque,
 } from '../../logique-metier/test-design/evaluerCouvertureRisques'
 import { genererCandidatsDepuisRisques } from '../../logique-metier/test-design/genererCandidatsDepuisRisques'
-import { identifiantActeurCourant } from '../identite/identiteLocale'
-import { db } from '../../persistance/db'
+import {
+  couverturesAMigrer,
+  requirementsAMigrer,
+  testCandidatesAMigrer,
+  testObjectivesAMigrer,
+  testsAMigrer,
+} from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 import { useRiskAssessmentStore } from './useRiskAssessmentStore'
+
+export function requirementWireVersDomaine(wire: RequirementWire): Requirement {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    reference: wire.reference,
+    titre: wire.titre,
+    description: wire.description,
+    asset_node_id: wire.assetNodeId,
+    process_id: wire.processId,
+    audit_log: wire.auditLog,
+    created_at: wire.createdAt,
+    updated_at: wire.updatedAt,
+  }
+}
+
+export function testObjectiveWireVersDomaine(wire: TestObjectiveWire): TestObjective {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    requirement_id: wire.requirementId,
+    titre: wire.titre,
+    description: wire.description,
+    created_at: wire.createdAt,
+    updated_at: wire.updatedAt,
+  }
+}
+
+export function testCandidateWireVersDomaine(wire: TestCandidateWire): TestCandidate {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    test_objective_id: wire.testObjectiveId,
+    risk_assessment_id: wire.riskAssessmentId,
+    titre: wire.titre,
+    description: wire.description,
+    statut: wire.statut as TestCandidate['statut'],
+    motif_rejet: wire.motifRejet,
+    duplique_de_id: wire.dupliqueDeId,
+    remplace_par_id: wire.remplaceParId,
+    audit_log: wire.auditLog,
+    created_at: wire.createdAt,
+    updated_at: wire.updatedAt,
+  }
+}
+
+export function testWireVersDomaine(wire: TestWire): Test {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    test_candidate_id: wire.testCandidateId,
+    titre: wire.titre,
+    description: wire.description,
+    etapes: wire.etapes.map((e) => ({
+      id: e.id,
+      ordre: e.ordre,
+      action: e.action,
+      resultat_attendu: e.resultatAttendu,
+    })),
+    statut: wire.statut as Test['statut'],
+    audit_log: wire.auditLog,
+    created_at: wire.createdAt,
+    updated_at: wire.updatedAt,
+  }
+}
+
+export function couvertureWireVersDomaine(wire: CouvertureWire): Couverture {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    requirement_id: wire.requirementId,
+    test_id: wire.testId,
+    created_at: wire.createdAt,
+  }
+}
+
+function requirementDomaineVersWire(r: Requirement): RequirementWire {
+  return {
+    id: r.id,
+    clientId: r.client_id,
+    reference: r.reference,
+    titre: r.titre,
+    description: r.description,
+    assetNodeId: r.asset_node_id,
+    processId: r.process_id,
+    auditLog: r.audit_log,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+function testObjectiveDomaineVersWire(o: TestObjective): TestObjectiveWire {
+  return {
+    id: o.id,
+    clientId: o.client_id,
+    requirementId: o.requirement_id,
+    titre: o.titre,
+    description: o.description,
+    createdAt: o.created_at,
+    updatedAt: o.updated_at,
+  }
+}
+
+function testCandidateDomaineVersWire(c: TestCandidate): TestCandidateWire {
+  return {
+    id: c.id,
+    clientId: c.client_id,
+    testObjectiveId: c.test_objective_id,
+    riskAssessmentId: c.risk_assessment_id,
+    titre: c.titre,
+    description: c.description,
+    statut: c.statut,
+    motifRejet: c.motif_rejet,
+    dupliqueDeId: c.duplique_de_id,
+    remplaceParId: c.remplace_par_id,
+    auditLog: c.audit_log,
+    createdAt: c.created_at,
+    updatedAt: c.updated_at,
+  }
+}
+
+function testDomaineVersWire(t: Test): TestWire {
+  return {
+    id: t.id,
+    clientId: t.client_id,
+    testCandidateId: t.test_candidate_id,
+    titre: t.titre,
+    description: t.description,
+    etapes: t.etapes.map((e) => ({
+      id: e.id,
+      ordre: e.ordre,
+      action: e.action,
+      resultatAttendu: e.resultat_attendu,
+    })),
+    statut: t.statut,
+    auditLog: t.audit_log,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at,
+  }
+}
+
+function couvertureDomaineVersWire(c: Couverture): CouvertureWire {
+  return {
+    id: c.id,
+    clientId: c.client_id,
+    requirementId: c.requirement_id,
+    testId: c.test_id,
+    createdAt: c.created_at,
+  }
+}
 
 export interface NouveauRequirementInput {
   reference: string
@@ -55,6 +217,11 @@ export interface NouveauTestInput {
  * dans `docs/convergence/CONVERGENCE_PLAN.md`). N'inclut ni l'exécution
  * ni l'Evidence, ni aucune génération IA.
  *
+ * **Phase 6a du chantier de migration D1**
+ * (docs/CHANTIER-MIGRATION-D1-RECAP.md) : Cloudflare D1 devient la source
+ * de vérité — mêmes routes authentifiées scopées par client que les
+ * autres domaines de ce chantier.
+ *
  * @requirement Target Architecture, domaine "Test"
  */
 export const useTestDefinitionStore = defineStore('testDefinition', () => {
@@ -66,20 +233,110 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
   const risquesAssessment = ref<RiskAssessment[]>([])
   const enChargement = ref(false)
 
+  /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que les autres stores de ce chantier. */
+  async function obtenirApi() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    return { api, jeton: authStore.jeton }
+  }
+
+  /**
+   * Envoie au serveur les enregistrements capturés depuis les anciennes
+   * tables IndexedDB locales juste avant leur suppression — n'a d'effet
+   * réel qu'une seule fois (voir migration Dexie v45, `persistance/db.ts`).
+   * Filtre par client avant envoi, même patron que les autres domaines de
+   * ce chantier.
+   */
+  async function migrerTestDefinitionLocalVersServeur(clientId: string): Promise<void> {
+    const requirementsDuClient = requirementsAMigrer.filter((r) => r.client_id === clientId)
+    const testObjectivesDuClient = testObjectivesAMigrer.filter((o) => o.client_id === clientId)
+    const testCandidatesDuClient = testCandidatesAMigrer.filter((c) => c.client_id === clientId)
+    const testsDuClient = testsAMigrer.filter((t) => t.client_id === clientId)
+    const couverturesDuClient = couverturesAMigrer.filter((c) => c.client_id === clientId)
+    if (
+      requirementsDuClient.length === 0 &&
+      testObjectivesDuClient.length === 0 &&
+      testCandidatesDuClient.length === 0 &&
+      testsDuClient.length === 0 &&
+      couverturesDuClient.length === 0
+    ) {
+      return
+    }
+
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.migrerTestDefinitionLocal(jeton, clientId, {
+      requirements: requirementsDuClient.map(requirementDomaineVersWire),
+      testObjectives: testObjectivesDuClient.map(testObjectiveDomaineVersWire),
+      testCandidates: testCandidatesDuClient.map(testCandidateDomaineVersWire),
+      tests: testsDuClient.map(testDomaineVersWire),
+      couvertures: couverturesDuClient.map(couvertureDomaineVersWire),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la migration Test Definition : ${resultat.erreur}`)
+    }
+    for (const r of requirementsDuClient) {
+      const index = requirementsAMigrer.indexOf(r)
+      if (index !== -1) requirementsAMigrer.splice(index, 1)
+    }
+    for (const o of testObjectivesDuClient) {
+      const index = testObjectivesAMigrer.indexOf(o)
+      if (index !== -1) testObjectivesAMigrer.splice(index, 1)
+    }
+    for (const c of testCandidatesDuClient) {
+      const index = testCandidatesAMigrer.indexOf(c)
+      if (index !== -1) testCandidatesAMigrer.splice(index, 1)
+    }
+    for (const t of testsDuClient) {
+      const index = testsAMigrer.indexOf(t)
+      if (index !== -1) testsAMigrer.splice(index, 1)
+    }
+    for (const c of couverturesDuClient) {
+      const index = couverturesAMigrer.indexOf(c)
+      if (index !== -1) couverturesAMigrer.splice(index, 1)
+    }
+  }
+
   async function charger(clientId: string): Promise<void> {
     enChargement.value = true
     try {
-      requirements.value = await db.requirements.where('client_id').equals(clientId).toArray()
-      testObjectives.value = await db.testObjectives.where('client_id').equals(clientId).toArray()
-      testCandidates.value = await db.testCandidates.where('client_id').equals(clientId).toArray()
-      tests.value = await db.tests.where('client_id').equals(clientId).toArray()
-      couvertures.value = await db.couvertures.where('client_id').equals(clientId).toArray()
+      try {
+        await migrerTestDefinitionLocalVersServeur(clientId)
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
+      }
       // RiskAssessment vit désormais dans le Worker/D1 (Phase 4d du
       // chantier de migration D1) — délègue à `useRiskAssessmentStore`,
       // seule source de vérité, plutôt que de dupliquer l'appel API ici.
       const riskAssessmentStore = useRiskAssessmentStore()
       await riskAssessmentStore.charger(clientId)
       risquesAssessment.value = riskAssessmentStore.evaluations
+
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.obtenirTestDefinition(jeton, clientId)
+      if (resultat.ok) {
+        requirements.value = resultat.donnees.requirements.map(requirementWireVersDomaine)
+        testObjectives.value = resultat.donnees.testObjectives.map(testObjectiveWireVersDomaine)
+        testCandidates.value = resultat.donnees.testCandidates.map(testCandidateWireVersDomaine)
+        tests.value = resultat.donnees.tests.map(testWireVersDomaine)
+        couvertures.value = resultat.donnees.couvertures.map(couvertureWireVersDomaine)
+      } else {
+        requirements.value = []
+        testObjectives.value = []
+        testCandidates.value = []
+        tests.value = []
+        couvertures.value = []
+      }
+    } catch {
+      // Panne réseau réelle ou relais non configuré : jamais une exception
+      // non gérée, même discipline que les autres stores de ce chantier.
+      requirements.value = []
+      testObjectives.value = []
+      testCandidates.value = []
+      tests.value = []
+      couvertures.value = []
     } finally {
       enChargement.value = false
     }
@@ -89,20 +346,18 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     clientId: string,
     input: NouveauRequirementInput,
   ): Promise<Requirement> {
-    const maintenant = new Date().toISOString()
-    const requirement: Requirement = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerRequirement(jeton, clientId, {
       reference: input.reference,
       titre: input.titre,
       description: input.description,
-      asset_node_id: input.assetNodeId,
-      process_id: input.processId,
-      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
-      created_at: maintenant,
-      updated_at: maintenant,
+      assetNodeId: input.assetNodeId,
+      processId: input.processId,
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la création du requirement : ${resultat.erreur}`)
     }
-    await db.requirements.put(requirement)
+    const requirement = requirementWireVersDomaine(resultat.donnees.requirement)
     requirements.value = [...requirements.value, requirement]
     return requirement
   }
@@ -111,17 +366,16 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     clientId: string,
     input: NouveauTestObjectiveInput,
   ): Promise<TestObjective> {
-    const maintenant = new Date().toISOString()
-    const objectif: TestObjective = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      requirement_id: input.requirementId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerTestObjective(jeton, clientId, {
+      requirementId: input.requirementId,
       titre: input.titre,
       description: input.description,
-      created_at: maintenant,
-      updated_at: maintenant,
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la création du test objective : ${resultat.erreur}`)
     }
-    await db.testObjectives.put(objectif)
+    const objectif = testObjectiveWireVersDomaine(resultat.donnees.testObjective)
     testObjectives.value = [...testObjectives.value, objectif]
     return objectif
   }
@@ -130,23 +384,16 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     clientId: string,
     input: NouveauTestCandidateInput,
   ): Promise<TestCandidate> {
-    const maintenant = new Date().toISOString()
-    const candidat: TestCandidate = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      test_objective_id: input.testObjectiveId,
-      risk_assessment_id: null,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerTestCandidate(jeton, clientId, {
+      testObjectiveId: input.testObjectiveId,
       titre: input.titre,
       description: input.description,
-      statut: 'propose',
-      motif_rejet: null,
-      duplique_de_id: null,
-      remplace_par_id: null,
-      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
-      created_at: maintenant,
-      updated_at: maintenant,
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la création du test candidate : ${resultat.erreur}`)
     }
-    await db.testCandidates.put(candidat)
+    const candidat = testCandidateWireVersDomaine(resultat.donnees.testCandidate)
     testCandidates.value = [...testCandidates.value, candidat]
     return candidat
   }
@@ -177,34 +424,24 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       risquesAssessment.value,
       candidatsExistants,
     )
+    if (suggestions.length === 0) return { ok: true, nombreCrees: 0 }
 
-    const maintenant = new Date().toISOString()
-    const nouveaux: TestCandidate[] = suggestions.map((s) => ({
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      test_objective_id: testObjectiveId,
-      risk_assessment_id: s.risk_assessment_id,
-      titre: s.titre,
-      description: s.description,
-      statut: 'propose',
-      motif_rejet: null,
-      duplique_de_id: null,
-      remplace_par_id: null,
-      audit_log: [
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: 'création (proposé depuis analyse de risque)',
-        },
-      ],
-      created_at: maintenant,
-      updated_at: maintenant,
-    }))
-
-    if (nouveaux.length > 0) {
-      await db.testCandidates.bulkPut(nouveaux)
-      testCandidates.value = [...testCandidates.value, ...nouveaux]
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerTestCandidatsDepuisRisques(
+      jeton,
+      clientId,
+      suggestions.map((s) => ({
+        testObjectiveId,
+        riskAssessmentId: s.risk_assessment_id,
+        titre: s.titre,
+        description: s.description,
+      })),
+    )
+    if (!resultat.ok) {
+      throw new Error(`Échec de la génération de candidats depuis les risques : ${resultat.erreur}`)
     }
+    const nouveaux = resultat.donnees.testCandidates.map(testCandidateWireVersDomaine)
+    testCandidates.value = [...testCandidates.value, ...nouveaux]
     return { ok: true, nombreCrees: nouveaux.length }
   }
 
@@ -277,34 +514,22 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     statut: TestCandidate['statut'],
     options: { motifRejet?: string; dupliqueDeId?: string; remplaceParId?: string },
   ): Promise<TestCandidate | null> {
-    const existant = await db.testCandidates.get(testCandidateId)
-    if (!existant || existant.client_id !== clientId) return null
-    const maintenant = new Date().toISOString()
-    const motifRejet = options.motifRejet ?? null
-    const misAJour: TestCandidate = {
-      ...existant,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.changerStatutTestCandidate(jeton, clientId, testCandidateId, {
       statut,
-      motif_rejet: motifRejet,
-      duplique_de_id: options.dupliqueDeId ?? null,
-      remplace_par_id: options.remplaceParId ?? null,
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: `changement de statut : ${statut}${motifRejet ? ` (${motifRejet})` : ''}`,
-        },
-      ],
-    }
-    await db.testCandidates.put(misAJour)
+      motifRejet: options.motifRejet ?? null,
+      dupliqueDeId: options.dupliqueDeId ?? null,
+      remplaceParId: options.remplaceParId ?? null,
+    })
+    if (!resultat.ok) return null
+    const candidat = testCandidateWireVersDomaine(resultat.donnees.testCandidate)
     testCandidates.value = testCandidates.value.map((c) =>
-      c.id === testCandidateId ? misAJour : c,
+      c.id === testCandidateId ? candidat : c,
     )
-    return misAJour
+    return candidat
   }
 
-  /** Un `Test` ne peut être créé qu'à partir d'un candidat accepté — jamais depuis un candidat proposé, rejeté, ou en attente. */
+  /** Un `Test` ne peut être créé qu'à partir d'un candidat accepté — revérifié aussi côté serveur, jamais fait confiance au client seul. */
   async function creerTestDepuisCandidat(
     clientId: string,
     testCandidateId: string,
@@ -314,50 +539,38 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     if (!candidat) return { erreur: 'candidat_introuvable' }
     if (candidat.statut !== 'accepte') return { erreur: 'candidat_non_accepte' }
 
-    const maintenant = new Date().toISOString()
-    const etapes: EtapeTest[] = input.etapes.map((e, index) => ({
-      id: crypto.randomUUID(),
-      ordre: index + 1,
-      action: e.action,
-      resultat_attendu: e.resultatAttendu,
-    }))
-    const test: Test = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      test_candidate_id: testCandidateId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerTest(jeton, clientId, {
+      testCandidateId,
       titre: input.titre,
       description: input.description,
-      etapes,
-      statut: 'brouillon',
-      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
-      created_at: maintenant,
-      updated_at: maintenant,
+      etapes: input.etapes.map((e) => ({
+        ordre: 0,
+        action: e.action,
+        resultatAttendu: e.resultatAttendu,
+      })),
+    })
+    if (!resultat.ok) {
+      if (
+        resultat.erreur === 'candidat_non_accepte' ||
+        resultat.erreur === 'candidat_introuvable'
+      ) {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec de la création du test : ${resultat.erreur}`)
     }
-    await db.tests.put(test)
+    const test = testWireVersDomaine(resultat.donnees.test)
     tests.value = [...tests.value, test]
     return test
   }
 
   async function approuverTest(clientId: string, testId: string): Promise<Test | null> {
-    const existant = await db.tests.get(testId)
-    if (!existant || existant.client_id !== clientId) return null
-    const maintenant = new Date().toISOString()
-    const misAJour: Test = {
-      ...existant,
-      statut: 'approuve',
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: 'approbation',
-        },
-      ],
-    }
-    await db.tests.put(misAJour)
-    tests.value = tests.value.map((t) => (t.id === testId ? misAJour : t))
-    return misAJour
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.approuverTest(jeton, clientId, testId)
+    if (!resultat.ok) return null
+    const test = testWireVersDomaine(resultat.donnees.test)
+    tests.value = tests.value.map((t) => (t.id === testId ? test : t))
+    return test
   }
 
   /** Déclaration explicite de couverture, jamais déduite automatiquement — idempotent. */
@@ -371,14 +584,12 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     )
     if (existante) return existante
 
-    const couverture: Couverture = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      requirement_id: requirementId,
-      test_id: testId,
-      created_at: new Date().toISOString(),
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerCouverture(jeton, clientId, { requirementId, testId })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la déclaration de couverture : ${resultat.erreur}`)
     }
-    await db.couvertures.put(couverture)
+    const couverture = couvertureWireVersDomaine(resultat.donnees.couverture)
     couvertures.value = [...couvertures.value, couverture]
     return couverture
   }

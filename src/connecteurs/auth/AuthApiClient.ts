@@ -507,6 +507,112 @@ export interface SaisieCreationReferenceQualityEventWire {
   cibleId: string
 }
 
+export interface RequirementWire {
+  id: string
+  clientId: string
+  reference: string
+  titre: string
+  description: string
+  assetNodeId: string | null
+  processId: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TestObjectiveWire {
+  id: string
+  clientId: string
+  requirementId: string
+  titre: string
+  description: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TestCandidateWire {
+  id: string
+  clientId: string
+  testObjectiveId: string
+  riskAssessmentId: string | null
+  titre: string
+  description: string
+  statut: string
+  motifRejet: string | null
+  dupliqueDeId: string | null
+  remplaceParId: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EtapeTestWire {
+  id: string
+  ordre: number
+  action: string
+  resultatAttendu: string
+}
+
+export interface TestWire {
+  id: string
+  clientId: string
+  testCandidateId: string
+  titre: string
+  description: string
+  etapes: EtapeTestWire[]
+  statut: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CouvertureWire {
+  id: string
+  clientId: string
+  requirementId: string
+  testId: string
+  createdAt: string
+}
+
+export interface SaisieCreationRequirementWire {
+  reference: string
+  titre: string
+  description: string
+  assetNodeId: string | null
+  processId: string | null
+}
+
+export interface SaisieCreationTestObjectiveWire {
+  requirementId: string
+  titre: string
+  description: string
+}
+
+export interface SaisieCreationTestCandidateWire {
+  testObjectiveId: string
+  titre: string
+  description: string
+}
+
+export interface SaisieCandidatDepuisRisquesWire {
+  testObjectiveId: string
+  riskAssessmentId: string | null
+  titre: string
+  description: string
+}
+
+export interface SaisieCreationTestWire {
+  testCandidateId: string
+  titre: string
+  description: string
+  etapes: { ordre: number; action: string; resultatAttendu: string }[]
+}
+
+export interface SaisieCreationCouvertureWire {
+  requirementId: string
+  testId: string
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -1299,6 +1405,144 @@ export class AuthApiClient {
     ResultatApi<{ evenements: QualityEventWire[]; references: ReferenceQualityEventWire[] }>
   > {
     return this.requete('POST', `/clients/${clientId}/quality-events/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Requirement/TestObjective/TestCandidate/Test/Couverture (Target Architecture, domaine "Test", Phase 6a du chantier de migration D1) ---
+
+  obtenirTestDefinition(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      requirements: RequirementWire[]
+      testObjectives: TestObjectiveWire[]
+      testCandidates: TestCandidateWire[]
+      tests: TestWire[]
+      couvertures: CouvertureWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/test-definition`, { jeton })
+  }
+
+  creerRequirement(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationRequirementWire,
+  ): Promise<ResultatApi<{ requirement: RequirementWire }>> {
+    return this.requete('POST', `/clients/${clientId}/test-definition/requirements`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerTestObjective(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationTestObjectiveWire,
+  ): Promise<ResultatApi<{ testObjective: TestObjectiveWire }>> {
+    return this.requete('POST', `/clients/${clientId}/test-definition/test-objectives`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerTestCandidate(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationTestCandidateWire,
+  ): Promise<ResultatApi<{ testCandidate: TestCandidateWire }>> {
+    return this.requete('POST', `/clients/${clientId}/test-definition/test-candidates`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerTestCandidatsDepuisRisques(
+    jeton: string,
+    clientId: string,
+    candidats: SaisieCandidatDepuisRisquesWire[],
+  ): Promise<ResultatApi<{ testCandidates: TestCandidateWire[] }>> {
+    return this.requete(
+      'POST',
+      `/clients/${clientId}/test-definition/test-candidates/depuis-risques`,
+      { jeton, body: { candidats } },
+    )
+  }
+
+  changerStatutTestCandidate(
+    jeton: string,
+    clientId: string,
+    testCandidateId: string,
+    saisie: {
+      statut: string
+      motifRejet?: string | null
+      dupliqueDeId?: string | null
+      remplaceParId?: string | null
+    },
+  ): Promise<ResultatApi<{ testCandidate: TestCandidateWire }>> {
+    return this.requete(
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${testCandidateId}/statut`,
+      { jeton, body: saisie },
+    )
+  }
+
+  creerTest(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationTestWire,
+  ): Promise<ResultatApi<{ test: TestWire }>> {
+    return this.requete('POST', `/clients/${clientId}/test-definition/tests`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  approuverTest(
+    jeton: string,
+    clientId: string,
+    testId: string,
+  ): Promise<ResultatApi<{ test: TestWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/test-definition/tests/${testId}/approuver`, {
+      jeton,
+    })
+  }
+
+  creerCouverture(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationCouvertureWire,
+  ): Promise<ResultatApi<{ couverture: CouvertureWire }>> {
+    return this.requete('POST', `/clients/${clientId}/test-definition/couvertures`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerTestDefinitionLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerTestDefinitionLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      requirements: RequirementWire[]
+      testObjectives: TestObjectiveWire[]
+      testCandidates: TestCandidateWire[]
+      tests: TestWire[]
+      couvertures: CouvertureWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      requirements: RequirementWire[]
+      testObjectives: TestObjectiveWire[]
+      testCandidates: TestCandidateWire[]
+      tests: TestWire[]
+      couvertures: CouvertureWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/test-definition/migration-locale`, {
       jeton,
       body: donnees,
     })
