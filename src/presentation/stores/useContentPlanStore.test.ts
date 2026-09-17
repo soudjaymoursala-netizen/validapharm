@@ -16,7 +16,6 @@ let demonter: () => void
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.contentPlans.clear()
-  await db.executions.clear()
   await db.evidences.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
@@ -88,19 +87,19 @@ async function semerChaineComplete(
     testId: `test-${clientId}`,
     createdAt: maintenant,
   })
-  await db.executions.put({
+  await ctx.executionRepo.creerExecution({
     id: `exec-${clientId}`,
-    client_id: clientId,
-    test_id: `test-${clientId}`,
-    asset_node_id: assetNodeId,
+    clientId,
+    testId: `test-${clientId}`,
+    assetNodeId,
     executant: 'alice',
     statut: 'terminee',
     verdict: 'conforme',
-    date_debut: maintenant,
-    date_fin: maintenant,
-    audit_log: [],
-    created_at: maintenant,
-    updated_at: maintenant,
+    dateDebut: maintenant,
+    dateFin: maintenant,
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
   })
   await db.evidences.put({
     id: `ev-${clientId}`,

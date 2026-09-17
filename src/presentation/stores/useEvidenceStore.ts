@@ -9,6 +9,7 @@ import type {
 } from '../../logique-metier/domaine/types'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
+import { useExecutionStore } from './useExecutionStore'
 
 export interface NouvellePreuveInput {
   executionStepId: string | null
@@ -63,12 +64,17 @@ export const useEvidenceStore = defineStore('evidence', () => {
     executionId: string,
     input: NouvellePreuveInput,
   ): Promise<Evidence | ErreurEcriturePreuve> {
-    const execution = await db.executions.get(executionId)
+    // Execution migrée vers le Worker/D1 (Phase 6b du chantier de
+    // migration D1) — chargée via le store dédié plutôt qu'un accès Dexie
+    // direct, devenu impossible depuis cette migration.
+    const executionStore = useExecutionStore()
+    await executionStore.charger(clientId)
+    const execution = executionStore.executions.find((e) => e.id === executionId)
     if (!execution || execution.client_id !== clientId) return { erreur: 'execution_introuvable' }
     if (execution.statut === 'terminee') return { erreur: 'execution_deja_cloturee' }
 
     if (input.executionStepId) {
-      const etape = await db.executionSteps.get(input.executionStepId)
+      const etape = executionStore.executionSteps.find((e) => e.id === input.executionStepId)
       if (!etape || etape.execution_id !== executionId) return { erreur: 'etape_inconnue' }
     }
 

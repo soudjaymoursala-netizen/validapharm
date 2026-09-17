@@ -15,10 +15,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.executions.clear()
-  await db.executionSteps.clear()
-  await db.measurements.clear()
-  await db.executionEvents.clear()
   await db.evidences.clear()
   await db.evidenceLocations.clear()
   await db.provenanceLinks.clear()

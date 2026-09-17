@@ -12,6 +12,7 @@ import {
   evaluerReglesConformite,
   type RegleConformite,
 } from '../../logique-metier/conformite/evaluerReglesConformite'
+import { useExecutionStore } from './useExecutionStore'
 import { useQualityEventStore } from './useQualityEventStore'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
 
@@ -88,13 +89,15 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     // chantier de migration D1) — même patron que ci-dessus.
     const testDefinitionStore = useTestDefinitionStore()
     await testDefinitionStore.charger(clientId)
-    const [executions, evidences] = await Promise.all([
-      db.executions.where('client_id').equals(clientId).toArray(),
-      db.evidences.where('client_id').equals(clientId).toArray(),
-    ])
+    // Execution migrée vers le Worker/D1 (Phase 6b du chantier de
+    // migration D1) — même patron que ci-dessus.
+    const executionStore = useExecutionStore()
+    await executionStore.charger(clientId)
+    const evidences = await db.evidences.where('client_id').equals(clientId).toArray()
     const requirements = testDefinitionStore.requirements
     const couvertures = testDefinitionStore.couvertures
     const tests = testDefinitionStore.tests
+    const executions = executionStore.executions
     const qualityEvents = qualityEventStore.evenements
     return construireReadinessContentPlan({
       assetNodeId,

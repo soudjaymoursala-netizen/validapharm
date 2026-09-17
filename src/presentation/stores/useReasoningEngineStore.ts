@@ -13,6 +13,7 @@ import type {
 import { executerBoucleRaisonnement } from '../../logique-metier/raisonnement/boucleRaisonnement'
 import { CATALOGUE_OUTILS_RAISONNEMENT } from '../../logique-metier/raisonnement/outilsRaisonnement'
 import { db } from '../../persistance/db'
+import { useExecutionStore } from './useExecutionStore'
 import { useProcessContextStore } from './useProcessContextStore'
 import { useQualityEventStore } from './useQualityEventStore'
 import { useStructureSystemeStore } from './useStructureSystemeStore'
@@ -117,9 +118,12 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
     // chantier de migration D1) — même patron que ci-dessus.
     const testDefinitionStore = useTestDefinitionStore()
     await testDefinitionStore.charger(clientId)
+    // Execution migrée vers le Worker/D1 (Phase 6b du chantier de
+    // migration D1) — même patron que ci-dessus.
+    const executionStore = useExecutionStore()
+    await executionStore.charger(clientId)
 
     const [
-      executions,
       evidences,
       knowledgeItems,
       procedures,
@@ -127,7 +131,6 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       knowledgeRelations,
       contextSnapshotItems,
     ] = await Promise.all([
-      db.executions.where('client_id').equals(clientId).toArray(),
       db.evidences.where('client_id').equals(clientId).toArray(),
       db.knowledgeItems.where('client_id').equals(clientId).toArray(),
       db.procedures.where('client_id').equals(clientId).toArray(),
@@ -143,6 +146,7 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
     const requirements = testDefinitionStore.requirements
     const couvertures = testDefinitionStore.couvertures
     const tests = testDefinitionStore.tests
+    const executions = executionStore.executions
     const manufacturingContexts = processContextStore.manufacturingContexts
     const qualityEvents = qualityEventStore.evenements
     const assetNodes = structureStore.noeuds
