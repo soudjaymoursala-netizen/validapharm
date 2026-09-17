@@ -613,6 +613,75 @@ export interface SaisieCreationCouvertureWire {
   testId: string
 }
 
+export interface ExecutionWire {
+  id: string
+  clientId: string
+  testId: string
+  assetNodeId: string | null
+  executant: string
+  statut: string
+  verdict: string | null
+  dateDebut: string
+  dateFin: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ExecutionStepWire {
+  id: string
+  clientId: string
+  executionId: string
+  testStepId: string
+  resultat: string
+  observation: string
+  horodatage: string
+}
+
+export interface MeasurementWire {
+  id: string
+  clientId: string
+  executionStepId: string
+  libelle: string
+  valeur: string
+  unite: string | null
+  horodatage: string
+}
+
+export interface ExecutionEventWire {
+  id: string
+  clientId: string
+  executionId: string
+  type: string
+  description: string
+  qualityEventId: string | null
+  horodatage: string
+  actor: string
+}
+
+export interface SaisieDemarrageExecutionWire {
+  testId: string
+  assetNodeId: string | null
+}
+
+export interface SaisieResultatEtapeWire {
+  testStepId: string
+  resultat: string
+  observation: string
+}
+
+export interface SaisieMesureWire {
+  libelle: string
+  valeur: string
+  unite: string | null
+}
+
+export interface SaisieEvenementExecutionWire {
+  type: string
+  description: string
+  qualityEventId: string | null
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -1543,6 +1612,102 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/test-definition/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Execution/ExecutionStep/Measurement/ExecutionEvent (Target Architecture, domaine "Execution", Phase 6b du chantier de migration D1) ---
+
+  obtenirExecutions(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      executions: ExecutionWire[]
+      executionSteps: ExecutionStepWire[]
+      measurements: MeasurementWire[]
+      executionEvents: ExecutionEventWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/executions`, { jeton })
+  }
+
+  demarrerExecution(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieDemarrageExecutionWire,
+  ): Promise<ResultatApi<{ execution: ExecutionWire }>> {
+    return this.requete('POST', `/clients/${clientId}/executions`, { jeton, body: saisie })
+  }
+
+  enregistrerResultatEtape(
+    jeton: string,
+    clientId: string,
+    executionId: string,
+    saisie: SaisieResultatEtapeWire,
+  ): Promise<ResultatApi<{ executionStep: ExecutionStepWire }>> {
+    return this.requete('POST', `/clients/${clientId}/executions/${executionId}/etapes`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  ajouterMesure(
+    jeton: string,
+    clientId: string,
+    executionStepId: string,
+    saisie: SaisieMesureWire,
+  ): Promise<ResultatApi<{ measurement: MeasurementWire }>> {
+    return this.requete('POST', `/clients/${clientId}/execution-steps/${executionStepId}/mesures`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  consignerEvenement(
+    jeton: string,
+    clientId: string,
+    executionId: string,
+    saisie: SaisieEvenementExecutionWire,
+  ): Promise<ResultatApi<{ executionEvent: ExecutionEventWire }>> {
+    return this.requete('POST', `/clients/${clientId}/executions/${executionId}/evenements`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  cloturerExecution(
+    jeton: string,
+    clientId: string,
+    executionId: string,
+    verdict: string,
+  ): Promise<ResultatApi<{ execution: ExecutionWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/executions/${executionId}/cloturer`, {
+      jeton,
+      body: { verdict },
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerExecutionsLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerExecutionsLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      executions: ExecutionWire[]
+      executionSteps: ExecutionStepWire[]
+      measurements: MeasurementWire[]
+      executionEvents: ExecutionEventWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      executions: ExecutionWire[]
+      executionSteps: ExecutionStepWire[]
+      measurements: MeasurementWire[]
+      executionEvents: ExecutionEventWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/executions/migration-locale`, {
       jeton,
       body: donnees,
     })

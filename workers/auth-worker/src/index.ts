@@ -5,6 +5,7 @@ import { D1AuditRepo } from './repos/d1/d1AuditRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
 import { D1CsvAssessmentRepo } from './repos/d1/d1CsvAssessmentRepo'
 import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
+import { D1ExecutionRepo } from './repos/d1/d1ExecutionRepo'
 import { D1ImpactAssessmentRepo } from './repos/d1/d1ImpactAssessmentRepo'
 import { D1OrganisationRepo } from './repos/d1/d1OrganisationRepo'
 import { D1ParametersRepo } from './repos/d1/d1ParametersRepo'
@@ -66,6 +67,7 @@ export default {
       processContextRepo: new D1ProcessContextRepo(env.DB),
       qualityEventRepo: new D1QualityEventRepo(env.DB),
       testDefinitionRepo: new D1TestDefinitionRepo(env.DB),
+      executionRepo: new D1ExecutionRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

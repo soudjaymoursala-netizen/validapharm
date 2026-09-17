@@ -68,10 +68,6 @@ async function creerTestApprouve(): Promise<string> {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.executions.clear()
-  await db.executionSteps.clear()
-  await db.measurements.clear()
-  await db.executionEvents.clear()
   await db.evidences.clear()
   await db.evidenceLocations.clear()
   await reinitialiserAuthDeTest()
@@ -122,11 +118,9 @@ describe('ExecutionTests', () => {
     const formDemarrage = wrapper.find('.bloc-demarrage form')
     await formDemarrage.find('select').setValue(testId)
     await formDemarrage.trigger('submit.prevent')
-    await attendreQue(
-      async () => (await db.executions.where('client_id').equals('client-1').count()) > 0,
-    )
+    await attendreQue(async () => (await ctx.executionRepo.listerExecutions(CLIENT_ID)).length > 0)
 
-    const execution = (await db.executions.toArray())[0]
+    const execution = (await ctx.executionRepo.listerExecutions(CLIENT_ID))[0]
     expect(execution?.statut).toBe('en_cours')
     expect(execution?.verdict).toBeNull()
     if (!execution) throw new Error('exécution non créée')
@@ -135,11 +129,13 @@ describe('ExecutionTests', () => {
     const premiereEtape = wrapper.find('.liste-etapes > li')
     await premiereEtape.find('select').setValue('conforme')
     await premiereEtape.find('button').trigger('click')
-    await attendreQue(async () => (await db.executionSteps.count()) > 0)
+    await attendreQue(
+      async () => (await ctx.executionRepo.listerExecutionSteps(CLIENT_ID)).length > 0,
+    )
 
-    const etapeEnregistree = (await db.executionSteps.toArray())[0]
+    const etapeEnregistree = (await ctx.executionRepo.listerExecutionSteps(CLIENT_ID))[0]
     expect(etapeEnregistree?.resultat).toBe('conforme')
-    expect(etapeEnregistree?.test_step_id).toBe('etape-1')
+    expect(etapeEnregistree?.testStepId).toBe('etape-1')
 
     // Mesure sur cette étape
     await flushPromises()
@@ -149,8 +145,10 @@ describe('ExecutionTests', () => {
     await inputsMesure[1]?.setValue('15.4')
     await inputsMesure[2]?.setValue('min')
     await zoneMesure.find('button').trigger('click')
-    await attendreQue(async () => (await db.measurements.count()) > 0)
-    expect((await db.measurements.toArray())[0]?.valeur).toBe('15.4')
+    await attendreQue(
+      async () => (await ctx.executionRepo.listerMeasurements(CLIENT_ID)).length > 0,
+    )
+    expect((await ctx.executionRepo.listerMeasurements(CLIENT_ID))[0]?.valeur).toBe('15.4')
 
     // Preuve native
     const zonePreuve = wrapper.find('.carte-execution').findAll('.ligne-formulaire')[1]
@@ -166,11 +164,13 @@ describe('ExecutionTests', () => {
     const zoneCloture = wrapper.find('.carte-execution').findAll('.ligne-formulaire').at(-1)
     await zoneCloture?.find('select').setValue('conforme')
     await zoneCloture?.find('button').trigger('click')
-    await attendreQue(async () => (await db.executions.toArray())[0]?.statut === 'terminee')
+    await attendreQue(
+      async () => (await ctx.executionRepo.listerExecutions(CLIENT_ID))[0]?.statut === 'terminee',
+    )
 
-    const executionCloturee = (await db.executions.toArray())[0]
+    const executionCloturee = (await ctx.executionRepo.listerExecutions(CLIENT_ID))[0]
     expect(executionCloturee?.verdict).toBe('conforme')
-    expect(executionCloturee?.date_fin).not.toBeNull()
+    expect(executionCloturee?.dateFin).not.toBeNull()
   })
 
   test("un test non approuvé n'apparaît pas dans la liste de démarrage (garde-fou 7b)", async () => {
@@ -220,10 +220,8 @@ describe('ExecutionTests — mutations non vérifiées', () => {
     const formDemarrage = wrapper.find('.bloc-demarrage form')
     await formDemarrage.find('select').setValue(testId)
     await formDemarrage.trigger('submit.prevent')
-    await attendreQue(
-      async () => (await db.executions.where('client_id').equals('client-1').count()) > 0,
-    )
-    const executionId = (await db.executions.toArray())[0]?.id
+    await attendreQue(async () => (await ctx.executionRepo.listerExecutions(CLIENT_ID)).length > 0)
+    const executionId = (await ctx.executionRepo.listerExecutions(CLIENT_ID))[0]?.id
     if (!executionId) throw new Error('exécution non créée')
     return { wrapper, executionId }
   }
@@ -247,7 +245,7 @@ describe('ExecutionTests — mutations non vérifiées', () => {
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
 
     expect(wrapper.find('.bandeau-erreur').text()).toContain('déjà clôturée')
-    expect((await db.executions.toArray())[0]?.statut).toBe('en_cours')
+    expect((await ctx.executionRepo.listerExecutions(CLIENT_ID))[0]?.statut).toBe('en_cours')
   })
 
   test('un enregistrement de résultat bloqué (exécution déjà clôturée entre-temps) affiche un message', async () => {
@@ -265,6 +263,7 @@ describe('ExecutionTests — mutations non vérifiées', () => {
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
 
     expect(wrapper.find('.bandeau-erreur').text()).toContain('déjà clôturée')
-    expect(await db.executionSteps.where('execution_id').equals(executionId).count()).toBe(0)
+    const etapes = await ctx.executionRepo.listerExecutionSteps(CLIENT_ID)
+    expect(etapes.filter((e) => e.executionId === executionId)).toHaveLength(0)
   })
 })

@@ -388,6 +388,19 @@ export const testsAMigrer: Test[] = []
 export const couverturesAMigrer: Couverture[] = []
 
 /**
+ * Execution/ExecutionStep/Measurement/ExecutionEvent : migrés vers le
+ * Worker/D1 (Target Architecture, domaine "Execution", Phase 6b du
+ * chantier de migration D1) — même principe que `requirementsAMigrer`
+ * ci-dessus : formes domaine inchangées, pas de type "Ancien". Consommés
+ * et envoyés au serveur par `migrerExecutionsLocalVersServeur`
+ * (`useExecutionStore`) au premier `charger()`.
+ */
+export const executionsAMigrer: Execution[] = []
+export const executionStepsAMigrer: ExecutionStep[] = []
+export const measurementsAMigrer: Measurement[] = []
+export const executionEventsAMigrer: ExecutionEvent[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -404,10 +417,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  executions!: EntityTable<Execution, 'id'>
-  executionSteps!: EntityTable<ExecutionStep, 'id'>
-  measurements!: EntityTable<Measurement, 'id'>
-  executionEvents!: EntityTable<ExecutionEvent, 'id'>
   evidences!: EntityTable<Evidence, 'id'>
   evidenceLocations!: EntityTable<EvidenceLocation, 'id'>
   provenanceLinks!: EntityTable<ProvenanceLink, 'id'>
@@ -969,6 +978,29 @@ export class ValidaPharmDatabase extends Dexie {
         testsAMigrer.push(...tests)
         const couvertures = await tx.table<Couverture>('couvertures').toArray()
         couverturesAMigrer.push(...couvertures)
+      })
+
+    // Execution/ExecutionStep/Measurement/ExecutionEvent : migrés vers le
+    // Worker/D1 (Target Architecture, domaine "Execution", Phase 6b du
+    // chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) —
+    // même technique de capture avant suppression physique que la
+    // version 45 ci-dessus.
+    this.version(46)
+      .stores({
+        executions: null,
+        executionSteps: null,
+        measurements: null,
+        executionEvents: null,
+      })
+      .upgrade(async (tx) => {
+        const executions = await tx.table<Execution>('executions').toArray()
+        executionsAMigrer.push(...executions)
+        const executionSteps = await tx.table<ExecutionStep>('executionSteps').toArray()
+        executionStepsAMigrer.push(...executionSteps)
+        const measurements = await tx.table<Measurement>('measurements').toArray()
+        measurementsAMigrer.push(...measurements)
+        const executionEvents = await tx.table<ExecutionEvent>('executionEvents').toArray()
+        executionEventsAMigrer.push(...executionEvents)
       })
   }
 }

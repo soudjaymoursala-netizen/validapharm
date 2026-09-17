@@ -97,20 +97,20 @@ async function seedChainePrete(assetNodeId: string): Promise<void> {
     testId: 'test-1',
     createdAt: maintenant,
   })
-  await db.executions.put({
+  await ctx.executionRepo.creerExecution({
     id: 'exec-1',
-    client_id: clientId,
-    test_id: 'test-1',
-    asset_node_id: assetNodeId,
+    clientId,
+    testId: 'test-1',
+    assetNodeId,
     executant: 'local',
     statut: 'terminee',
     verdict: 'conforme',
-    date_debut: maintenant,
-    date_fin: maintenant,
-    audit_log: [],
-    created_at: maintenant,
-    updated_at: maintenant,
-  } as never)
+    dateDebut: maintenant,
+    dateFin: maintenant,
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  })
   await db.evidences.put({
     id: 'ev-1',
     client_id: clientId,
@@ -128,7 +128,6 @@ async function seedChainePrete(assetNodeId: string): Promise<void> {
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.contentPlans.clear()
-  await db.executions.clear()
   await db.evidences.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()

@@ -18,6 +18,13 @@ import type {
   DocumentsNormatifsRepo,
 } from './repos/documentsNormatifsRepo'
 import type {
+  ExecutionEnregistree,
+  ExecutionEventEnregistree,
+  ExecutionRepo,
+  ExecutionStepEnregistree,
+  MeasurementEnregistree,
+} from './repos/executionRepo'
+import type {
   EvaluationImpactAssessmentEnregistree,
   ImpactAssessmentRepo,
   MethodProfileImpactAssessmentEnregistre,
@@ -113,6 +120,7 @@ export interface Contexte {
   processContextRepo: ProcessContextRepo
   qualityEventRepo: QualityEventRepo
   testDefinitionRepo: TestDefinitionRepo
+  executionRepo: ExecutionRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -759,6 +767,71 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchTestDefinitionMigrationLocale[1] as string,
+    )
+  }
+
+  // --- Execution/ExecutionStep/Measurement/ExecutionEvent (Target
+  // Architecture, domaine "Execution", Phase 6b du chantier de migration D1) ---
+  const matchExecutions = chemin.match(/^\/clients\/([^/]+)\/executions$/)
+  if (matchExecutions && request.method === 'GET') {
+    return gererObtenirExecutions(request, ctx, entetes, matchExecutions[1] as string)
+  }
+  if (matchExecutions && request.method === 'POST') {
+    return gererDemarrerExecution(request, ctx, entetes, matchExecutions[1] as string)
+  }
+  const matchExecutionEtapes = chemin.match(/^\/clients\/([^/]+)\/executions\/([^/]+)\/etapes$/)
+  if (matchExecutionEtapes && request.method === 'POST') {
+    return gererEnregistrerResultatEtape(
+      request,
+      ctx,
+      entetes,
+      matchExecutionEtapes[1] as string,
+      matchExecutionEtapes[2] as string,
+    )
+  }
+  const matchExecutionStepMesures = chemin.match(
+    /^\/clients\/([^/]+)\/execution-steps\/([^/]+)\/mesures$/,
+  )
+  if (matchExecutionStepMesures && request.method === 'POST') {
+    return gererAjouterMesure(
+      request,
+      ctx,
+      entetes,
+      matchExecutionStepMesures[1] as string,
+      matchExecutionStepMesures[2] as string,
+    )
+  }
+  const matchExecutionEvenements = chemin.match(
+    /^\/clients\/([^/]+)\/executions\/([^/]+)\/evenements$/,
+  )
+  if (matchExecutionEvenements && request.method === 'POST') {
+    return gererConsignerEvenement(
+      request,
+      ctx,
+      entetes,
+      matchExecutionEvenements[1] as string,
+      matchExecutionEvenements[2] as string,
+    )
+  }
+  const matchExecutionCloturer = chemin.match(/^\/clients\/([^/]+)\/executions\/([^/]+)\/cloturer$/)
+  if (matchExecutionCloturer && request.method === 'PATCH') {
+    return gererCloturerExecution(
+      request,
+      ctx,
+      entetes,
+      matchExecutionCloturer[1] as string,
+      matchExecutionCloturer[2] as string,
+    )
+  }
+  const matchExecutionsMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/executions\/migration-locale$/,
+  )
+  if (matchExecutionsMigrationLocale && request.method === 'POST') {
+    return gererMigrerExecutionsLocal(
+      request,
+      ctx,
+      entetes,
+      matchExecutionsMigrationLocale[1] as string,
     )
   }
 
@@ -3695,6 +3768,309 @@ async function gererMigrerTestDefinitionLocal(
       testCandidates: corps.testCandidates ?? [],
       tests: corps.tests ?? [],
       couvertures: corps.couvertures ?? [],
+    },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : Execution/ExecutionStep/Measurement/ExecutionEvent
+// (Target Architecture, domaine "Execution", Phase 6b du chantier de
+// migration D1) ---
+
+async function gererObtenirExecutions(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [executions, executionSteps, measurements, executionEvents] = await Promise.all([
+    ctx.executionRepo.listerExecutions(clientId),
+    ctx.executionRepo.listerExecutionSteps(clientId),
+    ctx.executionRepo.listerMeasurements(clientId),
+    ctx.executionRepo.listerExecutionEvents(clientId),
+  ])
+  return reponseJson({ executions, executionSteps, measurements, executionEvents }, 200, entetes)
+}
+
+interface SaisieDemarrageExecution {
+  testId?: string
+  assetNodeId?: string | null
+}
+
+/** Une `Execution` ne peut être créée qu'à partir d'un `Test` au statut `approuve` — revérifié ici côté serveur, même garde-fou que côté store avant la migration. */
+async function gererDemarrerExecution(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieDemarrageExecution>(request)
+  if (!corps?.testId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const test = await ctx.testDefinitionRepo.testParId(corps.testId)
+  if (!test || test.clientId !== clientId) {
+    return reponseJson({ erreur: 'test_introuvable' }, 404, entetes)
+  }
+  if (test.statut !== 'approuve') {
+    return reponseJson({ erreur: 'test_non_approuve' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const execution: ExecutionEnregistree = {
+    id: genererId(),
+    clientId,
+    testId: corps.testId,
+    assetNodeId: corps.assetNodeId ?? null,
+    executant: acteur.email,
+    statut: 'en_cours',
+    verdict: null,
+    dateDebut: maintenant,
+    dateFin: null,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'démarrage' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.executionRepo.creerExecution(execution)
+  return reponseJson({ execution }, 201, entetes)
+}
+
+interface SaisieResultatEtape {
+  testStepId?: string
+  resultat?: string
+  observation?: string
+}
+
+/** Immutable une fois créé — une correction passe par un `ExecutionEvent`, jamais une réécriture. */
+async function gererEnregistrerResultatEtape(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  executionId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const execution = await ctx.executionRepo.executionParId(executionId)
+  if (!execution || execution.clientId !== clientId) {
+    return reponseJson({ erreur: 'execution_introuvable' }, 404, entetes)
+  }
+  if (execution.statut === 'terminee') {
+    return reponseJson({ erreur: 'execution_deja_cloturee' }, 400, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieResultatEtape>(request)
+  if (!corps?.testStepId || !corps.resultat || corps.observation === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const test = await ctx.testDefinitionRepo.testParId(execution.testId)
+  const etapeConnue = test?.etapes.some((e) => e.id === corps.testStepId) ?? false
+  if (!etapeConnue) return reponseJson({ erreur: 'etape_inconnue' }, 400, entetes)
+
+  const etape: ExecutionStepEnregistree = {
+    id: genererId(),
+    clientId,
+    executionId,
+    testStepId: corps.testStepId,
+    resultat: corps.resultat,
+    observation: corps.observation,
+    horodatage: horodatage(),
+  }
+  await ctx.executionRepo.creerExecutionStep(etape)
+  return reponseJson({ executionStep: etape }, 201, entetes)
+}
+
+interface SaisieMesure {
+  libelle?: string
+  valeur?: string
+  unite?: string | null
+}
+
+async function gererAjouterMesure(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  executionStepId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const etape = await ctx.executionRepo.executionStepParId(executionStepId)
+  if (!etape || etape.clientId !== clientId) {
+    return reponseJson({ erreur: 'etape_execution_introuvable' }, 404, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieMesure>(request)
+  if (!corps?.libelle || !corps.valeur) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const mesure: MeasurementEnregistree = {
+    id: genererId(),
+    clientId,
+    executionStepId,
+    libelle: corps.libelle,
+    valeur: corps.valeur,
+    unite: corps.unite ?? null,
+    horodatage: horodatage(),
+  }
+  await ctx.executionRepo.creerMeasurement(mesure)
+  return reponseJson({ measurement: mesure }, 201, entetes)
+}
+
+interface SaisieEvenementExecution {
+  type?: string
+  description?: string
+  qualityEventId?: string | null
+}
+
+/** `qualityEventId` référence optionnellement un `QualityEvent` déjà existant — jamais créé automatiquement ici. */
+async function gererConsignerEvenement(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  executionId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const execution = await ctx.executionRepo.executionParId(executionId)
+  if (!execution || execution.clientId !== clientId) {
+    return reponseJson({ erreur: 'execution_introuvable' }, 404, entetes)
+  }
+  if (execution.statut === 'terminee') {
+    return reponseJson({ erreur: 'execution_deja_cloturee' }, 400, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieEvenementExecution>(request)
+  if (!corps?.type || corps.description === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const evenement: ExecutionEventEnregistree = {
+    id: genererId(),
+    clientId,
+    executionId,
+    type: corps.type,
+    description: corps.description,
+    qualityEventId: corps.qualityEventId ?? null,
+    horodatage: horodatage(),
+    actor: acteur.email,
+  }
+  await ctx.executionRepo.creerExecutionEvent(evenement)
+  return reponseJson({ executionEvent: evenement }, 201, entetes)
+}
+
+interface SaisieClotureExecution {
+  verdict?: string
+}
+
+/** Le verdict est toujours fourni explicitement par l'appelant — jamais déduit des ExecutionStep. */
+async function gererCloturerExecution(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  executionId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const existante = await ctx.executionRepo.executionParId(executionId)
+  if (!existante || existante.clientId !== clientId) {
+    return reponseJson({ erreur: 'execution_introuvable' }, 404, entetes)
+  }
+  if (existante.statut === 'terminee') {
+    return reponseJson({ erreur: 'execution_deja_cloturee' }, 400, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieClotureExecution>(request)
+  if (!corps?.verdict) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const maintenant = horodatage()
+  const execution: ExecutionEnregistree = {
+    ...existante,
+    statut: 'terminee',
+    verdict: corps.verdict,
+    dateFin: maintenant,
+    updatedAt: maintenant,
+    auditLog: [
+      ...existante.auditLog,
+      { timestamp: maintenant, actor: acteur.email, action: `clôture : ${corps.verdict}` },
+    ],
+  }
+  await ctx.executionRepo.remplacerExecution(execution)
+  return reponseJson({ execution }, 200, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale
+ * (`executionsAMigrer`/`executionStepsAMigrer`/etc.,
+ * `useExecutionStore.migrerExecutionsLocalVersServeur`) — idempotente,
+ * l'existant côté serveur gagne toujours (`ON CONFLICT(id) DO NOTHING`
+ * dans `D1ExecutionRepo`), même discipline que les autres migrations
+ * locales de ce chantier.
+ */
+interface SaisieMigrationExecutions {
+  executions?: ExecutionEnregistree[]
+  executionSteps?: ExecutionStepEnregistree[]
+  measurements?: MeasurementEnregistree[]
+  executionEvents?: ExecutionEventEnregistree[]
+}
+
+async function gererMigrerExecutionsLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationExecutions>(request)
+  if (
+    !corps ||
+    (!Array.isArray(corps.executions) &&
+      !Array.isArray(corps.executionSteps) &&
+      !Array.isArray(corps.measurements) &&
+      !Array.isArray(corps.executionEvents))
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const e of corps.executions ?? []) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.executionRepo.creerExecution(e)
+  }
+  for (const e of corps.executionSteps ?? []) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.executionRepo.creerExecutionStep(e)
+  }
+  for (const m of corps.measurements ?? []) {
+    if (m.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.executionRepo.creerMeasurement(m)
+  }
+  for (const e of corps.executionEvents ?? []) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.executionRepo.creerExecutionEvent(e)
+  }
+  return reponseJson(
+    {
+      executions: corps.executions ?? [],
+      executionSteps: corps.executionSteps ?? [],
+      measurements: corps.measurements ?? [],
+      executionEvents: corps.executionEvents ?? [],
     },
     200,
     entetes,

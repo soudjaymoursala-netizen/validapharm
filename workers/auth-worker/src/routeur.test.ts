@@ -15,6 +15,7 @@ import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
 import { CSVAssessmentRepoMemoire } from './repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
+import { ExecutionRepoMemoire } from './repos/executionRepo'
 import { ImpactAssessmentRepoMemoire } from './repos/impactAssessmentRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametersRepoMemoire } from './repos/parametersRepo'
@@ -58,6 +59,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     processContextRepo: new ProcessContextRepoMemoire(),
     qualityEventRepo: new QualityEventRepoMemoire(),
     testDefinitionRepo: new TestDefinitionRepoMemoire(),
+    executionRepo: new ExecutionRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -189,6 +191,14 @@ interface CorpsReponse {
   tests: TestJson[]
   couverture: CouvertureJson
   couvertures: CouvertureJson[]
+  execution: ExecutionJson
+  executions: ExecutionJson[]
+  executionStep: ExecutionStepJson
+  executionSteps: ExecutionStepJson[]
+  measurement: MeasurementJson
+  measurements: MeasurementJson[]
+  executionEvent: ExecutionEventJson
+  executionEvents: ExecutionEventJson[]
 }
 
 interface RequirementJson {
@@ -249,6 +259,52 @@ interface CouvertureJson {
   requirementId: string
   testId: string
   createdAt: string
+}
+
+interface ExecutionJson {
+  id: string
+  clientId: string
+  testId: string
+  assetNodeId: string | null
+  executant: string
+  statut: string
+  verdict: string | null
+  dateDebut: string
+  dateFin: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface ExecutionStepJson {
+  id: string
+  clientId: string
+  executionId: string
+  testStepId: string
+  resultat: string
+  observation: string
+  horodatage: string
+}
+
+interface MeasurementJson {
+  id: string
+  clientId: string
+  executionStepId: string
+  libelle: string
+  valeur: string
+  unite: string | null
+  horodatage: string
+}
+
+interface ExecutionEventJson {
+  id: string
+  clientId: string
+  executionId: string
+  type: string
+  description: string
+  qualityEventId: string | null
+  horodatage: string
+  actor: string
 }
 
 interface QualityEventJson {
@@ -3073,6 +3129,386 @@ describe('routerRequete — Requirement/TestObjective/TestCandidate/Test/Couvert
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/test-definition`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (Target Architecture, domaine "Execution", Phase 6b du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  /** Chaîne complète Requirement→TestObjective→TestCandidate(accepté)→Test(approuvé), avec une étape, prête à être exécutée. */
+  async function creerTestApprouveDeTest(
+    ctx: Contexte,
+    jeton: string,
+    clientId: string,
+  ): Promise<TestJson> {
+    const requirement = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/requirements`,
+      { jeton, body: { reference: 'REQ-1', titre: 'Débit stable', description: 'x' } },
+    )
+    const objectif = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-objectives`,
+      {
+        jeton,
+        body: {
+          requirementId: requirement.corps.requirement.id,
+          titre: 'Objectif',
+          description: 'x',
+        },
+      },
+    )
+    const candidat = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-candidates`,
+      {
+        jeton,
+        body: { testObjectiveId: objectif.corps.testObjective.id, titre: 'C', description: 'x' },
+      },
+    )
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${candidat.corps.testCandidate.id}/statut`,
+      { jeton, body: { statut: 'accepte' } },
+    )
+    const test = await requete(ctx, 'POST', `/clients/${clientId}/test-definition/tests`, {
+      jeton,
+      body: {
+        testCandidateId: candidat.corps.testCandidate.id,
+        titre: 'Test débit',
+        description: 'x',
+        etapes: [{ ordre: 1, action: 'Démarrer', resultatAttendu: 'Débit stable' }],
+      },
+    })
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/tests/${test.corps.test.id}/approuver`,
+      { jeton },
+    )
+    return test.corps.test
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.executions).toEqual([])
+    expect(obtenir.corps.executionSteps).toEqual([])
+    expect(obtenir.corps.measurements).toEqual([])
+    expect(obtenir.corps.executionEvents).toEqual([])
+  })
+
+  test('démarrer une exécution depuis un Test approuvé : id/statut/audit_log dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const test = await creerTestApprouveDeTest(ctx, admin.jeton, clientId)
+
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId: test.id, assetNodeId: 'granulateur-01' },
+    })
+    expect(demarrage.status).toBe(201)
+    expect(demarrage.corps.execution.statut).toBe('en_cours')
+    expect(demarrage.corps.execution.verdict).toBeNull()
+    expect(demarrage.corps.execution.auditLog).toEqual([
+      { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'démarrage' },
+    ])
+  })
+
+  test('démarrer une exécution depuis un Test non approuvé -> test_non_approuve', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const requirement = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/requirements`,
+      { jeton: admin.jeton, body: { reference: 'REQ-1', titre: 'Débit stable', description: 'x' } },
+    )
+    const objectif = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-objectives`,
+      {
+        jeton: admin.jeton,
+        body: {
+          requirementId: requirement.corps.requirement.id,
+          titre: 'Objectif',
+          description: 'x',
+        },
+      },
+    )
+    const candidat = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-candidates`,
+      {
+        jeton: admin.jeton,
+        body: { testObjectiveId: objectif.corps.testObjective.id, titre: 'C', description: 'x' },
+      },
+    )
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${candidat.corps.testCandidate.id}/statut`,
+      { jeton: admin.jeton, body: { statut: 'accepte' } },
+    )
+    const test = await requete(ctx, 'POST', `/clients/${clientId}/test-definition/tests`, {
+      jeton: admin.jeton,
+      body: {
+        testCandidateId: candidat.corps.testCandidate.id,
+        titre: 'Test débit',
+        description: 'x',
+        etapes: [],
+      },
+    })
+
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId: test.corps.test.id, assetNodeId: null },
+    })
+    expect(demarrage.status).toBe(400)
+    expect(demarrage.corps.erreur).toBe('test_non_approuve')
+  })
+
+  test('démarrer une exécution depuis un Test inconnu -> test_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId: 'inconnu', assetNodeId: null },
+    })
+    expect(demarrage.status).toBe(404)
+    expect(demarrage.corps.erreur).toBe('test_introuvable')
+  })
+
+  test('enregistrer un résultat d’étape : immutable, jamais réécrit', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const test = await creerTestApprouveDeTest(ctx, admin.jeton, clientId)
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId: test.id, assetNodeId: null },
+    })
+    const executionId = demarrage.corps.execution.id
+    const testStepId = test.etapes[0]?.id
+
+    const resultat = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${executionId}/etapes`,
+      { jeton: admin.jeton, body: { testStepId, resultat: 'conforme', observation: 'RAS' } },
+    )
+    expect(resultat.status).toBe(201)
+    expect(resultat.corps.executionStep.resultat).toBe('conforme')
+    expect(resultat.corps.executionStep.testStepId).toBe(testStepId)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.executionSteps.map((e) => e.id)).toContain(resultat.corps.executionStep.id)
+  })
+
+  test('enregistrer un résultat d’étape sur une étape inconnue -> etape_inconnue', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const test = await creerTestApprouveDeTest(ctx, admin.jeton, clientId)
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId: test.id, assetNodeId: null },
+    })
+
+    const resultat = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${demarrage.corps.execution.id}/etapes`,
+      {
+        jeton: admin.jeton,
+        body: { testStepId: 'inconnue', resultat: 'conforme', observation: '' },
+      },
+    )
+    expect(resultat.status).toBe(400)
+    expect(resultat.corps.erreur).toBe('etape_inconnue')
+  })
+
+  test('enregistrer un résultat d’étape sur une exécution inconnue -> execution_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const resultat = await requete(ctx, 'POST', `/clients/${clientId}/executions/inconnue/etapes`, {
+      jeton: admin.jeton,
+      body: { testStepId: 'x', resultat: 'conforme', observation: '' },
+    })
+    expect(resultat.status).toBe(404)
+    expect(resultat.corps.erreur).toBe('execution_introuvable')
+  })
+
+  test('ajouter une mesure à une étape d’exécution', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const test = await creerTestApprouveDeTest(ctx, admin.jeton, clientId)
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId: test.id, assetNodeId: null },
+    })
+    const resultat = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${demarrage.corps.execution.id}/etapes`,
+      {
+        jeton: admin.jeton,
+        body: { testStepId: test.etapes[0]?.id, resultat: 'conforme', observation: '' },
+      },
+    )
+
+    const mesure = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/execution-steps/${resultat.corps.executionStep.id}/mesures`,
+      { jeton: admin.jeton, body: { libelle: 'F0 sonde froide', valeur: '15.4', unite: 'min' } },
+    )
+    expect(mesure.status).toBe(201)
+    expect(mesure.corps.measurement.valeur).toBe('15.4')
+  })
+
+  test('ajouter une mesure à une étape d’exécution inconnue -> etape_execution_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const mesure = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/execution-steps/inconnue/mesures`,
+      { jeton: admin.jeton, body: { libelle: 'x', valeur: '1', unite: null } },
+    )
+    expect(mesure.status).toBe(404)
+    expect(mesure.corps.erreur).toBe('etape_execution_introuvable')
+  })
+
+  test('consigner un événement d’exécution — quality_event_id optionnel jamais créé automatiquement', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const test = await creerTestApprouveDeTest(ctx, admin.jeton, clientId)
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId: test.id, assetNodeId: null },
+    })
+
+    const evenement = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${demarrage.corps.execution.id}/evenements`,
+      {
+        jeton: admin.jeton,
+        body: { type: 'commentaire', description: 'RAS', qualityEventId: null },
+      },
+    )
+    expect(evenement.status).toBe(201)
+    expect(evenement.corps.executionEvent.type).toBe('commentaire')
+    expect(evenement.corps.executionEvent.qualityEventId).toBeNull()
+  })
+
+  test('clôturer une exécution : verdict toujours fourni explicitement, jamais déduit', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const test = await creerTestApprouveDeTest(ctx, admin.jeton, clientId)
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId: test.id, assetNodeId: null },
+    })
+
+    const cloture = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/executions/${demarrage.corps.execution.id}/cloturer`,
+      { jeton: admin.jeton, body: { verdict: 'conforme' } },
+    )
+    expect(cloture.status).toBe(200)
+    expect(cloture.corps.execution.statut).toBe('terminee')
+    expect(cloture.corps.execution.verdict).toBe('conforme')
+    expect(cloture.corps.execution.auditLog).toHaveLength(2)
+
+    const recloture = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/executions/${demarrage.corps.execution.id}/cloturer`,
+      { jeton: admin.jeton, body: { verdict: 'non_conforme' } },
+    )
+    expect(recloture.status).toBe(400)
+    expect(recloture.corps.erreur).toBe('execution_deja_cloturee')
+  })
+
+  test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const executionLocale = {
+      id: 'execution-locale-1',
+      clientId,
+      testId: 'test-x',
+      assetNodeId: null,
+      executant: 'local',
+      statut: 'en_cours',
+      verdict: null,
+      dateDebut: '2026-01-01T00:00:00.000Z',
+      dateFin: null,
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/migration-locale`,
+      { jeton: admin.jeton, body: { executions: [executionLocale] } },
+    )
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(ctx, 'POST', `/clients/${clientId}/executions/migration-locale`, {
+      jeton: admin.jeton,
+      body: { executions: [{ ...executionLocale, statut: 'terminee' }] },
+    })
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.executions).toHaveLength(1)
+    expect(liste.corps.executions[0]?.statut).toBe('en_cours')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/executions`)
     expect(obtenir.status).toBe(401)
   })
 })

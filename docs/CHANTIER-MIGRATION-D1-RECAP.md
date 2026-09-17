@@ -98,7 +98,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `processes`, `fonctionsActif`, `associationsFonctionAssetNode`, `associationsFonctionProcess`, `manufacturingContexts` | D1 | ✅ **Phase 5a terminée — voir §13** |
 | `qualityEvents`, `referencesQualityEvent` | D1 | ✅ **Phase 5b terminée — voir §14. Phase 5 entièrement close.** |
 | `requirements`, `testObjectives`, `testCandidates`, `tests`, `couvertures` | D1 | ✅ **Phase 6a terminée — voir §15** |
-| `executions`, `executionSteps`, `measurements`, `executionEvents` | D1 | ⬜ Phase 6 |
+| `executions`, `executionSteps`, `measurements`, `executionEvents` | D1 | ✅ **Phase 6b terminée — voir §16** |
 | `evidences`, `evidenceLocations`, `provenanceLinks` | D1 | ⬜ Phase 6 |
 | `sources`, `sourceVersions`, `sourceLocations`, `extractions`, `extractionItems`, `knowledgeItems`, `confirmations`, `knowledgeRelations`, `conflicts` | D1 | ⬜ Phase 7 |
 | `contentPlans` | D1 | ⬜ Phase 7 |
@@ -1599,3 +1599,108 @@ Enchaîner sur la Phase 6b sans s'arrêter pour confirmation, conformément
 à la consigne permanente de l'utilisateur. Le problème des nœuds SAP (bug
 d'import original) reste explicitement reporté, comme depuis le début de
 ce chantier.
+
+---
+
+## 16. État détaillé — Phase 6b (`Execution`/`ExecutionStep`/`Measurement`/`ExecutionEvent`), au 17/09/2026
+
+Deuxième brique de la Phase 6 — le moteur d'exécution d'un `Test`
+approuvé (`Requirement → TestObjective → TestCandidate → Test` migrés en
+Phase 6a). Jamais l'Evidence documentaire associée (Phase 6c :
+`evidences`/`evidenceLocations`/`provenanceLinks`), traitée séparément —
+risque élevé, séquencé en étapes distinctes comme prévu depuis l'origine
+de ce domaine.
+
+### 16.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0016_execution.sql`
+   crée 4 tables (`executions`, `execution_steps`, `measurements`,
+   `execution_events`) + un index par table sur `client_id`.
+   `execution_steps`/`measurements`/`execution_events` n'ont ni
+   `audit_log` ni `updated_at` : immutables une fois créés (aucune
+   mutation démontrée par les sources) — seule `executions` est mutable
+   (`statut`/`verdict`/`date_fin` via la clôture), même discipline que
+   `test_candidates`/`tests` (Phase 6a).
+2. **1 dépôt Worker** : `executionRepo.ts` (interface +
+   `ExecutionRepoMemoire`) + son implémentation D1
+   (`d1ExecutionRepo.ts`). Création idempotente via `ON CONFLICT(id) DO
+   NOTHING`. `executionParId`/`remplacerExecution` suivent le patron
+   mutable déjà utilisé pour TestCandidate/Test (Phase 6a) :
+   `remplacerExecution` ne met à jour que
+   `statut`/`verdict`/`date_fin`/`audit_log`/`updated_at`.
+3. **7 nouvelles routes Worker** sous `/clients/:clientId/executions...`
+   (obtenir, démarrer une exécution depuis un Test **approuvé
+   uniquement** — revérifié côté serveur, jamais fait confiance au
+   client —, enregistrer un résultat d'étape avec vérification que
+   l'étape appartient réellement au Test exécuté, ajouter une mesure via
+   `/execution-steps/:id/mesures`, consigner un événement, clôturer avec
+   verdict toujours fourni explicitement, migration locale), toutes via
+   `exigerAccesClient`. Clés JSON `execution(s)`/`executionStep(s)`/
+   `measurement(s)`/`executionEvent(s)` — noms neufs, aucune collision
+   avec les domaines déjà migrés.
+4. **`index.ts`** : `D1ExecutionRepo` câblé dans `routerRequete`.
+5. **13 nouveaux tests Worker** (`routeur.test.ts`) : liste vide,
+   démarrage depuis Test approuvé (id/statut/audit_log dérivés côté
+   serveur), démarrage depuis Test non approuvé → `test_non_approuve`,
+   démarrage depuis Test inconnu → `test_introuvable`, enregistrement de
+   résultat d'étape (+ étape inconnue → `etape_inconnue`, + exécution
+   inconnue → `execution_introuvable`), ajout de mesure (+ étape
+   d'exécution inconnue → `etape_execution_introuvable`), consignation
+   d'événement (`quality_event_id` optionnel jamais créé
+   automatiquement), clôture avec verdict explicite (+ reclôture →
+   `execution_deja_cloturee`), migration locale idempotente,
+   non-authentifié → 401. Suite Worker au complet : **197/197 tests
+   verts** (`cd workers/auth-worker && npx tsc --noEmit && npx vitest
+   run`).
+6. **`AuthApiClient`** : `ExecutionWire`/`ExecutionStepWire`/
+   `MeasurementWire`/`ExecutionEventWire` + saisies + 7 méthodes.
+7. **`useExecutionStore` entièrement réécrit** (API publique inchangée :
+   `executions`, `executionSteps`, `measurements`, `executionEvents`,
+   `enChargement`, `charger`, `demarrerExecution` (revérifie aussi
+   côté client que le Test est `approuve`, en plus de la revérification
+   serveur), `enregistrerResultatEtape`, `ajouterMesure`,
+   `consignerEvenement`, `cloturerExecution`, `etapesExecution`,
+   `mesuresEtape`, `evenementsExecution` — toutes pures, inchangées).
+8. **Ripple effect côté production** : `useContentPlanStore.ts` (calcul
+   de `readiness`) et `useReasoningEngineStore.ts` (donnée `executions`
+   pour le moteur de raisonnement) basculés vers
+   `useExecutionStore().charger(clientId)` plutôt que `db.executions`
+   directement. `useEvidenceStore.ts` (`enregistrerPreuve`) bascule
+   pareil pour vérifier qu'une Execution existe/n'est pas clôturée et
+   qu'un ExecutionStep référencé est réel — Evidence reste elle-même
+   Dexie (Phase 6c, pas encore migrée).
+9. **Filet de sécurité de migration locale** : capture Dexie **v46**
+   (`persistance/db.ts`, 4 tables supprimées, données capturées dans
+   `executionsAMigrer`/`executionStepsAMigrer`/`measurementsAMigrer`/
+   `executionEventsAMigrer` — formes domaine inchangées).
+10. **5 fichiers de test corrigés** (accès Dexie direct remplacé par de
+    vrais appels store/`ctx.executionRepo`) : `useExecutionStore.test.ts`
+    (suppression des `db.executions/executionSteps/measurements/
+    executionEvents.clear()` devenus inutiles, table Dexie supprimée),
+    `useEvidenceStore.test.ts` (idem), `useContentPlanStore.test.ts`/
+    `ContentPlan.test.ts` (`db.executions.put` → `ctx.executionRepo.
+    creerExecution`, champs wire camelCase), `ExecutionTests.test.ts`
+    (tous les `db.executions/executionSteps/measurements.toArray()/
+    where()` remplacés par `ctx.executionRepo.lister*(CLIENT_ID)` —
+    Evidence, non migrée, reste lue via `db.evidences` directement).
+11. **Validation complète (17/09/2026)** : `vue-tsc --noEmit`/`tsc
+    --noEmit` (Worker) sans erreur, `eslint`/`prettier --check` (src +
+    workers/auth-worker/src) sans erreur ni avertissement, `npx vitest
+    run` racine (**1323/1323 tests verts**), `cd workers/auth-worker &&
+    npx vitest run` (**197/197 tests verts**).
+
+### 16.2 Ce qui RESTE À FAIRE
+
+1. ⬜ **Commit + push + PR** (mirroir exact du process 4a-4d/5a/5b/6a) +
+   CI verte + merge squash sur `main`.
+2. ⬜ **Appliquer `0016_execution.sql` en production D1**
+   (`validapharm-auth`, requêtes séparées CREATE TABLE/INDEX +
+   vérification `sqlite_master`).
+3. ⬜ **Vérifier le déploiement Worker en production**
+   (`workers_get_worker_code`, chercher `executions`/`D1ExecutionRepo`).
+4. ⬜ **Redémarrer la branche depuis `main`** + PR doc-only complétant
+   cette section §16 avec les faits réels post-merge/déploiement (même
+   format que §15.2), puis merger cette PR doc-only aussi.
+5. ⬜ Seulement après tout ceci : enchaîner sur la Phase 6c
+   (`evidences`/`evidenceLocations`/`provenanceLinks`), sans s'arrêter
+   pour confirmation.
