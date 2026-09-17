@@ -855,9 +855,28 @@ Structure Système (Phase 1), pas celui de `Project` (Phase 3a).
     `cd workers/auth-worker && npx vitest run` (**125/125 tests verts**,
     dont les 8 nouveaux tests ACFC).
 
-### 9.2 Phase 4a — terminée
+### 9.2 Phase 4a — terminée (17/09/2026)
 
-_À compléter après commit/push/PR/merge/migration-apply/déploiement._
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #46 ouverte. `Lint, typecheck, tests` et les deux `Workers
+   Builds` (`ia-relay`/`auth-worker`) verts dès le premier passage — le
+   correctif `--config` du Version command (§8.2 point 6) tient sans
+   aucun contournement. Mergée sur `main` (squash, commit `af5c12b`).
+3. ✅ Migration `0009_acfc.sql` appliquée en production D1
+   (`validapharm-auth`) — les deux tables et leurs index confirmés
+   présents (`sqlite_master`). **Étourderie repérée et corrigée dans la
+   foulée** : le premier passage n'avait créé que l'index
+   `idx_method_profiles_acfc_client`, pas
+   `idx_evaluations_acfc_client` (oublié en enchaînant les requêtes) —
+   détecté immédiatement par la vérification `sqlite_master` d'usage,
+   corrigé par une requête `CREATE INDEX` supplémentaire, reconfirmé.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : `D1AcfcRepo`,
+   les routes `/clients/:clientId/acfc/...` et `ctx.acfcRepo` bien
+   présents.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `ACFC` n'a jamais été synchronisé
+   vers GitHub, même avant cette migration : pas une régression.
 
 ### 9.3 Prochaine action
 
