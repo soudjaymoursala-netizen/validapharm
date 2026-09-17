@@ -1689,18 +1689,37 @@ de ce domaine.
     run` racine (**1323/1323 tests verts**), `cd workers/auth-worker &&
     npx vitest run` (**197/197 tests verts**).
 
-### 16.2 Ce qui RESTE À FAIRE
+### 16.2 Phase 6b — terminée (17/09/2026)
 
-1. ⬜ **Commit + push + PR** (mirroir exact du process 4a-4d/5a/5b/6a) +
-   CI verte + merge squash sur `main`.
-2. ⬜ **Appliquer `0016_execution.sql` en production D1**
-   (`validapharm-auth`, requêtes séparées CREATE TABLE/INDEX +
-   vérification `sqlite_master`).
-3. ⬜ **Vérifier le déploiement Worker en production**
-   (`workers_get_worker_code`, chercher `executions`/`D1ExecutionRepo`).
-4. ⬜ **Redémarrer la branche depuis `main`** + PR doc-only complétant
-   cette section §16 avec les faits réels post-merge/déploiement (même
-   format que §15.2), puis merger cette PR doc-only aussi.
-5. ⬜ Seulement après tout ceci : enchaîner sur la Phase 6c
-   (`evidences`/`evidenceLocations`/`provenanceLinks`), sans s'arrêter
-   pour confirmation.
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #60 ouverte. Premier passage de CI rouge sur `Lint, typecheck,
+   tests` : `DossierVivantActif.test.ts` en échec (comparaison de texte
+   sur un écran ne référençant ni `Execution` ni aucun fichier touché par
+   ce diff) — passait 3/3 en local isolé, cohérent avec la fragilité de
+   timing déjà documentée dans les commentaires de ce test (course entre
+   plusieurs `charger()` concurrents dans `onMounted`). Un seul re-run
+   ciblé (`rerun_failed_jobs`) a confirmé le flake : CI verte ensuite.
+   Mergée sur `main` (squash, commit `90d431b`).
+3. ✅ Migration `0016_execution.sql` appliquée en production D1
+   (`validapharm-auth`) en 8 requêtes séparées (4 `CREATE TABLE` + 4
+   `CREATE INDEX`), toutes réussies du premier coup. Vérification
+   `sqlite_master` confirmant les 4 tables + leurs 4 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : les routes et
+   `D1ExecutionRepo` présents dans le bundle (20 occurrences).
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `Execution`/`ExecutionStep`/
+   `Measurement`/`ExecutionEvent` n'ont jamais été synchronisés vers
+   GitHub, même avant cette migration : pas une régression.
+
+### 16.3 Phase 6b — close ; suite du chantier
+
+Reste, dans la Phase 6 (voir §3) :
+
+- **Phase 6c** : `evidences`/`evidenceLocations`/`provenanceLinks`
+  (Evidence) — dernière brique du Test/Execution/Evidence engine.
+
+Enchaîner sur la Phase 6c sans s'arrêter pour confirmation, conformément
+à la consigne permanente de l'utilisateur. Le problème des nœuds SAP (bug
+d'import original) reste explicitement reporté, comme depuis le début de
+ce chantier.
