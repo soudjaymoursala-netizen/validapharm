@@ -13,6 +13,7 @@ import type {
 import { executerBoucleRaisonnement } from '../../logique-metier/raisonnement/boucleRaisonnement'
 import { CATALOGUE_OUTILS_RAISONNEMENT } from '../../logique-metier/raisonnement/outilsRaisonnement'
 import { db } from '../../persistance/db'
+import { useProcessContextStore } from './useProcessContextStore'
 import { useStructureSystemeStore } from './useStructureSystemeStore'
 
 const VERSION_CONFIGURATION_ACTUELLE = 'v1'
@@ -102,6 +103,10 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
     // direct, devenu impossible depuis cette migration.
     const structureStore = useStructureSystemeStore()
     await structureStore.charger(clientId)
+    // ManufacturingContext migré vers le Worker/D1 (Phase 5a du chantier
+    // de migration D1) — même patron que Structure Système ci-dessus.
+    const processContextStore = useProcessContextStore()
+    await processContextStore.charger(clientId)
 
     const [
       requirements,
@@ -112,7 +117,6 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       knowledgeItems,
       procedures,
       procedureSteps,
-      manufacturingContexts,
       qualityEvents,
       knowledgeRelations,
       contextSnapshotItems,
@@ -125,7 +129,6 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       db.knowledgeItems.where('client_id').equals(clientId).toArray(),
       db.procedures.where('client_id').equals(clientId).toArray(),
       db.procedureSteps.where('client_id').equals(clientId).toArray(),
-      db.manufacturingContexts.where('client_id').equals(clientId).toArray(),
       db.qualityEvents.where('client_id').equals(clientId).toArray(),
       db.knowledgeRelations.where('client_id').equals(clientId).toArray(),
       entrees.contextSnapshotId
@@ -135,6 +138,7 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
             .toArray()
         : Promise.resolve([]),
     ])
+    const manufacturingContexts = processContextStore.manufacturingContexts
     const assetNodes = structureStore.noeuds
     const relationsTechniques = structureStore.relationsTechniques
 

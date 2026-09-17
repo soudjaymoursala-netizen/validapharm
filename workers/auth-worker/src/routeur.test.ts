@@ -20,6 +20,7 @@ import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametersRepoMemoire } from './repos/parametersRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
 import { ProjectDocumentsRepoMemoire } from './repos/projectDocumentsRepo'
+import { ProcessContextRepoMemoire } from './repos/processContextRepo'
 import { ProjectsRepoMemoire } from './repos/projectsRepo'
 import { RiskAssessmentRepoMemoire } from './repos/riskAssessmentRepo'
 import { SectionsRepoMemoire } from './repos/sectionsRepo'
@@ -52,6 +53,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     impactAssessmentRepo: new ImpactAssessmentRepoMemoire(),
     csvAssessmentRepo: new CSVAssessmentRepoMemoire(),
     riskAssessmentRepo: new RiskAssessmentRepoMemoire(),
+    processContextRepo: new ProcessContextRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -159,6 +161,67 @@ interface CorpsReponse {
   profilsRisque: MethodProfileRiskAssessmentJson[]
   evaluationRisque: RiskAssessmentJson
   evaluationsRisque: RiskAssessmentJson[]
+  process: ProcessJson
+  processes: ProcessJson[]
+  fonction: FonctionActifJson
+  fonctions: FonctionActifJson[]
+  associationFonctionAssetNode: AssociationFonctionAssetNodeJson
+  associationsFonctionAssetNode: AssociationFonctionAssetNodeJson[]
+  associationFonctionProcess: AssociationFonctionProcessJson
+  associationsFonctionProcess: AssociationFonctionProcessJson[]
+  manufacturingContext: ManufacturingContextJson
+  manufacturingContexts: ManufacturingContextJson[]
+}
+
+interface ProcessJson {
+  id: string
+  clientId: string
+  nom: string
+  description: string
+  type: string
+  sourceId: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface FonctionActifJson {
+  id: string
+  clientId: string
+  nom: string
+  description: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface AssociationFonctionAssetNodeJson {
+  id: string
+  clientId: string
+  functionId: string
+  assetNodeId: string
+  createdAt: string
+}
+
+interface AssociationFonctionProcessJson {
+  id: string
+  clientId: string
+  functionId: string
+  processId: string
+  createdAt: string
+}
+
+interface ManufacturingContextJson {
+  id: string
+  clientId: string
+  assetNodeId: string
+  processId: string
+  produit: string
+  recette: string | null
+  format: string | null
+  configuration: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 interface MethodProfileRiskAssessmentJson {
@@ -2061,6 +2124,243 @@ describe('routerRequete — Risk Assessment / AMDEC (Target Architecture §10, P
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/risk-assessment`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Process/FonctionActif/ManufacturingContext (Target Architecture §4/§5/§7, Phase 5a du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/process-context`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.processes).toEqual([])
+    expect(obtenir.corps.fonctions).toEqual([])
+    expect(obtenir.corps.associationsFonctionAssetNode).toEqual([])
+    expect(obtenir.corps.associationsFonctionProcess).toEqual([])
+    expect(obtenir.corps.manufacturingContexts).toEqual([])
+  })
+
+  test('créer un process : id/audit_log/horodatages dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/process-context/processes`, {
+      jeton: admin.jeton,
+      body: { nom: 'Granulation', description: 'x', type: 'manufacturing', sourceId: null },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.process.clientId).toBe(clientId)
+    expect(creation.corps.process.id).toEqual(expect.any(String))
+    expect(creation.corps.process.auditLog).toEqual([
+      { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
+    ])
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/process-context`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.processes.map((p) => p.id)).toContain(creation.corps.process.id)
+  })
+
+  test('créer un process sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/process-context/processes`, {
+      jeton: admin.jeton,
+      body: { nom: 'Granulation' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('créer une fonction : id/audit_log dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/process-context/fonctions`, {
+      jeton: admin.jeton,
+      body: { nom: 'Mesure de pression', description: 'x' },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.fonction.clientId).toBe(clientId)
+    expect(creation.corps.fonction.auditLog).toHaveLength(1)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/process-context`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.fonctions.map((f) => f.id)).toContain(creation.corps.fonction.id)
+  })
+
+  test('associer une fonction à un nœud d’actif : id/created_at dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const fonction = await requete(ctx, 'POST', `/clients/${clientId}/process-context/fonctions`, {
+      jeton: admin.jeton,
+      body: { nom: 'Mesure de pression', description: 'x' },
+    })
+
+    const association = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/process-context/associations-fonction-asset-node`,
+      { jeton: admin.jeton, body: { functionId: fonction.corps.fonction.id, assetNodeId: 'n1' } },
+    )
+    expect(association.status).toBe(201)
+    expect(association.corps.associationFonctionAssetNode.functionId).toBe(
+      fonction.corps.fonction.id,
+    )
+    expect(association.corps.associationFonctionAssetNode.assetNodeId).toBe('n1')
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/process-context`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.associationsFonctionAssetNode).toHaveLength(1)
+  })
+
+  test('associer une fonction à un process : id/created_at dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const fonction = await requete(ctx, 'POST', `/clients/${clientId}/process-context/fonctions`, {
+      jeton: admin.jeton,
+      body: { nom: 'Mesure de pression', description: 'x' },
+    })
+    const process = await requete(ctx, 'POST', `/clients/${clientId}/process-context/processes`, {
+      jeton: admin.jeton,
+      body: { nom: 'Granulation', description: 'x', type: 'manufacturing', sourceId: null },
+    })
+
+    const association = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/process-context/associations-fonction-process`,
+      {
+        jeton: admin.jeton,
+        body: { functionId: fonction.corps.fonction.id, processId: process.corps.process.id },
+      },
+    )
+    expect(association.status).toBe(201)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/process-context`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.associationsFonctionProcess).toHaveLength(1)
+  })
+
+  test('créer un manufacturing context : id/horodatages dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const process = await requete(ctx, 'POST', `/clients/${clientId}/process-context/processes`, {
+      jeton: admin.jeton,
+      body: { nom: 'Coating', description: 'x', type: 'manufacturing', sourceId: null },
+    })
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/process-context/manufacturing-contexts`,
+      {
+        jeton: admin.jeton,
+        body: {
+          assetNodeId: 'n1',
+          processId: process.corps.process.id,
+          produit: 'Produit A',
+          recette: 'R02',
+          format: null,
+          configuration: null,
+        },
+      },
+    )
+    expect(creation.status).toBe(201)
+    expect(creation.corps.manufacturingContext.produit).toBe('Produit A')
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/process-context`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.manufacturingContexts.map((c) => c.id)).toContain(
+      creation.corps.manufacturingContext.id,
+    )
+  })
+
+  test('créer un manufacturing context sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/process-context/manufacturing-contexts`,
+      { jeton: admin.jeton, body: { assetNodeId: 'n1' } },
+    )
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const processLocal = {
+      id: 'process-local-1',
+      clientId,
+      nom: 'Ancien nom',
+      description: 'x',
+      type: 'manufacturing',
+      sourceId: null,
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/process-context/migration-locale`,
+      { jeton: admin.jeton, body: { processes: [processLocal] } },
+    )
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/process-context/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { processes: [{ ...processLocal, nom: 'Tentative d’écrasement' }] },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/process-context`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.processes).toHaveLength(1)
+    expect(liste.corps.processes[0]?.nom).toBe('Ancien nom')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/process-context`)
     expect(obtenir.status).toBe(401)
   })
 })
