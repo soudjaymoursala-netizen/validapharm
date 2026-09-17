@@ -15,6 +15,7 @@ import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
+import { ParametersRepoMemoire } from './repos/parametersRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
 import { ProjectDocumentsRepoMemoire } from './repos/projectDocumentsRepo'
 import { ProjectsRepoMemoire } from './repos/projectsRepo'
@@ -44,6 +45,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     sectionsRepo: new SectionsRepoMemoire(),
     projectDocumentsRepo: new ProjectDocumentsRepoMemoire(),
     acfcRepo: new ACFCRepoMemoire(),
+    parametersRepo: new ParametersRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -133,6 +135,62 @@ interface CorpsReponse {
   profils: MethodProfileACFCJson[]
   evaluation: EvaluationACFCJson
   evaluations: EvaluationACFCJson[]
+  parametreProcede: ParameterJson
+  parametresProcede: ParameterJson[]
+  classification: ClassificationCriticiteParametreJson
+  classifications: ClassificationCriticiteParametreJson[]
+  cpp: CPPJson
+  cpps: CPPJson[]
+  cqa: CQAJson
+  cqas: CQAJson[]
+}
+
+interface ParameterJson {
+  id: string
+  clientId: string
+  assetNodeId: string | null
+  nom: string
+  description: string
+  unite: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface ClassificationCriticiteParametreJson {
+  id: string
+  clientId: string
+  parameterId: string
+  niveau: string
+  contexte: string | null
+  justification: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+}
+
+interface CPPJson {
+  id: string
+  clientId: string
+  parameterId: string
+  contexte: string
+  justification: string
+  actif: boolean
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface CQAJson {
+  id: string
+  clientId: string
+  nom: string
+  description: string
+  contexte: string
+  justification: string
+  actif: boolean
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
 }
 
 interface MethodProfileACFCJson {
@@ -1141,6 +1199,212 @@ describe('routerRequete — ACFC (méthode configurable par client, Phase 4a du 
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/acfc`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Parameter/ClassificationCriticiteParametre/CPP/CQA (Target Architecture §10, Phase 4b du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/parameters`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.parametresProcede).toEqual([])
+    expect(obtenir.corps.classifications).toEqual([])
+    expect(obtenir.corps.cpps).toEqual([])
+    expect(obtenir.corps.cqas).toEqual([])
+  })
+
+  test('créer un paramètre : id/auditLog/horodatages dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/parameters/parametres`, {
+      jeton: admin.jeton,
+      body: {
+        nom: 'Température de stérilisation',
+        description: 'Température du cycle autoclave',
+        unite: '°C',
+        assetNodeId: null,
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.parametreProcede.clientId).toBe(clientId)
+    expect(creation.corps.parametreProcede.id).toEqual(expect.any(String))
+    expect(creation.corps.parametreProcede.auditLog).toEqual([
+      { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
+    ])
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/parameters`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.parametresProcede.map((p) => p.id)).toContain(
+      creation.corps.parametreProcede.id,
+    )
+  })
+
+  test('créer un paramètre sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/parameters/parametres`, {
+      jeton: admin.jeton,
+      body: { nom: 'Sans description' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('classifier un paramètre ne crée jamais de CPP/CQA (garde-fou §10)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const parametre = await requete(ctx, 'POST', `/clients/${clientId}/parameters/parametres`, {
+      jeton: admin.jeton,
+      body: { nom: 'Pression chambre', description: 'Pression du cycle', unite: 'bar' },
+    })
+
+    const classification = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/parameters/classifications`,
+      {
+        jeton: admin.jeton,
+        body: {
+          parameterId: parametre.corps.parametreProcede.id,
+          niveau: 'critique',
+          contexte: 'Cycle de stérilisation terminale',
+          justification: 'Impact direct sur la stérilité du produit',
+        },
+      },
+    )
+    expect(classification.status).toBe(201)
+    expect(classification.corps.classification.niveau).toBe('critique')
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/parameters`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.cpps).toEqual([])
+    expect(liste.corps.cqas).toEqual([])
+  })
+
+  test('déclarer un CPP puis le désactiver : historique conservé, jamais muté ni supprimé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const parametre = await requete(ctx, 'POST', `/clients/${clientId}/parameters/parametres`, {
+      jeton: admin.jeton,
+      body: { nom: 'Pression chambre', description: 'Pression du cycle', unite: 'bar' },
+    })
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/parameters/cpps`, {
+      jeton: admin.jeton,
+      body: {
+        parameterId: parametre.corps.parametreProcede.id,
+        contexte: 'Recette produit A',
+        justification: 'Paramètre critique du procédé de stérilisation',
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.cpp.actif).toBe(true)
+
+    const desactivation = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/parameters/cpps/${creation.corps.cpp.id}`,
+      { jeton: admin.jeton, body: { motif: 'Changement de recette produit' } },
+    )
+    expect(desactivation.status).toBe(200)
+    expect(desactivation.corps.cpp.actif).toBe(false)
+    expect(desactivation.corps.cpp.auditLog).toHaveLength(2)
+    expect(desactivation.corps.cpp.auditLog[1]?.action).toContain('Changement de recette produit')
+  })
+
+  test('déclarer un CQA puis le désactiver', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/parameters/cqas`, {
+      jeton: admin.jeton,
+      body: {
+        nom: 'Stérilité',
+        description: 'Absence de micro-organismes viables',
+        contexte: 'Produit stérile injectable',
+        justification: 'Exigence pharmacopée',
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.cqa.actif).toBe(true)
+
+    const desactivation = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/parameters/cqas/${creation.corps.cqa.id}`,
+      { jeton: admin.jeton, body: { motif: 'Attribut retiré du dossier qualité' } },
+    )
+    expect(desactivation.status).toBe(200)
+    expect(desactivation.corps.cqa.actif).toBe(false)
+  })
+
+  test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const parametreLocal = {
+      id: 'parametre-local-1',
+      clientId,
+      assetNodeId: null,
+      nom: 'Ancien paramètre',
+      description: 'Description locale',
+      unite: null,
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/parameters/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { parametresProcede: [parametreLocal] },
+      },
+    )
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(ctx, 'POST', `/clients/${clientId}/parameters/migration-locale`, {
+      jeton: admin.jeton,
+      body: { parametresProcede: [{ ...parametreLocal, nom: 'Tentative d’écrasement' }] },
+    })
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/parameters`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.parametresProcede).toHaveLength(1)
+    expect(liste.corps.parametresProcede[0]?.nom).toBe('Ancien paramètre')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/parameters`)
     expect(obtenir.status).toBe(401)
   })
 })

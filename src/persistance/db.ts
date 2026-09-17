@@ -305,6 +305,22 @@ export const methodProfilesACFCAMigrer: MethodProfileACFC[] = []
 export const evaluationsACFCAMigrer: EvaluationACFC[] = []
 
 /**
+ * Filet de sécurité de migration locale pour `Parameter`/
+ * `ClassificationCriticiteParametre`/`CPP`/`CQA` (Target Architecture §10,
+ * Phase 4b du chantier de migration D1,
+ * docs/CHANTIER-MIGRATION-D1-RECAP.md) — même principe que
+ * `methodProfilesACFCAMigrer` ci-dessus : ces 4 types n'ont pas changé de
+ * forme, D1 ne fait que remplacer IndexedDB comme lieu de stockage, donc
+ * pas de type "Ancien" séparé ici non plus. Consommés et envoyés au
+ * serveur par `migrerParametersLocalVersServeur` (`useParameterStore`) au
+ * premier `charger()`.
+ */
+export const parametersAMigrer: Parameter[] = []
+export const classificationsCriticiteParametreAMigrer: ClassificationCriticiteParametre[] = []
+export const cppsAMigrer: CPP[] = []
+export const cqasAMigrer: CQA[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -321,10 +337,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  parameters!: EntityTable<Parameter, 'id'>
-  classificationsCriticiteParametre!: EntityTable<ClassificationCriticiteParametre, 'id'>
-  cpps!: EntityTable<CPP, 'id'>
-  cqas!: EntityTable<CQA, 'id'>
   methodProfilesImpactAssessment!: EntityTable<MethodProfileImpactAssessment, 'id'>
   evaluationsImpactAssessment!: EntityTable<EvaluationImpactAssessment, 'id'>
   evaluationsCSVAssessment!: EntityTable<EvaluationCSVAssessment, 'id'>
@@ -765,6 +777,30 @@ export class ValidaPharmDatabase extends Dexie {
         methodProfilesACFCAMigrer.push(...profils)
         const evaluations = await tx.table<EvaluationACFC>('evaluationsACFC').toArray()
         evaluationsACFCAMigrer.push(...evaluations)
+      })
+
+    // Parameter/ClassificationCriticiteParametre/CPP/CQA : migrés vers le
+    // Worker/D1 (Target Architecture §10, Phase 4b du chantier de
+    // migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique
+    // de capture avant suppression physique que la version 39 ci-dessus.
+    this.version(40)
+      .stores({
+        parameters: null,
+        classificationsCriticiteParametre: null,
+        cpps: null,
+        cqas: null,
+      })
+      .upgrade(async (tx) => {
+        const parametres = await tx.table<Parameter>('parameters').toArray()
+        parametersAMigrer.push(...parametres)
+        const classifications = await tx
+          .table<ClassificationCriticiteParametre>('classificationsCriticiteParametre')
+          .toArray()
+        classificationsCriticiteParametreAMigrer.push(...classifications)
+        const cpps = await tx.table<CPP>('cpps').toArray()
+        cppsAMigrer.push(...cpps)
+        const cqas = await tx.table<CQA>('cqas').toArray()
+        cqasAMigrer.push(...cqas)
       })
   }
 }

@@ -19,6 +19,13 @@ import type {
   WorkspaceEnregistre,
 } from './repos/organisationRepo'
 import type {
+  CPPEnregistre,
+  CQAEnregistre,
+  ClassificationCriticiteParametreEnregistree,
+  ParameterEnregistre,
+  ParametersRepo,
+} from './repos/parametersRepo'
+import type {
   ParametresInstallationRepo,
   ValeurParametreInstallation,
 } from './repos/parametresInstallationRepo'
@@ -63,6 +70,7 @@ export interface Contexte {
   sectionsRepo: SectionsRepo
   projectDocumentsRepo: ProjectDocumentsRepo
   acfcRepo: ACFCRepo
+  parametersRepo: ParametersRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -326,6 +334,60 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   const matchAcfcEvaluations = chemin.match(/^\/clients\/([^/]+)\/acfc\/evaluations$/)
   if (matchAcfcEvaluations && request.method === 'POST') {
     return gererCreerEvaluationAcfc(request, ctx, entetes, matchAcfcEvaluations[1] as string)
+  }
+
+  // --- Parameter/ClassificationCriticiteParametre/CPP/CQA (Target
+  // Architecture §10, Phase 4b du chantier de migration D1) ---
+  const matchParameters = chemin.match(/^\/clients\/([^/]+)\/parameters$/)
+  if (matchParameters && request.method === 'GET') {
+    return gererObtenirParameters(request, ctx, entetes, matchParameters[1] as string)
+  }
+  const matchParametersMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/parameters\/migration-locale$/,
+  )
+  if (matchParametersMigrationLocale && request.method === 'POST') {
+    return gererMigrerParametersLocal(
+      request,
+      ctx,
+      entetes,
+      matchParametersMigrationLocale[1] as string,
+    )
+  }
+  const matchParametresCreation = chemin.match(/^\/clients\/([^/]+)\/parameters\/parametres$/)
+  if (matchParametresCreation && request.method === 'POST') {
+    return gererCreerParametre(request, ctx, entetes, matchParametresCreation[1] as string)
+  }
+  const matchClassifications = chemin.match(/^\/clients\/([^/]+)\/parameters\/classifications$/)
+  if (matchClassifications && request.method === 'POST') {
+    return gererCreerClassification(request, ctx, entetes, matchClassifications[1] as string)
+  }
+  const matchCppsCreation = chemin.match(/^\/clients\/([^/]+)\/parameters\/cpps$/)
+  if (matchCppsCreation && request.method === 'POST') {
+    return gererCreerCPP(request, ctx, entetes, matchCppsCreation[1] as string)
+  }
+  const matchCppId = chemin.match(/^\/clients\/([^/]+)\/parameters\/cpps\/([^/]+)$/)
+  if (matchCppId && request.method === 'PATCH') {
+    return gererDesactiverCPP(
+      request,
+      ctx,
+      entetes,
+      matchCppId[1] as string,
+      matchCppId[2] as string,
+    )
+  }
+  const matchCqasCreation = chemin.match(/^\/clients\/([^/]+)\/parameters\/cqas$/)
+  if (matchCqasCreation && request.method === 'POST') {
+    return gererCreerCQA(request, ctx, entetes, matchCqasCreation[1] as string)
+  }
+  const matchCqaId = chemin.match(/^\/clients\/([^/]+)\/parameters\/cqas\/([^/]+)$/)
+  if (matchCqaId && request.method === 'PATCH') {
+    return gererDesactiverCQA(
+      request,
+      ctx,
+      entetes,
+      matchCqaId[1] as string,
+      matchCqaId[2] as string,
+    )
   }
 
   // --- Organization/Workspace (Phase 2 du chantier de migration D1) ---
@@ -1509,6 +1571,311 @@ async function gererMigrerAcfcLocal(
   }
   return reponseJson(
     { profils: corps.profils ?? [], evaluations: corps.evaluations ?? [] },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : Parameter/ClassificationCriticiteParametre/CPP/CQA (Target
+// Architecture §10, Phase 4b du chantier de migration D1) ---
+//
+// Garde-fou central inchangé côté serveur : aucun de ces handlers ne crée
+// de CPP/CQA à partir d'une classification, ce sont des actes de
+// déclaration humaine distincts et volontairement non reliés par du code
+// (même discipline que `useParameterStore.ts`, déjà testée).
+
+async function gererObtenirParameters(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [parametresProcede, classifications, cpps, cqas] = await Promise.all([
+    ctx.parametersRepo.listerParametres(clientId),
+    ctx.parametersRepo.listerClassifications(clientId),
+    ctx.parametersRepo.listerCPPs(clientId),
+    ctx.parametersRepo.listerCQAs(clientId),
+  ])
+  return reponseJson({ parametresProcede, classifications, cpps, cqas }, 200, entetes)
+}
+
+interface SaisieCreationParametre {
+  nom?: string
+  description?: string
+  unite?: string | null
+  assetNodeId?: string | null
+}
+
+async function gererCreerParametre(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationParametre>(request)
+  // `description` peut être vide (chaîne vide) sans être invalide — seul
+  // `nom` est réellement requis ; `undefined` distingue "absent" de "vide".
+  if (!corps?.nom || corps.description === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const maintenant = horodatage()
+  // Clé `parametreProcede` (jamais `parametre`) : `parametre` désigne déjà
+  // une entrée `parametres_installation` (config technique clé/valeur,
+  // `/parametres-installation/:cle`) — une collision de nom aurait rendu
+  // les deux réponses JSON ambiguës pour le frontend.
+  const parametreProcede: ParameterEnregistre = {
+    id: genererId(),
+    clientId,
+    assetNodeId: corps.assetNodeId ?? null,
+    nom: corps.nom,
+    description: corps.description,
+    unite: corps.unite ?? null,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.parametersRepo.creerParametre(parametreProcede)
+  return reponseJson({ parametreProcede }, 201, entetes)
+}
+
+interface SaisieCreationClassification {
+  parameterId?: string
+  niveau?: string
+  contexte?: string | null
+  justification?: string
+}
+
+async function gererCreerClassification(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationClassification>(request)
+  if (!corps?.parameterId || !corps.niveau || !corps.justification) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const maintenant = horodatage()
+  const classification: ClassificationCriticiteParametreEnregistree = {
+    id: genererId(),
+    clientId,
+    parameterId: corps.parameterId,
+    niveau: corps.niveau,
+    contexte: corps.contexte ?? null,
+    justification: corps.justification,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+  }
+  await ctx.parametersRepo.creerClassification(classification)
+  return reponseJson({ classification }, 201, entetes)
+}
+
+interface SaisieCreationCPP {
+  parameterId?: string
+  contexte?: string
+  justification?: string
+}
+
+async function gererCreerCPP(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationCPP>(request)
+  if (!corps?.parameterId || !corps.contexte || !corps.justification) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const maintenant = horodatage()
+  const cpp: CPPEnregistre = {
+    id: genererId(),
+    clientId,
+    parameterId: corps.parameterId,
+    contexte: corps.contexte,
+    justification: corps.justification,
+    actif: true,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.parametersRepo.creerCPP(cpp)
+  return reponseJson({ cpp }, 201, entetes)
+}
+
+/**
+ * Désactive un CPP existant (changement de contexte) sans le muter ni le
+ * supprimer : l'historique reste lisible tel qu'il a été produit — même
+ * principe `ContextSnapshot` que `gererModifierNoeud`.
+ */
+async function gererDesactiverCPP(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  cppId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const cpp = await ctx.parametersRepo.cppParId(cppId)
+  if (!cpp || cpp.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const corps = await lireCorpsJson<{ motif?: string }>(request)
+  if (!corps?.motif) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const maintenant = horodatage()
+  const misAJour: CPPEnregistre = {
+    ...cpp,
+    actif: false,
+    auditLog: [
+      ...cpp.auditLog,
+      { timestamp: maintenant, actor: acteur.email, action: `désactivation : ${corps.motif}` },
+    ],
+    updatedAt: maintenant,
+  }
+  await ctx.parametersRepo.remplacerCPP(misAJour)
+  return reponseJson({ cpp: misAJour }, 200, entetes)
+}
+
+interface SaisieCreationCQA {
+  nom?: string
+  description?: string
+  contexte?: string
+  justification?: string
+}
+
+async function gererCreerCQA(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationCQA>(request)
+  // `description` peut être vide (chaîne vide) sans être invalide, même
+  // discipline que `gererCreerParametre`.
+  if (!corps?.nom || corps.description === undefined || !corps.contexte || !corps.justification) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const maintenant = horodatage()
+  const cqa: CQAEnregistre = {
+    id: genererId(),
+    clientId,
+    nom: corps.nom,
+    description: corps.description,
+    contexte: corps.contexte,
+    justification: corps.justification,
+    actif: true,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.parametersRepo.creerCQA(cqa)
+  return reponseJson({ cqa }, 201, entetes)
+}
+
+async function gererDesactiverCQA(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  cqaId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const cqa = await ctx.parametersRepo.cqaParId(cqaId)
+  if (!cqa || cqa.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const corps = await lireCorpsJson<{ motif?: string }>(request)
+  if (!corps?.motif) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const maintenant = horodatage()
+  const misAJour: CQAEnregistre = {
+    ...cqa,
+    actif: false,
+    auditLog: [
+      ...cqa.auditLog,
+      { timestamp: maintenant, actor: acteur.email, action: `désactivation : ${corps.motif}` },
+    ],
+    updatedAt: maintenant,
+  }
+  await ctx.parametersRepo.remplacerCQA(misAJour)
+  return reponseJson({ cqa: misAJour }, 200, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale (`parametersAMigrer`/etc.,
+ * `useParameterStore.migrerParametersLocalVersServeur`) — idempotente,
+ * l'existant côté serveur gagne toujours (`ON CONFLICT(id) DO NOTHING`
+ * dans `D1ParametersRepo`), même discipline que `POST /clients/:id/acfc/migration-locale`.
+ */
+interface SaisieMigrationParameters {
+  parametresProcede?: ParameterEnregistre[]
+  classifications?: ClassificationCriticiteParametreEnregistree[]
+  cpps?: CPPEnregistre[]
+  cqas?: CQAEnregistre[]
+}
+
+async function gererMigrerParametersLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationParameters>(request)
+  if (
+    !corps ||
+    (!Array.isArray(corps.parametresProcede) &&
+      !Array.isArray(corps.classifications) &&
+      !Array.isArray(corps.cpps) &&
+      !Array.isArray(corps.cqas))
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const p of corps.parametresProcede ?? []) {
+    if (p.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.parametersRepo.creerParametre(p)
+  }
+  for (const c of corps.classifications ?? []) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.parametersRepo.creerClassification(c)
+  }
+  for (const c of corps.cpps ?? []) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.parametersRepo.creerCPP(c)
+  }
+  for (const c of corps.cqas ?? []) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.parametersRepo.creerCQA(c)
+  }
+  return reponseJson(
+    {
+      parametresProcede: corps.parametresProcede ?? [],
+      classifications: corps.classifications ?? [],
+      cpps: corps.cpps ?? [],
+      cqas: corps.cqas ?? [],
+    },
     200,
     entetes,
   )

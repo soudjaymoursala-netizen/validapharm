@@ -1,15 +1,49 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useParameterStore } from './useParameterStore'
+
+let ctx: Contexte
+let demonter: () => void
+
+/** Parameter/CPP/CQA migrés vers le Worker/D1 (Phase 4b) — un client doit réellement exister pour que `exigerAccesClient` l'autorise. */
+async function creerClientDeTest(id: string): Promise<void> {
+  await ctx.clientsRepo.creer({
+    id,
+    name: id,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.parameters.clear()
-  await db.classificationsCriticiteParametre.clear()
-  await db.cpps.clear()
-  await db.cqas.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await creerClientDeTest('client-1')
+  await creerClientDeTest('client-A')
+  await creerClientDeTest('client-B')
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useParameterStore — Parameter de base', () => {
@@ -50,8 +84,8 @@ describe('useParameterStore — scénario obligatoire "parameter critical but no
     // Le garde-fou central : aucun CPP ne doit exister après une simple classification.
     expect(store.cpps).toHaveLength(0)
 
-    const cppsEnBase = await db.cpps.where('parameter_id').equals(parametre.id).toArray()
-    expect(cppsEnBase).toHaveLength(0)
+    const cppsEnBase = await ctx.parametersRepo.listerCPPs('client-1')
+    expect(cppsEnBase.filter((c) => c.parameterId === parametre.id)).toHaveLength(0)
   })
 
   test('un paramètre important (pas critique) reste aussi sans CPP', async () => {
@@ -126,7 +160,7 @@ describe('useParameterStore — scénario obligatoire "CQA/CPP context change" (
     })
 
     expect(store.cppsActifs).toHaveLength(2)
-    const r02Relu = await db.cpps.get(cppR02.id)
+    const r02Relu = await ctx.parametersRepo.cppParId(cppR02.id)
     expect(r02Relu?.contexte).toBe('Enrobage / Produit A / Recette R02')
     expect(r02Relu?.actif).toBe(true)
     expect(cppR05.contexte).toBe('Enrobage / Produit B / Recette R05')
@@ -158,7 +192,7 @@ describe('useParameterStore — scénario obligatoire "CQA/CPP context change" (
     expect(desactive?.audit_log).toHaveLength(2)
     expect(store.cppsActifs).toHaveLength(0)
 
-    const relu = await db.cpps.get(cpp.id)
+    const relu = await ctx.parametersRepo.cppParId(cpp.id)
     expect(relu?.actif).toBe(false)
     expect(relu?.contexte).toBe('Enrobage / Produit A / Recette R02')
   })
@@ -178,7 +212,7 @@ describe('useParameterStore — scénario obligatoire "CQA/CPP context change" (
     const desactive = await store.desactiverCQA('client-1', cqa.id, 'Produit A retiré du marché')
     expect(desactive?.actif).toBe(false)
     expect(store.cqasActifs).toHaveLength(0)
-    const relu = await db.cqas.get(cqa.id)
+    const relu = await ctx.parametersRepo.cqaParId(cqa.id)
     expect(relu?.contexte).toBe('Produit A / Recette R02')
   })
 })
