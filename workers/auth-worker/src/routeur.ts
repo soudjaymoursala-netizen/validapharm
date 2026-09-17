@@ -49,6 +49,11 @@ import type {
 } from './repos/processContextRepo'
 import type { ProjectDocumentEnregistre, ProjectDocumentsRepo } from './repos/projectDocumentsRepo'
 import type {
+  QualityEventEnregistre,
+  QualityEventRepo,
+  ReferenceQualityEventEnregistree,
+} from './repos/qualityEventRepo'
+import type {
   LienProjetEnregistre,
   PartageProjetEnregistre,
   PhaseProjetEnregistree,
@@ -98,6 +103,7 @@ export interface Contexte {
   csvAssessmentRepo: CSVAssessmentRepo
   riskAssessmentRepo: RiskAssessmentRepo
   processContextRepo: ProcessContextRepo
+  qualityEventRepo: QualityEventRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -596,6 +602,58 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchProcessContextMigrationLocale[1] as string,
+    )
+  }
+
+  // --- QualityEvent/ReferenceQualityEvent (URS catalogue §10 famille
+  // H/I, Phase 5b du chantier de migration D1) ---
+  const matchQualityEvents = chemin.match(/^\/clients\/([^/]+)\/quality-events$/)
+  if (matchQualityEvents && request.method === 'GET') {
+    return gererObtenirQualityEvents(request, ctx, entetes, matchQualityEvents[1] as string)
+  }
+  const matchQualityEventsEvenements = chemin.match(
+    /^\/clients\/([^/]+)\/quality-events\/evenements$/,
+  )
+  if (matchQualityEventsEvenements && request.method === 'POST') {
+    return gererCreerEvenementQualityEvent(
+      request,
+      ctx,
+      entetes,
+      matchQualityEventsEvenements[1] as string,
+    )
+  }
+  const matchQualityEventsStatut = chemin.match(
+    /^\/clients\/([^/]+)\/quality-events\/evenements\/([^/]+)\/statut$/,
+  )
+  if (matchQualityEventsStatut && request.method === 'PATCH') {
+    return gererChangerStatutQualityEvent(
+      request,
+      ctx,
+      entetes,
+      matchQualityEventsStatut[1] as string,
+      matchQualityEventsStatut[2] as string,
+    )
+  }
+  const matchQualityEventsReferences = chemin.match(
+    /^\/clients\/([^/]+)\/quality-events\/references$/,
+  )
+  if (matchQualityEventsReferences && request.method === 'POST') {
+    return gererCreerReferenceQualityEvent(
+      request,
+      ctx,
+      entetes,
+      matchQualityEventsReferences[1] as string,
+    )
+  }
+  const matchQualityEventsMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/quality-events\/migration-locale$/,
+  )
+  if (matchQualityEventsMigrationLocale && request.method === 'POST') {
+    return gererMigrerQualityEventsLocal(
+      request,
+      ctx,
+      entetes,
+      matchQualityEventsMigrationLocale[1] as string,
     )
   }
 
@@ -2895,6 +2953,196 @@ async function gererMigrerProcessContextLocal(
       associationsFonctionProcess: corps.associationsFonctionProcess ?? [],
       manufacturingContexts: corps.manufacturingContexts ?? [],
     },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : QualityEvent/ReferenceQualityEvent (URS catalogue §10
+// famille H/I, Phase 5b du chantier de migration D1) ---
+//
+// Garde-fou central inchangé côté Worker : un événement externe est
+// seulement référencé (`referenceExterne`), jamais un verrou — ces
+// handlers ne font qu'authentifier, vérifier l'accès au client concerné
+// et persister l'état qu'on leur donne, même discipline que les autres
+// handlers de ce chantier.
+
+async function gererObtenirQualityEvents(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [evenements, references] = await Promise.all([
+    ctx.qualityEventRepo.listerEvenements(clientId),
+    ctx.qualityEventRepo.listerReferences(clientId),
+  ])
+  return reponseJson({ evenements, references }, 200, entetes)
+}
+
+interface SaisieCreationQualityEvent {
+  type?: string
+  titre?: string
+  description?: string
+  origine?: string
+  referenceExterne?: { systeme: string; identifiant: string } | null
+  assetNodeId?: string | null
+  processId?: string | null
+  manufacturingContextId?: string | null
+}
+
+async function gererCreerEvenementQualityEvent(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationQualityEvent>(request)
+  // `description` peut être vide sans être invalide, même discipline que
+  // `gererCreerParametre`/`gererCreerProcess`.
+  if (!corps?.type || !corps.titre || corps.description === undefined || !corps.origine) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const evenement: QualityEventEnregistre = {
+    id: genererId(),
+    clientId,
+    type: corps.type,
+    titre: corps.titre,
+    description: corps.description,
+    origine: corps.origine,
+    referenceExterne: corps.referenceExterne ?? null,
+    assetNodeId: corps.assetNodeId ?? null,
+    processId: corps.processId ?? null,
+    manufacturingContextId: corps.manufacturingContextId ?? null,
+    statut: 'ouvert',
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.qualityEventRepo.creerEvenement(evenement)
+  return reponseJson({ evenement }, 201, entetes)
+}
+
+interface SaisieChangementStatutQualityEvent {
+  statut?: string
+}
+
+async function gererChangerStatutQualityEvent(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  evenementId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const existant = await ctx.qualityEventRepo.evenementParId(evenementId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const corps = await lireCorpsJson<SaisieChangementStatutQualityEvent>(request)
+  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const maintenant = horodatage()
+  const evenement: QualityEventEnregistre = {
+    ...existant,
+    statut: corps.statut,
+    updatedAt: maintenant,
+    auditLog: [
+      ...existant.auditLog,
+      {
+        timestamp: maintenant,
+        actor: acteur.email,
+        action: `changement de statut : ${corps.statut}`,
+      },
+    ],
+  }
+  await ctx.qualityEventRepo.remplacerEvenement(evenement)
+  return reponseJson({ evenement }, 200, entetes)
+}
+
+interface SaisieCreationReferenceQualityEvent {
+  sourceId?: string
+  cibleId?: string
+}
+
+async function gererCreerReferenceQualityEvent(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationReferenceQualityEvent>(request)
+  if (!corps?.sourceId || !corps.cibleId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const existantes = await ctx.qualityEventRepo.listerReferences(clientId)
+  const dejaExistante = existantes.find(
+    (r) => r.qualityEventSourceId === corps.sourceId && r.qualityEventCibleId === corps.cibleId,
+  )
+  if (dejaExistante) return reponseJson({ reference: dejaExistante }, 200, entetes)
+
+  const reference: ReferenceQualityEventEnregistree = {
+    id: genererId(),
+    clientId,
+    qualityEventSourceId: corps.sourceId,
+    qualityEventCibleId: corps.cibleId,
+    createdAt: horodatage(),
+  }
+  await ctx.qualityEventRepo.creerReference(reference)
+  return reponseJson({ reference }, 201, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale
+ * (`qualityEventsAMigrer`/`referencesQualityEventAMigrer`,
+ * `useQualityEventStore.migrerQualityEventsLocalVersServeur`) —
+ * idempotente, l'existant côté serveur gagne toujours (`ON CONFLICT(id) DO
+ * NOTHING` dans `D1QualityEventRepo`), même discipline que les autres
+ * migrations locales de ce chantier.
+ */
+interface SaisieMigrationQualityEvents {
+  evenements?: QualityEventEnregistre[]
+  references?: ReferenceQualityEventEnregistree[]
+}
+
+async function gererMigrerQualityEventsLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationQualityEvents>(request)
+  if (!corps || (!Array.isArray(corps.evenements) && !Array.isArray(corps.references))) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const e of corps.evenements ?? []) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.qualityEventRepo.creerEvenement(e)
+  }
+  for (const r of corps.references ?? []) {
+    if (r.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.qualityEventRepo.creerReference(r)
+  }
+  return reponseJson(
+    { evenements: corps.evenements ?? [], references: corps.references ?? [] },
     200,
     entetes,
   )

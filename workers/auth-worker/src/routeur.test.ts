@@ -22,6 +22,7 @@ import { ParametresInstallationRepoMemoire } from './repos/parametresInstallatio
 import { ProjectDocumentsRepoMemoire } from './repos/projectDocumentsRepo'
 import { ProcessContextRepoMemoire } from './repos/processContextRepo'
 import { ProjectsRepoMemoire } from './repos/projectsRepo'
+import { QualityEventRepoMemoire } from './repos/qualityEventRepo'
 import { RiskAssessmentRepoMemoire } from './repos/riskAssessmentRepo'
 import { SectionsRepoMemoire } from './repos/sectionsRepo'
 import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
@@ -54,6 +55,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     csvAssessmentRepo: new CSVAssessmentRepoMemoire(),
     riskAssessmentRepo: new RiskAssessmentRepoMemoire(),
     processContextRepo: new ProcessContextRepoMemoire(),
+    qualityEventRepo: new QualityEventRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -171,6 +173,35 @@ interface CorpsReponse {
   associationsFonctionProcess: AssociationFonctionProcessJson[]
   manufacturingContext: ManufacturingContextJson
   manufacturingContexts: ManufacturingContextJson[]
+  evenement: QualityEventJson
+  evenements: QualityEventJson[]
+  reference: ReferenceQualityEventJson
+  references: ReferenceQualityEventJson[]
+}
+
+interface QualityEventJson {
+  id: string
+  clientId: string
+  type: string
+  titre: string
+  description: string
+  origine: string
+  referenceExterne: { systeme: string; identifiant: string } | null
+  assetNodeId: string | null
+  processId: string | null
+  manufacturingContextId: string | null
+  statut: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface ReferenceQualityEventJson {
+  id: string
+  clientId: string
+  qualityEventSourceId: string
+  qualityEventCibleId: string
+  createdAt: string
 }
 
 interface ProcessJson {
@@ -2361,6 +2392,232 @@ describe('routerRequete — Process/FonctionActif/ManufacturingContext (Target A
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/process-context`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §10 famille H/I, Phase 5b du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/quality-events`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.evenements).toEqual([])
+    expect(obtenir.corps.references).toEqual([])
+  })
+
+  test('créer un événement : id/statut/audit_log/horodatages dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
+      jeton: admin.jeton,
+      body: {
+        type: 'deviation',
+        titre: 'Écart température',
+        description: 'x',
+        origine: 'production',
+        referenceExterne: null,
+        assetNodeId: null,
+        processId: null,
+        manufacturingContextId: null,
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.evenement.clientId).toBe(clientId)
+    expect(creation.corps.evenement.id).toEqual(expect.any(String))
+    expect(creation.corps.evenement.statut).toBe('ouvert')
+    expect(creation.corps.evenement.auditLog).toEqual([
+      { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
+    ])
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/quality-events`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.evenements.map((e) => e.id)).toContain(creation.corps.evenement.id)
+  })
+
+  test('créer un événement sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
+      jeton: admin.jeton,
+      body: { type: 'deviation' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('changer le statut d’un événement : audit_log accumulé, jamais réécrit', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
+      jeton: admin.jeton,
+      body: {
+        type: 'capa',
+        titre: 'CAPA X',
+        description: 'x',
+        origine: 'audit',
+        referenceExterne: null,
+        assetNodeId: null,
+        processId: null,
+        manufacturingContextId: null,
+      },
+    })
+
+    const changement = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/quality-events/evenements/${creation.corps.evenement.id}/statut`,
+      { jeton: admin.jeton, body: { statut: 'en_cours' } },
+    )
+    expect(changement.status).toBe(200)
+    expect(changement.corps.evenement.statut).toBe('en_cours')
+    expect(changement.corps.evenement.auditLog).toHaveLength(2)
+  })
+
+  test('changer le statut d’un événement inexistant -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const changement = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/quality-events/evenements/inconnu/statut`,
+      { jeton: admin.jeton, body: { statut: 'clos' } },
+    )
+    expect(changement.status).toBe(404)
+  })
+
+  test('référencer un événement externe sans le bloquer ni le dupliquer', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const source = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
+      jeton: admin.jeton,
+      body: {
+        type: 'deviation',
+        titre: 'Écart',
+        description: 'x',
+        origine: 'production',
+        referenceExterne: { systeme: 'SAP-QM', identifiant: 'CC-2026-042' },
+        assetNodeId: null,
+        processId: null,
+        manufacturingContextId: null,
+      },
+    })
+    const cible = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
+      jeton: admin.jeton,
+      body: {
+        type: 'capa',
+        titre: 'CAPA',
+        description: 'x',
+        origine: 'audit',
+        referenceExterne: null,
+        assetNodeId: null,
+        processId: null,
+        manufacturingContextId: null,
+      },
+    })
+
+    const reference = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/references`, {
+      jeton: admin.jeton,
+      body: { sourceId: source.corps.evenement.id, cibleId: cible.corps.evenement.id },
+    })
+    expect(reference.status).toBe(201)
+    expect(reference.corps.reference.qualityEventSourceId).toBe(source.corps.evenement.id)
+    expect(reference.corps.reference.qualityEventCibleId).toBe(cible.corps.evenement.id)
+
+    // Un Change Control externe ouvert référençant un événement n'empêche
+    // jamais la création d'un ManufacturingContext indépendant — garde-fou
+    // central du domaine QualityEvent, aucun blocage n'existe par design.
+    const manufacturingContext = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/process-context/manufacturing-contexts`,
+      {
+        jeton: admin.jeton,
+        body: {
+          assetNodeId: 'n1',
+          processId: 'p1',
+          produit: 'Produit A',
+          recette: null,
+          format: null,
+          configuration: null,
+        },
+      },
+    )
+    expect(manufacturingContext.status).toBe(201)
+  })
+
+  test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const evenementLocal = {
+      id: 'evenement-local-1',
+      clientId,
+      type: 'deviation',
+      titre: 'Ancien titre',
+      description: 'x',
+      origine: 'production',
+      referenceExterne: null,
+      assetNodeId: null,
+      processId: null,
+      manufacturingContextId: null,
+      statut: 'ouvert',
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/quality-events/migration-locale`,
+      { jeton: admin.jeton, body: { evenements: [evenementLocal] } },
+    )
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/quality-events/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { evenements: [{ ...evenementLocal, titre: 'Tentative d’écrasement' }] },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/quality-events`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.evenements).toHaveLength(1)
+    expect(liste.corps.evenements[0]?.titre).toBe('Ancien titre')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/quality-events`)
     expect(obtenir.status).toBe(401)
   })
 })

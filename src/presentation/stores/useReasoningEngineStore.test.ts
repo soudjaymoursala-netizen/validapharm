@@ -65,7 +65,6 @@ beforeEach(async () => {
   await db.tests.clear()
   await db.procedures.clear()
   await db.procedureSteps.clear()
-  await db.qualityEvents.clear()
   await db.contextSnapshotItems.clear()
 })
 

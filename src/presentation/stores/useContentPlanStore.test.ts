@@ -12,7 +12,6 @@ beforeEach(async () => {
   await db.tests.clear()
   await db.executions.clear()
   await db.evidences.clear()
-  await db.qualityEvents.clear()
 })
 
 /**

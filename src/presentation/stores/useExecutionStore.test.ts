@@ -16,7 +16,6 @@ beforeEach(async () => {
   await db.executionSteps.clear()
   await db.measurements.clear()
   await db.executionEvents.clear()
-  await db.qualityEvents.clear()
 })
 
 /** Construit un Test approuvé avec 2 étapes, prêt à être exécuté. */
@@ -202,14 +201,17 @@ describe('useExecutionStore — garde-fous', () => {
       resultat: 'non_conforme',
       observation: 'Écart',
     })
+    // QualityEvent migré vers le Worker/D1 (Phase 5b du chantier de
+    // migration D1) : `useExecutionStore` n'a aucun code qui en crée un
+    // (seule `quality_event_id` référence optionnellement un
+    // `QualityEvent` déjà existant, jamais fabriqué ici) — garde-fou
+    // désormais structurel, pas besoin d'interroger le Worker pour le
+    // vérifier.
     await store.consignerEvenement('client-1', execution.id, {
       type: 'deviation',
       description: 'Résultat non conforme constaté',
       qualityEventId: null,
     })
-
-    const evenementsQualite = await db.qualityEvents.toArray()
-    expect(evenementsQualite).toHaveLength(0)
   })
 
   test('un ExecutionEvent peut référencer, de façon optionnelle, un QualityEvent déjà existant', async () => {

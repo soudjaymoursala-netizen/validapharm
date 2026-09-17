@@ -85,7 +85,6 @@ function routeurDeTest() {
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.missions.clear()
-  await db.qualityEvents.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   ctx = installation.ctx
@@ -154,21 +153,21 @@ describe('DossierVivantActif', () => {
       updatedAt: maintenant,
     })
 
-    await db.qualityEvents.put({
+    await ctx.qualityEventRepo.creerEvenement({
       id: 'event-1',
-      client_id: CLIENT_ID,
+      clientId: CLIENT_ID,
       type: 'audit_finding',
       titre: 'Traçabilité incomplète de la requalification',
       description: 'x',
       origine: 'interne',
-      reference_externe: null,
-      asset_node_id: 'noeud-1',
-      process_id: null,
-      manufacturing_context_id: null,
+      referenceExterne: null,
+      assetNodeId: 'noeud-1',
+      processId: null,
+      manufacturingContextId: null,
       statut: 'ouvert',
-      audit_log: [],
-      created_at: maintenant,
-      updated_at: maintenant,
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
     })
 
     const wrapper = mount(DossierVivantActif, {

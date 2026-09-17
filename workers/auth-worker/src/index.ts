@@ -12,6 +12,7 @@ import { D1ParametresInstallationRepo } from './repos/d1/d1ParametresInstallatio
 import { D1ProjectDocumentsRepo } from './repos/d1/d1ProjectDocumentsRepo'
 import { D1ProcessContextRepo } from './repos/d1/d1ProcessContextRepo'
 import { D1ProjectsRepo } from './repos/d1/d1ProjectsRepo'
+import { D1QualityEventRepo } from './repos/d1/d1QualityEventRepo'
 import { D1RiskAssessmentRepo } from './repos/d1/d1RiskAssessmentRepo'
 import { D1SectionsRepo } from './repos/d1/d1SectionsRepo'
 import { D1StructureSystemeRepo } from './repos/d1/d1StructureSystemeRepo'
@@ -62,6 +63,7 @@ export default {
       csvAssessmentRepo: new D1CsvAssessmentRepo(env.DB),
       riskAssessmentRepo: new D1RiskAssessmentRepo(env.DB),
       processContextRepo: new D1ProcessContextRepo(env.DB),
+      qualityEventRepo: new D1QualityEventRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

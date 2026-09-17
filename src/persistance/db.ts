@@ -363,6 +363,17 @@ export const associationsFonctionProcessAMigrer: AssociationFonctionProcess[] = 
 export const manufacturingContextsAMigrer: ManufacturingContext[] = []
 
 /**
+ * QualityEvent/ReferenceQualityEvent : migrés vers le Worker/D1 (URS
+ * catalogue §10 famille H/I, Phase 5b du chantier de migration D1) — même
+ * principe que `processesAMigrer` ci-dessus : formes domaine inchangées,
+ * pas de type "Ancien". Consommés et envoyés au serveur par
+ * `migrerQualityEventsLocalVersServeur` (`useQualityEventStore`) au premier
+ * `charger()`.
+ */
+export const qualityEventsAMigrer: QualityEvent[] = []
+export const referencesQualityEventAMigrer: ReferenceQualityEvent[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -379,8 +390,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  qualityEvents!: EntityTable<QualityEvent, 'id'>
-  referencesQualityEvent!: EntityTable<ReferenceQualityEvent, 'id'>
   requirements!: EntityTable<Requirement, 'id'>
   testObjectives!: EntityTable<TestObjective, 'id'>
   testCandidates!: EntityTable<TestCandidate, 'id'>
@@ -909,6 +918,22 @@ export class ValidaPharmDatabase extends Dexie {
           .table<ManufacturingContext>('manufacturingContexts')
           .toArray()
         manufacturingContextsAMigrer.push(...manufacturingContexts)
+      })
+
+    // QualityEvent/ReferenceQualityEvent : migrés vers le Worker/D1 (URS
+    // catalogue §10 famille H/I, Phase 5b du chantier de migration D1,
+    // docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique de capture
+    // avant suppression physique que la version 43 ci-dessus.
+    this.version(44)
+      .stores({
+        qualityEvents: null,
+        referencesQualityEvent: null,
+      })
+      .upgrade(async (tx) => {
+        const evenements = await tx.table<QualityEvent>('qualityEvents').toArray()
+        qualityEventsAMigrer.push(...evenements)
+        const references = await tx.table<ReferenceQualityEvent>('referencesQualityEvent').toArray()
+        referencesQualityEventAMigrer.push(...references)
       })
   }
 }
