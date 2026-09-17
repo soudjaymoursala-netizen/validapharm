@@ -105,6 +105,55 @@ export interface SaisieCreationNoeudWire {
   workspaceId?: string | null
 }
 
+export interface QuestionACFCWire {
+  id: string
+  texte: Partial<Record<'fr' | 'en' | 'de', string>>
+  famille?: string
+}
+
+export interface MethodProfileACFCWire {
+  id: string
+  clientId: string
+  version: string
+  effectiveDate: string
+  source: string
+  origin: string
+  questions: QuestionACFCWire[]
+  decisionRule: string
+  createdAt: string
+}
+
+export interface EvaluationACFCWire {
+  id: string
+  clientId: string
+  methodProfileId: string
+  methodProfileVersion: string
+  assetNodeId: string | null
+  nomElement: string
+  reponses: Record<string, string>
+  verdict: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaisieCreationProfilAcfcWire {
+  version: string
+  source: string
+  origin: string
+  questions: QuestionACFCWire[]
+  decisionRule: string
+}
+
+export interface SaisieCreationEvaluationAcfcWire {
+  methodProfileId: string
+  methodProfileVersion: string
+  assetNodeId: string | null
+  nomElement: string
+  reponses: Record<string, string>
+  verdict: string | null
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -443,6 +492,43 @@ export class AuthApiClient {
     return this.requete('POST', `/clients/${clientId}/structure-systeme/relations-techniques`, {
       jeton,
       body: saisie,
+    })
+  }
+
+  // --- ACFC (méthode configurable par client, F2 du catalogue §10, Phase 4a du chantier de migration D1) ---
+
+  obtenirAcfc(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ profils: MethodProfileACFCWire[]; evaluations: EvaluationACFCWire[] }>> {
+    return this.requete('GET', `/clients/${clientId}/acfc`, { jeton })
+  }
+
+  creerProfilAcfc(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationProfilAcfcWire,
+  ): Promise<ResultatApi<{ profil: MethodProfileACFCWire }>> {
+    return this.requete('POST', `/clients/${clientId}/acfc/profils`, { jeton, body: saisie })
+  }
+
+  creerEvaluationAcfc(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationEvaluationAcfcWire,
+  ): Promise<ResultatApi<{ evaluation: EvaluationACFCWire }>> {
+    return this.requete('POST', `/clients/${clientId}/acfc/evaluations`, { jeton, body: saisie })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerAcfcLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerAcfcLocal(
+    jeton: string,
+    clientId: string,
+    donnees: { profils: MethodProfileACFCWire[]; evaluations: EvaluationACFCWire[] },
+  ): Promise<ResultatApi<{ profils: MethodProfileACFCWire[]; evaluations: EvaluationACFCWire[] }>> {
+    return this.requete('POST', `/clients/${clientId}/acfc/migration-locale`, {
+      jeton,
+      body: donnees,
     })
   }
 

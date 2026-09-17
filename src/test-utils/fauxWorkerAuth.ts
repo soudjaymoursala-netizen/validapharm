@@ -12,6 +12,7 @@
 // d'un backend qui se comporte réellement comme le Worker.
 import { vi } from 'vitest'
 import { EnvoyeurEmailMemoire } from '../../workers/auth-worker/src/notifications/envoyeurEmail'
+import { ACFCRepoMemoire } from '../../workers/auth-worker/src/repos/acfcRepo'
 import { AuditRepoMemoire } from '../../workers/auth-worker/src/repos/auditRepo'
 import { ClientsRepoMemoire } from '../../workers/auth-worker/src/repos/clientsRepo'
 import { DocumentsNormatifsRepoMemoire } from '../../workers/auth-worker/src/repos/documentsNormatifsRepo'
@@ -51,6 +52,7 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     projectsRepo: new ProjectsRepoMemoire(),
     sectionsRepo: new SectionsRepoMemoire(),
     projectDocumentsRepo: new ProjectDocumentsRepoMemoire(),
+    acfcRepo: new ACFCRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,

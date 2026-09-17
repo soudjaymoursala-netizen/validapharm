@@ -289,6 +289,22 @@ export interface ProjectDocumentAncien {
 export const projectDocumentsAMigrer: ProjectDocumentAncien[] = []
 
 /**
+ * `MethodProfileACFC`/`EvaluationACFC` capturés depuis les anciennes
+ * tables locales `methodProfilesACFC`/`evaluationsACFC` juste avant leur
+ * suppression (version 39, Phase 4a du chantier de migration D1,
+ * docs/CHANTIER-MIGRATION-D1-RECAP.md) — même filet de sécurité que
+ * `projectDocumentsAMigrer` ci-dessus : vide sur un navigateur déjà passé
+ * par cette version. La forme de ces deux types n'a pas changé (D1 ne
+ * fait que remplacer IndexedDB comme lieu de stockage, jamais le
+ * contrat), contrairement à `ProjectDocumentAncien` ci-dessus — inutile
+ * d'introduire un type "Ancien" séparé ici. Consommés et envoyés au
+ * serveur par `migrerAcfcLocalVersServeur` (`useMethodProfileACFCStore`)
+ * au premier `charger()`.
+ */
+export const methodProfilesACFCAMigrer: MethodProfileACFC[] = []
+export const evaluationsACFCAMigrer: EvaluationACFC[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -305,8 +321,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  methodProfilesACFC!: EntityTable<MethodProfileACFC, 'id'>
-  evaluationsACFC!: EntityTable<EvaluationACFC, 'id'>
   parameters!: EntityTable<Parameter, 'id'>
   classificationsCriticiteParametre!: EntityTable<ClassificationCriticiteParametre, 'id'>
   cpps!: EntityTable<CPP, 'id'>
@@ -736,6 +750,21 @@ export class ValidaPharmDatabase extends Dexie {
       .upgrade(async (tx) => {
         const projectDocuments = await tx.table<ProjectDocumentAncien>('projectDocuments').toArray()
         projectDocumentsAMigrer.push(...projectDocuments)
+      })
+
+    // ACFC : migré vers le Worker/D1 (Phase 4a du chantier de migration
+    // D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique de
+    // capture avant suppression physique que la version 38 ci-dessus.
+    this.version(39)
+      .stores({
+        methodProfilesACFC: null,
+        evaluationsACFC: null,
+      })
+      .upgrade(async (tx) => {
+        const profils = await tx.table<MethodProfileACFC>('methodProfilesACFC').toArray()
+        methodProfilesACFCAMigrer.push(...profils)
+        const evaluations = await tx.table<EvaluationACFC>('evaluationsACFC').toArray()
+        evaluationsACFCAMigrer.push(...evaluations)
       })
   }
 }

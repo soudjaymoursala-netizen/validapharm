@@ -1,13 +1,49 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useMethodProfileACFCStore } from './useMethodProfileACFCStore'
+
+let ctx: Contexte
+let demonter: () => void
+
+/** ACFC migré vers le Worker/D1 (Phase 4a) — un client doit réellement exister pour que `exigerAccesClient` l'autorise. */
+async function creerClientDeTest(id: string): Promise<void> {
+  await ctx.clientsRepo.creer({
+    id,
+    name: id,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.methodProfilesACFC.clear()
-  await db.evaluationsACFC.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await creerClientDeTest('client-1')
+  await creerClientDeTest('client-A')
+  await creerClientDeTest('client-B')
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useMethodProfileACFCStore — aucun profil configuré', () => {
@@ -64,38 +100,26 @@ describe('useMethodProfileACFCStore — creerNouvelleVersion', () => {
     expect(store.profilActif?.id).toBe(v2.id)
     expect(store.profils).toHaveLength(2)
 
-    const v1Relu = await db.methodProfilesACFC.get(v1.id)
+    await store.charger('client-1')
+    const v1Relu = store.profils.find((p) => p.id === v1.id)
     expect(v1Relu?.questions).toHaveLength(1)
   })
 
   test('régression : profilActif reste correct même si deux versions partagent le même created_at (même milliseconde)', async () => {
     const store = useMethodProfileACFCStore()
     await store.charger('client-1')
-    const memeInstant = new Date().toISOString()
-    await db.methodProfilesACFC.put({
-      id: 'v1-id',
-      client_id: 'client-1',
-      version: 'v1',
-      effective_date: memeInstant,
+    await store.creerNouvelleVersion('client-1', {
+      questions: [{ texte: 'Question ?' }],
       source: 'Source v1',
       origin: 'defini_utilisateur',
-      questions: [{ id: 'q1', texte: { fr: 'Question ?' } }],
-      decision_rule: 'au_moins_un_oui_critique',
-      created_at: memeInstant,
     })
-    await db.methodProfilesACFC.put({
-      id: 'v2-id',
-      client_id: 'client-1',
-      version: 'v2',
-      effective_date: memeInstant,
+    const v2 = await store.creerNouvelleVersion('client-1', {
+      questions: [{ texte: 'Question ?' }],
       source: 'Source v2',
       origin: 'defini_utilisateur',
-      questions: [{ id: 'q1', texte: { fr: 'Question ?' } }],
-      decision_rule: 'au_moins_un_oui_critique',
-      created_at: memeInstant,
     })
     await store.charger('client-1')
-    expect(store.profilActif?.id).toBe('v2-id')
+    expect(store.profilActif?.id).toBe(v2.id)
   })
 
   test('isolation stricte par client (même principe que Structure Système)', async () => {
@@ -181,7 +205,8 @@ describe('useMethodProfileACFCStore — creerEvaluation (règle "au moins un oui
       reponses: { [question.id]: 'non' },
     })
     expect(store.evaluations).toHaveLength(2)
-    const relues = await db.evaluationsACFC.where('client_id').equals('client-1').toArray()
-    expect(relues).toHaveLength(2)
+
+    await store.charger('client-1')
+    expect(store.evaluations).toHaveLength(2)
   })
 })

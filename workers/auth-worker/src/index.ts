@@ -1,5 +1,6 @@
 import type { D1Database } from './d1Types'
 import { ResendEnvoyeurEmail } from './notifications/resendEnvoyeurEmail'
+import { D1AcfcRepo } from './repos/d1/d1AcfcRepo'
 import { D1AuditRepo } from './repos/d1/d1AuditRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
 import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
@@ -50,6 +51,7 @@ export default {
       projectsRepo: new D1ProjectsRepo(env.DB),
       sectionsRepo: new D1SectionsRepo(env.DB),
       projectDocumentsRepo: new D1ProjectDocumentsRepo(env.DB),
+      acfcRepo: new D1AcfcRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

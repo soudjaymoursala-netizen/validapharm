@@ -1,6 +1,12 @@
 import { signerJwt, verifierJwt } from './jwt'
 import { genererSel, hacherMotDePasse, verifierMotDePasse } from './motDePasse'
 import type { EnvoyeurEmail } from './notifications/envoyeurEmail'
+import type {
+  ACFCRepo,
+  EvaluationACFCEnregistree,
+  MethodProfileACFCEnregistre,
+  QuestionACFCEnregistree,
+} from './repos/acfcRepo'
 import type { AuditRepo } from './repos/auditRepo'
 import type { ClientsRepo } from './repos/clientsRepo'
 import type {
@@ -56,6 +62,7 @@ export interface Contexte {
   projectsRepo: ProjectsRepo
   sectionsRepo: SectionsRepo
   projectDocumentsRepo: ProjectDocumentsRepo
+  acfcRepo: ACFCRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -300,6 +307,25 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   )
   if (matchRelationsTechniques && request.method === 'POST') {
     return gererCreerRelationTechnique(request, ctx, entetes, matchRelationsTechniques[1] as string)
+  }
+
+  // --- ACFC (méthode configurable par client, F2 du catalogue §10, Phase
+  // 4a du chantier de migration D1) ---
+  const matchAcfc = chemin.match(/^\/clients\/([^/]+)\/acfc$/)
+  if (matchAcfc && request.method === 'GET') {
+    return gererObtenirAcfc(request, ctx, entetes, matchAcfc[1] as string)
+  }
+  const matchAcfcProfils = chemin.match(/^\/clients\/([^/]+)\/acfc\/profils$/)
+  if (matchAcfcProfils && request.method === 'POST') {
+    return gererCreerProfilAcfc(request, ctx, entetes, matchAcfcProfils[1] as string)
+  }
+  const matchAcfcMigrationLocale = chemin.match(/^\/clients\/([^/]+)\/acfc\/migration-locale$/)
+  if (matchAcfcMigrationLocale && request.method === 'POST') {
+    return gererMigrerAcfcLocal(request, ctx, entetes, matchAcfcMigrationLocale[1] as string)
+  }
+  const matchAcfcEvaluations = chemin.match(/^\/clients\/([^/]+)\/acfc\/evaluations$/)
+  if (matchAcfcEvaluations && request.method === 'POST') {
+    return gererCreerEvaluationAcfc(request, ctx, entetes, matchAcfcEvaluations[1] as string)
   }
 
   // --- Organization/Workspace (Phase 2 du chantier de migration D1) ---
@@ -1321,6 +1347,171 @@ async function gererCreerRelationTechnique(
   }
   await ctx.structureSystemeRepo.creerRelationTechnique(relation)
   return reponseJson({ relation }, 201, entetes)
+}
+
+// --- Handlers : ACFC (méthode configurable par client, F2 du catalogue
+// §10, Phase 4a du chantier de migration D1) ---
+//
+// La logique métier (numéro de version suivant, calcul du verdict via
+// `evaluerVerdictACFC`) reste côté store frontend
+// (`useMethodProfileACFCStore.ts`, déjà testée) — ces handlers ne font
+// qu'authentifier, vérifier l'accès au client concerné et persister l'état
+// qu'on leur donne, même discipline que les handlers Structure Système.
+
+interface SaisieCreationProfilAcfc {
+  version?: string
+  source?: string
+  origin?: string
+  questions?: QuestionACFCEnregistree[]
+  decisionRule?: string
+}
+
+function profilAcfcDepuisSaisie(
+  clientId: string,
+  saisie: SaisieCreationProfilAcfc,
+): MethodProfileACFCEnregistre | null {
+  if (
+    !saisie.version ||
+    !saisie.source ||
+    !saisie.origin ||
+    !Array.isArray(saisie.questions) ||
+    !saisie.decisionRule
+  ) {
+    return null
+  }
+  const maintenant = horodatage()
+  return {
+    id: genererId(),
+    clientId,
+    version: saisie.version,
+    effectiveDate: maintenant,
+    source: saisie.source,
+    origin: saisie.origin,
+    questions: saisie.questions,
+    decisionRule: saisie.decisionRule,
+    createdAt: maintenant,
+  }
+}
+
+async function gererObtenirAcfc(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [profils, evaluations] = await Promise.all([
+    ctx.acfcRepo.listerProfils(clientId),
+    ctx.acfcRepo.listerEvaluations(clientId),
+  ])
+  return reponseJson({ profils, evaluations }, 200, entetes)
+}
+
+async function gererCreerProfilAcfc(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationProfilAcfc>(request)
+  const profil = corps ? profilAcfcDepuisSaisie(clientId, corps) : null
+  if (!profil) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  await ctx.acfcRepo.creerProfil(profil)
+  return reponseJson({ profil }, 201, entetes)
+}
+
+interface SaisieCreationEvaluationAcfc {
+  methodProfileId?: string
+  methodProfileVersion?: string
+  assetNodeId?: string | null
+  nomElement?: string
+  reponses?: Record<string, string>
+  verdict?: string | null
+}
+
+async function gererCreerEvaluationAcfc(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationEvaluationAcfc>(request)
+  if (
+    !corps?.methodProfileId ||
+    !corps.methodProfileVersion ||
+    !corps.nomElement ||
+    !corps.reponses
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const evaluation: EvaluationACFCEnregistree = {
+    id: genererId(),
+    clientId,
+    methodProfileId: corps.methodProfileId,
+    methodProfileVersion: corps.methodProfileVersion,
+    assetNodeId: corps.assetNodeId ?? null,
+    nomElement: corps.nomElement,
+    reponses: corps.reponses,
+    verdict: corps.verdict ?? null,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.acfcRepo.creerEvaluation(evaluation)
+  return reponseJson({ evaluation }, 201, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale (`acfcAMigrer`,
+ * `useMethodProfileACFCStore.migrerAcfcLocalVersServeur`) — idempotente,
+ * l'existant côté serveur gagne toujours (`ON CONFLICT(id) DO NOTHING`
+ * dans `D1AcfcRepo`), jamais un écrasement, même discipline que
+ * `POST /sections/migration-locale`.
+ */
+interface SaisieMigrationAcfc {
+  profils?: MethodProfileACFCEnregistre[]
+  evaluations?: EvaluationACFCEnregistree[]
+}
+
+async function gererMigrerAcfcLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationAcfc>(request)
+  if (!corps || (!Array.isArray(corps.profils) && !Array.isArray(corps.evaluations))) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const p of corps.profils ?? []) {
+    if (p.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.acfcRepo.creerProfil(p)
+  }
+  for (const e of corps.evaluations ?? []) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.acfcRepo.creerEvaluation(e)
+  }
+  return reponseJson(
+    { profils: corps.profils ?? [], evaluations: corps.evaluations ?? [] },
+    200,
+    entetes,
+  )
 }
 
 // --- Handlers : Organization/Workspace (Phase 2 du chantier de migration D1) ---
