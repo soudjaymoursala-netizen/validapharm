@@ -1,13 +1,49 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useRiskAssessmentStore } from './useRiskAssessmentStore'
+
+let ctx: Contexte
+let demonter: () => void
+
+/** Risk Assessment migré vers le Worker/D1 (Phase 4d) — un client doit réellement exister pour que `exigerAccesClient` l'autorise. */
+async function creerClientDeTest(id: string): Promise<void> {
+  await ctx.clientsRepo.creer({
+    id,
+    name: id,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.methodProfilesRiskAssessment.clear()
-  await db.risksAssessment.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await creerClientDeTest('client-1')
+  await creerClientDeTest('client-A')
+  await creerClientDeTest('client-B')
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useRiskAssessmentStore — aucun profil configuré', () => {
@@ -72,8 +108,8 @@ describe('useRiskAssessmentStore — creerNouvelleVersion', () => {
     expect(v2.echelle_max).toBe(10)
     expect(store.profilActif?.id).toBe(v2.id)
 
-    const v1Relu = await db.methodProfilesRiskAssessment.get(v1.id)
-    expect(v1Relu?.echelle_max).toBe(5)
+    const v1Relu = await ctx.riskAssessmentRepo.listerProfils('client-1')
+    expect(v1Relu.find((p) => p.id === v1.id)?.echelleMax).toBe(5)
   })
 })
 
@@ -214,6 +250,7 @@ describe('useRiskAssessmentStore — enregistrerActionResiduelle (cycle AMDEC r�
 
   test('RiskAssessment inconnu -> erreur explicite, jamais une exception', async () => {
     const store = useRiskAssessmentStore()
+    await store.charger('client-1')
     const resultat = await store.enregistrerActionResiduelle('client-1', 'inconnu', {
       recommandation: null,
       responsable: null,

@@ -1,9 +1,36 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { db } from '../../persistance/db'
-import type { RiskAssessment } from '../../logique-metier/domaine/types'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import type { RiskAssessmentEnregistre } from '../../../workers/auth-worker/src/repos/riskAssessmentRepo'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
+
+let ctx: Contexte
+let demonter: () => void
+
+/** RiskAssessment vit désormais dans le Worker/D1 (Phase 4d) — un client doit réellement exister pour que `exigerAccesClient` l'autorise. */
+async function creerClientDeTest(id: string): Promise<void> {
+  await ctx.clientsRepo.creer({
+    id,
+    name: id,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
 
 beforeEach(async () => {
   setActivePinia(createPinia())
@@ -12,39 +39,49 @@ beforeEach(async () => {
   await db.testCandidates.clear()
   await db.tests.clear()
   await db.couvertures.clear()
-  await db.risksAssessment.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await creerClientDeTest('client-1')
+  await creerClientDeTest('client-A')
 })
 
-function risqueTest(overrides: Partial<RiskAssessment> = {}): RiskAssessment {
+afterEach(() => {
+  demonter()
+})
+
+function risqueTest(overrides: Partial<RiskAssessmentEnregistre> = {}): RiskAssessmentEnregistre {
   return {
     id: 'risque-1',
-    client_id: 'client-1',
-    method_profile_id: 'profil-1',
-    method_profile_version: '1',
-    asset_node_id: 'noeud-1',
-    parameter_id: null,
-    etape_processus: 'Compression',
-    mode_defaillance: 'Perte de pression',
-    effet_defaillance: 'Comprimé hors spécification',
-    cause_potentielle: 'Joint défectueux',
-    controle_actuel: 'Contrôle visuel hebdomadaire',
-    severite_initiale: 4,
-    occurrence_initiale: 3,
-    detectabilite_initiale: 2,
-    ipr_initial: 24,
-    verdict_initial: 'action_requise',
+    clientId: 'client-1',
+    methodProfileId: 'profil-1',
+    methodProfileVersion: '1',
+    assetNodeId: 'noeud-1',
+    parameterId: null,
+    etapeProcessus: 'Compression',
+    modeDefaillance: 'Perte de pression',
+    effetDefaillance: 'Comprimé hors spécification',
+    causePotentielle: 'Joint défectueux',
+    controleActuel: 'Contrôle visuel hebdomadaire',
+    severiteInitiale: 4,
+    occurrenceInitiale: 3,
+    detectabiliteInitiale: 2,
+    iprInitial: 24,
+    verdictInitial: 'action_requise',
     recommandation: 'Ajouter un capteur de pression continu',
     responsable: null,
-    date_cible: null,
-    actions_menees: null,
-    severite_residuelle: null,
-    occurrence_residuelle: null,
-    detectabilite_residuelle: null,
-    ipr_residuel: null,
-    verdict_residuel: null,
-    audit_log: [],
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z',
+    dateCible: null,
+    actionsMenees: null,
+    severiteResiduelle: null,
+    occurrenceResiduelle: null,
+    detectabiliteResiduelle: null,
+    iprResiduel: null,
+    verdictResiduel: null,
+    auditLog: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   }
 }
@@ -339,7 +376,7 @@ describe('useTestDefinitionStore — isolation stricte par client', () => {
 
 describe('useTestDefinitionStore — Test Design Engine', () => {
   test('genererCandidatsRisquesPourObjectif crée des candidats proposés depuis les risques action_requise', async () => {
-    await db.risksAssessment.put(risqueTest())
+    await ctx.riskAssessmentRepo.creerEvaluation(risqueTest())
     const store = useTestDefinitionStore()
     await store.charger('client-1')
 
@@ -367,7 +404,7 @@ describe('useTestDefinitionStore — Test Design Engine', () => {
   })
 
   test('genererCandidatsRisquesPourObjectif est idempotent — ne recrée pas un candidat déjà généré', async () => {
-    await db.risksAssessment.put(risqueTest())
+    await ctx.riskAssessmentRepo.creerEvaluation(risqueTest())
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {
@@ -398,7 +435,7 @@ describe('useTestDefinitionStore — Test Design Engine', () => {
   })
 
   test('couvertureRisquesRequirement reflète non_couvert puis couvert après génération', async () => {
-    await db.risksAssessment.put(risqueTest())
+    await ctx.riskAssessmentRepo.creerEvaluation(risqueTest())
     const store = useTestDefinitionStore()
     await store.charger('client-1')
     const requirement = await store.creerRequirement('client-1', {

@@ -302,6 +302,88 @@ export interface SaisieCreationEvaluationCsvAssessmentWire {
   justificationPertinence: string
 }
 
+export interface MethodProfileRiskAssessmentWire {
+  id: string
+  clientId: string
+  version: string
+  effectiveDate: string
+  source: string
+  origin: string
+  echelleMin: number
+  echelleMax: number
+  seuilAction: number
+  createdAt: string
+}
+
+export interface RiskAssessmentWire {
+  id: string
+  clientId: string
+  methodProfileId: string
+  methodProfileVersion: string
+  assetNodeId: string | null
+  parameterId: string | null
+  etapeProcessus: string
+  modeDefaillance: string
+  effetDefaillance: string
+  causePotentielle: string
+  controleActuel: string
+  severiteInitiale: number | null
+  occurrenceInitiale: number | null
+  detectabiliteInitiale: number | null
+  iprInitial: number | null
+  verdictInitial: string | null
+  recommandation: string | null
+  responsable: string | null
+  dateCible: string | null
+  actionsMenees: string | null
+  severiteResiduelle: number | null
+  occurrenceResiduelle: number | null
+  detectabiliteResiduelle: number | null
+  iprResiduel: number | null
+  verdictResiduel: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaisieCreationProfilRiskAssessmentWire {
+  version: string
+  source: string
+  origin: string
+  echelleMin: number
+  echelleMax: number
+  seuilAction: number
+}
+
+export interface SaisieCreationEvaluationRiskAssessmentWire {
+  methodProfileId: string
+  methodProfileVersion: string
+  assetNodeId: string | null
+  parameterId: string | null
+  etapeProcessus: string
+  modeDefaillance: string
+  effetDefaillance: string
+  causePotentielle: string
+  controleActuel: string
+  severiteInitiale: number | null
+  occurrenceInitiale: number | null
+  detectabiliteInitiale: number | null
+  iprInitial: number | null
+  verdictInitial: string | null
+}
+
+export interface SaisieActionResiduelleRiskAssessmentWire {
+  recommandation: string | null
+  responsable: string | null
+  dateCible: string | null
+  actionsMenees: string | null
+  severiteResiduelle: number | null
+  occurrenceResiduelle: number | null
+  detectabiliteResiduelle: number | null
+  iprResiduel: number | null
+  verdictResiduel: string | null
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -865,6 +947,75 @@ export class AuthApiClient {
     donnees: { evaluationsCsv: EvaluationCSVAssessmentWire[] },
   ): Promise<ResultatApi<{ evaluationsCsv: EvaluationCSVAssessmentWire[] }>> {
     return this.requete('POST', `/clients/${clientId}/csv-assessment/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Risk Assessment / AMDEC (Target Architecture §10, Phase 4d du chantier de migration D1) ---
+
+  obtenirRiskAssessment(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      profilsRisque: MethodProfileRiskAssessmentWire[]
+      evaluationsRisque: RiskAssessmentWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/risk-assessment`, { jeton })
+  }
+
+  creerProfilRiskAssessment(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationProfilRiskAssessmentWire,
+  ): Promise<ResultatApi<{ profilRisque: MethodProfileRiskAssessmentWire }>> {
+    return this.requete('POST', `/clients/${clientId}/risk-assessment/profils`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerEvaluationRiskAssessment(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationEvaluationRiskAssessmentWire,
+  ): Promise<ResultatApi<{ evaluationRisque: RiskAssessmentWire }>> {
+    return this.requete('POST', `/clients/${clientId}/risk-assessment/evaluations`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  enregistrerActionResiduelleRiskAssessment(
+    jeton: string,
+    clientId: string,
+    evaluationId: string,
+    saisie: SaisieActionResiduelleRiskAssessmentWire,
+  ): Promise<ResultatApi<{ evaluationRisque: RiskAssessmentWire }>> {
+    return this.requete(
+      'PATCH',
+      `/clients/${clientId}/risk-assessment/evaluations/${evaluationId}/action-residuelle`,
+      { jeton, body: saisie },
+    )
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerRiskAssessmentLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerRiskAssessmentLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      profilsRisque: MethodProfileRiskAssessmentWire[]
+      evaluationsRisque: RiskAssessmentWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      profilsRisque: MethodProfileRiskAssessmentWire[]
+      evaluationsRisque: RiskAssessmentWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/risk-assessment/migration-locale`, {
       jeton,
       body: donnees,
     })

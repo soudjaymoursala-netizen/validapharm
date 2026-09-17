@@ -16,6 +16,7 @@ import {
 import { genererCandidatsDepuisRisques } from '../../logique-metier/test-design/genererCandidatsDepuisRisques'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { db } from '../../persistance/db'
+import { useRiskAssessmentStore } from './useRiskAssessmentStore'
 
 export interface NouveauRequirementInput {
   reference: string
@@ -73,10 +74,12 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       testCandidates.value = await db.testCandidates.where('client_id').equals(clientId).toArray()
       tests.value = await db.tests.where('client_id').equals(clientId).toArray()
       couvertures.value = await db.couvertures.where('client_id').equals(clientId).toArray()
-      risquesAssessment.value = await db.risksAssessment
-        .where('client_id')
-        .equals(clientId)
-        .toArray()
+      // RiskAssessment vit désormais dans le Worker/D1 (Phase 4d du
+      // chantier de migration D1) — délègue à `useRiskAssessmentStore`,
+      // seule source de vérité, plutôt que de dupliquer l'appel API ici.
+      const riskAssessmentStore = useRiskAssessmentStore()
+      await riskAssessmentStore.charger(clientId)
+      risquesAssessment.value = riskAssessmentStore.evaluations
     } finally {
       enChargement.value = false
     }
