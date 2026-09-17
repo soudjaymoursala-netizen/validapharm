@@ -13,7 +13,9 @@ import { EnvoyeurEmailMemoire } from './notifications/envoyeurEmail'
 import { ACFCRepoMemoire } from './repos/acfcRepo'
 import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
+import { CSVAssessmentRepoMemoire } from './repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
+import { ImpactAssessmentRepoMemoire } from './repos/impactAssessmentRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametersRepoMemoire } from './repos/parametersRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
@@ -46,6 +48,8 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     projectDocumentsRepo: new ProjectDocumentsRepoMemoire(),
     acfcRepo: new ACFCRepoMemoire(),
     parametersRepo: new ParametersRepoMemoire(),
+    impactAssessmentRepo: new ImpactAssessmentRepoMemoire(),
+    csvAssessmentRepo: new CSVAssessmentRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -143,6 +147,53 @@ interface CorpsReponse {
   cpps: CPPJson[]
   cqa: CQAJson
   cqas: CQAJson[]
+  evaluationCsv: EvaluationCSVAssessmentJson
+  evaluationsCsv: EvaluationCSVAssessmentJson[]
+  profilImpact: MethodProfileImpactAssessmentJson
+  profilsImpact: MethodProfileImpactAssessmentJson[]
+  evaluationImpact: EvaluationImpactAssessmentJson
+  evaluationsImpact: EvaluationImpactAssessmentJson[]
+}
+
+interface MethodProfileImpactAssessmentJson {
+  id: string
+  clientId: string
+  version: string
+  effectiveDate: string
+  source: string
+  origin: string
+  questions: { id: string; texte: Record<string, string> }[]
+  decisionRule: string
+  createdAt: string
+}
+
+interface EvaluationImpactAssessmentJson {
+  id: string
+  clientId: string
+  methodProfileId: string
+  methodProfileVersion: string
+  assetNodeId: string | null
+  nomElement: string
+  reponses: Record<string, string>
+  verdict: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface EvaluationCSVAssessmentJson {
+  id: string
+  clientId: string
+  assetNodeId: string | null
+  nomSysteme: string
+  categorieGamp5: number
+  justificationCategorie: string
+  pertinenceGxp: boolean
+  pertinenceEresPart11: boolean
+  justificationPertinence: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
 }
 
 interface ParameterJson {
@@ -1405,6 +1456,284 @@ describe('routerRequete — Parameter/ClassificationCriticiteParametre/CPP/CQA (
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/parameters`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Impact Assessment / System Classification (F1 du catalogue §10, Phase 4c du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans profil configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/impact-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.profilsImpact).toEqual([])
+    expect(obtenir.corps.evaluationsImpact).toEqual([])
+  })
+
+  test('créer un profil : id/effectiveDate/createdAt dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/impact-assessment/profils`, {
+      jeton: admin.jeton,
+      body: {
+        version: 'v1',
+        source: 'Ferring FSMP',
+        origin: 'procedure_client',
+        questions: [{ id: 'q-1', texte: { fr: 'Le système est-il en contact direct produit ?' } }],
+        decisionRule: 'au_moins_un_oui_impact_direct',
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.profilImpact.clientId).toBe(clientId)
+    expect(creation.corps.profilImpact.id).toEqual(expect.any(String))
+    expect(creation.corps.profilImpact.effectiveDate).toEqual(expect.any(String))
+    expect(creation.corps.profilImpact.questions).toHaveLength(1)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/impact-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.profilsImpact.map((p) => p.id)).toContain(creation.corps.profilImpact.id)
+  })
+
+  test('créer un profil sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/impact-assessment/profils`, {
+      jeton: admin.jeton,
+      body: { version: 'v1' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('créer une évaluation : id/audit_log/horodatages dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/impact-assessment/profils`, {
+      jeton: admin.jeton,
+      body: {
+        version: 'v1',
+        source: 'Ferring FSMP',
+        origin: 'procedure_client',
+        questions: [{ id: 'q-1', texte: { fr: 'Contact produit ?' } }],
+        decisionRule: 'au_moins_un_oui_impact_direct',
+      },
+    })
+
+    const evaluation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/impact-assessment/evaluations`,
+      {
+        jeton: admin.jeton,
+        body: {
+          methodProfileId: profil.corps.profilImpact.id,
+          methodProfileVersion: profil.corps.profilImpact.version,
+          assetNodeId: null,
+          nomElement: 'Ligne de remplissage L-201',
+          reponses: { 'q-1': 'oui' },
+          verdict: 'impact_direct',
+        },
+      },
+    )
+    expect(evaluation.status).toBe(201)
+    expect(evaluation.corps.evaluationImpact.clientId).toBe(clientId)
+    expect(evaluation.corps.evaluationImpact.verdict).toBe('impact_direct')
+    expect(evaluation.corps.evaluationImpact.auditLog).toEqual([
+      { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
+    ])
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/impact-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.evaluationsImpact.map((e) => e.id)).toContain(
+      evaluation.corps.evaluationImpact.id,
+    )
+  })
+
+  test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const profilLocal = {
+      id: 'profil-impact-local-1',
+      clientId,
+      version: 'v1',
+      effectiveDate: '2026-01-01T00:00:00.000Z',
+      source: 'Ancienne procédure',
+      origin: 'procedure_client',
+      questions: [{ id: 'q-1', texte: { fr: 'Contact produit ?' } }],
+      decisionRule: 'au_moins_un_oui_impact_direct',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/impact-assessment/migration-locale`,
+      { jeton: admin.jeton, body: { profilsImpact: [profilLocal], evaluationsImpact: [] } },
+    )
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/impact-assessment/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: {
+          profilsImpact: [{ ...profilLocal, source: 'Tentative d’écrasement' }],
+          evaluationsImpact: [],
+        },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/impact-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.profilsImpact).toHaveLength(1)
+    expect(liste.corps.profilsImpact[0]?.source).toBe('Ancienne procédure')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/impact-assessment`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Computer System Assessment (F3 du catalogue §10, Phase 4c du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans rien configuré -> liste vide, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/csv-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.evaluationsCsv).toEqual([])
+  })
+
+  test('créer une évaluation : id/audit_log/horodatages dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/csv-assessment/evaluations`, {
+      jeton: admin.jeton,
+      body: {
+        assetNodeId: null,
+        nomSysteme: 'MES ligne A',
+        categorieGamp5: 4,
+        justificationCategorie: 'Logiciel paramétrable, pas de code sur mesure',
+        pertinenceGxp: true,
+        pertinenceEresPart11: true,
+        justificationPertinence: 'Enregistrements électroniques réglementaires',
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.evaluationCsv.clientId).toBe(clientId)
+    expect(creation.corps.evaluationCsv.categorieGamp5).toBe(4)
+    expect(creation.corps.evaluationCsv.auditLog).toEqual([
+      { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
+    ])
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/csv-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.evaluationsCsv.map((e) => e.id)).toContain(creation.corps.evaluationCsv.id)
+  })
+
+  test('créer une évaluation sans champ obligatoire -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/csv-assessment/evaluations`, {
+      jeton: admin.jeton,
+      body: { nomSysteme: 'MES ligne A' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const evaluationLocale = {
+      id: 'evaluation-csv-locale-1',
+      clientId,
+      assetNodeId: null,
+      nomSysteme: 'Ancien système',
+      categorieGamp5: 3,
+      justificationCategorie: 'Justification locale',
+      pertinenceGxp: true,
+      pertinenceEresPart11: false,
+      justificationPertinence: 'Justification pertinence',
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/csv-assessment/migration-locale`,
+      { jeton: admin.jeton, body: { evaluationsCsv: [evaluationLocale] } },
+    )
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/csv-assessment/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { evaluationsCsv: [{ ...evaluationLocale, nomSysteme: 'Tentative d’écrasement' }] },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/csv-assessment`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.evaluationsCsv).toHaveLength(1)
+    expect(liste.corps.evaluationsCsv[0]?.nomSysteme).toBe('Ancien système')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/csv-assessment`)
     expect(obtenir.status).toBe(401)
   })
 })

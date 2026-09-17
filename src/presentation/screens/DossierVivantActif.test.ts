@@ -84,7 +84,6 @@ function routeurDeTest() {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.evaluationsCSVAssessment.clear()
   await db.missions.clear()
   await db.qualityEvents.clear()
   await reinitialiserAuthDeTest()
@@ -140,19 +139,19 @@ describe('DossierVivantActif', () => {
       createdAt: maintenant,
       updatedAt: maintenant,
     })
-    await db.evaluationsCSVAssessment.put({
+    await ctx.csvAssessmentRepo.creerEvaluation({
       id: 'eval-1',
-      client_id: CLIENT_ID,
-      asset_node_id: 'noeud-1',
-      nom_systeme: 'PLC autoclave',
-      categorie_gamp5: 4,
-      justification_categorie: 'x',
-      pertinence_gxp: true,
-      pertinence_eres_part11: false,
-      justification_pertinence: 'x',
-      audit_log: [],
-      created_at: maintenant,
-      updated_at: maintenant,
+      clientId: CLIENT_ID,
+      assetNodeId: 'noeud-1',
+      nomSysteme: 'PLC autoclave',
+      categorieGamp5: 4,
+      justificationCategorie: 'x',
+      pertinenceGxp: true,
+      pertinenceEresPart11: false,
+      justificationPertinence: 'x',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
     })
 
     await db.qualityEvents.put({
@@ -176,7 +175,13 @@ describe('DossierVivantActif', () => {
       props: { clientId: CLIENT_ID, noeudId: 'noeud-1' },
       global: { plugins: [routeurDeTest()] },
     })
-    await attendreQue(() => wrapper.text().includes('Autoclave AUT-042'))
+    // Attendre uniquement le nom du nœud ne suffit pas : Structure Système
+    // et CSV Assessment/Quality Events se chargent via des `charger()`
+    // concurrents distincts (voir le commentaire d'`attendreQue` en tête de
+    // fichier) — un « PLC autoclave » pas encore arrivé a fait échouer ce
+    // test en CI (jamais reproduit en local) tant que la condition
+    // n'attendait que le nom du nœud.
+    await attendreQue(() => wrapper.text().includes('PLC autoclave'))
 
     expect(wrapper.text()).toContain('Qualifié')
     expect(wrapper.text()).toContain('2027-01-01')

@@ -1,9 +1,14 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import ComputerSystemAssessment from './ComputerSystemAssessment.vue'
 
 function routeurDeTest() {
@@ -29,15 +34,42 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+const CLIENT_ID = 'client-1'
+
+let ctx: Contexte
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.evaluationsCSVAssessment.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: CLIENT_ID,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('ComputerSystemAssessment', () => {
   test("le bouton d'enregistrement reste désactivé tant que le formulaire n'est pas complet", async () => {
     const wrapper = mount(ComputerSystemAssessment, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await flushPromises()
@@ -48,7 +80,7 @@ describe('ComputerSystemAssessment', () => {
 
   test('enregistre une évaluation complète (catégorie fixe, jamais configurable par client)', async () => {
     const wrapper = mount(ComputerSystemAssessment, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await flushPromises()
@@ -69,15 +101,14 @@ describe('ComputerSystemAssessment', () => {
     await wrapper.find('.formulaire').trigger('submit.prevent')
 
     await attendreQue(
-      async () =>
-        (await db.evaluationsCSVAssessment.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.csvAssessmentRepo.listerEvaluations(CLIENT_ID)).length > 0,
     )
-    const evals = await db.evaluationsCSVAssessment.where('client_id').equals('client-1').toArray()
+    const evals = await ctx.csvAssessmentRepo.listerEvaluations(CLIENT_ID)
     expect(evals[0]).toMatchObject({
-      nom_systeme: 'SCADA ligne STICK002',
-      categorie_gamp5: 4,
-      pertinence_gxp: true,
-      pertinence_eres_part11: false,
+      nomSysteme: 'SCADA ligne STICK002',
+      categorieGamp5: 4,
+      pertinenceGxp: true,
+      pertinenceEresPart11: false,
     })
   })
 })

@@ -321,6 +321,20 @@ export const cppsAMigrer: CPP[] = []
 export const cqasAMigrer: CQA[] = []
 
 /**
+ * Filet de sécurité de migration locale pour `MethodProfileImpactAssessment`/
+ * `EvaluationImpactAssessment`/`EvaluationCSVAssessment` (F1/F3 du
+ * catalogue §10, Phase 4c du chantier de migration D1,
+ * docs/CHANTIER-MIGRATION-D1-RECAP.md) — même principe que
+ * `parametersAMigrer` ci-dessus : formes domaine inchangées, pas de type
+ * "Ancien". Consommés et envoyés au serveur par
+ * `migrerImpactAssessmentLocalVersServeur`/`migrerCsvAssessmentLocalVersServeur`
+ * (`useImpactAssessmentStore`/`useCSVAssessmentStore`) au premier `charger()`.
+ */
+export const methodProfilesImpactAssessmentAMigrer: MethodProfileImpactAssessment[] = []
+export const evaluationsImpactAssessmentAMigrer: EvaluationImpactAssessment[] = []
+export const evaluationsCSVAssessmentAMigrer: EvaluationCSVAssessment[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -337,9 +351,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  methodProfilesImpactAssessment!: EntityTable<MethodProfileImpactAssessment, 'id'>
-  evaluationsImpactAssessment!: EntityTable<EvaluationImpactAssessment, 'id'>
-  evaluationsCSVAssessment!: EntityTable<EvaluationCSVAssessment, 'id'>
   processes!: EntityTable<Process, 'id'>
   fonctionsActif!: EntityTable<FonctionActif, 'id'>
   associationsFonctionAssetNode!: EntityTable<AssociationFonctionAssetNode, 'id'>
@@ -801,6 +812,32 @@ export class ValidaPharmDatabase extends Dexie {
         cppsAMigrer.push(...cpps)
         const cqas = await tx.table<CQA>('cqas').toArray()
         cqasAMigrer.push(...cqas)
+      })
+
+    // MethodProfileImpactAssessment/EvaluationImpactAssessment/
+    // EvaluationCSVAssessment : migrés vers le Worker/D1 (F1/F3 du
+    // catalogue §10, Phase 4c du chantier de migration D1,
+    // docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique de capture
+    // avant suppression physique que la version 40 ci-dessus.
+    this.version(41)
+      .stores({
+        methodProfilesImpactAssessment: null,
+        evaluationsImpactAssessment: null,
+        evaluationsCSVAssessment: null,
+      })
+      .upgrade(async (tx) => {
+        const profils = await tx
+          .table<MethodProfileImpactAssessment>('methodProfilesImpactAssessment')
+          .toArray()
+        methodProfilesImpactAssessmentAMigrer.push(...profils)
+        const evaluationsImpact = await tx
+          .table<EvaluationImpactAssessment>('evaluationsImpactAssessment')
+          .toArray()
+        evaluationsImpactAssessmentAMigrer.push(...evaluationsImpact)
+        const evaluationsCsv = await tx
+          .table<EvaluationCSVAssessment>('evaluationsCSVAssessment')
+          .toArray()
+        evaluationsCSVAssessmentAMigrer.push(...evaluationsCsv)
       })
   }
 }

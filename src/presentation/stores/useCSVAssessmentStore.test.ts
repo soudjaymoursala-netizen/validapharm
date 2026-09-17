@@ -1,12 +1,49 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useCSVAssessmentStore } from './useCSVAssessmentStore'
+
+let ctx: Contexte
+let demonter: () => void
+
+/** Computer System Assessment migré vers le Worker/D1 (Phase 4c) — un client doit réellement exister pour que `exigerAccesClient` l'autorise. */
+async function creerClientDeTest(id: string): Promise<void> {
+  await ctx.clientsRepo.creer({
+    id,
+    name: id,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.evaluationsCSVAssessment.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await creerClientDeTest('client-1')
+  await creerClientDeTest('client-A')
+  await creerClientDeTest('client-B')
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useCSVAssessmentStore — Computer System Assessment (F3)', () => {
@@ -67,8 +104,9 @@ describe('useCSVAssessmentStore — Computer System Assessment (F3)', () => {
       justificationPertinence: 'Calculs métier spécifiques',
     })
     expect(store.evaluations).toHaveLength(2)
-    const relues = await db.evaluationsCSVAssessment.where('client_id').equals('client-1').toArray()
-    expect(relues).toHaveLength(2)
+
+    await store.charger('client-1')
+    expect(store.evaluations).toHaveLength(2)
   })
 })
 
