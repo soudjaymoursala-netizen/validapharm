@@ -1,9 +1,14 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import ImpactAssessment from './ImpactAssessment.vue'
 
 function routeurDeTest() {
@@ -29,16 +34,42 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+const CLIENT_ID = 'client-1'
+
+let ctx: Contexte
+let demonter: () => void
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.methodProfilesImpactAssessment.clear()
-  await db.evaluationsImpactAssessment.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: CLIENT_ID,
+    name: CLIENT_ID,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('ImpactAssessment', () => {
   test("n'affiche aucune question par défaut tant qu'aucune méthode n'est configurée", async () => {
     const wrapper = mount(ImpactAssessment, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.find('.bloc-config').exists())
@@ -52,22 +83,22 @@ describe('ImpactAssessment', () => {
     // Assessment n'est configurée » tant que le onMounted n'avait pas
     // terminé (même motif que RiskAssessmentAmdec.vue, `d68de27`).
     const maintenant = new Date().toISOString()
-    await db.methodProfilesImpactAssessment.put({
+    await ctx.impactAssessmentRepo.creerProfil({
       id: crypto.randomUUID(),
-      client_id: 'client-1',
+      clientId: CLIENT_ID,
       version: 'v1',
-      effective_date: maintenant,
+      effectiveDate: maintenant,
       source: 'Procédure interne QD-001',
       origin: 'procedure_client',
       questions: [
         { id: crypto.randomUUID(), texte: { fr: 'Le système touche-t-il le produit ?' } },
       ],
-      decision_rule: 'au_moins_un_oui_impact_direct',
-      created_at: maintenant,
+      decisionRule: 'au_moins_un_oui_impact_direct',
+      createdAt: maintenant,
     })
 
     const wrapper = mount(ImpactAssessment, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
 
@@ -80,7 +111,7 @@ describe('ImpactAssessment', () => {
 
   test('configure une méthode puis calcule le verdict Direct Impact sur une réponse "oui"', async () => {
     const wrapper = mount(ImpactAssessment, {
-      props: { clientId: 'client-1' },
+      props: { clientId: CLIENT_ID },
       global: { plugins: [routeurDeTest()] },
     })
     await attendreQue(() => wrapper.find('.bloc-config').exists())
@@ -91,8 +122,7 @@ describe('ImpactAssessment', () => {
     await wrapper.find('.formulaire').trigger('submit.prevent')
 
     await attendreQue(
-      async () =>
-        (await db.methodProfilesImpactAssessment.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.impactAssessmentRepo.listerProfils(CLIENT_ID)).length > 0,
     )
     await flushPromises()
 
@@ -116,15 +146,11 @@ describe('ImpactAssessment', () => {
     await enregistrerBtn?.trigger('click')
 
     await attendreQue(
-      async () =>
-        (await db.evaluationsImpactAssessment.where('client_id').equals('client-1').count()) > 0,
+      async () => (await ctx.impactAssessmentRepo.listerEvaluations(CLIENT_ID)).length > 0,
     )
-    const evals = await db.evaluationsImpactAssessment
-      .where('client_id')
-      .equals('client-1')
-      .toArray()
+    const evals = await ctx.impactAssessmentRepo.listerEvaluations(CLIENT_ID)
     expect(evals[0]?.verdict).toBe('impact_direct')
-    expect(evals[0]?.nom_element).toBe('Isolateur STICK002')
+    expect(evals[0]?.nomElement).toBe('Isolateur STICK002')
 
     await flushPromises()
     expect(wrapper.text()).toContain('Évaluations enregistrées')

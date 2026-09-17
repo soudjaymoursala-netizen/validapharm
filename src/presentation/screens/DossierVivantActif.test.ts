@@ -84,7 +84,6 @@ function routeurDeTest() {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.evaluationsCSVAssessment.clear()
   await db.missions.clear()
   await db.qualityEvents.clear()
   await reinitialiserAuthDeTest()
@@ -140,19 +139,19 @@ describe('DossierVivantActif', () => {
       createdAt: maintenant,
       updatedAt: maintenant,
     })
-    await db.evaluationsCSVAssessment.put({
+    await ctx.csvAssessmentRepo.creerEvaluation({
       id: 'eval-1',
-      client_id: CLIENT_ID,
-      asset_node_id: 'noeud-1',
-      nom_systeme: 'PLC autoclave',
-      categorie_gamp5: 4,
-      justification_categorie: 'x',
-      pertinence_gxp: true,
-      pertinence_eres_part11: false,
-      justification_pertinence: 'x',
-      audit_log: [],
-      created_at: maintenant,
-      updated_at: maintenant,
+      clientId: CLIENT_ID,
+      assetNodeId: 'noeud-1',
+      nomSysteme: 'PLC autoclave',
+      categorieGamp5: 4,
+      justificationCategorie: 'x',
+      pertinenceGxp: true,
+      pertinenceEresPart11: false,
+      justificationPertinence: 'x',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
     })
 
     await db.qualityEvents.put({

@@ -10,9 +10,19 @@ import type {
 import type { AuditRepo } from './repos/auditRepo'
 import type { ClientsRepo } from './repos/clientsRepo'
 import type {
+  CSVAssessmentRepo,
+  EvaluationCSVAssessmentEnregistree,
+} from './repos/csvAssessmentRepo'
+import type {
   DocumentNormatifEnregistre,
   DocumentsNormatifsRepo,
 } from './repos/documentsNormatifsRepo'
+import type {
+  EvaluationImpactAssessmentEnregistree,
+  ImpactAssessmentRepo,
+  MethodProfileImpactAssessmentEnregistre,
+  QuestionImpactAssessmentEnregistree,
+} from './repos/impactAssessmentRepo'
 import type {
   OrganisationRepo,
   OrganizationEnregistree,
@@ -71,6 +81,8 @@ export interface Contexte {
   projectDocumentsRepo: ProjectDocumentsRepo
   acfcRepo: ACFCRepo
   parametersRepo: ParametersRepo
+  impactAssessmentRepo: ImpactAssessmentRepo
+  csvAssessmentRepo: CSVAssessmentRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -387,6 +399,75 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       entetes,
       matchCqaId[1] as string,
       matchCqaId[2] as string,
+    )
+  }
+
+  // --- Impact Assessment / System Classification (F1 du catalogue §10,
+  // Phase 4c du chantier de migration D1) ---
+  const matchImpactAssessment = chemin.match(/^\/clients\/([^/]+)\/impact-assessment$/)
+  if (matchImpactAssessment && request.method === 'GET') {
+    return gererObtenirImpactAssessment(request, ctx, entetes, matchImpactAssessment[1] as string)
+  }
+  const matchImpactAssessmentProfils = chemin.match(
+    /^\/clients\/([^/]+)\/impact-assessment\/profils$/,
+  )
+  if (matchImpactAssessmentProfils && request.method === 'POST') {
+    return gererCreerProfilImpactAssessment(
+      request,
+      ctx,
+      entetes,
+      matchImpactAssessmentProfils[1] as string,
+    )
+  }
+  const matchImpactAssessmentMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/impact-assessment\/migration-locale$/,
+  )
+  if (matchImpactAssessmentMigrationLocale && request.method === 'POST') {
+    return gererMigrerImpactAssessmentLocal(
+      request,
+      ctx,
+      entetes,
+      matchImpactAssessmentMigrationLocale[1] as string,
+    )
+  }
+  const matchImpactAssessmentEvaluations = chemin.match(
+    /^\/clients\/([^/]+)\/impact-assessment\/evaluations$/,
+  )
+  if (matchImpactAssessmentEvaluations && request.method === 'POST') {
+    return gererCreerEvaluationImpactAssessment(
+      request,
+      ctx,
+      entetes,
+      matchImpactAssessmentEvaluations[1] as string,
+    )
+  }
+
+  // --- Computer System Assessment (F3 du catalogue §10, Phase 4c du
+  // chantier de migration D1) ---
+  const matchCsvAssessment = chemin.match(/^\/clients\/([^/]+)\/csv-assessment$/)
+  if (matchCsvAssessment && request.method === 'GET') {
+    return gererObtenirCsvAssessment(request, ctx, entetes, matchCsvAssessment[1] as string)
+  }
+  const matchCsvAssessmentMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/csv-assessment\/migration-locale$/,
+  )
+  if (matchCsvAssessmentMigrationLocale && request.method === 'POST') {
+    return gererMigrerCsvAssessmentLocal(
+      request,
+      ctx,
+      entetes,
+      matchCsvAssessmentMigrationLocale[1] as string,
+    )
+  }
+  const matchCsvAssessmentEvaluations = chemin.match(
+    /^\/clients\/([^/]+)\/csv-assessment\/evaluations$/,
+  )
+  if (matchCsvAssessmentEvaluations && request.method === 'POST') {
+    return gererCreerEvaluationCsvAssessment(
+      request,
+      ctx,
+      entetes,
+      matchCsvAssessmentEvaluations[1] as string,
     )
   }
 
@@ -1879,6 +1960,277 @@ async function gererMigrerParametersLocal(
     200,
     entetes,
   )
+}
+
+// --- Handlers : Impact Assessment / System Classification (F1 du
+// catalogue §10, Phase 4c du chantier de migration D1) ---
+//
+// La logique métier (numéro de version suivant, calcul du verdict) reste
+// côté store frontend (`useImpactAssessmentStore.ts`, déjà testée) — ces
+// handlers ne font qu'authentifier, vérifier l'accès au client concerné
+// et persister l'état qu'on leur donne, même discipline que les handlers
+// ACFC.
+
+interface SaisieCreationProfilImpactAssessment {
+  version?: string
+  source?: string
+  origin?: string
+  questions?: QuestionImpactAssessmentEnregistree[]
+  decisionRule?: string
+}
+
+function profilImpactAssessmentDepuisSaisie(
+  clientId: string,
+  saisie: SaisieCreationProfilImpactAssessment,
+): MethodProfileImpactAssessmentEnregistre | null {
+  if (
+    !saisie.version ||
+    !saisie.source ||
+    !saisie.origin ||
+    !Array.isArray(saisie.questions) ||
+    !saisie.decisionRule
+  ) {
+    return null
+  }
+  const maintenant = horodatage()
+  return {
+    id: genererId(),
+    clientId,
+    version: saisie.version,
+    effectiveDate: maintenant,
+    source: saisie.source,
+    origin: saisie.origin,
+    questions: saisie.questions,
+    decisionRule: saisie.decisionRule,
+    createdAt: maintenant,
+  }
+}
+
+async function gererObtenirImpactAssessment(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [profilsImpact, evaluationsImpact] = await Promise.all([
+    ctx.impactAssessmentRepo.listerProfils(clientId),
+    ctx.impactAssessmentRepo.listerEvaluations(clientId),
+  ])
+  return reponseJson({ profilsImpact, evaluationsImpact }, 200, entetes)
+}
+
+async function gererCreerProfilImpactAssessment(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationProfilImpactAssessment>(request)
+  // Clé `profilImpact` (jamais `profil`) : `profil` désigne déjà la
+  // réponse de `POST /clients/:id/acfc/profils` — même discipline que
+  // `parametreProcede` pour éviter une collision de nom entre deux
+  // réponses JSON distinctes.
+  const profilImpact = corps ? profilImpactAssessmentDepuisSaisie(clientId, corps) : null
+  if (!profilImpact) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  await ctx.impactAssessmentRepo.creerProfil(profilImpact)
+  return reponseJson({ profilImpact }, 201, entetes)
+}
+
+interface SaisieCreationEvaluationImpactAssessment {
+  methodProfileId?: string
+  methodProfileVersion?: string
+  assetNodeId?: string | null
+  nomElement?: string
+  reponses?: Record<string, string>
+  verdict?: string | null
+}
+
+async function gererCreerEvaluationImpactAssessment(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationEvaluationImpactAssessment>(request)
+  if (
+    !corps?.methodProfileId ||
+    !corps.methodProfileVersion ||
+    !corps.nomElement ||
+    !corps.reponses
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const evaluationImpact: EvaluationImpactAssessmentEnregistree = {
+    id: genererId(),
+    clientId,
+    methodProfileId: corps.methodProfileId,
+    methodProfileVersion: corps.methodProfileVersion,
+    assetNodeId: corps.assetNodeId ?? null,
+    nomElement: corps.nomElement,
+    reponses: corps.reponses,
+    verdict: corps.verdict ?? null,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.impactAssessmentRepo.creerEvaluation(evaluationImpact)
+  return reponseJson({ evaluationImpact }, 201, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale (`methodProfilesImpactAssessmentAMigrer`/
+ * `evaluationsImpactAssessmentAMigrer`,
+ * `useImpactAssessmentStore.migrerImpactAssessmentLocalVersServeur`) —
+ * idempotente, l'existant côté serveur gagne toujours (`ON CONFLICT(id) DO
+ * NOTHING` dans `D1ImpactAssessmentRepo`), même discipline que
+ * `POST /clients/:id/acfc/migration-locale`.
+ */
+interface SaisieMigrationImpactAssessment {
+  profilsImpact?: MethodProfileImpactAssessmentEnregistre[]
+  evaluationsImpact?: EvaluationImpactAssessmentEnregistree[]
+}
+
+async function gererMigrerImpactAssessmentLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationImpactAssessment>(request)
+  if (!corps || (!Array.isArray(corps.profilsImpact) && !Array.isArray(corps.evaluationsImpact))) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const p of corps.profilsImpact ?? []) {
+    if (p.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.impactAssessmentRepo.creerProfil(p)
+  }
+  for (const e of corps.evaluationsImpact ?? []) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.impactAssessmentRepo.creerEvaluation(e)
+  }
+  return reponseJson(
+    { profilsImpact: corps.profilsImpact ?? [], evaluationsImpact: corps.evaluationsImpact ?? [] },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : Computer System Assessment (F3 du catalogue §10, Phase
+// 4c du chantier de migration D1) ---
+//
+// Pas de MethodProfile ici : la catégorisation GAMP5 est une grille
+// normative fixe (PIC/S PI 011-3), jamais configurable par client — même
+// discipline documentée dans `useCSVAssessmentStore.ts`.
+
+async function gererObtenirCsvAssessment(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const evaluationsCsv = await ctx.csvAssessmentRepo.listerEvaluations(clientId)
+  return reponseJson({ evaluationsCsv }, 200, entetes)
+}
+
+interface SaisieCreationEvaluationCsvAssessment {
+  assetNodeId?: string | null
+  nomSysteme?: string
+  categorieGamp5?: number
+  justificationCategorie?: string
+  pertinenceGxp?: boolean
+  pertinenceEresPart11?: boolean
+  justificationPertinence?: string
+}
+
+async function gererCreerEvaluationCsvAssessment(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationEvaluationCsvAssessment>(request)
+  if (
+    !corps?.nomSysteme ||
+    !corps.categorieGamp5 ||
+    !corps.justificationCategorie ||
+    corps.pertinenceGxp === undefined ||
+    corps.pertinenceEresPart11 === undefined ||
+    !corps.justificationPertinence
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const evaluationCsv: EvaluationCSVAssessmentEnregistree = {
+    id: genererId(),
+    clientId,
+    assetNodeId: corps.assetNodeId ?? null,
+    nomSysteme: corps.nomSysteme,
+    categorieGamp5: corps.categorieGamp5,
+    justificationCategorie: corps.justificationCategorie,
+    pertinenceGxp: corps.pertinenceGxp,
+    pertinenceEresPart11: corps.pertinenceEresPart11,
+    justificationPertinence: corps.justificationPertinence,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.csvAssessmentRepo.creerEvaluation(evaluationCsv)
+  return reponseJson({ evaluationCsv }, 201, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale (`evaluationsCSVAssessmentAMigrer`,
+ * `useCSVAssessmentStore.migrerCsvAssessmentLocalVersServeur`) —
+ * idempotente, même discipline que les autres migrations locales de ce
+ * chantier.
+ */
+interface SaisieMigrationCsvAssessment {
+  evaluationsCsv?: EvaluationCSVAssessmentEnregistree[]
+}
+
+async function gererMigrerCsvAssessmentLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationCsvAssessment>(request)
+  if (!corps || !Array.isArray(corps.evaluationsCsv)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const e of corps.evaluationsCsv) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.csvAssessmentRepo.creerEvaluation(e)
+  }
+  return reponseJson({ evaluationsCsv: corps.evaluationsCsv }, 200, entetes)
 }
 
 // --- Handlers : Organization/Workspace (Phase 2 du chantier de migration D1) ---

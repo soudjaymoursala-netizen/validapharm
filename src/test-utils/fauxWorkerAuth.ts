@@ -15,7 +15,9 @@ import { EnvoyeurEmailMemoire } from '../../workers/auth-worker/src/notification
 import { ACFCRepoMemoire } from '../../workers/auth-worker/src/repos/acfcRepo'
 import { AuditRepoMemoire } from '../../workers/auth-worker/src/repos/auditRepo'
 import { ClientsRepoMemoire } from '../../workers/auth-worker/src/repos/clientsRepo'
+import { CSVAssessmentRepoMemoire } from '../../workers/auth-worker/src/repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from '../../workers/auth-worker/src/repos/documentsNormatifsRepo'
+import { ImpactAssessmentRepoMemoire } from '../../workers/auth-worker/src/repos/impactAssessmentRepo'
 import { OrganisationRepoMemoire } from '../../workers/auth-worker/src/repos/organisationRepo'
 import { ParametersRepoMemoire } from '../../workers/auth-worker/src/repos/parametersRepo'
 import { ParametresInstallationRepoMemoire } from '../../workers/auth-worker/src/repos/parametresInstallationRepo'
@@ -55,6 +57,8 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     projectDocumentsRepo: new ProjectDocumentsRepoMemoire(),
     acfcRepo: new ACFCRepoMemoire(),
     parametersRepo: new ParametersRepoMemoire(),
+    impactAssessmentRepo: new ImpactAssessmentRepoMemoire(),
+    csvAssessmentRepo: new CSVAssessmentRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,

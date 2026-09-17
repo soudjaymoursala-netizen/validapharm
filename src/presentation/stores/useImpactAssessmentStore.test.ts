@@ -1,13 +1,49 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useImpactAssessmentStore } from './useImpactAssessmentStore'
+
+let ctx: Contexte
+let demonter: () => void
+
+/** Impact Assessment migré vers le Worker/D1 (Phase 4c) — un client doit réellement exister pour que `exigerAccesClient` l'autorise. */
+async function creerClientDeTest(id: string): Promise<void> {
+  await ctx.clientsRepo.creer({
+    id,
+    name: id,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.methodProfilesImpactAssessment.clear()
-  await db.evaluationsImpactAssessment.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await creerClientDeTest('client-1')
+  await creerClientDeTest('client-A')
+  await creerClientDeTest('client-B')
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useImpactAssessmentStore — aucun profil configuré', () => {
@@ -63,38 +99,26 @@ describe('useImpactAssessmentStore — creerNouvelleVersion (F1)', () => {
     expect(v2.questions).toHaveLength(2)
     expect(store.profilActif?.id).toBe(v2.id)
 
-    const v1Relu = await db.methodProfilesImpactAssessment.get(v1.id)
+    await store.charger('client-1')
+    const v1Relu = store.profils.find((p) => p.id === v1.id)
     expect(v1Relu?.questions).toHaveLength(1)
   })
 
   test('régression : profilActif reste correct même si deux versions partagent le même created_at (même milliseconde)', async () => {
     const store = useImpactAssessmentStore()
     await store.charger('client-1')
-    const memeInstant = new Date().toISOString()
-    await db.methodProfilesImpactAssessment.put({
-      id: 'v1-id',
-      client_id: 'client-1',
-      version: 'v1',
-      effective_date: memeInstant,
+    await store.creerNouvelleVersion('client-1', {
+      questions: [{ texte: 'Question ?' }],
       source: 'Source v1',
       origin: 'defini_utilisateur',
-      questions: [{ id: 'q1', texte: { fr: 'Question ?' } }],
-      decision_rule: 'au_moins_un_oui_impact_direct',
-      created_at: memeInstant,
     })
-    await db.methodProfilesImpactAssessment.put({
-      id: 'v2-id',
-      client_id: 'client-1',
-      version: 'v2',
-      effective_date: memeInstant,
+    const v2 = await store.creerNouvelleVersion('client-1', {
+      questions: [{ texte: 'Question ?' }],
       source: 'Source v2',
       origin: 'defini_utilisateur',
-      questions: [{ id: 'q1', texte: { fr: 'Question ?' } }],
-      decision_rule: 'au_moins_un_oui_impact_direct',
-      created_at: memeInstant,
     })
     await store.charger('client-1')
-    expect(store.profilActif?.id).toBe('v2-id')
+    expect(store.profilActif?.id).toBe(v2.id)
   })
 })
 

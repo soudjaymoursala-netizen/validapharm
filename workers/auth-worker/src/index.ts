@@ -3,7 +3,9 @@ import { ResendEnvoyeurEmail } from './notifications/resendEnvoyeurEmail'
 import { D1AcfcRepo } from './repos/d1/d1AcfcRepo'
 import { D1AuditRepo } from './repos/d1/d1AuditRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
+import { D1CsvAssessmentRepo } from './repos/d1/d1CsvAssessmentRepo'
 import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
+import { D1ImpactAssessmentRepo } from './repos/d1/d1ImpactAssessmentRepo'
 import { D1OrganisationRepo } from './repos/d1/d1OrganisationRepo'
 import { D1ParametersRepo } from './repos/d1/d1ParametersRepo'
 import { D1ParametresInstallationRepo } from './repos/d1/d1ParametresInstallationRepo'
@@ -54,6 +56,8 @@ export default {
       projectDocumentsRepo: new D1ProjectDocumentsRepo(env.DB),
       acfcRepo: new D1AcfcRepo(env.DB),
       parametersRepo: new D1ParametersRepo(env.DB),
+      impactAssessmentRepo: new D1ImpactAssessmentRepo(env.DB),
+      csvAssessmentRepo: new D1CsvAssessmentRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

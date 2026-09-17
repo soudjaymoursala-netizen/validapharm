@@ -93,7 +93,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `projectDocuments` (D1+R2, contenu binaire) | D1+R2 | ✅ **Phase 3c terminée (14/09/2026)** — voir §8 |
 | `methodProfilesACFC`, `evaluationsACFC` | D1 | ✅ **Phase 4a terminée** — voir §9 |
 | `parameters`, `classificationsCriticiteParametre`, `cpps`, `cqas` | D1 | ✅ **Phase 4b terminée** — voir §10 |
-| `methodProfilesImpactAssessment`, `evaluationsImpactAssessment`, `evaluationsCSVAssessment` | D1 | ⬜ Phase 4 |
+| `methodProfilesImpactAssessment`, `evaluationsImpactAssessment`, `evaluationsCSVAssessment` | D1 | ✅ **Phase 4c terminée** — voir §11 |
 | `methodProfilesRiskAssessment`, `risksAssessment` | D1 | ⬜ Phase 4 |
 | `processes`, `fonctionsActif`, `associationsFonctionAssetNode`, `associationsFonctionProcess`, `manufacturingContexts` | D1 | ⬜ Phase 5 |
 | `qualityEvents`, `referencesQualityEvent` | D1 | ⬜ Phase 5 |
@@ -993,11 +993,91 @@ vérifié par un test dédié côté Worker et côté store.
    été synchronisés vers GitHub, même avant cette migration : pas une
    régression.
 
-### 10.3 Prochaine action
+### 10.3 Phase 4b — clôturée
 
-Phase 4b définitivement close. Enchaîner sur la Phase 4c
-(`methodProfilesImpactAssessment`/`evaluationsImpactAssessment`/
-`evaluationsCSVAssessment`) puis 4d (`methodProfilesRiskAssessment`/
-`risksAssessment`), même méthodologie client_id-scopée, sans s'arrêter
-pour confirmation entre chacune, conformément à la consigne permanente de
-l'utilisateur.
+PR #49 (doc-only, complétant ce §10 avec les faits réels de merge/
+migration/déploiement) ouverte et mergée. Phase 4b définitivement close,
+enchaînement immédiat sur la Phase 4c ci-dessous.
+
+---
+
+## 11. État détaillé — Phase 4c (`MethodProfileImpactAssessment`/`EvaluationImpactAssessment`/`EvaluationCSVAssessment`), au 17/09/2026
+
+Troisième brique de la Phase 4 : Impact Assessment / System Classification
+(F1 du catalogue §10) et Computer System Assessment (F3). Même patron
+client_id-scopé qu'ACFC (F2, Phase 4a)/Parameter (Phase 4b) — pas de
+`owner_id`/`shared_with`. `MethodProfileImpactAssessment`/
+`EvaluationImpactAssessment` sont une réplique quasi exacte du patron ACFC
+(questionnaire Oui/Non versionné, verdict calculé côté client) ;
+`EvaluationCSVAssessment` n'a pas de `MethodProfile` (catégorisation GAMP5
+fixe, PIC/S PI 011-3, jamais configurable par client) — même discipline
+que la distinction CPP/CQA de la Phase 4b, mais ici c'est le type entier
+qui est plus simple (pas de version, pas de désactivation, création seule).
+
+### 11.1 Ce qui est fait (code complet, tout vert localement)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0011_impact_csv_assessment.sql`
+   crée 3 tables (`method_profiles_impact_assessment`,
+   `evaluations_impact_assessment`, `evaluations_csv_assessment`) + un
+   index par table sur `client_id`. **Pas encore appliquée en production.**
+2. **2 dépôts Worker** : `impactAssessmentRepo.ts` (interface +
+   `ImpactAssessmentRepoMemoire`, mirroir exact d'`ACFCRepo`) et
+   `csvAssessmentRepo.ts` (interface + `CSVAssessmentRepoMemoire`, pas de
+   notion de profil) + leurs implémentations D1
+   (`d1ImpactAssessmentRepo.ts`/`d1CsvAssessmentRepo.ts`), créations
+   idempotentes via `ON CONFLICT(id) DO NOTHING`.
+3. **7 nouvelles routes Worker** sous `/clients/:clientId/impact-assessment/...`
+   (obtenir/créer profil/créer évaluation/migration locale) et
+   `/clients/:clientId/csv-assessment/...` (obtenir/créer évaluation/
+   migration locale), toutes via `exigerAccesClient`. Clés JSON
+   `profilImpact`/`profilsImpact`/`evaluationImpact`/`evaluationsImpact`
+   (jamais `profil`/`profils`/`evaluation`/`evaluations`, déjà pris par
+   ACFC) et `evaluationCsv`/`evaluationsCsv` — même discipline de
+   disambiguïsation que `parametreProcede` en Phase 4b, repérée cette
+   fois **avant** l'écriture du code grâce à la leçon de la Phase 4b.
+4. **13 nouveaux tests Worker** (`routeur.test.ts`) : listes vides,
+   création de profil/évaluation Impact Assessment (dérivation serveur),
+   corps invalide, migration locale idempotente, non-authentifié → 401
+   (×2 domaines) + spécificités CSV (catégorie GAMP5 fixe). Suite Worker
+   au complet : **144/144 tests verts**.
+5. **`AuthApiClient`** : `MethodProfileImpactAssessmentWire`/
+   `EvaluationImpactAssessmentWire`/`EvaluationCSVAssessmentWire` + 7
+   méthodes.
+6. **`useImpactAssessmentStore`/`useCSVAssessmentStore` entièrement
+   réécrits** (API publique inchangée) : logique métier (verdict, numéro
+   de version suivant pour Impact Assessment) intégralement côté client,
+   seule la persistance passe par l'API. `charger` dégrade gracieusement
+   sur toute erreur, même discipline qu'ACFC/Parameter.
+7. **Ripple effect côté production** : aucun — `DossierVivantActif.vue`
+   ne consomme que l'API publique des stores.
+8. **Filet de sécurité de migration locale** : capture Dexie v41
+   (`persistance/db.ts`, 3 tables supprimées, données capturées dans
+   `methodProfilesImpactAssessmentAMigrer`/
+   `evaluationsImpactAssessmentAMigrer`/`evaluationsCSVAssessmentAMigrer`
+   — formes domaine inchangées, pas de type "Ancien").
+9. **5 fichiers de test corrigés** (accès Dexie direct remplacé par de
+   vrais appels store/`ctx.impactAssessmentRepo`/`ctx.csvAssessmentRepo`,
+   client de test créé via `ctx.clientsRepo.creer`) :
+   `useImpactAssessmentStore.test.ts`, `useCSVAssessmentStore.test.ts`,
+   `ImpactAssessment.test.ts`, `ComputerSystemAssessment.test.ts`
+   (entièrement réécrits) et `DossierVivantActif.test.ts` (un seul appel
+   `db.evaluationsCSVAssessment.put` remplacé par
+   `ctx.csvAssessmentRepo.creerEvaluation`).
+10. **Validation complète** (17/09/2026) : `npm run typecheck` (0
+    erreur), `npm run lint` (0 erreur/warning), `npm run format` (0
+    erreur), `npx vitest run` racine (**1270/1270 tests verts**),
+    `cd workers/auth-worker && npx vitest run` (**144/144 tests verts**,
+    dont les 13 nouveaux tests Impact/CSV Assessment).
+
+### 11.2 Prochaine action
+
+Une fois cette PR mergée : appliquer `0011_impact_csv_assessment.sql` en
+production D1, vérifier via `sqlite_master` (3 tables + 3 index — ne pas
+oublier aucun `CREATE INDEX`), vérifier le déploiement Worker, puis
+compléter ce §11 avec les faits réels (PR/commit/migration/déploiement),
+même patron doc-only en 2 temps que les phases précédentes. Enchaîner
+ensuite sur la Phase 4d, dernière brique de la Phase 4
+(`methodProfilesRiskAssessment`/`risksAssessment`, AMDEC — cycle en deux
+temps évaluation initiale/résiduelle, seule nuance par rapport au patron
+ACFC/Impact Assessment), sans s'arrêter pour confirmation, conformément à
+la consigne permanente de l'utilisateur.

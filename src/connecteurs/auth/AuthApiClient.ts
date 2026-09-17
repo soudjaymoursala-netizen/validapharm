@@ -229,6 +229,79 @@ export interface SaisieCreationCQAWire {
   justification: string
 }
 
+export interface QuestionImpactAssessmentWire {
+  id: string
+  texte: Partial<Record<'fr' | 'en' | 'de', string>>
+}
+
+export interface MethodProfileImpactAssessmentWire {
+  id: string
+  clientId: string
+  version: string
+  effectiveDate: string
+  source: string
+  origin: string
+  questions: QuestionImpactAssessmentWire[]
+  decisionRule: string
+  createdAt: string
+}
+
+export interface EvaluationImpactAssessmentWire {
+  id: string
+  clientId: string
+  methodProfileId: string
+  methodProfileVersion: string
+  assetNodeId: string | null
+  nomElement: string
+  reponses: Record<string, string>
+  verdict: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaisieCreationProfilImpactAssessmentWire {
+  version: string
+  source: string
+  origin: string
+  questions: QuestionImpactAssessmentWire[]
+  decisionRule: string
+}
+
+export interface SaisieCreationEvaluationImpactAssessmentWire {
+  methodProfileId: string
+  methodProfileVersion: string
+  assetNodeId: string | null
+  nomElement: string
+  reponses: Record<string, string>
+  verdict: string | null
+}
+
+export interface EvaluationCSVAssessmentWire {
+  id: string
+  clientId: string
+  assetNodeId: string | null
+  nomSysteme: string
+  categorieGamp5: number
+  justificationCategorie: string
+  pertinenceGxp: boolean
+  pertinenceEresPart11: boolean
+  justificationPertinence: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaisieCreationEvaluationCsvAssessmentWire {
+  assetNodeId: string | null
+  nomSysteme: string
+  categorieGamp5: number
+  justificationCategorie: string
+  pertinenceGxp: boolean
+  pertinenceEresPart11: boolean
+  justificationPertinence: string
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -704,6 +777,94 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/parameters/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Impact Assessment / System Classification (F1 du catalogue §10, Phase 4c du chantier de migration D1) ---
+
+  obtenirImpactAssessment(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      profilsImpact: MethodProfileImpactAssessmentWire[]
+      evaluationsImpact: EvaluationImpactAssessmentWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/impact-assessment`, { jeton })
+  }
+
+  creerProfilImpactAssessment(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationProfilImpactAssessmentWire,
+  ): Promise<ResultatApi<{ profilImpact: MethodProfileImpactAssessmentWire }>> {
+    return this.requete('POST', `/clients/${clientId}/impact-assessment/profils`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerEvaluationImpactAssessment(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationEvaluationImpactAssessmentWire,
+  ): Promise<ResultatApi<{ evaluationImpact: EvaluationImpactAssessmentWire }>> {
+    return this.requete('POST', `/clients/${clientId}/impact-assessment/evaluations`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerImpactAssessmentLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerImpactAssessmentLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      profilsImpact: MethodProfileImpactAssessmentWire[]
+      evaluationsImpact: EvaluationImpactAssessmentWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      profilsImpact: MethodProfileImpactAssessmentWire[]
+      evaluationsImpact: EvaluationImpactAssessmentWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/impact-assessment/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Computer System Assessment (F3 du catalogue §10, Phase 4c du chantier de migration D1) ---
+
+  obtenirCsvAssessment(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ evaluationsCsv: EvaluationCSVAssessmentWire[] }>> {
+    return this.requete('GET', `/clients/${clientId}/csv-assessment`, { jeton })
+  }
+
+  creerEvaluationCsvAssessment(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationEvaluationCsvAssessmentWire,
+  ): Promise<ResultatApi<{ evaluationCsv: EvaluationCSVAssessmentWire }>> {
+    return this.requete('POST', `/clients/${clientId}/csv-assessment/evaluations`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerCsvAssessmentLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerCsvAssessmentLocal(
+    jeton: string,
+    clientId: string,
+    donnees: { evaluationsCsv: EvaluationCSVAssessmentWire[] },
+  ): Promise<ResultatApi<{ evaluationsCsv: EvaluationCSVAssessmentWire[] }>> {
+    return this.requete('POST', `/clients/${clientId}/csv-assessment/migration-locale`, {
       jeton,
       body: donnees,
     })
