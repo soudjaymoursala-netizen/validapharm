@@ -972,15 +972,32 @@ vérifié par un test dédié côté Worker et côté store.
     npx vitest run` (**133/133 tests verts**, dont les 8 nouveaux tests
     Parameter/CPP/CQA).
 
-### 10.2 Prochaine action
+### 10.2 Phase 4b — terminée (17/09/2026)
 
-Une fois cette PR mergée : appliquer `0010_parameters.sql` en production
-D1, vérifier via `sqlite_master` (4 tables + 4 index — **ne pas oublier
-aucun des 4 `CREATE INDEX`**, leçon de l'étourderie Phase 4a §9.2 point 3),
-vérifier le déploiement Worker (`workers_get_worker_code`), puis compléter
-ce §10 avec les faits réels (PR/commit/migration/déploiement), même
-patron doc-only en 2 temps que Phase 4a. Enchaîner ensuite sur la Phase 4c
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #48 ouverte. `Lint, typecheck, tests` et les deux `Workers
+   Builds` (`ia-relay`/`auth-worker`) verts dès le premier passage — le
+   correctif `--config` du Version command (§8.2 point 6) continue de
+   tenir sans aucun contournement. Mergée sur `main` (squash, commit
+   `7b6e6ff`).
+3. ✅ Migration `0010_parameters.sql` appliquée en production D1
+   (`validapharm-auth`) en 8 requêtes séparées (une par `CREATE
+   TABLE`/`CREATE INDEX`, pour éviter l'étourderie de la Phase 4a §9.2
+   point 3) — les 4 tables et leurs 4 index confirmés présents dès le
+   premier passage (`sqlite_master`).
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : `D1ParametersRepo`
+   et `ctx.parametersRepo` bien câblés dans tous les handlers.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `Parameter`/`CPP`/`CQA` n'ont jamais
+   été synchronisés vers GitHub, même avant cette migration : pas une
+   régression.
+
+### 10.3 Prochaine action
+
+Phase 4b définitivement close. Enchaîner sur la Phase 4c
 (`methodProfilesImpactAssessment`/`evaluationsImpactAssessment`/
 `evaluationsCSVAssessment`) puis 4d (`methodProfilesRiskAssessment`/
-`risksAssessment`), sans s'arrêter pour confirmation entre chacune,
-conformément à la consigne permanente de l'utilisateur.
+`risksAssessment`), même méthodologie client_id-scopée, sans s'arrêter
+pour confirmation entre chacune, conformément à la consigne permanente de
+l'utilisateur.
