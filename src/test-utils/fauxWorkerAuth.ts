@@ -21,6 +21,7 @@ import { DocumentsNormatifsRepoMemoire } from '../../workers/auth-worker/src/rep
 import { EvidenceRepoMemoire } from '../../workers/auth-worker/src/repos/evidenceRepo'
 import { ExecutionRepoMemoire } from '../../workers/auth-worker/src/repos/executionRepo'
 import { ImpactAssessmentRepoMemoire } from '../../workers/auth-worker/src/repos/impactAssessmentRepo'
+import { IntegrationRepoMemoire } from '../../workers/auth-worker/src/repos/integrationRepo'
 import { KnowledgeEngineRepoMemoire } from '../../workers/auth-worker/src/repos/knowledgeEngineRepo'
 import { OrganisationRepoMemoire } from '../../workers/auth-worker/src/repos/organisationRepo'
 import { ParametersRepoMemoire } from '../../workers/auth-worker/src/repos/parametersRepo'
@@ -75,6 +76,7 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     evidenceRepo: new EvidenceRepoMemoire(),
     knowledgeEngineRepo: new KnowledgeEngineRepoMemoire(),
     contentPlanRepo: new ContentPlanRepoMemoire(),
+    integrationRepo: new IntegrationRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,

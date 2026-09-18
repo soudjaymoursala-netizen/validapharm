@@ -38,6 +38,12 @@ import type {
   QuestionImpactAssessmentEnregistree,
 } from './repos/impactAssessmentRepo'
 import type {
+  ConnectorEnregistre,
+  ExternalReferenceEnregistre,
+  IntegrationRepo,
+  SyncJobEnregistre,
+} from './repos/integrationRepo'
+import type {
   ConfirmationEnregistree,
   ConflictEnregistre,
   ExtractionEnregistree,
@@ -143,6 +149,7 @@ export interface Contexte {
   evidenceRepo: EvidenceRepo
   knowledgeEngineRepo: KnowledgeEngineRepo
   contentPlanRepo: ContentPlanRepo
+  integrationRepo: IntegrationRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -1056,6 +1063,128 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchContentPlansMigrationLocale[1] as string,
+    )
+  }
+
+  // --- Integration (Target Architecture, domaine "Integration",
+  // Phase 7c du chantier de migration D1) ---
+  const matchIntegration = chemin.match(/^\/clients\/([^/]+)\/integration$/)
+  if (matchIntegration && request.method === 'GET') {
+    return gererObtenirIntegration(request, ctx, entetes, matchIntegration[1] as string)
+  }
+  const matchConnectors = chemin.match(/^\/clients\/([^/]+)\/connectors$/)
+  if (matchConnectors && request.method === 'POST') {
+    return gererCreerConnector(request, ctx, entetes, matchConnectors[1] as string)
+  }
+  const matchDesactiverConnector = chemin.match(
+    /^\/clients\/([^/]+)\/connectors\/([^/]+)\/desactiver$/,
+  )
+  if (matchDesactiverConnector && request.method === 'PATCH') {
+    return gererDesactiverConnector(
+      request,
+      ctx,
+      entetes,
+      matchDesactiverConnector[1] as string,
+      matchDesactiverConnector[2] as string,
+    )
+  }
+  const matchBasculerActifConnector = chemin.match(
+    /^\/clients\/([^/]+)\/connectors\/([^/]+)\/basculer-actif$/,
+  )
+  if (matchBasculerActifConnector && request.method === 'PATCH') {
+    return gererBasculerActifConnector(
+      request,
+      ctx,
+      entetes,
+      matchBasculerActifConnector[1] as string,
+      matchBasculerActifConnector[2] as string,
+    )
+  }
+  const matchConnectorParId = chemin.match(/^\/clients\/([^/]+)\/connectors\/([^/]+)$/)
+  if (matchConnectorParId && request.method === 'DELETE') {
+    return gererSupprimerConnector(
+      request,
+      ctx,
+      entetes,
+      matchConnectorParId[1] as string,
+      matchConnectorParId[2] as string,
+    )
+  }
+  const matchDemarrerSyncJob = chemin.match(/^\/clients\/([^/]+)\/connectors\/([^/]+)\/sync-jobs$/)
+  if (matchDemarrerSyncJob && request.method === 'POST') {
+    return gererDemarrerSyncJob(
+      request,
+      ctx,
+      entetes,
+      matchDemarrerSyncJob[1] as string,
+      matchDemarrerSyncJob[2] as string,
+    )
+  }
+  const matchSyncJobIndisponible = chemin.match(
+    /^\/clients\/([^/]+)\/sync-jobs\/([^/]+)\/indisponible$/,
+  )
+  if (matchSyncJobIndisponible && request.method === 'PATCH') {
+    return gererMarquerSyncJobIndisponible(
+      request,
+      ctx,
+      entetes,
+      matchSyncJobIndisponible[1] as string,
+      matchSyncJobIndisponible[2] as string,
+    )
+  }
+  const matchSyncJobNouvelleTentative = chemin.match(
+    /^\/clients\/([^/]+)\/sync-jobs\/([^/]+)\/nouvelle-tentative$/,
+  )
+  if (matchSyncJobNouvelleTentative && request.method === 'PATCH') {
+    return gererMarquerSyncJobNouvelleTentative(
+      request,
+      ctx,
+      entetes,
+      matchSyncJobNouvelleTentative[1] as string,
+      matchSyncJobNouvelleTentative[2] as string,
+    )
+  }
+  const matchSyncJobEchec = chemin.match(/^\/clients\/([^/]+)\/sync-jobs\/([^/]+)\/echec$/)
+  if (matchSyncJobEchec && request.method === 'PATCH') {
+    return gererMarquerSyncJobEchec(
+      request,
+      ctx,
+      entetes,
+      matchSyncJobEchec[1] as string,
+      matchSyncJobEchec[2] as string,
+    )
+  }
+  const matchSyncJobReussi = chemin.match(/^\/clients\/([^/]+)\/sync-jobs\/([^/]+)\/reussi$/)
+  if (matchSyncJobReussi && request.method === 'PATCH') {
+    return gererMarquerSyncJobReussi(
+      request,
+      ctx,
+      entetes,
+      matchSyncJobReussi[1] as string,
+      matchSyncJobReussi[2] as string,
+    )
+  }
+  const matchDeclarerReference = chemin.match(
+    /^\/clients\/([^/]+)\/connectors\/([^/]+)\/references$/,
+  )
+  if (matchDeclarerReference && request.method === 'POST') {
+    return gererDeclarerReference(
+      request,
+      ctx,
+      entetes,
+      matchDeclarerReference[1] as string,
+      matchDeclarerReference[2] as string,
+    )
+  }
+  const matchIntegrationMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/integration\/migration-locale$/,
+  )
+  if (matchIntegrationMigrationLocale && request.method === 'POST') {
+    return gererMigrerIntegrationLocal(
+      request,
+      ctx,
+      entetes,
+      matchIntegrationMigrationLocale[1] as string,
     )
   }
 
@@ -5342,6 +5471,336 @@ async function gererMigrerContentPlansLocal(
     await ctx.contentPlanRepo.creerContentPlan(p)
   }
   return reponseJson({ contentPlans: corps.contentPlans }, 200, entetes)
+}
+
+// --- Handlers : Integration (Target Architecture, domaine "Integration",
+// Phase 7c du chantier de migration D1) ---
+
+async function gererObtenirIntegration(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [connectors, syncJobs, externalReferences] = await Promise.all([
+    ctx.integrationRepo.listerConnectors(clientId),
+    ctx.integrationRepo.listerSyncJobs(clientId),
+    ctx.integrationRepo.listerExternalReferences(clientId),
+  ])
+  return reponseJson({ connectors, syncJobs, externalReferences }, 200, entetes)
+}
+
+interface SaisieCreationConnector {
+  nom?: string
+  actif?: boolean
+  type?: string
+  config?: unknown
+}
+
+/** `config` (secrets de connexion inclus) est stocké tel quel en JSON — même principe que `contextSnapshot` de ContentPlan. */
+async function gererCreerConnector(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationConnector>(request)
+  if (!corps?.nom || !corps.type || corps.config === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const connector: ConnectorEnregistre = {
+    id: genererId(),
+    clientId,
+    nom: corps.nom,
+    actif: corps.actif ?? true,
+    type: corps.type,
+    config: JSON.stringify(corps.config),
+    createdAt: horodatage(),
+  }
+  await ctx.integrationRepo.creerConnector(connector)
+  return reponseJson({ connector }, 201, entetes)
+}
+
+async function gererDesactiverConnector(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  connectorId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const existant = await ctx.integrationRepo.connectorParId(connectorId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+
+  const miseAJour: ConnectorEnregistre = { ...existant, actif: false }
+  await ctx.integrationRepo.remplacerConnector(miseAJour)
+  return reponseJson({ connector: miseAJour }, 200, entetes)
+}
+
+async function gererBasculerActifConnector(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  connectorId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const existant = await ctx.integrationRepo.connectorParId(connectorId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+
+  const miseAJour: ConnectorEnregistre = { ...existant, actif: !existant.actif }
+  await ctx.integrationRepo.remplacerConnector(miseAJour)
+  return reponseJson({ connector: miseAJour }, 200, entetes)
+}
+
+/**
+ * Vraie suppression physique — nouveau patron dans ce chantier,
+ * justifié car `Connector` est une pure configuration technique (pas un
+ * enregistrement GxP à préserver), contrairement à tous les autres
+ * domaines migrés jusqu'ici.
+ */
+async function gererSupprimerConnector(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  connectorId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const existant = await ctx.integrationRepo.connectorParId(connectorId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+
+  await ctx.integrationRepo.supprimerConnector(connectorId)
+  return reponseJson({ ok: true }, 200, entetes)
+}
+
+async function gererDemarrerSyncJob(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  connectorId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const connector = await ctx.integrationRepo.connectorParId(connectorId)
+  if (!connector || connector.clientId !== clientId) {
+    return reponseJson({ erreur: 'connector_introuvable' }, 404, entetes)
+  }
+
+  const maintenant = horodatage()
+  const job: SyncJobEnregistre = {
+    id: genererId(),
+    clientId,
+    connectorId,
+    statut: 'en_attente',
+    tentative: 1,
+    derniereErreur: null,
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.integrationRepo.creerSyncJob(job)
+  return reponseJson({ syncJob: job }, 201, entetes)
+}
+
+/**
+ * Garde-fou non négociable : `indisponible`/`echec` ne bloque jamais une
+ * activité métier indépendante — aucun handler de ce domaine ne
+ * conditionne `gererDeclarerReference` ou toute autre opération au
+ * statut d'un `SyncJob` (cohérent avec `QualityEvent`).
+ */
+async function gererMarquerSyncJobIndisponible(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  syncJobId: string,
+): Promise<Response> {
+  return changerStatutSyncJob(request, ctx, entetes, clientId, syncJobId, (existant) => ({
+    ...existant,
+    statut: 'indisponible',
+    derniereErreur: null,
+  }))
+}
+
+async function gererMarquerSyncJobNouvelleTentative(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  syncJobId: string,
+): Promise<Response> {
+  return changerStatutSyncJob(request, ctx, entetes, clientId, syncJobId, (existant) => ({
+    ...existant,
+    statut: 'nouvelle_tentative',
+    tentative: existant.tentative + 1,
+  }))
+}
+
+async function gererMarquerSyncJobEchec(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  syncJobId: string,
+): Promise<Response> {
+  const corps = await lireCorpsJson<{ erreur?: string }>(request)
+  if (!corps?.erreur) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  return changerStatutSyncJob(request, ctx, entetes, clientId, syncJobId, (existant) => ({
+    ...existant,
+    statut: 'echec',
+    derniereErreur: corps.erreur as string,
+  }))
+}
+
+async function gererMarquerSyncJobReussi(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  syncJobId: string,
+): Promise<Response> {
+  return changerStatutSyncJob(request, ctx, entetes, clientId, syncJobId, (existant) => ({
+    ...existant,
+    statut: 'reussi',
+    derniereErreur: null,
+  }))
+}
+
+async function changerStatutSyncJob(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  syncJobId: string,
+  transformer: (existant: SyncJobEnregistre) => SyncJobEnregistre,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const existant = await ctx.integrationRepo.syncJobParId(syncJobId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+
+  const miseAJour: SyncJobEnregistre = { ...transformer(existant), updatedAt: horodatage() }
+  await ctx.integrationRepo.remplacerSyncJob(miseAJour)
+  return reponseJson({ syncJob: miseAJour }, 200, entetes)
+}
+
+interface SaisieDeclarationReference {
+  identifiantExterne?: string
+  libelle?: string
+}
+
+/** Pointeur vers un document externe — jamais son contenu dupliqué. Aucune vérification d'existence du `Connector` (comportement inchangé du store d'origine). */
+async function gererDeclarerReference(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  connectorId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieDeclarationReference>(request)
+  if (!corps?.identifiantExterne || !corps.libelle) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const reference: ExternalReferenceEnregistre = {
+    id: genererId(),
+    clientId,
+    connectorId,
+    identifiantExterne: corps.identifiantExterne,
+    libelle: corps.libelle,
+    createdAt: horodatage(),
+  }
+  await ctx.integrationRepo.creerExternalReference(reference)
+  return reponseJson({ externalReference: reference }, 201, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale (`useIntegrationStore`/
+ * `useConnecteursQMSStore`), même discipline que les autres migrations
+ * locales de ce chantier — idempotente, l'existant côté serveur gagne
+ * toujours (`ON CONFLICT(id) DO NOTHING` dans `D1IntegrationRepo`).
+ */
+interface SaisieMigrationIntegration {
+  connectors?: ConnectorEnregistre[]
+  syncJobs?: SyncJobEnregistre[]
+  externalReferences?: ExternalReferenceEnregistre[]
+}
+
+async function gererMigrerIntegrationLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationIntegration>(request)
+  if (
+    !corps ||
+    !Array.isArray(corps.connectors) ||
+    !Array.isArray(corps.syncJobs) ||
+    !Array.isArray(corps.externalReferences)
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const c of corps.connectors) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.integrationRepo.creerConnector(c)
+  }
+  for (const j of corps.syncJobs) {
+    if (j.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.integrationRepo.creerSyncJob(j)
+  }
+  for (const r of corps.externalReferences) {
+    if (r.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.integrationRepo.creerExternalReference(r)
+  }
+  return reponseJson(
+    {
+      connectors: corps.connectors,
+      syncJobs: corps.syncJobs,
+      externalReferences: corps.externalReferences,
+    },
+    200,
+    entetes,
+  )
 }
 
 // --- Handlers : Organization/Workspace (Phase 2 du chantier de migration D1) ---

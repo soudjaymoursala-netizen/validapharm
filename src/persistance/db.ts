@@ -443,6 +443,19 @@ export const conflictsAMigrer: Conflict[] = []
 export const contentPlansAMigrer: ContentPlan[] = []
 
 /**
+ * Connector/SyncJob/ExternalReference : migrés vers le Worker/D1 (Target
+ * Architecture, domaine "Integration", Phase 7c du chantier de migration
+ * D1) — même principe que `contentPlansAMigrer` ci-dessus : formes
+ * domaine inchangées, pas de type "Ancien". Consommés et envoyés au
+ * serveur par `migrerIntegrationLocalVersServeur`
+ * (`useIntegrationStore`/`useConnecteursQMSStore`) au premier
+ * `charger()`.
+ */
+export const connectorsAMigrer: Connector[] = []
+export const syncJobsAMigrer: SyncJob[] = []
+export const externalReferencesAMigrer: ExternalReference[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -459,9 +472,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  connectors!: EntityTable<Connector, 'id'>
-  syncJobs!: EntityTable<SyncJob, 'id'>
-  externalReferences!: EntityTable<ExternalReference, 'id'>
   missions!: EntityTable<Mission, 'id'>
   associationsMissionQualityEvent!: EntityTable<AssociationMissionQualityEvent, 'id'>
   activities!: EntityTable<Activity, 'id'>
@@ -1100,6 +1110,22 @@ export class ValidaPharmDatabase extends Dexie {
       .upgrade(async (tx) => {
         const contentPlans = await tx.table<ContentPlan>('contentPlans').toArray()
         contentPlansAMigrer.push(...contentPlans)
+      })
+
+    // Connector/SyncJob/ExternalReference : migrés vers le Worker/D1
+    // (Target Architecture, domaine "Integration", Phase 7c du chantier
+    // de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) — même
+    // technique de capture avant suppression physique que la version 49
+    // ci-dessus.
+    this.version(50)
+      .stores({ connectors: null, syncJobs: null, externalReferences: null })
+      .upgrade(async (tx) => {
+        const connectors = await tx.table<Connector>('connectors').toArray()
+        connectorsAMigrer.push(...connectors)
+        const syncJobs = await tx.table<SyncJob>('syncJobs').toArray()
+        syncJobsAMigrer.push(...syncJobs)
+        const externalReferences = await tx.table<ExternalReference>('externalReferences').toArray()
+        externalReferencesAMigrer.push(...externalReferences)
       })
   }
 }

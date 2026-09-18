@@ -1,12 +1,41 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useConnecteursQMSStore } from './useConnecteursQMSStore'
+
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.connectors.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  for (const id of ['client-1', 'client-A', 'client-B']) {
+    await installation.ctx.clientsRepo.creer({
+      id,
+      name: id,
+      adresse: null,
+      secteur: null,
+      details: null,
+      statut: 'actif',
+      archivedAt: null,
+      archivedBy: null,
+      createdByUserId: 'admin-test',
+      sharedWith: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useConnecteursQMSStore — creerConnecteur', () => {
@@ -26,10 +55,8 @@ describe('useConnecteursQMSStore — creerConnecteur', () => {
     })
 
     expect(store.connecteurs).toHaveLength(1)
-    const relu = await db.connectors.toArray()
-    expect(relu).toHaveLength(1)
-    expect(relu[0]?.nom).toBe('Veeva Vault site Rennes')
-    expect(relu[0]?.type).toBe('veeva_vault')
+    expect(store.connecteurs[0]?.nom).toBe('Veeva Vault site Rennes')
+    expect(store.connecteurs[0]?.type).toBe('veeva_vault')
   })
 
   test('isolation stricte par client', async () => {
@@ -85,6 +112,8 @@ describe('useConnecteursQMSStore — supprimerConnecteur', () => {
     await store.supprimerConnecteur(id)
 
     expect(store.connecteurs).toHaveLength(0)
-    expect(await db.connectors.get(id)).toBeUndefined()
+
+    await store.charger('client-1')
+    expect(store.connecteurs).toHaveLength(0)
   })
 })
