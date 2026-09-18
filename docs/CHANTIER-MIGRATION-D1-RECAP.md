@@ -102,7 +102,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `evidences`, `evidenceLocations`, `provenanceLinks` | D1 | ✅ **Phase 6c terminée — voir §17. Phase 6 entièrement close.** |
 | `sources`, `sourceVersions`, `sourceLocations`, `extractions`, `extractionItems`, `knowledgeItems`, `confirmations`, `knowledgeRelations`, `conflicts` | D1 | ✅ **Phase 7a terminée — voir §18** |
 | `contentPlans` | D1 | ✅ **Phase 7b terminée — voir §19** |
-| `connectors`, `syncJobs`, `externalReferences` | D1 | ⬜ Phase 7 |
+| `connectors`, `syncJobs`, `externalReferences` | D1 | ✅ **Phase 7c terminée — voir §20. Phase 7 entièrement close.** |
 | `missions`, `activities`, `dependencies`, `associationsMissionQualityEvent` | D1 | ⬜ Phase 8 |
 | `contextSnapshots`, `contextSnapshotItems` | D1 | ⬜ Phase 8 |
 | `aiConfigurations`, `aiRequests`, `aiResponses`, `citationsAIResponse` | D1 | ⬜ Phase 8 |
@@ -2105,9 +2105,132 @@ Phase 7c).
 Reste, dans la Phase 7 (voir §3) :
 
 - **Phase 7c** : `connectors`/`syncJobs`/`externalReferences`
-  (connecteurs QMS tiers) — dernière brique de la Phase 7.
+  (connecteurs QMS tiers) — dernière brique de la Phase 7, voir §20,
+  terminée.
 
-Enchaîner sur la Phase 7c sans s'arrêter pour confirmation, conformément
+## 20. État détaillé — Phase 7c (`Connector`/`SyncJob`/`ExternalReference`, domaine « Integration »), au 18/09/2026
+
+Troisième et dernière brique de la Phase 7. `Connector`/`SyncJob`/
+`ExternalReference` (connecteurs QMS/documentaires tiers — Veeva Vault,
+SharePoint, dossier réseau, EDMS générique — plus `github`/
+`google_drive` en ADAPT sur les connecteurs de stockage déjà existants).
+Deux stores frontend partageaient déjà ce domaine côté Dexie :
+`useIntegrationStore` (orchestration complète Connector→SyncJob→
+ExternalReference, spec `PHASE_10_INTEGRATION_GATEWAY_SPEC.md`, jamais
+consommé par un écran) et `useConnecteursQMSStore` (CRUD de
+configuration, consommé par `ConfigurationConnecteursQMS.vue` — écran
+trouvé le 31/08/2026 sans jamais avoir eu de store Worker).
+
+### 20.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0020_integration.sql`
+   crée 3 tables (`connectors`, `sync_jobs`, `external_references`) + un
+   index par table sur `client_id` (plus un index secondaire sur
+   `connector_id` pour `sync_jobs`/`external_references`). `Connector`
+   reste **mutable** via `actif` (activation/désactivation, bascule) et
+   **réellement supprimable** (`DELETE` physique — **nouveau patron dans
+   ce chantier**, jamais utilisé jusqu'ici : tous les autres domaines
+   migrés restent append-only ou changent seulement de statut, jamais
+   supprimés, car ce sont des enregistrements GxP à préserver ;
+   `Connector` est une pure configuration technique, sa suppression ne
+   perd aucune preuve). `SyncJob` reste mutable via
+   `statut`/`tentative`/`derniere_erreur`/`updated_at`. `ExternalReference`
+   est **INSERT-only** (pur pointeur, jamais modifié).
+2. **1 dépôt Worker** : `integrationRepo.ts` (interface +
+   `IntegrationRepoMemoire`) + son implémentation D1
+   (`d1IntegrationRepo.ts`) : INSERT (`ON CONFLICT(id) DO NOTHING`) pour
+   les créations, UPDATE ciblé pour `remplacerConnector`/
+   `remplacerSyncJob`, DELETE réel pour `supprimerConnector`.
+3. **12 nouvelles routes Worker** sous `/clients/:clientId/...` (GET
+   agrégat `integration`, création `connectors` — `id`/`actif`/
+   `createdAt` dérivés côté serveur, `config` — secrets de connexion
+   inclus — stocké tel quel en JSON —, `connectors/:id/desactiver`,
+   `connectors/:id/basculer-actif`, `DELETE connectors/:id`, démarrage
+   `connectors/:id/sync-jobs`, 4 routes de changement de statut
+   `sync-jobs/:id/{indisponible,nouvelle-tentative,echec,reussi}` —
+   garde-fou non négociable : `indisponible`/`echec` ne bloque jamais
+   une activité métier indépendante, cohérent avec `QualityEvent` —,
+   déclaration de référence `connectors/:id/references` — pointeur
+   externe, jamais son contenu dupliqué, aucune vérification d'existence
+   du `Connector` (comportement inchangé du store d'origine) —,
+   migration locale `integration/migration-locale`), toutes via
+   `exigerAccesClient`.
+4. **`index.ts`** : `D1IntegrationRepo` câblé dans `routerRequete`.
+5. **20 nouveaux tests Worker** (`routeur.test.ts`) : GET vide, création/
+   désactivation/bascule/suppression de connecteur (+404 introuvable,
+   +400 corps invalide), démarrage de SyncJob (+404
+   `connector_introuvable`), cycle complet
+   indisponible→nouvelle-tentative→échec sans jamais bloquer
+   `declarerReference`, réussite sans toucher aux tentatives
+   précédentes, changement de statut sur SyncJob introuvable (+404),
+   déclaration/validation de référence externe, migration locale
+   idempotente, non-authentifié → 401. **Résultat : 263/263 tests Worker
+   verts** (243 existants + 20 nouveaux).
+6. **`AuthApiClient.ts`** : `ConnectorWire`/`SyncJobWire`/
+   `ExternalReferenceWire`/`SaisieCreationConnectorWire`/
+   `SaisieDeclarationReferenceWire` + 12 méthodes.
+7. **`useIntegrationStore.ts`** et **`useConnecteursQMSStore.ts`** :
+   entièrement réécrits vers l'API (même patron `obtenirApi()`/
+   `resultat.ok`/`resultat.donnees`/`resultat.erreur` que les autres
+   stores de ce chantier). Surfaces publiques préservées à l'identique.
+   Les fonctions de mapping wire↔domaine (`connectorWireVersDomaine`,
+   etc.) sont définies une seule fois dans `useIntegrationStore.ts` et
+   réutilisées par `useConnecteursQMSStore.ts` (même domaine "Integration"
+   côté Worker, pas de duplication).
+8. **`persistance/db.ts`** : retrait de `connectors!`/`syncJobs!`/
+   `externalReferences!: EntityTable<...>`, ajout de
+   `connectorsAMigrer`/`syncJobsAMigrer`/`externalReferencesAMigrer` +
+   migration `.version(50)` nullant les 3 tables et capturant les lignes
+   existantes — même filet de sécurité que les phases précédentes,
+   partagé par les deux stores (idempotent quel que soit l'ordre
+   d'appel).
+9. **Fichiers de test corrigés** : `useIntegrationStore.test.ts`,
+   `useConnecteursQMSStore.test.ts`, `ConfigurationConnecteursQMS.test.ts`
+   (tous les trois réécrits pour installer `installerFauxWorkerAuth()` +
+   `connecterAdminDeTest()` — aucun ne le faisait auparavant, car les
+   anciens stores Dexie n'exigeaient aucune session — et remplacer les
+   accès `db.connectors`/`db.syncJobs`/`db.externalReferences` par
+   `ctx.integrationRepo.*`).
+10. **Validation complète** : `npx vue-tsc --noEmit` (aucune erreur),
+    Worker `npx vitest run` (263/263), frontend `npx vitest run`
+    (1390/1390 — 1 rejet non géré isolé et non reproductible dans
+    `RevueStructureProcedure.livrablesLies.test.ts`, sans lien avec cette
+    Phase, confirmé pré-existant et non bloquant sur deux relances
+    complètes), `npx eslint . --fix` + `npx prettier --write .`.
+
+### 20.2 Phase 7c — terminée (18/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #68 ouverte. CI (« Lint, typecheck, tests » + builds Workers)
+   verte du premier coup, aucun flake rencontré. Mergée sur `main`
+   (squash, commit `2097620`).
+3. ✅ Migration `0020_integration.sql` appliquée en production D1
+   (`validapharm-auth`) en 9 requêtes séparées (3 `CREATE TABLE` + 6
+   `CREATE INDEX`), toutes réussies du premier coup. Vérification
+   `sqlite_master` confirmant les 3 tables + leurs 6 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : les routes et
+   `D1IntegrationRepo` présents dans le bundle (50 occurrences).
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `Connector`/`SyncJob`/
+   `ExternalReference` n'ont jamais été synchronisés vers GitHub, même
+   avant cette migration : pas une régression.
+
+### 20.3 Phase 7c close ; Phase 7 entièrement close ; suite du chantier
+
+**La Phase 7 est close** (Phase 7a Knowledge Engine — §18, Phase 7b
+ContentPlan — §19, Phase 7c Integration — §20). Reste au chantier (voir
+§3) :
+
+- **Phase 8** : `missions`/`activities`/`dependencies`/
+  `associationsMissionQualityEvent`, `contextSnapshots`/
+  `contextSnapshotItems`, `aiConfigurations`/`aiRequests`/`aiResponses`/
+  `citationsAIResponse`.
+- **Phase 9** : `procedures`/`procedureSteps`, `gabaritsExportClient`,
+  `aiChatSessionLogs`, `connexionDrive`/`etatMiroirDrive`, et le reste de
+  l'inventaire (voir §3).
+
+Enchaîner sur la Phase 8 sans s'arrêter pour confirmation, conformément
 à la consigne permanente de l'utilisateur. Le problème des nœuds SAP
 (bug d'import original) reste explicitement reporté, comme depuis le
 début de ce chantier.
