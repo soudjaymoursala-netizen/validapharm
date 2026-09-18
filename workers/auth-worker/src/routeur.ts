@@ -37,6 +37,18 @@ import type {
   QuestionImpactAssessmentEnregistree,
 } from './repos/impactAssessmentRepo'
 import type {
+  ConfirmationEnregistree,
+  ConflictEnregistre,
+  ExtractionEnregistree,
+  ExtractionItemEnregistre,
+  KnowledgeEngineRepo,
+  KnowledgeItemEnregistre,
+  KnowledgeRelationEnregistree,
+  SourceEnregistree,
+  SourceLocationEnregistree,
+  SourceVersionEnregistree,
+} from './repos/knowledgeEngineRepo'
+import type {
   OrganisationRepo,
   OrganizationEnregistree,
   WorkspaceEnregistre,
@@ -128,6 +140,7 @@ export interface Contexte {
   testDefinitionRepo: TestDefinitionRepo
   executionRepo: ExecutionRepo
   evidenceRepo: EvidenceRepo
+  knowledgeEngineRepo: KnowledgeEngineRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -876,6 +889,116 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchEvidencesMigrationLocale[1] as string,
+    )
+  }
+
+  // --- Source/SourceLocation/SourceVersion/Extraction/ExtractionItem/
+  // KnowledgeItem/Confirmation/KnowledgeRelation/Conflict (Target
+  // Architecture, domaines "Source Intelligence" et "Knowledge", Phase 7a
+  // du chantier de migration D1) ---
+  const matchKnowledgeEngine = chemin.match(/^\/clients\/([^/]+)\/knowledge-engine$/)
+  if (matchKnowledgeEngine && request.method === 'GET') {
+    return gererObtenirKnowledgeEngine(request, ctx, entetes, matchKnowledgeEngine[1] as string)
+  }
+  const matchSources = chemin.match(/^\/clients\/([^/]+)\/sources$/)
+  if (matchSources && request.method === 'POST') {
+    return gererCreerSource(request, ctx, entetes, matchSources[1] as string)
+  }
+  const matchSourceLocalisations = chemin.match(
+    /^\/clients\/([^/]+)\/sources\/([^/]+)\/localisations$/,
+  )
+  if (matchSourceLocalisations && request.method === 'POST') {
+    return gererAjouterLocalisationSource(
+      request,
+      ctx,
+      entetes,
+      matchSourceLocalisations[1] as string,
+      matchSourceLocalisations[2] as string,
+    )
+  }
+  const matchSourceVersions = chemin.match(/^\/clients\/([^/]+)\/sources\/([^/]+)\/versions$/)
+  if (matchSourceVersions && request.method === 'POST') {
+    return gererCreerSourceVersion(
+      request,
+      ctx,
+      entetes,
+      matchSourceVersions[1] as string,
+      matchSourceVersions[2] as string,
+    )
+  }
+  const matchExtractions = chemin.match(
+    /^\/clients\/([^/]+)\/source-versions\/([^/]+)\/extractions$/,
+  )
+  if (matchExtractions && request.method === 'POST') {
+    return gererEnregistrerExtraction(
+      request,
+      ctx,
+      entetes,
+      matchExtractions[1] as string,
+      matchExtractions[2] as string,
+    )
+  }
+  const matchExtractionItems = chemin.match(/^\/clients\/([^/]+)\/extractions\/([^/]+)\/items$/)
+  if (matchExtractionItems && request.method === 'POST') {
+    return gererAjouterExtractionItem(
+      request,
+      ctx,
+      entetes,
+      matchExtractionItems[1] as string,
+      matchExtractionItems[2] as string,
+    )
+  }
+  const matchKnowledgeItems = chemin.match(
+    /^\/clients\/([^/]+)\/extraction-items\/([^/]+)\/knowledge-items$/,
+  )
+  if (matchKnowledgeItems && request.method === 'POST') {
+    return gererCreerKnowledgeItem(
+      request,
+      ctx,
+      entetes,
+      matchKnowledgeItems[1] as string,
+      matchKnowledgeItems[2] as string,
+    )
+  }
+  const matchConfirmerKnowledgeItem = chemin.match(
+    /^\/clients\/([^/]+)\/knowledge-items\/([^/]+)\/confirmer$/,
+  )
+  if (matchConfirmerKnowledgeItem && request.method === 'PATCH') {
+    return gererConfirmerKnowledgeItem(
+      request,
+      ctx,
+      entetes,
+      matchConfirmerKnowledgeItem[1] as string,
+      matchConfirmerKnowledgeItem[2] as string,
+    )
+  }
+  const matchKnowledgeRelations = chemin.match(/^\/clients\/([^/]+)\/knowledge-relations$/)
+  if (matchKnowledgeRelations && request.method === 'POST') {
+    return gererDeclarerRelation(request, ctx, entetes, matchKnowledgeRelations[1] as string)
+  }
+  const matchConflicts = chemin.match(/^\/clients\/([^/]+)\/conflicts$/)
+  if (matchConflicts && request.method === 'POST') {
+    return gererDeclarerConflit(request, ctx, entetes, matchConflicts[1] as string)
+  }
+  const matchResoudreConflit = chemin.match(/^\/clients\/([^/]+)\/conflicts\/([^/]+)\/resoudre$/)
+  if (matchResoudreConflit && request.method === 'PATCH') {
+    return gererResoudreConflit(
+      request,
+      ctx,
+      entetes,
+      matchResoudreConflit[1] as string,
+      matchResoudreConflit[2] as string,
+    )
+  }
+  const matchKnowledgeEngineMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/knowledge-engine\/migration-locale$/,
+  )
+  if (matchKnowledgeEngineMigrationLocale && request.method === 'POST') {
+    return gererMigrerKnowledgeEngineLocal(
+      request,
+      ctx,
+      entetes,
+      matchKnowledgeEngineMigrationLocale[1] as string,
     )
   }
 
@@ -4327,6 +4450,544 @@ async function gererMigrerEvidencesLocal(
       evidences: corps.evidences ?? [],
       evidenceLocations: corps.evidenceLocations ?? [],
       provenanceLinks: corps.provenanceLinks ?? [],
+    },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : Source/SourceLocation/SourceVersion/Extraction/
+// ExtractionItem/KnowledgeItem/Confirmation/KnowledgeRelation/Conflict
+// (Target Architecture, domaines "Source Intelligence" et "Knowledge",
+// Phase 7a du chantier de migration D1) ---
+
+async function gererObtenirKnowledgeEngine(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [
+    sources,
+    sourceLocations,
+    sourceVersions,
+    extractions,
+    extractionItems,
+    knowledgeItems,
+    confirmations,
+    knowledgeRelations,
+    conflicts,
+  ] = await Promise.all([
+    ctx.knowledgeEngineRepo.listerSources(clientId),
+    ctx.knowledgeEngineRepo.listerSourceLocations(clientId),
+    ctx.knowledgeEngineRepo.listerSourceVersions(clientId),
+    ctx.knowledgeEngineRepo.listerExtractions(clientId),
+    ctx.knowledgeEngineRepo.listerExtractionItems(clientId),
+    ctx.knowledgeEngineRepo.listerKnowledgeItems(clientId),
+    ctx.knowledgeEngineRepo.listerConfirmations(clientId),
+    ctx.knowledgeEngineRepo.listerKnowledgeRelations(clientId),
+    ctx.knowledgeEngineRepo.listerConflicts(clientId),
+  ])
+  return reponseJson(
+    {
+      sources,
+      sourceLocations,
+      sourceVersions,
+      extractions,
+      extractionItems,
+      knowledgeItems,
+      confirmations,
+      knowledgeRelations,
+      conflicts,
+    },
+    200,
+    entetes,
+  )
+}
+
+interface SaisieCreationSource {
+  type?: string
+  titre?: string
+}
+
+async function gererCreerSource(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieCreationSource>(request)
+  if (!corps?.type || !corps.titre) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const source: SourceEnregistree = {
+    id: genererId(),
+    clientId,
+    type: corps.type,
+    titre: corps.titre,
+    createdAt: horodatage(),
+  }
+  await ctx.knowledgeEngineRepo.creerSource(source)
+  return reponseJson({ source }, 201, entetes)
+}
+
+interface SaisieAjoutLocalisationSource {
+  systeme?: string
+  reference?: string
+}
+
+/** Un `Source` peut avoir plusieurs localisations (ex. miroir Drive + référence externe). */
+async function gererAjouterLocalisationSource(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  sourceId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const source = await ctx.knowledgeEngineRepo.sourceParId(sourceId)
+  if (!source || source.clientId !== clientId) {
+    return reponseJson({ erreur: 'source_introuvable' }, 404, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieAjoutLocalisationSource>(request)
+  if (!corps?.systeme || !corps.reference) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const localisation: SourceLocationEnregistree = {
+    id: genererId(),
+    clientId,
+    sourceId,
+    systeme: corps.systeme,
+    reference: corps.reference,
+  }
+  await ctx.knowledgeEngineRepo.creerSourceLocation(localisation)
+  return reponseJson({ sourceLocation: localisation }, 201, entetes)
+}
+
+/** `numeroVersion` est auto-incrémenté côté serveur à partir des versions existantes de cette `Source` — jamais fourni par le client. */
+async function gererCreerSourceVersion(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  sourceId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const source = await ctx.knowledgeEngineRepo.sourceParId(sourceId)
+  if (!source || source.clientId !== clientId) {
+    return reponseJson({ erreur: 'source_introuvable' }, 404, entetes)
+  }
+
+  const versionsExistantes = (await ctx.knowledgeEngineRepo.listerSourceVersions(clientId)).filter(
+    (v) => v.sourceId === sourceId,
+  )
+  const numeroVersion = versionsExistantes.reduce((max, v) => Math.max(max, v.numeroVersion), 0) + 1
+
+  const version: SourceVersionEnregistree = {
+    id: genererId(),
+    clientId,
+    sourceId,
+    numeroVersion,
+    createdAt: horodatage(),
+  }
+  await ctx.knowledgeEngineRepo.creerSourceVersion(version)
+  return reponseJson({ sourceVersion: version }, 201, entetes)
+}
+
+interface SaisieEnregistrementExtraction {
+  methode?: string
+}
+
+async function gererEnregistrerExtraction(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  sourceVersionId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const version = await ctx.knowledgeEngineRepo.sourceVersionParId(sourceVersionId)
+  if (!version || version.clientId !== clientId) {
+    return reponseJson({ erreur: 'version_introuvable' }, 404, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieEnregistrementExtraction>(request)
+  if (!corps?.methode) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const extraction: ExtractionEnregistree = {
+    id: genererId(),
+    clientId,
+    sourceVersionId,
+    methode: corps.methode,
+    horodatage: horodatage(),
+  }
+  await ctx.knowledgeEngineRepo.creerExtraction(extraction)
+  return reponseJson({ extraction }, 201, entetes)
+}
+
+interface SaisieAjoutExtractionItem {
+  contenu?: string
+  position?: number
+}
+
+/** Immutable une fois créé — la "preuve de premier niveau" d'une extraction. */
+async function gererAjouterExtractionItem(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  extractionId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const extraction = await ctx.knowledgeEngineRepo.extractionParId(extractionId)
+  if (!extraction || extraction.clientId !== clientId) {
+    return reponseJson({ erreur: 'extraction_introuvable' }, 404, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieAjoutExtractionItem>(request)
+  if (corps?.contenu === undefined || corps.position === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const item: ExtractionItemEnregistre = {
+    id: genererId(),
+    clientId,
+    extractionId,
+    contenu: corps.contenu,
+    position: corps.position,
+  }
+  await ctx.knowledgeEngineRepo.creerExtractionItem(item)
+  return reponseJson({ extractionItem: item }, 201, entetes)
+}
+
+interface SaisieCreationKnowledgeItem {
+  libelle?: string
+  valeurInterpretee?: string
+}
+
+/** Garde-fou non négociable : toujours créé au statut `a_valider`, jamais `valide` à la création. */
+async function gererCreerKnowledgeItem(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  extractionItemId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const items = await ctx.knowledgeEngineRepo.listerExtractionItems(clientId)
+  const item = items.find((i) => i.id === extractionItemId)
+  if (!item) {
+    return reponseJson({ erreur: 'extraction_item_introuvable' }, 404, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieCreationKnowledgeItem>(request)
+  if (!corps?.libelle || corps.valeurInterpretee === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const knowledgeItem: KnowledgeItemEnregistre = {
+    id: genererId(),
+    clientId,
+    extractionItemId,
+    libelle: corps.libelle,
+    valeurInterpretee: corps.valeurInterpretee,
+    statut: 'a_valider',
+    validePar: null,
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.knowledgeEngineRepo.creerKnowledgeItem(knowledgeItem)
+  return reponseJson({ knowledgeItem }, 201, entetes)
+}
+
+interface SaisieConfirmationKnowledgeItem {
+  decision?: string
+}
+
+/**
+ * Validation/rejet toujours humains et explicites — jamais automatiques.
+ * Crée un enregistrement `Confirmation` auditable distinct, en plus de la
+ * mise à jour dénormalisée de `KnowledgeItem.statut`/`validePar`.
+ * `confirmePar`/`validePar` dérivés côté serveur (`acteur.email`), jamais
+ * fait confiance au client.
+ */
+async function gererConfirmerKnowledgeItem(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  knowledgeItemId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const existant = await ctx.knowledgeEngineRepo.knowledgeItemParId(knowledgeItemId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'knowledge_item_introuvable' }, 404, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieConfirmationKnowledgeItem>(request)
+  if (corps?.decision !== 'confirme' && corps?.decision !== 'rejete') {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const maintenant = horodatage()
+  const confirmation: ConfirmationEnregistree = {
+    id: genererId(),
+    clientId,
+    knowledgeItemId,
+    decision: corps.decision,
+    confirmePar: acteur.email,
+    horodatage: maintenant,
+  }
+  await ctx.knowledgeEngineRepo.creerConfirmation(confirmation)
+
+  const statut = corps.decision === 'confirme' ? 'valide' : 'rejete'
+  const miseAJour: KnowledgeItemEnregistre = {
+    ...existant,
+    statut,
+    validePar: acteur.email,
+    updatedAt: maintenant,
+    auditLog: [
+      ...existant.auditLog,
+      { timestamp: maintenant, actor: acteur.email, action: `changement de statut : ${statut}` },
+    ],
+  }
+  await ctx.knowledgeEngineRepo.remplacerKnowledgeItem(miseAJour)
+  return reponseJson({ knowledgeItem: miseAJour, confirmation }, 200, entetes)
+}
+
+interface SaisieDeclarationRelation {
+  knowledgeItemSourceId?: string
+  knowledgeItemCibleId?: string
+  type?: string
+}
+
+/** Lien explicite non conflictuel entre deux `KnowledgeItem` — jamais déduit, idempotent. */
+async function gererDeclarerRelation(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieDeclarationRelation>(request)
+  if (!corps?.knowledgeItemSourceId || !corps.knowledgeItemCibleId || !corps.type) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const existantes = await ctx.knowledgeEngineRepo.listerKnowledgeRelations(clientId)
+  const existante = existantes.find(
+    (r) =>
+      r.knowledgeItemSourceId === corps.knowledgeItemSourceId &&
+      r.knowledgeItemCibleId === corps.knowledgeItemCibleId &&
+      r.type === corps.type,
+  )
+  if (existante) return reponseJson({ knowledgeRelation: existante }, 200, entetes)
+
+  const relation: KnowledgeRelationEnregistree = {
+    id: genererId(),
+    clientId,
+    knowledgeItemSourceId: corps.knowledgeItemSourceId,
+    knowledgeItemCibleId: corps.knowledgeItemCibleId,
+    type: corps.type,
+    createdAt: horodatage(),
+  }
+  await ctx.knowledgeEngineRepo.creerKnowledgeRelation(relation)
+  return reponseJson({ knowledgeRelation: relation }, 201, entetes)
+}
+
+interface SaisieDeclarationConflit {
+  knowledgeItemSourceId?: string
+  knowledgeItemCibleId?: string
+  description?: string
+}
+
+async function gererDeclarerConflit(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieDeclarationConflit>(request)
+  if (!corps?.knowledgeItemSourceId || !corps.knowledgeItemCibleId || !corps.description) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const conflit: ConflictEnregistre = {
+    id: genererId(),
+    clientId,
+    knowledgeItemSourceId: corps.knowledgeItemSourceId,
+    knowledgeItemCibleId: corps.knowledgeItemCibleId,
+    description: corps.description,
+    statut: 'ouvert',
+    resolution: null,
+    createdAt: horodatage(),
+  }
+  await ctx.knowledgeEngineRepo.creerConflict(conflit)
+  return reponseJson({ conflict: conflit }, 201, entetes)
+}
+
+interface SaisieResolutionConflit {
+  resolution?: string
+}
+
+/** Un Conflict reste `ouvert` tant qu'aucune résolution explicite n'est fournie — jamais auto-résolu. */
+async function gererResoudreConflit(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  conflictId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const existant = await ctx.knowledgeEngineRepo.conflictParId(conflictId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'conflict_introuvable' }, 404, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieResolutionConflit>(request)
+  if (!corps?.resolution) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const miseAJour: ConflictEnregistre = {
+    ...existant,
+    statut: 'resolu',
+    resolution: corps.resolution,
+  }
+  await ctx.knowledgeEngineRepo.remplacerConflict(miseAJour)
+  return reponseJson({ conflict: miseAJour }, 200, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale (`useSourceIntelligenceStore`),
+ * même discipline que les autres migrations locales de ce chantier —
+ * idempotente, l'existant côté serveur gagne toujours (`ON CONFLICT(id)
+ * DO NOTHING` dans `D1KnowledgeEngineRepo`).
+ */
+interface SaisieMigrationKnowledgeEngine {
+  sources?: SourceEnregistree[]
+  sourceLocations?: SourceLocationEnregistree[]
+  sourceVersions?: SourceVersionEnregistree[]
+  extractions?: ExtractionEnregistree[]
+  extractionItems?: ExtractionItemEnregistre[]
+  knowledgeItems?: KnowledgeItemEnregistre[]
+  confirmations?: ConfirmationEnregistree[]
+  knowledgeRelations?: KnowledgeRelationEnregistree[]
+  conflicts?: ConflictEnregistre[]
+}
+
+async function gererMigrerKnowledgeEngineLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationKnowledgeEngine>(request)
+  if (
+    !corps ||
+    (!Array.isArray(corps.sources) &&
+      !Array.isArray(corps.sourceLocations) &&
+      !Array.isArray(corps.sourceVersions) &&
+      !Array.isArray(corps.extractions) &&
+      !Array.isArray(corps.extractionItems) &&
+      !Array.isArray(corps.knowledgeItems) &&
+      !Array.isArray(corps.confirmations) &&
+      !Array.isArray(corps.knowledgeRelations) &&
+      !Array.isArray(corps.conflicts))
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const s of corps.sources ?? []) {
+    if (s.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.knowledgeEngineRepo.creerSource(s)
+  }
+  for (const l of corps.sourceLocations ?? []) {
+    if (l.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.knowledgeEngineRepo.creerSourceLocation(l)
+  }
+  for (const v of corps.sourceVersions ?? []) {
+    if (v.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.knowledgeEngineRepo.creerSourceVersion(v)
+  }
+  for (const e of corps.extractions ?? []) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.knowledgeEngineRepo.creerExtraction(e)
+  }
+  for (const i of corps.extractionItems ?? []) {
+    if (i.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.knowledgeEngineRepo.creerExtractionItem(i)
+  }
+  for (const k of corps.knowledgeItems ?? []) {
+    if (k.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.knowledgeEngineRepo.creerKnowledgeItem(k)
+  }
+  for (const c of corps.confirmations ?? []) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.knowledgeEngineRepo.creerConfirmation(c)
+  }
+  for (const r of corps.knowledgeRelations ?? []) {
+    if (r.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.knowledgeEngineRepo.creerKnowledgeRelation(r)
+  }
+  for (const c of corps.conflicts ?? []) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.knowledgeEngineRepo.creerConflict(c)
+  }
+  return reponseJson(
+    {
+      sources: corps.sources ?? [],
+      sourceLocations: corps.sourceLocations ?? [],
+      sourceVersions: corps.sourceVersions ?? [],
+      extractions: corps.extractions ?? [],
+      extractionItems: corps.extractionItems ?? [],
+      knowledgeItems: corps.knowledgeItems ?? [],
+      confirmations: corps.confirmations ?? [],
+      knowledgeRelations: corps.knowledgeRelations ?? [],
+      conflicts: corps.conflicts ?? [],
     },
     200,
     entetes,

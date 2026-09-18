@@ -21,12 +21,12 @@
 // - "Raccourcis épinglés" (§5 du parcours) : `useEpinglageStore`.
 import { computed, onMounted, ref } from 'vue'
 import type { Project } from '../../logique-metier/domaine/types'
-import { db } from '../../persistance/db'
 import { useClientActifStore } from '../stores/useClientActifStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useEpinglageStore, type RaccourciEpingle } from '../stores/useEpinglageStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useSectionsStore } from '../stores/useSectionsStore'
+import { useSourceIntelligenceStore } from '../stores/useSourceIntelligenceStore'
 import IconeSvg, { type NomIcone } from '../composants/IconeSvg.vue'
 
 const clientActifStore = useClientActifStore()
@@ -34,6 +34,7 @@ const clientsStore = useClientsStore()
 const projetsStore = useProjectsStore()
 const epinglageStore = useEpinglageStore()
 const sectionsStore = useSectionsStore()
+const sourceIntelligenceStore = useSourceIntelligenceStore()
 
 const chargementTermine = ref(false)
 const erreurChargementClients = ref<string | null>(null)
@@ -74,8 +75,23 @@ onMounted(async () => {
     }
   }
 
-  nbInformationsAValider.value = await db.knowledgeItems.where('statut').equals('a_valider').count()
-  nbConflitsOuverts.value = await db.conflicts.where('statut').equals('ouvert').count()
+  // Source Intelligence/Knowledge migré vers le Worker/D1 (Phase 7a du
+  // chantier de migration D1) — scopé par client, comme toutes les
+  // routes du Worker : « À vérifier » ne peut donc porter que sur le
+  // client actif (mémoire de navigation, `useClientActifStore`), jamais
+  // un agrégat global fabriqué en interrogeant tous les clients.
+  const clientActifId = clientActifStore.clientActifId
+  if (clientActifId) {
+    try {
+      await sourceIntelligenceStore.charger(clientActifId)
+      nbInformationsAValider.value = sourceIntelligenceStore.knowledgeItems.filter(
+        (k) => k.statut === 'a_valider',
+      ).length
+      nbConflitsOuverts.value = sourceIntelligenceStore.conflitsOuverts().length
+    } catch {
+      // Panne réseau isolée — ne bloque jamais le reste de l'accueil.
+    }
+  }
   chargementTermine.value = true
 })
 
@@ -168,7 +184,7 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
         </p>
         <template v-else>
           <RouterLink
-            v-if="nbInformationsAValider > 0 && clientActifStore.clientActifId"
+            v-if="nbInformationsAValider > 0"
             :to="{
               name: 'source-intelligence',
               params: { clientId: clientActifStore.clientActifId },
@@ -178,12 +194,8 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
             <span>Information(s) extraite(s) non validée(s)</span>
             <strong>{{ nbInformationsAValider }}</strong>
           </RouterLink>
-          <p v-else-if="nbInformationsAValider > 0" class="accueil__ligne-stat">
-            <span>Information(s) extraite(s) non validée(s)</span>
-            <strong>{{ nbInformationsAValider }}</strong>
-          </p>
           <RouterLink
-            v-if="nbConflitsOuverts > 0 && clientActifStore.clientActifId"
+            v-if="nbConflitsOuverts > 0"
             :to="{
               name: 'source-intelligence',
               params: { clientId: clientActifStore.clientActifId },
@@ -193,10 +205,6 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
             <span>Conflit(s) non résolu(s)</span>
             <strong>{{ nbConflitsOuverts }}</strong>
           </RouterLink>
-          <p v-else-if="nbConflitsOuverts > 0" class="accueil__ligne-stat">
-            <span>Conflit(s) non résolu(s)</span>
-            <strong>{{ nbConflitsOuverts }}</strong>
-          </p>
         </template>
       </section>
 

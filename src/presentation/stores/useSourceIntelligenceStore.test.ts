@@ -1,20 +1,41 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useSourceIntelligenceStore } from './useSourceIntelligenceStore'
+
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.sources.clear()
-  await db.sourceVersions.clear()
-  await db.sourceLocations.clear()
-  await db.extractions.clear()
-  await db.extractionItems.clear()
-  await db.knowledgeItems.clear()
-  await db.confirmations.clear()
-  await db.knowledgeRelations.clear()
-  await db.conflicts.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  for (const id of ['client-1', 'client-A', 'client-B']) {
+    await installation.ctx.clientsRepo.creer({
+      id,
+      name: id,
+      adresse: null,
+      secteur: null,
+      details: null,
+      statut: 'actif',
+      archivedAt: null,
+      archivedBy: null,
+      createdByUserId: 'admin-test',
+      sharedWith: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }
+})
+
+afterEach(() => {
+  demonter()
 })
 
 /** Construit la chaîne complète Source -> SourceVersion -> Extraction -> ExtractionItem. */
@@ -64,18 +85,18 @@ describe('useSourceIntelligenceStore — chaîne nominale', () => {
     expect(knowledgeItem.valide_par).toBeNull()
     expect(store.knowledgeItemsExtractionItem(item.id)).toHaveLength(1)
 
-    const valide = await store.validerKnowledgeItem(
-      'client-1',
-      knowledgeItem.id,
-      'auditeur-qualite',
-    )
+    // `valide_par`/`confirme_par` dérivés côté serveur de la session
+    // authentifiée (`admin@pharmatech.example`), jamais fournis par
+    // l'appelant — cohérent avec la discipline du reste du chantier.
+    const valide = await store.validerKnowledgeItem('client-1', knowledgeItem.id)
     expect(valide?.statut).toBe('valide')
-    expect(valide?.valide_par).toBe('auditeur-qualite')
+    expect(valide?.valide_par).toBe('admin@pharmatech.example')
     expect(valide?.audit_log).toHaveLength(2)
 
     const confirmations = store.confirmationsKnowledgeItem(knowledgeItem.id)
     expect(confirmations).toHaveLength(1)
     expect(confirmations[0]?.decision).toBe('confirme')
+    expect(confirmations[0]?.confirme_par).toBe('admin@pharmatech.example')
   })
 
   test('une Source peut avoir plusieurs SourceVersion, numérotées séquentiellement', async () => {
@@ -97,12 +118,9 @@ describe('useSourceIntelligenceStore — chaîne nominale', () => {
     })
     if ('erreur' in knowledgeItem) throw new Error('unreachable')
 
-    const rejete = await store.rejeterKnowledgeItem(
-      'client-1',
-      knowledgeItem.id,
-      'auditeur-qualite',
-    )
+    const rejete = await store.rejeterKnowledgeItem('client-1', knowledgeItem.id)
     expect(rejete?.statut).toBe('rejete')
+    expect(rejete?.valide_par).toBe('admin@pharmatech.example')
     expect(store.confirmationsKnowledgeItem(knowledgeItem.id)[0]?.decision).toBe('rejete')
   })
 

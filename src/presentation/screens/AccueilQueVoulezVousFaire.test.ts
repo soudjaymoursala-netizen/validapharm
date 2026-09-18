@@ -3,8 +3,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import type { Section } from '../../logique-metier/domaine/types'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -72,15 +72,16 @@ async function attendreQue(condition: () => boolean): Promise<void> {
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+let ctx: Contexte
 let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
   localStorage.clear()
   await reinitialiserAuthDeTest()
-  await db.knowledgeItems.clear()
-  await db.conflicts.clear()
-  demonter = installerFauxWorkerAuth().demonter
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
 })
 
 afterEach(() => {
@@ -171,6 +172,25 @@ describe('AccueilQueVoulezVousFaire — Mes clients', () => {
   })
 })
 
+/** Crée un vrai client `client-1` via le dépôt en mémoire (Worker/D1, Phase 7a du chantier de migration D1). */
+async function creerClientUnDeTest(): Promise<void> {
+  const maintenant = new Date().toISOString()
+  await ctx.clientsRepo.creer({
+    id: 'client-1',
+    name: 'Ferring',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  })
+}
+
 describe('AccueilQueVoulezVousFaire — À vérifier', () => {
   test('aucune donnée à vérifier : état neutre', async () => {
     const router = routeurDeTest()
@@ -181,13 +201,27 @@ describe('AccueilQueVoulezVousFaire — À vérifier', () => {
     expect(wrapper.text()).toContain('Rien à vérifier pour l’instant.'.replace('’', "'"))
   })
 
-  test('agrège les informations non validées et les conflits ouverts réels', async () => {
-    await db.knowledgeItems.bulkAdd([
-      knowledgeItemMinimal('ki1', 'a_valider'),
-      knowledgeItemMinimal('ki2', 'a_valider'),
-      knowledgeItemMinimal('ki3', 'valide'),
-    ])
-    await db.conflicts.add(conflitMinimal('c1', 'ouvert'))
+  test('sans client actif, aucun agrégat global n’est fabriqué (scopage par client, Phase 7a)', async () => {
+    await creerClientUnDeTest()
+    await ctx.knowledgeEngineRepo.creerKnowledgeItem(knowledgeItemMinimal('ki1', 'a_valider'))
+    await ctx.knowledgeEngineRepo.creerConflict(conflitMinimal('c1', 'ouvert'))
+
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(AccueilQueVoulezVousFaire, { global: { plugins: [router] } })
+    await attendreQue(() => wrapper.text().includes('À vérifier'))
+
+    expect(wrapper.text()).toContain('Rien à vérifier pour l’instant.'.replace('’', "'"))
+  })
+
+  test('avec un client actif, agrège les informations non validées et les conflits ouverts réels de ce client', async () => {
+    await connecterAdminDeTest()
+    useClientActifStore().definirClientActif('client-1')
+    await creerClientUnDeTest()
+    await ctx.knowledgeEngineRepo.creerKnowledgeItem(knowledgeItemMinimal('ki1', 'a_valider'))
+    await ctx.knowledgeEngineRepo.creerKnowledgeItem(knowledgeItemMinimal('ki2', 'a_valider'))
+    await ctx.knowledgeEngineRepo.creerKnowledgeItem(knowledgeItemMinimal('ki3', 'valide'))
+    await ctx.knowledgeEngineRepo.creerConflict(conflitMinimal('c1', 'ouvert'))
 
     const router = routeurDeTest()
     await router.push('/')
@@ -198,9 +232,11 @@ describe('AccueilQueVoulezVousFaire — À vérifier', () => {
   })
 
   test('avec un client actif, les deux lignes mènent vers Source Intelligence de ce client', async () => {
+    await connecterAdminDeTest()
     useClientActifStore().definirClientActif('client-1')
-    await db.knowledgeItems.add(knowledgeItemMinimal('ki1', 'a_valider'))
-    await db.conflicts.add(conflitMinimal('c1', 'ouvert'))
+    await creerClientUnDeTest()
+    await ctx.knowledgeEngineRepo.creerKnowledgeItem(knowledgeItemMinimal('ki1', 'a_valider'))
+    await ctx.knowledgeEngineRepo.creerConflict(conflitMinimal('c1', 'ouvert'))
 
     const router = routeurDeTest()
     await router.push('/')
@@ -277,27 +313,27 @@ function knowledgeItemMinimal(id: string, statut: 'a_valider' | 'valide' | 'reje
   const maintenant = new Date().toISOString()
   return {
     id,
-    client_id: 'client-1',
-    extraction_item_id: 'extraction-item-1',
+    clientId: 'client-1',
+    extractionItemId: 'extraction-item-1',
     libelle: 'Donnée extraite',
-    valeur_interpretee: 'Valeur',
+    valeurInterpretee: 'Valeur',
     statut,
-    valide_par: null,
-    audit_log: [],
-    created_at: maintenant,
-    updated_at: maintenant,
+    validePar: null,
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
   }
 }
 
 function conflitMinimal(id: string, statut: 'ouvert' | 'resolu') {
   return {
     id,
-    client_id: 'client-1',
-    knowledge_item_source_id: 'ki1',
-    knowledge_item_cible_id: 'ki2',
+    clientId: 'client-1',
+    knowledgeItemSourceId: 'ki1',
+    knowledgeItemCibleId: 'ki2',
     description: 'Valeurs contradictoires',
     statut,
     resolution: null,
-    created_at: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
   }
 }
