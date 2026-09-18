@@ -13,6 +13,7 @@ import { EnvoyeurEmailMemoire } from './notifications/envoyeurEmail'
 import { ACFCRepoMemoire } from './repos/acfcRepo'
 import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
+import { ContentPlanRepoMemoire } from './repos/contentPlanRepo'
 import { CSVAssessmentRepoMemoire } from './repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from './repos/evidenceRepo'
@@ -64,6 +65,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     executionRepo: new ExecutionRepoMemoire(),
     evidenceRepo: new EvidenceRepoMemoire(),
     knowledgeEngineRepo: new KnowledgeEngineRepoMemoire(),
+    contentPlanRepo: new ContentPlanRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -227,6 +229,8 @@ interface CorpsReponse {
   knowledgeRelations: KnowledgeRelationJson[]
   conflict: ConflictJson
   conflicts: ConflictJson[]
+  contentPlan: ContentPlanJson
+  contentPlans: ContentPlanJson[]
 }
 
 interface RequirementJson {
@@ -443,6 +447,22 @@ interface ConflictJson {
   statut: string
   resolution: string | null
   createdAt: string
+}
+
+interface ContentPlanJson {
+  id: string
+  clientId: string
+  templateId: string
+  assetNodeId: string | null
+  processId: string | null
+  methodProfileId: string | null
+  methodProfileType: string | null
+  contextSnapshot: string
+  readiness: string
+  statut: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
 }
 
 interface QualityEventJson {
@@ -4330,6 +4350,455 @@ describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/Extra
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/knowledge-engine`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverable Engine", Phase 7b du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  /**
+   * Chaîne complète Requirement → Couverture → Test → Execution → Evidence
+   * ancrée sur `assetNodeId`, menant à `readiness: 'pret'` — même patron
+   * que `creerExecutionEnCoursDeTest` (Phase 6b/6c) mais avec un
+   * `assetNodeId` partagé et poussée jusqu'à la preuve.
+   */
+  async function creerChainePreteDeTest(
+    ctx: Contexte,
+    jeton: string,
+    clientId: string,
+    assetNodeId: string,
+  ): Promise<void> {
+    const requirement = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/requirements`,
+      { jeton, body: { reference: 'REQ-1', titre: 'Débit stable', description: 'x', assetNodeId } },
+    )
+    const objectif = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-objectives`,
+      {
+        jeton,
+        body: {
+          requirementId: requirement.corps.requirement.id,
+          titre: 'Objectif',
+          description: 'x',
+        },
+      },
+    )
+    const candidat = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-candidates`,
+      {
+        jeton,
+        body: { testObjectiveId: objectif.corps.testObjective.id, titre: 'C', description: 'x' },
+      },
+    )
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${candidat.corps.testCandidate.id}/statut`,
+      { jeton, body: { statut: 'accepte' } },
+    )
+    const test = await requete(ctx, 'POST', `/clients/${clientId}/test-definition/tests`, {
+      jeton,
+      body: {
+        testCandidateId: candidat.corps.testCandidate.id,
+        titre: 'Test débit',
+        description: 'x',
+        etapes: [{ ordre: 1, action: 'Démarrer', resultatAttendu: 'Débit stable' }],
+      },
+    })
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/tests/${test.corps.test.id}/approuver`,
+      { jeton },
+    )
+    await requete(ctx, 'POST', `/clients/${clientId}/test-definition/couvertures`, {
+      jeton,
+      body: { requirementId: requirement.corps.requirement.id, testId: test.corps.test.id },
+    })
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton,
+      body: { testId: test.corps.test.id, assetNodeId },
+    })
+    await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton,
+      body: {
+        executionId: demarrage.corps.execution.id,
+        executionStepId: null,
+        type: 'native',
+        titre: 'Observation directe',
+        description: 'Cycle sans alarme',
+      },
+    })
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/executions/${demarrage.corps.execution.id}/cloturer`,
+      { jeton, body: { verdict: 'conforme' } },
+    )
+  }
+
+  test('GET sans rien configuré -> liste vide, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.contentPlans).toEqual([])
+  })
+
+  test('créer sans assetNodeId : readiness calculée serveur -> besoin_information', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', contextSnapshot: '{}' },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.contentPlan.readiness).toBe('besoin_information')
+    expect(creation.corps.contentPlan.statut).toBe('brouillon')
+    expect(creation.corps.contentPlan.auditLog).toHaveLength(1)
+    expect(creation.corps.contentPlan.auditLog[0]?.actor).toBe('admin@pharmatech.example')
+  })
+
+  test('créer avec un assetNodeId sans requirement -> besoin_information', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', assetNodeId: 'noeud-1', contextSnapshot: '{}' },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.contentPlan.readiness).toBe('besoin_information')
+  })
+
+  test('créer avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { contextSnapshot: '{}' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('chaîne complète jusqu’à la preuve -> readiness pret', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', assetNodeId: 'noeud-1', contextSnapshot: '{}' },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.contentPlan.readiness).toBe('pret')
+  })
+
+  test('recalculer readiness : introuvable -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const recalcul = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/content-plans/inconnu/recalculer-readiness`,
+      { jeton: admin.jeton },
+    )
+    expect(recalcul.status).toBe(404)
+    expect(recalcul.corps.erreur).toBe('introuvable')
+  })
+
+  test('recalculer readiness : après ajout de la chaîne complète, repasse à pret', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', assetNodeId: 'noeud-1', contextSnapshot: '{}' },
+    })
+    expect(creation.corps.contentPlan.readiness).toBe('besoin_information')
+
+    await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
+
+    const recalcul = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/content-plans/${creation.corps.contentPlan.id}/recalculer-readiness`,
+      { jeton: admin.jeton },
+    )
+    expect(recalcul.status).toBe(200)
+    expect(recalcul.corps.contentPlan.readiness).toBe('pret')
+    expect(recalcul.corps.contentPlan.auditLog).toHaveLength(2)
+  })
+
+  test('recalculer readiness sur un plan gelé -> deja_gele', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', assetNodeId: 'noeud-1', contextSnapshot: '{}' },
+    })
+    const id = creation.corps.contentPlan.id
+    await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/valider`, {
+      jeton: admin.jeton,
+    })
+    await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/geler`, {
+      jeton: admin.jeton,
+    })
+
+    const recalcul = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/content-plans/${id}/recalculer-readiness`,
+      { jeton: admin.jeton },
+    )
+    expect(recalcul.status).toBe(400)
+    expect(recalcul.corps.erreur).toBe('deja_gele')
+  })
+
+  test('valider : introuvable -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const validation = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/content-plans/inconnu/valider`,
+      { jeton: admin.jeton },
+    )
+    expect(validation.status).toBe(404)
+    expect(validation.corps.erreur).toBe('introuvable')
+  })
+
+  test('valider un brouillon -> statut valide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', contextSnapshot: '{}' },
+    })
+    const validation = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/content-plans/${creation.corps.contentPlan.id}/valider`,
+      { jeton: admin.jeton },
+    )
+    expect(validation.status).toBe(200)
+    expect(validation.corps.contentPlan.statut).toBe('valide')
+    expect(validation.corps.contentPlan.auditLog).toHaveLength(2)
+  })
+
+  test('valider un plan déjà gelé -> deja_gele', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', assetNodeId: 'noeud-1', contextSnapshot: '{}' },
+    })
+    const id = creation.corps.contentPlan.id
+    await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/valider`, {
+      jeton: admin.jeton,
+    })
+    await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/geler`, {
+      jeton: admin.jeton,
+    })
+
+    const revalidation = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/content-plans/${id}/valider`,
+      { jeton: admin.jeton },
+    )
+    expect(revalidation.status).toBe(400)
+    expect(revalidation.corps.erreur).toBe('deja_gele')
+  })
+
+  test('geler : introuvable -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const gel = await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/inconnu/geler`, {
+      jeton: admin.jeton,
+    })
+    expect(gel.status).toBe(404)
+    expect(gel.corps.erreur).toBe('introuvable')
+  })
+
+  test('geler un brouillon non validé -> non_valide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', assetNodeId: 'noeud-1', contextSnapshot: '{}' },
+    })
+
+    const gel = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/content-plans/${creation.corps.contentPlan.id}/geler`,
+      { jeton: admin.jeton },
+    )
+    expect(gel.status).toBe(400)
+    expect(gel.corps.erreur).toBe('non_valide')
+  })
+
+  test('geler un plan validé mais dont la readiness n’est plus pret -> donnees_non_pretes (jamais fait confiance à la valeur stockée)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    // aucun requirement pour ce nœud -> readiness restera besoin_information
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', assetNodeId: 'noeud-vide', contextSnapshot: '{}' },
+    })
+    const id = creation.corps.contentPlan.id
+    await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/valider`, {
+      jeton: admin.jeton,
+    })
+
+    const gel = await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/geler`, {
+      jeton: admin.jeton,
+    })
+    expect(gel.status).toBe(400)
+    expect(gel.corps.erreur).toBe('donnees_non_pretes')
+  })
+
+  test('geler un plan validé et prêt -> statut gele', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', assetNodeId: 'noeud-1', contextSnapshot: '{}' },
+    })
+    const id = creation.corps.contentPlan.id
+    await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/valider`, {
+      jeton: admin.jeton,
+    })
+
+    const gel = await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/geler`, {
+      jeton: admin.jeton,
+    })
+    expect(gel.status).toBe(200)
+    expect(gel.corps.contentPlan.statut).toBe('gele')
+    expect(gel.corps.contentPlan.readiness).toBe('pret')
+  })
+
+  test('geler un plan déjà gelé -> deja_gele', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', assetNodeId: 'noeud-1', contextSnapshot: '{}' },
+    })
+    const id = creation.corps.contentPlan.id
+    await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/valider`, {
+      jeton: admin.jeton,
+    })
+    await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/geler`, {
+      jeton: admin.jeton,
+    })
+
+    const regel = await requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${id}/geler`, {
+      jeton: admin.jeton,
+    })
+    expect(regel.status).toBe(400)
+    expect(regel.corps.erreur).toBe('deja_gele')
+  })
+
+  test('migration locale : idempotente, id existant ignoré', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const planLocal: ContentPlanJson = {
+      id: 'plan-local-1',
+      clientId,
+      templateId: 'gabarit-iq',
+      assetNodeId: null,
+      processId: null,
+      methodProfileId: null,
+      methodProfileType: null,
+      contextSnapshot: '{}',
+      readiness: 'besoin_information',
+      statut: 'brouillon',
+      auditLog: [{ timestamp: '2024-01-01T00:00:00.000Z', actor: 'local', action: 'création' }],
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    }
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/content-plans/migration-locale`,
+      { jeton: admin.jeton, body: { contentPlans: [planLocal] } },
+    )
+    expect(migration.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/content-plans/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { contentPlans: [{ ...planLocal, templateId: 'tentative-ecrasement' }] },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.contentPlans).toHaveLength(1)
+    expect(liste.corps.contentPlans[0]?.templateId).toBe('gabarit-iq')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/content-plans`)
     expect(obtenir.status).toBe(401)
   })
 })

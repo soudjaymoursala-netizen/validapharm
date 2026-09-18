@@ -15,6 +15,7 @@ import { EnvoyeurEmailMemoire } from '../../workers/auth-worker/src/notification
 import { ACFCRepoMemoire } from '../../workers/auth-worker/src/repos/acfcRepo'
 import { AuditRepoMemoire } from '../../workers/auth-worker/src/repos/auditRepo'
 import { ClientsRepoMemoire } from '../../workers/auth-worker/src/repos/clientsRepo'
+import { ContentPlanRepoMemoire } from '../../workers/auth-worker/src/repos/contentPlanRepo'
 import { CSVAssessmentRepoMemoire } from '../../workers/auth-worker/src/repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from '../../workers/auth-worker/src/repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from '../../workers/auth-worker/src/repos/evidenceRepo'
@@ -73,6 +74,7 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     executionRepo: new ExecutionRepoMemoire(),
     evidenceRepo: new EvidenceRepoMemoire(),
     knowledgeEngineRepo: new KnowledgeEngineRepoMemoire(),
+    contentPlanRepo: new ContentPlanRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,

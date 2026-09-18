@@ -4,7 +4,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -126,7 +125,6 @@ async function seedChainePrete(assetNodeId: string): Promise<void> {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.contentPlans.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   ctx = installation.ctx
@@ -154,10 +152,10 @@ describe('ContentPlan', () => {
     await formCreation.find('select').setValue('oq')
     await formCreation.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.contentPlans.where('client_id').equals(clientId).count()) > 0,
+      async () => (await ctx.contentPlanRepo.listerContentPlans(clientId)).length > 0,
     )
 
-    const plan = (await db.contentPlans.toArray())[0]
+    const plan = (await ctx.contentPlanRepo.listerContentPlans(clientId))[0]
     expect(plan?.readiness).toBe('besoin_information')
     expect(plan?.statut).toBe('brouillon')
   })
@@ -184,9 +182,11 @@ describe('ContentPlan', () => {
     await selects[0]?.setValue('oq')
     await selects[1]?.setValue(noeudId)
     await formCreation.trigger('submit.prevent')
-    await attendreQue(async () => (await db.contentPlans.count()) > 0)
+    await attendreQue(
+      async () => (await ctx.contentPlanRepo.listerContentPlans(clientId)).length > 0,
+    )
 
-    const planPret = (await db.contentPlans.toArray())[0]
+    const planPret = (await ctx.contentPlanRepo.listerContentPlans(clientId))[0]
     expect(planPret?.readiness).toBe('pret')
 
     // Geler avant validation : refusé
@@ -195,7 +195,9 @@ describe('ContentPlan', () => {
     const boutonValider = boutons.find((b) => b.text() === 'Valider')
     expect(boutonValider).toBeTruthy()
     await boutonValider?.trigger('click')
-    await attendreQue(async () => (await db.contentPlans.toArray())[0]?.statut === 'valide')
+    await attendreQue(
+      async () => (await ctx.contentPlanRepo.listerContentPlans(clientId))[0]?.statut === 'valide',
+    )
 
     // Geler après validation, readiness prête : accepté
     await attendreQue(() =>
@@ -209,9 +211,11 @@ describe('ContentPlan', () => {
       .findAll('button')
       .find((b) => b.text() === 'Geler')
     await boutonGeler?.trigger('click')
-    await attendreQue(async () => (await db.contentPlans.toArray())[0]?.statut === 'gele')
+    await attendreQue(
+      async () => (await ctx.contentPlanRepo.listerContentPlans(clientId))[0]?.statut === 'gele',
+    )
 
-    const planGele = (await db.contentPlans.toArray())[0]
+    const planGele = (await ctx.contentPlanRepo.listerContentPlans(clientId))[0]
     expect(planGele?.statut).toBe('gele')
   })
 })

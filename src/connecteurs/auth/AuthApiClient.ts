@@ -854,6 +854,31 @@ export interface SaisieResolutionConflitWire {
   resolution: string
 }
 
+export interface ContentPlanWire {
+  id: string
+  clientId: string
+  templateId: string
+  assetNodeId: string | null
+  processId: string | null
+  methodProfileId: string | null
+  methodProfileType: string | null
+  contextSnapshot: string
+  readiness: string
+  statut: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaisieCreationContentPlanWire {
+  templateId: string
+  assetNodeId?: string | null
+  processId?: string | null
+  methodProfileId?: string | null
+  methodProfileType?: string | null
+  contextSnapshot: string
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -2113,6 +2138,67 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/knowledge-engine/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- ContentPlan (Target Architecture, domaine "Deliverable Engine", Phase 7b du chantier de migration D1) ---
+
+  obtenirContentPlans(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ contentPlans: ContentPlanWire[] }>> {
+    return this.requete('GET', `/clients/${clientId}/content-plans`, { jeton })
+  }
+
+  creerContentPlan(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationContentPlanWire,
+  ): Promise<ResultatApi<{ contentPlan: ContentPlanWire }>> {
+    return this.requete('POST', `/clients/${clientId}/content-plans`, { jeton, body: saisie })
+  }
+
+  recalculerReadinessContentPlan(
+    jeton: string,
+    clientId: string,
+    contentPlanId: string,
+  ): Promise<ResultatApi<{ contentPlan: ContentPlanWire }>> {
+    return this.requete(
+      'PATCH',
+      `/clients/${clientId}/content-plans/${contentPlanId}/recalculer-readiness`,
+      { jeton },
+    )
+  }
+
+  validerContentPlan(
+    jeton: string,
+    clientId: string,
+    contentPlanId: string,
+  ): Promise<ResultatApi<{ contentPlan: ContentPlanWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/content-plans/${contentPlanId}/valider`, {
+      jeton,
+    })
+  }
+
+  gelerContentPlan(
+    jeton: string,
+    clientId: string,
+    contentPlanId: string,
+  ): Promise<ResultatApi<{ contentPlan: ContentPlanWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/content-plans/${contentPlanId}/geler`, {
+      jeton,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerContentPlansLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerContentPlansLocal(
+    jeton: string,
+    clientId: string,
+    donnees: { contentPlans: ContentPlanWire[] },
+  ): Promise<ResultatApi<{ contentPlans: ContentPlanWire[] }>> {
+    return this.requete('POST', `/clients/${clientId}/content-plans/migration-locale`, {
       jeton,
       body: donnees,
     })

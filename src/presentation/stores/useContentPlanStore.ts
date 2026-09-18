@@ -1,21 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
+  ContentPlanWire,
+  SaisieCreationContentPlanWire,
+} from '../../connecteurs/auth/AuthApiClient'
+import type {
   ContentPlan,
+  ReadinessContentPlan,
+  StatutContentPlan,
   TemplateType,
   TypeMethodProfileReference,
 } from '../../logique-metier/domaine/types'
-import { identifiantActeurCourant } from '../identite/identiteLocale'
-import { db } from '../../persistance/db'
-import { construireReadinessContentPlan } from '../../logique-metier/deliverable/readinessContentPlan'
-import {
-  evaluerReglesConformite,
-  type RegleConformite,
-} from '../../logique-metier/conformite/evaluerReglesConformite'
-import { useEvidenceStore } from './useEvidenceStore'
-import { useExecutionStore } from './useExecutionStore'
-import { useQualityEventStore } from './useQualityEventStore'
-import { useTestDefinitionStore } from './useTestDefinitionStore'
+import { contentPlansAMigrer } from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 
 export interface NouveauContentPlanInput {
   templateId: TemplateType
@@ -30,20 +27,41 @@ export type ErreurEcritureContentPlan = {
   erreur: 'introuvable' | 'non_valide' | 'deja_gele' | 'donnees_non_pretes'
 }
 
-/**
- * Garde-fou non négociable — un `ContentPlan` dont
- * `readiness` n'est pas `pret` ne peut jamais être gelé. Implémenté
- * via le Compliance Engine généralisé
- * (`evaluerReglesConformite`) — comportement strictement identique à avant
- * ce refactor.
- */
-const REGLES_GEL_CONTENT_PLAN: readonly RegleConformite<Pick<ContentPlan, 'readiness'>>[] = [
-  {
-    code: 'readiness_non_prete',
-    bloque: (plan) => plan.readiness !== 'pret',
-    message: 'Les données ne sont pas encore prêtes (readiness ≠ pret).',
-  },
-]
+export function contentPlanWireVersDomaine(w: ContentPlanWire): ContentPlan {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    template_id: w.templateId as TemplateType,
+    asset_node_id: w.assetNodeId,
+    process_id: w.processId,
+    method_profile_id: w.methodProfileId,
+    method_profile_type: w.methodProfileType as TypeMethodProfileReference | null,
+    context_snapshot: w.contextSnapshot,
+    readiness: w.readiness as ReadinessContentPlan,
+    statut: w.statut as StatutContentPlan,
+    audit_log: w.auditLog,
+    created_at: w.createdAt,
+    updated_at: w.updatedAt,
+  }
+}
+
+export function contentPlanDomaineVersWire(p: ContentPlan): ContentPlanWire {
+  return {
+    id: p.id,
+    clientId: p.client_id,
+    templateId: p.template_id,
+    assetNodeId: p.asset_node_id,
+    processId: p.process_id,
+    methodProfileId: p.method_profile_id,
+    methodProfileType: p.method_profile_type,
+    contextSnapshot: p.context_snapshot,
+    readiness: p.readiness,
+    statut: p.statut,
+    auditLog: p.audit_log,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+  }
+}
 
 /**
  * Store du `ContentPlan` (convergence architecturale — spec
@@ -54,10 +72,15 @@ const REGLES_GEL_CONTENT_PLAN: readonly RegleConformite<Pick<ContentPlan, 'readi
  * `RenduGabarit.vue`, KEEP) et le cycle de vie de `Section`, hors périmètre
  * ici. Aucune génération/validation/gel automatique par IA.
  *
- * **Étendu** : `readiness` n'est plus fourni par
- * l'appelant — calculé automatiquement à la création et recalculable à la
- * demande via `construireReadinessContentPlan`
- * (`logique-metier/deliverable/readinessContentPlan.ts`).
+ * **Migré vers le Worker/D1 (Phase 7b du chantier de migration D1)** —
+ * même patron que les phases précédentes : `id`/timestamps/identité
+ * (`actor` de `audit_log`) toujours dérivés côté serveur, jamais fait
+ * confiance au client. `readiness` n'est plus calculée côté client (elle
+ * l'était auparavant via `construireReadinessContentPlan` en rechargeant
+ * QualityEvent/Requirement/Couverture/Test/Execution/Evidence) — le Worker
+ * la calcule désormais lui-même à partir des mêmes dépôts D1, y compris
+ * dans le garde-fou non négociable de `gelerContentPlan` (jamais fait
+ * confiance à une valeur `readiness` fournie par le client ou stockée).
  *
  * @requirement Target Architecture, domaine "Deliverable Engine"
  */
@@ -65,79 +88,77 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
   const contentPlans = ref<ContentPlan[]>([])
   const enChargement = ref(false)
 
+  /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que les autres stores de ce chantier. */
+  async function obtenirApi() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    return { api, jeton: authStore.jeton }
+  }
+
+  /**
+   * Envoie au serveur les enregistrements capturés depuis l'ancienne table
+   * IndexedDB locale juste avant sa suppression — n'a d'effet réel qu'une
+   * seule fois (voir migration Dexie v49, `persistance/db.ts`).
+   */
+  async function migrerContentPlansLocalVersServeur(clientId: string): Promise<void> {
+    const contentPlansDuClient = contentPlansAMigrer.filter((p) => p.client_id === clientId)
+    if (contentPlansDuClient.length === 0) return
+
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.migrerContentPlansLocal(jeton, clientId, {
+      contentPlans: contentPlansDuClient.map(contentPlanDomaineVersWire),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la migration ContentPlan : ${resultat.erreur}`)
+    }
+    for (const entree of contentPlansDuClient) {
+      const index = contentPlansAMigrer.indexOf(entree)
+      if (index !== -1) contentPlansAMigrer.splice(index, 1)
+    }
+  }
+
   async function charger(clientId: string): Promise<void> {
     enChargement.value = true
     try {
-      contentPlans.value = await db.contentPlans.where('client_id').equals(clientId).toArray()
+      try {
+        await migrerContentPlansLocalVersServeur(clientId)
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
+      }
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.obtenirContentPlans(jeton, clientId)
+      contentPlans.value = resultat.ok
+        ? resultat.donnees.contentPlans.map(contentPlanWireVersDomaine)
+        : []
+    } catch {
+      // Panne réseau réelle ou relais non configuré : jamais une exception
+      // non gérée, même discipline que les autres stores de ce chantier.
+      contentPlans.value = []
     } finally {
       enChargement.value = false
     }
   }
 
-  /**
-   * Recharge la chaîne réelle `Requirement → Couverture → Test → Execution
-   * → Evidence` + `QualityEvent` pour ce client et calcule `readiness` via
-   * `construireReadinessContentPlan` — jamais une valeur
-   * fournie par l'appelant.
-   */
-  async function calculerReadiness(clientId: string, assetNodeId: string | null) {
-    // QualityEvent migré vers le Worker/D1 (Phase 5b du chantier de
-    // migration D1) — chargé via le store dédié plutôt qu'un accès Dexie
-    // direct, devenu impossible depuis cette migration.
-    const qualityEventStore = useQualityEventStore()
-    await qualityEventStore.charger(clientId)
-    // Requirement/Couverture/Test migrés vers le Worker/D1 (Phase 6a du
-    // chantier de migration D1) — même patron que ci-dessus.
-    const testDefinitionStore = useTestDefinitionStore()
-    await testDefinitionStore.charger(clientId)
-    // Execution migrée vers le Worker/D1 (Phase 6b du chantier de
-    // migration D1) — même patron que ci-dessus.
-    const executionStore = useExecutionStore()
-    await executionStore.charger(clientId)
-    // Evidence migrée vers le Worker/D1 (Phase 6c du chantier de
-    // migration D1) — même patron que ci-dessus.
-    const evidenceStore = useEvidenceStore()
-    await evidenceStore.charger(clientId)
-    const requirements = testDefinitionStore.requirements
-    const couvertures = testDefinitionStore.couvertures
-    const tests = testDefinitionStore.tests
-    const executions = executionStore.executions
-    const evidences = evidenceStore.evidences
-    const qualityEvents = qualityEventStore.evenements
-    return construireReadinessContentPlan({
-      assetNodeId,
-      requirements,
-      couvertures,
-      tests,
-      executions,
-      evidences,
-      qualityEvents,
-    })
-  }
-
-  /** `context_snapshot` est figé une seule fois ici et reste immutable ensuite. */
+  /** `context_snapshot` est figé une seule fois ici et reste immutable ensuite ; `readiness` est calculée côté serveur, jamais fournie par l'appelant. */
   async function creerContentPlan(
     clientId: string,
     input: NouveauContentPlanInput,
   ): Promise<ContentPlan> {
-    const maintenant = new Date().toISOString()
-    const readiness = await calculerReadiness(clientId, input.assetNodeId)
-    const plan: ContentPlan = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      template_id: input.templateId,
-      asset_node_id: input.assetNodeId,
-      process_id: input.processId,
-      method_profile_id: input.methodProfileId,
-      method_profile_type: input.methodProfileType,
-      context_snapshot: JSON.stringify(input.contextSnapshot),
-      readiness,
-      statut: 'brouillon',
-      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
-      created_at: maintenant,
-      updated_at: maintenant,
+    const { api, jeton } = await obtenirApi()
+    const saisie: SaisieCreationContentPlanWire = {
+      templateId: input.templateId,
+      assetNodeId: input.assetNodeId,
+      processId: input.processId,
+      methodProfileId: input.methodProfileId,
+      methodProfileType: input.methodProfileType,
+      contextSnapshot: JSON.stringify(input.contextSnapshot),
     }
-    await db.contentPlans.put(plan)
+    const resultat = await api.creerContentPlan(jeton, clientId, saisie)
+    if (!resultat.ok) throw new Error(`Échec de la création du ContentPlan : ${resultat.erreur}`)
+    const plan = contentPlanWireVersDomaine(resultat.donnees.contentPlan)
     contentPlans.value = [...contentPlans.value, plan]
     return plan
   }
@@ -151,27 +172,16 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     clientId: string,
     contentPlanId: string,
   ): Promise<ContentPlan | ErreurEcritureContentPlan> {
-    const existant = await db.contentPlans.get(contentPlanId)
-    if (!existant || existant.client_id !== clientId) return { erreur: 'introuvable' }
-    if (existant.statut === 'gele') return { erreur: 'deja_gele' }
-
-    const readiness = await calculerReadiness(clientId, existant.asset_node_id)
-    const maintenant = new Date().toISOString()
-    const miseAJour: ContentPlan = {
-      ...existant,
-      readiness,
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: `recalcul readiness : ${readiness}`,
-        },
-      ],
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.recalculerReadinessContentPlan(jeton, clientId, contentPlanId)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable' || resultat.erreur === 'deja_gele') {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec du recalcul de la readiness : ${resultat.erreur}`)
     }
-    await db.contentPlans.put(miseAJour)
-    contentPlans.value = contentPlans.value.map((p) => (p.id === existant.id ? miseAJour : p))
+    const miseAJour = contentPlanWireVersDomaine(resultat.donnees.contentPlan)
+    contentPlans.value = contentPlans.value.map((p) => (p.id === contentPlanId ? miseAJour : p))
     return miseAJour
   }
 
@@ -179,54 +189,46 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     clientId: string,
     contentPlanId: string,
   ): Promise<ContentPlan | ErreurEcritureContentPlan> {
-    const existant = await db.contentPlans.get(contentPlanId)
-    if (!existant || existant.client_id !== clientId) return { erreur: 'introuvable' }
-    if (existant.statut === 'gele') return { erreur: 'deja_gele' }
-
-    return changerStatut(existant, 'valide')
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.validerContentPlan(jeton, clientId, contentPlanId)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'introuvable' || resultat.erreur === 'deja_gele') {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec de la validation : ${resultat.erreur}`)
+    }
+    const miseAJour = contentPlanWireVersDomaine(resultat.donnees.contentPlan)
+    contentPlans.value = contentPlans.value.map((p) => (p.id === contentPlanId ? miseAJour : p))
+    return miseAJour
   }
 
   /**
-   * Garde-fous non négociables : DOIT être `valide` au préalable (pas de
-   * saut direct depuis `brouillon`) ET `readiness` DOIT être `pret` — un
-   * plan dont les données sont encore incomplètes (`besoin_information`/
-   * `besoin_revue`/`bloque`) ne peut jamais être gelé, cohérent avec le
-   * principe fondateur n°1 (aucune promotion automatique/prématurée).
+   * Garde-fous non négociables, revérifiés côté serveur : DOIT être
+   * `valide` au préalable (pas de saut direct depuis `brouillon`) ET
+   * `readiness` DOIT être `pret` — un plan dont les données sont encore
+   * incomplètes (`besoin_information`/`besoin_revue`/`bloque`) ne peut
+   * jamais être gelé, cohérent avec le principe fondateur n°1 (aucune
+   * promotion automatique/prématurée).
    */
   async function gelerContentPlan(
     clientId: string,
     contentPlanId: string,
   ): Promise<ContentPlan | ErreurEcritureContentPlan> {
-    const existant = await db.contentPlans.get(contentPlanId)
-    if (!existant || existant.client_id !== clientId) return { erreur: 'introuvable' }
-    if (existant.statut === 'gele') return { erreur: 'deja_gele' }
-    if (existant.statut !== 'valide') return { erreur: 'non_valide' }
-    const [regleBloquante] = evaluerReglesConformite(existant, REGLES_GEL_CONTENT_PLAN)
-    if (regleBloquante) return { erreur: 'donnees_non_pretes' }
-
-    return changerStatut(existant, 'gele')
-  }
-
-  async function changerStatut(
-    existant: ContentPlan,
-    statut: ContentPlan['statut'],
-  ): Promise<ContentPlan> {
-    const maintenant = new Date().toISOString()
-    const miseAJour: ContentPlan = {
-      ...existant,
-      statut,
-      updated_at: maintenant,
-      audit_log: [
-        ...existant.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: `changement de statut : ${statut}`,
-        },
-      ],
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.gelerContentPlan(jeton, clientId, contentPlanId)
+    if (!resultat.ok) {
+      if (
+        resultat.erreur === 'introuvable' ||
+        resultat.erreur === 'deja_gele' ||
+        resultat.erreur === 'non_valide' ||
+        resultat.erreur === 'donnees_non_pretes'
+      ) {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec du gel : ${resultat.erreur}`)
     }
-    await db.contentPlans.put(miseAJour)
-    contentPlans.value = contentPlans.value.map((p) => (p.id === existant.id ? miseAJour : p))
+    const miseAJour = contentPlanWireVersDomaine(resultat.donnees.contentPlan)
+    contentPlans.value = contentPlans.value.map((p) => (p.id === contentPlanId ? miseAJour : p))
     return miseAJour
   }
 

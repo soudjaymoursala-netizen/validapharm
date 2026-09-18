@@ -9,6 +9,7 @@ import type {
 } from './repos/acfcRepo'
 import type { AuditRepo } from './repos/auditRepo'
 import type { ClientsRepo } from './repos/clientsRepo'
+import type { ContentPlanEnregistre, ContentPlanRepo } from './repos/contentPlanRepo'
 import type {
   CSVAssessmentRepo,
   EvaluationCSVAssessmentEnregistree,
@@ -141,6 +142,7 @@ export interface Contexte {
   executionRepo: ExecutionRepo
   evidenceRepo: EvidenceRepo
   knowledgeEngineRepo: KnowledgeEngineRepo
+  contentPlanRepo: ContentPlanRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -999,6 +1001,61 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchKnowledgeEngineMigrationLocale[1] as string,
+    )
+  }
+
+  // --- ContentPlan (Target Architecture, domaine "Deliverable Engine",
+  // Phase 7b du chantier de migration D1) ---
+  const matchContentPlans = chemin.match(/^\/clients\/([^/]+)\/content-plans$/)
+  if (matchContentPlans && request.method === 'GET') {
+    return gererObtenirContentPlans(request, ctx, entetes, matchContentPlans[1] as string)
+  }
+  if (matchContentPlans && request.method === 'POST') {
+    return gererCreerContentPlan(request, ctx, entetes, matchContentPlans[1] as string)
+  }
+  const matchRecalculerReadiness = chemin.match(
+    /^\/clients\/([^/]+)\/content-plans\/([^/]+)\/recalculer-readiness$/,
+  )
+  if (matchRecalculerReadiness && request.method === 'PATCH') {
+    return gererRecalculerReadiness(
+      request,
+      ctx,
+      entetes,
+      matchRecalculerReadiness[1] as string,
+      matchRecalculerReadiness[2] as string,
+    )
+  }
+  const matchValiderContentPlan = chemin.match(
+    /^\/clients\/([^/]+)\/content-plans\/([^/]+)\/valider$/,
+  )
+  if (matchValiderContentPlan && request.method === 'PATCH') {
+    return gererValiderContentPlan(
+      request,
+      ctx,
+      entetes,
+      matchValiderContentPlan[1] as string,
+      matchValiderContentPlan[2] as string,
+    )
+  }
+  const matchGelerContentPlan = chemin.match(/^\/clients\/([^/]+)\/content-plans\/([^/]+)\/geler$/)
+  if (matchGelerContentPlan && request.method === 'PATCH') {
+    return gererGelerContentPlan(
+      request,
+      ctx,
+      entetes,
+      matchGelerContentPlan[1] as string,
+      matchGelerContentPlan[2] as string,
+    )
+  }
+  const matchContentPlansMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/content-plans\/migration-locale$/,
+  )
+  if (matchContentPlansMigrationLocale && request.method === 'POST') {
+    return gererMigrerContentPlansLocal(
+      request,
+      ctx,
+      entetes,
+      matchContentPlansMigrationLocale[1] as string,
     )
   }
 
@@ -4992,6 +5049,299 @@ async function gererMigrerKnowledgeEngineLocal(
     200,
     entetes,
   )
+}
+
+// --- Handlers : ContentPlan (Target Architecture, domaine "Deliverable
+// Engine", Phase 7b du chantier de migration D1) ---
+
+const SEVERITE_READINESS: Record<string, number> = {
+  bloque: 3,
+  besoin_information: 2,
+  besoin_revue: 1,
+  pret: 0,
+}
+
+function pireReadiness(a: string, b: string): string {
+  return (SEVERITE_READINESS[b] ?? 0) > (SEVERITE_READINESS[a] ?? 0) ? b : a
+}
+
+/**
+ * Calcul déterministe de `readiness` — porté côté serveur (jamais fait
+ * confiance à une valeur fournie par le client, notamment pour le
+ * garde-fou de `gererGelerContentPlan`) à partir des mêmes dépôts D1 que
+ * `construireReadinessContentPlan` (`logique-metier/deliverable/
+ * readinessContentPlan.ts`, côté frontend) résout côté client pour
+ * l'affichage : `Requirement → Couverture → Test → Execution → Evidence`
+ * ancré sur `assetNodeId`, plus un `QualityEvent` non clôturé sur ce
+ * même nœud qui bloque toujours. Même logique, adaptée aux champs
+ * camelCase des dépôts Worker.
+ */
+async function calculerReadinessContentPlan(
+  ctx: Contexte,
+  clientId: string,
+  assetNodeId: string | null,
+): Promise<string> {
+  if (assetNodeId === null) return 'besoin_information'
+
+  const [requirements, couvertures, tests, executions, evidences, qualityEvents] =
+    await Promise.all([
+      ctx.testDefinitionRepo.listerRequirements(clientId),
+      ctx.testDefinitionRepo.listerCouvertures(clientId),
+      ctx.testDefinitionRepo.listerTests(clientId),
+      ctx.executionRepo.listerExecutions(clientId),
+      ctx.evidenceRepo.listerEvidences(clientId),
+      ctx.qualityEventRepo.listerEvenements(clientId),
+    ])
+
+  const evenementBloquant = qualityEvents.some(
+    (e) => e.assetNodeId === assetNodeId && e.statut !== 'cloture',
+  )
+  if (evenementBloquant) return 'bloque'
+
+  const requirementsPertinents = requirements.filter((r) => r.assetNodeId === assetNodeId)
+  if (requirementsPertinents.length === 0) return 'besoin_information'
+
+  let resultat = 'pret'
+  for (const requirement of requirementsPertinents) {
+    const testIdsCouvrants = couvertures
+      .filter((c) => c.requirementId === requirement.id)
+      .map((c) => c.testId)
+    if (testIdsCouvrants.length === 0) {
+      resultat = pireReadiness(resultat, 'besoin_revue')
+      continue
+    }
+
+    const testsCouvrants = tests.filter((t) => testIdsCouvrants.includes(t.id))
+    for (const test of testsCouvrants) {
+      if (test.statut === 'brouillon') {
+        resultat = pireReadiness(resultat, 'besoin_revue')
+        continue
+      }
+      const executionsDuTest = executions.filter((e) => e.testId === test.id)
+      if (executionsDuTest.length === 0) {
+        resultat = pireReadiness(resultat, 'besoin_information')
+        continue
+      }
+      for (const execution of executionsDuTest) {
+        if (execution.statut !== 'terminee') {
+          resultat = pireReadiness(resultat, 'besoin_information')
+          continue
+        }
+        if (execution.verdict === 'non_conforme') {
+          resultat = pireReadiness(resultat, 'bloque')
+          continue
+        }
+        const aDeLaPreuve = evidences.some((ev) => ev.executionId === execution.id)
+        resultat = pireReadiness(resultat, aDeLaPreuve ? 'pret' : 'besoin_revue')
+      }
+    }
+  }
+  return resultat
+}
+
+async function gererObtenirContentPlans(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const contentPlans = await ctx.contentPlanRepo.listerContentPlans(clientId)
+  return reponseJson({ contentPlans }, 200, entetes)
+}
+
+interface SaisieCreationContentPlan {
+  templateId?: string
+  assetNodeId?: string | null
+  processId?: string | null
+  methodProfileId?: string | null
+  methodProfileType?: string | null
+  contextSnapshot?: string
+}
+
+/** `readiness` est toujours calculée côté serveur à la création, jamais fournie par l'appelant. */
+async function gererCreerContentPlan(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieCreationContentPlan>(request)
+  if (!corps?.templateId || corps.contextSnapshot === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const assetNodeId = corps.assetNodeId ?? null
+  const readiness = await calculerReadinessContentPlan(ctx, clientId, assetNodeId)
+  const maintenant = horodatage()
+  const plan: ContentPlanEnregistre = {
+    id: genererId(),
+    clientId,
+    templateId: corps.templateId,
+    assetNodeId,
+    processId: corps.processId ?? null,
+    methodProfileId: corps.methodProfileId ?? null,
+    methodProfileType: corps.methodProfileType ?? null,
+    contextSnapshot: corps.contextSnapshot,
+    readiness,
+    statut: 'brouillon',
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.contentPlanRepo.creerContentPlan(plan)
+  return reponseJson({ contentPlan: plan }, 201, entetes)
+}
+
+/** Recalcule `readiness` à la demande — jamais automatique en tâche de fond, toujours une action explicite tracée. */
+async function gererRecalculerReadiness(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  contentPlanId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const existant = await ctx.contentPlanRepo.contentPlanParId(contentPlanId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  if (existant.statut === 'gele') {
+    return reponseJson({ erreur: 'deja_gele' }, 400, entetes)
+  }
+
+  const readiness = await calculerReadinessContentPlan(ctx, clientId, existant.assetNodeId)
+  const maintenant = horodatage()
+  const miseAJour: ContentPlanEnregistre = {
+    ...existant,
+    readiness,
+    updatedAt: maintenant,
+    auditLog: [
+      ...existant.auditLog,
+      {
+        timestamp: maintenant,
+        actor: acteur.email,
+        action: `recalcul readiness : ${readiness}`,
+      },
+    ],
+  }
+  await ctx.contentPlanRepo.remplacerContentPlan(miseAJour)
+  return reponseJson({ contentPlan: miseAJour }, 200, entetes)
+}
+
+async function gererValiderContentPlan(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  contentPlanId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const existant = await ctx.contentPlanRepo.contentPlanParId(contentPlanId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  if (existant.statut === 'gele') {
+    return reponseJson({ erreur: 'deja_gele' }, 400, entetes)
+  }
+
+  const miseAJour = changerStatutContentPlan(existant, 'valide', acteur.email)
+  await ctx.contentPlanRepo.remplacerContentPlan(miseAJour)
+  return reponseJson({ contentPlan: miseAJour }, 200, entetes)
+}
+
+/**
+ * Garde-fous non négociables, revérifiés côté serveur : DOIT être
+ * `valide` au préalable (pas de saut direct depuis `brouillon`) ET
+ * `readiness` DOIT être `pret` — jamais fait confiance à une valeur
+ * fournie par le client, recalculée ici avant toute décision.
+ */
+async function gererGelerContentPlan(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  contentPlanId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const existant = await ctx.contentPlanRepo.contentPlanParId(contentPlanId)
+  if (!existant || existant.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  if (existant.statut === 'gele') {
+    return reponseJson({ erreur: 'deja_gele' }, 400, entetes)
+  }
+  if (existant.statut !== 'valide') {
+    return reponseJson({ erreur: 'non_valide' }, 400, entetes)
+  }
+
+  const readiness = await calculerReadinessContentPlan(ctx, clientId, existant.assetNodeId)
+  if (readiness !== 'pret') {
+    return reponseJson({ erreur: 'donnees_non_pretes' }, 400, entetes)
+  }
+
+  const miseAJour = changerStatutContentPlan({ ...existant, readiness }, 'gele', acteur.email)
+  await ctx.contentPlanRepo.remplacerContentPlan(miseAJour)
+  return reponseJson({ contentPlan: miseAJour }, 200, entetes)
+}
+
+function changerStatutContentPlan(
+  existant: ContentPlanEnregistre,
+  statut: string,
+  actor: string,
+): ContentPlanEnregistre {
+  const maintenant = horodatage()
+  return {
+    ...existant,
+    statut,
+    updatedAt: maintenant,
+    auditLog: [
+      ...existant.auditLog,
+      { timestamp: maintenant, actor, action: `changement de statut : ${statut}` },
+    ],
+  }
+}
+
+/**
+ * Filet de sécurité de migration locale (`useContentPlanStore`), même
+ * discipline que les autres migrations locales de ce chantier —
+ * idempotente, l'existant côté serveur gagne toujours (`ON CONFLICT(id)
+ * DO NOTHING` dans `D1ContentPlanRepo`).
+ */
+interface SaisieMigrationContentPlans {
+  contentPlans?: ContentPlanEnregistre[]
+}
+
+async function gererMigrerContentPlansLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationContentPlans>(request)
+  if (!corps || !Array.isArray(corps.contentPlans)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const p of corps.contentPlans) {
+    if (p.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.contentPlanRepo.creerContentPlan(p)
+  }
+  return reponseJson({ contentPlans: corps.contentPlans }, 200, entetes)
 }
 
 // --- Handlers : Organization/Workspace (Phase 2 du chantier de migration D1) ---
