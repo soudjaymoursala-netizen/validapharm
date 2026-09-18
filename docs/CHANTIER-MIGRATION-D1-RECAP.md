@@ -103,7 +103,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `sources`, `sourceVersions`, `sourceLocations`, `extractions`, `extractionItems`, `knowledgeItems`, `confirmations`, `knowledgeRelations`, `conflicts` | D1 | ✅ **Phase 7a terminée — voir §18** |
 | `contentPlans` | D1 | ✅ **Phase 7b terminée — voir §19** |
 | `connectors`, `syncJobs`, `externalReferences` | D1 | ✅ **Phase 7c terminée — voir §20. Phase 7 entièrement close.** |
-| `missions`, `activities`, `dependencies`, `associationsMissionQualityEvent` | D1 | ⬜ Phase 8 |
+| `missions`, `activities`, `dependencies`, `associationsMissionQualityEvent` | D1 | ✅ **Phase 8a terminée — voir §21** |
 | `contextSnapshots`, `contextSnapshotItems` | D1 | ⬜ Phase 8 |
 | `aiConfigurations`, `aiRequests`, `aiResponses`, `citationsAIResponse` | D1 | ⬜ Phase 8 |
 | `relationsTechniques` | D1 (avec Structure Système, Phase 1) | ✅ Phase 1 terminée, même état que la ligne ci-dessus |
@@ -2231,6 +2231,122 @@ ContentPlan — §19, Phase 7c Integration — §20). Reste au chantier (voir
   l'inventaire (voir §3).
 
 Enchaîner sur la Phase 8 sans s'arrêter pour confirmation, conformément
+à la consigne permanente de l'utilisateur. Le problème des nœuds SAP
+(bug d'import original) reste explicitement reporté, comme depuis le
+début de ce chantier.
+
+## 21. État détaillé — Phase 8a (`Mission`/`Activity`/`Dependency`/`AssociationMissionQualityEvent`, domaine « Work »), au 18/09/2026
+
+Première brique de la Phase 8. `Mission`/`Activity` (conteneurs de
+travail contextualisés — jamais un moteur de raisonnement en soi) et
+leurs deux relations pures `Dependency` (ordre attendu entre `Activity`,
+jamais un verrou bloquant) et `AssociationMissionQualityEvent`
+(association N:M optionnelle à un `QualityEvent`, jamais une étape
+obligatoire).
+
+### 21.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0021_mission.sql`
+   crée 4 tables (`missions`, `activities`, `dependencies`,
+   `associations_mission_quality_event`) + 7 index (`client_id` sur
+   chacune, plus `mission_id` sur `activities`,
+   `activity_source_id` sur `dependencies`, `mission_id` sur
+   `associations_mission_quality_event`). `Mission`/`Activity` restent
+   **mutables** via `statut`/`audit_log`/`updated_at` (même patron que
+   ContentPlan/KnowledgeItem). `Dependency`/
+   `AssociationMissionQualityEvent` sont **INSERT-only**, purs pointeurs
+   relationnels, avec recherche d'existant avant création
+   (idempotence).
+2. **1 dépôt Worker** : `missionRepo.ts` (interface + `MissionRepoMemoire`)
+   + son implémentation D1 (`d1MissionRepo.ts`) : INSERT
+   (`ON CONFLICT(id) DO NOTHING`) pour les créations, UPDATE ciblé pour
+   `remplacerMission`/`remplacerActivity` (seulement
+   `statut`/`audit_log`/`updated_at`).
+3. **8 nouvelles routes Worker** sous `/clients/:clientId/...` (GET
+   agrégat `missions`, création `missions` — `id`/`statut`/`auditLog`
+   dérivés côté serveur, `acteur.email` du JWT jamais fait confiance au
+   client —, `PATCH missions/:id/statut` — 404 si introuvable —, `POST
+   missions/:id/quality-events` — idempotent, cherche l'association
+   existante avant d'en créer une —, `POST missions/:id/activities`,
+   `PATCH activities/:id/statut` — 404 si introuvable —, `POST
+   activities/:id/dependances` — idempotent —, migration locale `POST
+   missions/migration-locale`), toutes via `exigerAccesClient`.
+4. **`index.ts`** : `D1MissionRepo` câblé dans `routerRequete`.
+5. **14 nouveaux tests Worker** (`routeur.test.ts`) : GET vide, création
+   de mission (+400 corps invalide), changement de statut (+404
+   introuvable, audit_log cumulé), association QualityEvent idempotente,
+   création d'activité (+400 corps invalide), changement de statut
+   d'activité (+404 introuvable, audit_log cumulé), ajout de dépendance
+   idempotent, migration locale idempotente (+400 corps invalide),
+   non-authentifié → 401. **Résultat : 277/277 tests Worker verts** (263
+   existants + 14 nouveaux).
+6. **`AuthApiClient.ts`** : `MissionWire`/`ActivityWire`/`DependencyWire`/
+   `AssociationMissionQualityEventWire`/`SaisieCreationMissionWire`/
+   `SaisieCreationActivityWire` + 8 méthodes.
+7. **`useMissionStore.ts`** : entièrement réécrit vers l'API (même
+   patron `obtenirApi()`/`resultat.ok`/`resultat.donnees`/
+   `resultat.erreur` que les autres stores de ce chantier). Surface
+   publique préservée à l'identique — retrait de
+   `identifiantActeurCourant()` (l'acteur est désormais dérivé côté
+   serveur depuis le JWT).
+8. **`persistance/db.ts`** : retrait de `missions!`/`activities!`/
+   `dependencies!`/`associationsMissionQualityEvent!: EntityTable<...>`,
+   ajout de `missionsAMigrer`/`activitiesAMigrer`/`dependenciesAMigrer`/
+   `associationsMissionQualityEventAMigrer` + migration `.version(51)`
+   nullant les 4 tables et capturant les lignes existantes — même filet
+   de sécurité que les phases précédentes.
+9. **Fichiers de test corrigés** : `useMissionStore.test.ts` (réécrit
+   pour installer `installerFauxWorkerAuth()` + `connecterAdminDeTest()`
+   — ne le faisait pas auparavant, l'ancien store Dexie n'exigeant aucune
+   session), `ListeMissions.test.ts` (même patron ajouté au bloc qui ne
+   l'avait pas), `MissionWorkspace.test.ts` (remplacement des accès
+   `db.missions`/`db.activities`/`db.dependencies`/
+   `db.associationsMissionQualityEvent` par `ctx.missionRepo.*`),
+   `DossierVivantActif.test.ts` (retrait du `db.missions.clear()` devenu
+   inutile).
+10. **Validation complète** : `npx vue-tsc --noEmit` (aucune erreur),
+    Worker `npx tsc --noEmit` (aucune erreur) + `npx vitest run`
+    (277/277), frontend `npx vitest run` (1404/1404), `npx eslint . --fix`
+    + `npx prettier --write .`.
+
+### 21.2 Phase 8a — terminée (18/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #70 ouverte. CI (« Lint, typecheck, tests » + builds Workers)
+   verte du premier coup, aucun flake rencontré. Mergée sur `main`
+   (squash, commit `7c3b605`).
+3. ✅ Migration `0021_mission.sql` appliquée en production D1
+   (`validapharm-auth`) en 11 requêtes séparées (4 `CREATE TABLE` + 7
+   `CREATE INDEX`), toutes réussies du premier coup. Vérification
+   `sqlite_master` confirmant les 4 tables + leurs 7 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : les routes et
+   `D1MissionRepo` présents dans le bundle (9 occurrences).
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `Mission`/`Activity`/`Dependency`/
+   `AssociationMissionQualityEvent` n'ont jamais été synchronisés vers
+   GitHub, même avant cette migration : pas une régression.
+
+### 21.3 Suite du chantier
+
+Reste à la Phase 8 (voir §3) :
+
+- **Phase 8b** : `contextSnapshots`/`contextSnapshotItems` — `ContextSnapshot`/
+  `ContextSnapshotItem` sont **entièrement immuables** (aucune fonction
+  de mise à jour exposée), `assemblerElementsContextSnapshot`
+  (`src/logique-metier/contexte/assemblageContextSnapshot.ts`) est une
+  fonction pure lisant des domaines déjà migrés (Organization/Workspace,
+  Structure Système, ManufacturingContext, QualityEvent) — forte
+  candidate au portage côté serveur, comme
+  `calculerReadinessContentPlan` en Phase 7b.
+- **Phase 8c** : `aiConfigurations`/`aiRequests`/`aiResponses`/
+  `citationsAIResponse` (domaine AI) — seule la persistance CRUD migre
+  vers le Worker ; l'orchestration du raisonnement
+  (`executerBoucleRaisonnement`, appels réseau réels au fournisseur LLM
+  via `ProviderAdapter`) reste côté client, hors périmètre de ce
+  chantier.
+
+Enchaîner sur la Phase 8b sans s'arrêter pour confirmation, conformément
 à la consigne permanente de l'utilisateur. Le problème des nœuds SAP
 (bug d'import original) reste explicitement reporté, comme depuis le
 début de ce chantier.
