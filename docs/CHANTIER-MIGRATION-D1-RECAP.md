@@ -100,7 +100,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `requirements`, `testObjectives`, `testCandidates`, `tests`, `couvertures` | D1 | ✅ **Phase 6a terminée — voir §15** |
 | `executions`, `executionSteps`, `measurements`, `executionEvents` | D1 | ✅ **Phase 6b terminée — voir §16** |
 | `evidences`, `evidenceLocations`, `provenanceLinks` | D1 | ✅ **Phase 6c terminée — voir §17. Phase 6 entièrement close.** |
-| `sources`, `sourceVersions`, `sourceLocations`, `extractions`, `extractionItems`, `knowledgeItems`, `confirmations`, `knowledgeRelations`, `conflicts` | D1 | ⬜ Phase 7 |
+| `sources`, `sourceVersions`, `sourceLocations`, `extractions`, `extractionItems`, `knowledgeItems`, `confirmations`, `knowledgeRelations`, `conflicts` | D1 | ✅ **Phase 7a terminée — voir §18** |
 | `contentPlans` | D1 | ⬜ Phase 7 |
 | `connectors`, `syncJobs`, `externalReferences` | D1 | ⬜ Phase 7 |
 | `missions`, `activities`, `dependencies`, `associationsMissionQualityEvent` | D1 | ⬜ Phase 8 |
@@ -1856,3 +1856,147 @@ Enchaîner sur la Phase 7 sans s'arrêter pour confirmation, conformément à
 la consigne permanente de l'utilisateur. Le problème des nœuds SAP (bug
 d'import original) reste explicitement reporté, comme depuis le début de
 ce chantier.
+
+## 18. État détaillé — Phase 7a (`Source`/`SourceLocation`/`SourceVersion`/`Extraction`/`ExtractionItem`/`KnowledgeItem`/`Confirmation`/`KnowledgeRelation`/`Conflict`), au 18/09/2026
+
+Première brique de la Phase 7 — le domaine « Source Intelligence »/
+« Knowledge » (structuration assistée de documents : ingestion d'une
+`Source`, détection de révision via `SourceVersion`, extraction OCR/
+native/manuelle via `Extraction`/`ExtractionItem`, interprétation
+structurée candidate via `KnowledgeItem`, validation/rejet humain
+explicite via `Confirmation`, liens/désaccords explicites via
+`KnowledgeRelation`/`Conflict`). Reste dans la Phase 7 : `contentPlans`
+(Deliverable Engine) et `connectors`/`syncJobs`/`externalReferences`
+(connecteurs QMS tiers).
+
+### 18.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0018_knowledge_engine.sql`
+   crée 9 tables (`sources`, `source_locations`, `source_versions`,
+   `extractions`, `extraction_items`, `knowledge_items`, `confirmations`,
+   `knowledge_relations`, `conflicts`) + un index par table sur
+   `client_id`. `knowledge_items` et `conflicts` restent **mutables**
+   (statut/validé_par/audit_log via confirmation ; statut/résolution via
+   résolution explicite) — les 7 autres tables sont **entièrement
+   immutables** une fois créées (aucune mutation démontrée par les
+   sources).
+2. **1 dépôt Worker** : `knowledgeEngineRepo.ts` (interface +
+   `KnowledgeEngineRepoMemoire`) + son implémentation D1
+   (`d1KnowledgeEngineRepo.ts`), écritures en INSERT (`ON CONFLICT(id) DO
+   NOTHING`) sauf `remplacerKnowledgeItem`/`remplacerConflict` (UPDATE
+   ciblé sur les seuls champs mutables).
+3. **11 nouvelles routes Worker** sous `/clients/:clientId/...` (GET
+   agrégat `knowledge-engine`, création `sources`, ajout de localisation
+   `sources/:id/localisations`, création de version
+   `sources/:id/versions` — `numeroVersion` auto-incrémenté côté serveur,
+   jamais fourni par le client —, enregistrement d'extraction
+   `source-versions/:id/extractions`, ajout d'élément extrait
+   `extractions/:id/items`, création de KnowledgeItem
+   `extraction-items/:id/knowledge-items` — toujours `a_valider` à la
+   création, jamais `valide` —, confirmation `knowledge-items/:id/
+   confirmer` — `confirmePar`/`validePar` dérivés côté serveur de
+   `acteur.email`, jamais fait confiance au client —, déclaration de
+   relation `knowledge-relations` — idempotente —, déclaration de
+   conflit `conflicts`, résolution `conflicts/:id/resoudre`, migration
+   locale `knowledge-engine/migration-locale`), toutes via
+   `exigerAccesClient`.
+4. **`index.ts`** : `D1KnowledgeEngineRepo` câblé dans `routerRequete`.
+5. **17 nouveaux tests Worker** (`routeur.test.ts`) : GET vide, création
+   Source + localisation (+ `source_introuvable`), SourceVersion
+   auto-incrémentée (+ `source_introuvable`), Extraction (+
+   `version_introuvable`), ExtractionItem (+ `extraction_introuvable`),
+   KnowledgeItem toujours `a_valider` (+ `extraction_item_introuvable`),
+   confirmation/rejet avec `confirmePar` dérivé serveur (+
+   `knowledge_item_introuvable`), déclaration de relation idempotente,
+   déclaration + résolution de conflit (+ `conflict_introuvable`),
+   migration locale idempotente, non-authentifié → 401. Suite Worker au
+   complet : **225/225 tests verts** (`cd workers/auth-worker && npx tsc
+   --noEmit && npx vitest run`).
+6. **`AuthApiClient`** : `SourceWire`/`SourceLocationWire`/
+   `SourceVersionWire`/`ExtractionWire`/`ExtractionItemWire`/
+   `KnowledgeItemWire`/`ConfirmationWire`/`KnowledgeRelationWire`/
+   `ConflictWire` + saisies + 11 méthodes.
+7. **`useSourceIntelligenceStore` entièrement réécrit** (API publique
+   quasi inchangée : `sources`, `sourceVersions`, `sourceLocations`,
+   `extractions`, `extractionItems`, `knowledgeItems`, `confirmations`,
+   `knowledgeRelations`, `conflicts`, `enChargement`, `charger`,
+   `creerSource`, `ajouterLocalisation`, `creerSourceVersion`,
+   `enregistrerExtraction`, `ajouterExtractionItem`, `creerKnowledgeItem`,
+   `declarerRelation`, `declarerConflit`, `resoudreConflit`,
+   `knowledgeItemsExtractionItem`, `confirmationsKnowledgeItem`,
+   `conflitsOuverts` — toutes pures, inchangées). **Seule différence
+   d'API** : `validerKnowledgeItem`/`rejeterKnowledgeItem` ne prennent
+   plus de paramètre `validateur` fourni par l'appelant — dérivé côté
+   serveur de la session authentifiée, cohérent avec la discipline du
+   reste du chantier (jamais fait confiance à une identité fournie par
+   le client). `SourceIntelligence.vue` et ses tests mis à jour en
+   conséquence.
+8. **Ripple effect côté production** : `useReasoningEngineStore.ts`
+   (données `knowledgeItems`/`knowledgeRelations` pour le moteur de
+   raisonnement) et `useRechercheGlobaleStore.ts` (recherche transverse
+   « connaissance ») basculés vers
+   `useSourceIntelligenceStore().charger(clientId)` plutôt que
+   `db.knowledgeItems` directement. `AccueilQueVoulezVousFaire.vue`
+   (widget « À vérifier ») adapté au scoping par client désormais
+   obligatoire du Worker : le comptage informations non validées/
+   conflits ouverts porte sur le client actif (`useClientActifStore`)
+   uniquement — l'ancien agrégat cross-client (toutes les données de
+   tous les clients confondues, possible avec Dexie local) n'a plus de
+   sens avec des routes scopées par client, et aurait exigé une requête
+   admin par client, jamais fabriqué ici.
+9. **Filet de sécurité de migration locale** : capture Dexie **v48**
+   (`persistance/db.ts`, 9 tables supprimées, données capturées dans
+   `sourcesAMigrer`/`sourceLocationsAMigrer`/`sourceVersionsAMigrer`/
+   `extractionsAMigrer`/`extractionItemsAMigrer`/`knowledgeItemsAMigrer`/
+   `confirmationsAMigrer`/`knowledgeRelationsAMigrer`/`conflictsAMigrer`
+   — formes domaine inchangées).
+10. **6 fichiers de test corrigés** (accès Dexie direct remplacé par de
+    vrais appels store/`ctx.knowledgeEngineRepo`) : `Process.test.ts`,
+    `SourceIntelligence.test.ts` (réécriture complète avec wiring
+    `fauxWorkerAuth`/`ctx`/`demonter`/`connecterAdminDeTest`),
+    `useSourceIntelligenceStore.test.ts` (réécriture complète, même
+    wiring — `valide_par`/`confirme_par` désormais vérifiés contre
+    l'acteur authentifié `admin@pharmatech.example` plutôt qu'une chaîne
+    arbitraire fournie par l'appelant), `useRechercheGlobaleStore.test.ts`
+    (suppression du `db.knowledgeItems.clear()` devenu inutile),
+    `AccueilQueVoulezVousFaire.test.ts` (les tests « À vérifier »
+    seedent désormais un vrai client + `ctx.knowledgeEngineRepo` et
+    fixent `useClientActifStore` avant montage, cohérent avec le nouveau
+    scopage par client).
+11. **Validation complète (18/09/2026)** : `vue-tsc --noEmit`/`tsc
+    --noEmit` (Worker) sans erreur, `eslint --fix`/`prettier --write`
+    (racine + workers) sans erreur ni changement, `npx vitest run`
+    racine (**1352/1352 tests verts**, 165 fichiers), `cd
+    workers/auth-worker && npx vitest run` (**225/225 tests verts**).
+
+### 18.2 Phase 7a — terminée (18/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #64 ouverte. CI (« Quality gate ») verte du premier coup, aucun
+   flake rencontré. Mergée sur `main` (squash, commit `67ab6ed`).
+3. ✅ Migration `0018_knowledge_engine.sql` appliquée en production D1
+   (`validapharm-auth`) en 18 requêtes séparées (9 `CREATE TABLE` + 9
+   `CREATE INDEX`), toutes réussies du premier coup. Vérification
+   `sqlite_master` confirmant les 9 tables + leurs 9 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : les routes et
+   `D1KnowledgeEngineRepo` présents dans le bundle (62 occurrences).
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `Source`/`SourceLocation`/
+   `SourceVersion`/`Extraction`/`ExtractionItem`/`KnowledgeItem`/
+   `Confirmation`/`KnowledgeRelation`/`Conflict` n'ont jamais été
+   synchronisés vers GitHub, même avant cette migration : pas une
+   régression.
+
+### 18.3 Phase 7a close ; suite du chantier
+
+Reste, dans la Phase 7 (voir §3) :
+
+- **Phase 7b** : `contentPlans` (Deliverable Engine).
+- **Phase 7c** : `connectors`/`syncJobs`/`externalReferences`
+  (connecteurs QMS tiers).
+
+Enchaîner sur la Phase 7b sans s'arrêter pour confirmation, conformément
+à la consigne permanente de l'utilisateur. Le problème des nœuds SAP
+(bug d'import original) reste explicitement reporté, comme depuis le
+début de ce chantier.
