@@ -2771,21 +2771,26 @@ suite (Phase 9c à 9f).
     — voir §24.1 point 11), `npx eslint .` et `npx prettier --check .`
     propres (6 avertissements prettier auto-corrigés via `--fix`).
 
-### 25.2 Phase 9b — commit/push/PR (18/09/2026)
+### 25.2 Phase 9b — terminée (18/09/2026)
 
 1. ✅ Commit sur `claude/contexte-reprise-session-tin77u` (branche
    redémarrée depuis `main` après le merge de la PR #77 doc-only de la
    Phase 9a).
-2. ✅ PR #78 ouverte (« Phase 9b migration D1 : GabaritExportClient »).
-3. ⬜ CI en cours au moment de la rédaction de cette section — suivi via
-   `subscribe_pr_activity` + relance programmée.
-4. ⬜ Merge sur `main`.
-5. ⬜ Migration `0025_gabarits_export_client.sql` à appliquer en
-   production D1 (`validapharm-auth`) + vérification `sqlite_master`.
-6. ⬜ Vérification du code déployé (`workers_get_worker_code`,
-   `validapharm-auth-worker`).
-7. ⬜ PR doc-only de clôture (mise à jour de cette section une fois tout
-   confirmé).
+2. ✅ PR #78 ouverte (« Phase 9b migration D1 : GabaritExportClient »),
+   CI verte du premier coup (« Lint, typecheck, tests » + builds Workers
+   `validapharm-auth-worker`/`validapharm-ia-relay`). Mergée sur `main`
+   (squash, commit `456e939`).
+3. ✅ Migration `0025_gabarits_export_client.sql` appliquée en
+   production D1 (`validapharm-auth`) en 2 requêtes séparées
+   (`CREATE TABLE` + `CREATE INDEX`), toutes deux réussies du premier
+   coup. Vérification `sqlite_master` confirmant la table et son index.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `D1GabaritExportClientRepo`, les 5 routes `/gabarits-export`, et les
+   handlers `gererListerGabaritsExportClient`/`gererCreerGabaritExportClient`
+   présents dans le bundle.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes).
 
 ### 25.3 Suite du chantier
 
