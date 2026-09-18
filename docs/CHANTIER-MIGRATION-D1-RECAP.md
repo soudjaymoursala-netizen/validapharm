@@ -107,7 +107,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `contextSnapshots`, `contextSnapshotItems` | D1 | ✅ **Phase 8b terminée — voir §22** |
 | `aiConfigurations`, `aiRequests`, `aiResponses`, `citationsAIResponse` | D1 | ✅ **Phase 8c terminée — voir §23. Phase 8 entièrement close.** |
 | `relationsTechniques` | D1 (avec Structure Système, Phase 1) | ✅ Phase 1 terminée, même état que la ligne ci-dessus |
-| `procedures`, `procedureSteps` | D1 | ⬜ Phase 9 |
+| `procedures`, `procedureSteps` | D1 | ✅ **Phase 9a terminée — voir §24** |
 | `gabaritsExportClient` | D1 | ⬜ Phase 9 |
 | `aiChatSessionLogs` | D1 | ⬜ Phase 9 |
 | `connexionDrive`, `etatMiroirDrive` (miroir Drive par client) | D1 | ⬜ Phase 9 |
@@ -2579,14 +2579,110 @@ La Phase 8 (Mission/Activity, ContextSnapshot, Reasoning Engine) est
 désormais **entièrement migrée** : code, production D1, déploiement
 Worker vérifiés pour ses 3 sous-phases (8a §21, 8b §22, 8c §23).
 
-Reste au chantier (voir §3), Phase 9 :
+Phase 9a (`procedures`/`procedureSteps`, cerveau procédural) — voir §24.
 
-- `procedures`/`procedureSteps` (cerveau procédural)
-- `gabaritsExportClient` (gabarits d'export personnalisés client)
-- `aiChatSessionLogs`
-- `connexionDrive`/`etatMiroirDrive` (miroir Drive par client)
-- `connexionRelaisOCR` (même patron que Relais IA)
-- `clientConfigs`
+## 24. État détaillé — Phase 9a (`Procedure`/`ProcedureStep`, cerveau procédural), au 18/09/2026
+
+Première brique de la Phase 9. `Procedure`/`ProcedureStep` restent
+entièrement immuables (INSERT-only) : une nouvelle révision d'une
+`reference` incrémente `numeroVersion` **côté serveur**, jamais une
+mutation en place — répond à R-21, `02-analyse-de-risque-outil.md`.
+
+### 24.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0024_procedure.sql`
+   crée 2 tables (`procedures`, `procedure_steps`) + 4 index (`client_id`
+   sur chacune, plus `(client_id, reference)` sur `procedures` et
+   `procedure_id` sur `procedure_steps`). Les deux tables sont
+   **INSERT-only**, aucune colonne mise à jour après création.
+2. **1 dépôt Worker** : `procedureRepo.ts` (interface +
+   `ProcedureRepoMemoire`) + son implémentation D1
+   (`d1ProcedureRepo.ts` — booléen `obligatoire` stocké en `INTEGER`
+   0/1, même patron que `has_binary_content` en Phase 39).
+3. **4 nouvelles routes Worker** sous `/clients/:clientId/procedures`
+   (GET agrégat des 2 collections, POST création — `numeroVersion`
+   **calculé côté serveur** par recherche du maximum existant pour la
+   même `reference`, jamais fait confiance à une valeur fournie par le
+   client —, POST `/:procedureId/steps` — `ordre` auto-incrémenté côté
+   serveur, garde `procedure_introuvable` en 404 si la procédure
+   n'existe pas ou appartient à un autre client —, POST
+   `migration-locale`), toutes via `exigerAccesClient`.
+4. **`index.ts`** : `D1ProcedureRepo` câblé dans `routerRequete`.
+5. **10 nouveaux tests Worker** (`routeur.test.ts`) : GET vide, création
+   avec `numeroVersion = 1`, deuxième révision de la même référence
+   (`numeroVersion = 2`, jamais une mutation), +400 corps invalide,
+   ajout d'étape avec `ordre` auto-incrémenté, ajout à une procédure
+   inexistante → `procedure_introuvable` (404), +400 corps invalide,
+   migration locale idempotente (+400 corps invalide), non-authentifié
+   → 401. **Résultat : 306/306 tests Worker verts** (296 existants + 10
+   nouveaux).
+6. **`AuthApiClient.ts`** : `ProcedureWire`/`ProcedureStepWire` + types
+   de saisie + 4 méthodes.
+7. **`useProcedureStore.ts`** : entièrement réécrit vers l'API — même
+   surface publique pour tous ses appelants (`charger`, `creerProcedure`,
+   `ajouterEtape`, `etapesDeProcedure`, `proceduresParCategorie`,
+   `derniereVersion`, `genererProposition`/`annulerProposition`/
+   `confirmerProposition` inchangés). `creerProcedure` ne calcule plus
+   `numero_version` localement — délégué au serveur, idempotent par
+   construction.
+8. **`persistance/db.ts`** : retrait de `procedures!`/
+   `procedureSteps!: EntityTable<...>`, ajout de
+   `proceduresAMigrer`/`procedureStepsAMigrer` + migration `.version(54)`
+   nullant les 2 tables et capturant les lignes existantes.
+9. **Autres consommateurs directs corrigés** (discipline §22.2 appliquée
+   dès le départ) : `useReasoningEngineStore.ts` (le narratif du moteur
+   de raisonnement lisait `db.procedures`/`db.procedureSteps`
+   directement — bascule vers `useProcedureStore().charger(clientId)`)
+   et `useRechercheGlobaleStore.ts` (même correction pour la recherche
+   transverse).
+10. **Fichiers de test corrigés** : `useProcedureStore.test.ts`
+    (entièrement réécrit — bascule vers `installerFauxWorkerAuth()` +
+    client réel, plusieurs tests n'avaient jusqu'ici besoin d'aucune
+    authentification), `useReasoningEngineStore.test.ts`,
+    `useRechercheGlobaleStore.test.ts`,
+    `AssistantCreationLivrable.test.ts`,
+    `EditeurSection.liensStructurels.test.ts`,
+    `RechercheGlobale.test.ts`,
+    `RevueStructureProcedure.livrablesLies.test.ts` (ce dernier
+    utilisait un `client-1` jamais réellement créé via `clientsRepo` —
+    fonctionnait tant que `db.procedures` ne vérifiait rien côté
+    serveur ; corrigé en créant le client dans `beforeEach`).
+11. **Validation complète** : `npx vue-tsc -b --noEmit` (aucune erreur —
+    **note** : `npx vue-tsc --noEmit` sans `-b` ne typecheck rien du
+    tout dans ce projet, `tsconfig.json` racine n'a que des
+    `references` ; toujours utiliser `-b`, comme le fait le script
+    `npm run typecheck`), Worker `npx tsc --noEmit` (aucune erreur) +
+    `npx vitest run` (306/306), frontend `npx vitest run` (1434/1434),
+    `npx eslint . --fix` et `npx prettier --write .` propres.
+
+### 24.2 Phase 9a — terminée (18/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #76 ouverte, CI verte du premier coup (« Lint, typecheck, tests »
+   + builds Workers `validapharm-auth-worker`/`validapharm-ia-relay`).
+   Mergée sur `main` (squash, commit `eabe996`).
+3. ✅ Migration `0024_procedure.sql` appliquée en production D1
+   (`validapharm-auth`) en 6 requêtes séparées (2 `CREATE TABLE` + 4
+   `CREATE INDEX`), toutes réussies du premier coup. Vérification
+   `sqlite_master` confirmant les 2 tables + leurs 4 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `D1ProcedureRepo`, les 4 routes `/procedures`, et les handlers
+   `gererObtenirProcedures`/`gererCreerProcedure` présents dans le
+   bundle.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes).
+
+### 24.3 Suite du chantier
+
+Reste à la Phase 9 (voir §3) :
+
+- `gabaritsExportClient` (gabarits d'export personnalisés client) —
+  Phase 9b
+- `aiChatSessionLogs` — Phase 9c
+- `connexionDrive`/`etatMiroirDrive` (miroir Drive par client) — Phase 9d
+- `connexionRelaisOCR` (même patron que Relais IA) — Phase 9e
+- `clientConfigs` — Phase 9f
 
 Enchaîner sans s'arrêter pour confirmation, conformément à la consigne
 permanente de l'utilisateur. Le problème des nœuds SAP (bug d'import
