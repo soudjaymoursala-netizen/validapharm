@@ -105,7 +105,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `connectors`, `syncJobs`, `externalReferences` | D1 | ✅ **Phase 7c terminée — voir §20. Phase 7 entièrement close.** |
 | `missions`, `activities`, `dependencies`, `associationsMissionQualityEvent` | D1 | ✅ **Phase 8a terminée — voir §21** |
 | `contextSnapshots`, `contextSnapshotItems` | D1 | ✅ **Phase 8b terminée — voir §22** |
-| `aiConfigurations`, `aiRequests`, `aiResponses`, `citationsAIResponse` | D1 | ⬜ Phase 8 |
+| `aiConfigurations`, `aiRequests`, `aiResponses`, `citationsAIResponse` | D1 | ✅ **Phase 8c terminée — voir §23. Phase 8 entièrement close.** |
 | `relationsTechniques` | D1 (avec Structure Système, Phase 1) | ✅ Phase 1 terminée, même état que la ligne ci-dessus |
 | `procedures`, `procedureSteps` | D1 | ⬜ Phase 9 |
 | `gabaritsExportClient` | D1 | ⬜ Phase 9 |
@@ -2466,19 +2466,128 @@ l'`arbreWorkspace` local). CI repassée verte au commit suivant.
 
 ### 22.4 Suite du chantier
 
-Reste à la Phase 8 (voir §3) :
+Phase 8c (`aiConfigurations`/`aiRequests`/`aiResponses`/
+`citationsAIResponse`, domaine « Reasoning Engine ») — voir §23.
 
-- **Phase 8c** : `aiConfigurations`/`aiRequests`/`aiResponses`/
-  `citationsAIResponse` (domaine AI) — seule la persistance CRUD migre
-  vers le Worker ; l'orchestration du raisonnement
-  (`executerBoucleRaisonnement`, appels réseau réels au fournisseur LLM
-  via `ProviderAdapter`) reste côté client, hors périmètre de ce
-  chantier. `AIConfiguration`/`AIRequest`/`AIResponse`/
-  `CitationAIResponse` sont toutes **immuables une fois créées** (aucune
-  fonction de mise à jour exposée dans `useReasoningEngineStore.ts`
-  actuel).
+## 23. État détaillé — Phase 8c (`AIConfiguration`/`AIRequest`/`AIResponse`/`CitationAIResponse`, domaine « Reasoning Engine »), au 18/09/2026
 
-Une fois la Phase 8c terminée, la Phase 8 sera entièrement close.
+Troisième et dernière brique de la Phase 8. Seule la persistance CRUD
+migre vers le Worker/D1 : l'orchestration du raisonnement
+(`executerBoucleRaisonnement`, appels réseau réels au fournisseur LLM
+via `ProviderAdapter`) reste côté client, hors périmètre de ce
+chantier — c'est une décision de scope délibérée, pas un oubli. Les 4
+entités sont entièrement immuables une fois créées (invariant #12,
+condition E4 de la revue panel : une configuration versionnée n'est
+jamais modifiée en place, une nouvelle version en crée une nouvelle) —
+aucune fonction de mise à jour exposée, ni côté Worker ni côté store.
+
+### 23.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0023_reasoning_engine.sql`
+   crée 4 tables (`ai_configurations`, `ai_requests`, `ai_responses`,
+   `citations_ai_response`) + 7 index (`client_id` sur chacune, plus
+   `(client_id, version)` sur `ai_configurations` pour la recherche
+   idempotente par version, `ai_request_id` sur `ai_responses`,
+   `ai_response_id` sur `citations_ai_response`). Les 4 tables sont
+   **INSERT-only**, aucune colonne mise à jour après création.
+2. **1 dépôt Worker** : `reasoningEngineRepo.ts` (interface +
+   `ReasoningEngineRepoMemoire`) + son implémentation D1
+   (`d1ReasoningEngineRepo.ts` — `JSON.stringify`/`parse` pour
+   `outils_disponibles` et `trace_appels_outils`, seuls champs non
+   scalaires du domaine).
+3. **6 nouvelles routes Worker** sous `/clients/:clientId/reasoning-engine`
+   (GET agrégat des 4 collections, POST `configurations` — **idempotent
+   par version côté serveur** via `configurationParVersion`, jamais de
+   duplication même si le client rejoue l'appel —, POST `requests`, POST
+   `responses`, POST `citations` en masse — même patron que
+   `db.citationsAIResponse.bulkPut(...)` côté client, un tableau créé en
+   une seule requête —, POST `migration-locale`), toutes via
+   `exigerAccesClient`. `acteur` authentifié mais non utilisé dans les
+   handlers : aucune des 4 entités n'a de champ acteur/audit_log dans le
+   modèle de domaine (contrairement à Mission/Activity).
+4. **`index.ts`** : `D1ReasoningEngineRepo` câblé dans `routerRequete`.
+5. **12 nouveaux tests Worker** (`routeur.test.ts`) : GET vide,
+   `assurerConfiguration` idempotent (création puis retour de la même
+   configuration par version, +400 corps invalide), création AIRequest
+   (+400 champs manquants), création AIResponse (+400 champs manquants),
+   citations en masse (+400 entrée malformée), migration locale
+   idempotente (+400 corps invalide), non-authentifié → 401. **Résultat :
+   296/296 tests Worker verts** (284 existants + 12 nouveaux).
+6. **`AuthApiClient.ts`** : `AIConfigurationWire`/`AIRequestWire`/
+   `AIResponseWire`/`CitationAIResponseWire`/`TraceAppelOutilWire` + types
+   de saisie + 6 méthodes.
+7. **`useReasoningEngineStore.ts`** : entièrement réécrit vers l'API.
+   `charger`/`assurerConfiguration` appellent désormais le Worker ;
+   `executerRaisonnement` garde exactement la même signature publique et
+   le même comportement pour ses appelants (`EditeurSection.vue`,
+   `MissionWorkspace.vue`) — seule sa persistance interne
+   (`db.aiRequests.put`/`db.aiResponses.put`/
+   `db.citationsAIResponse.bulkPut` → `api.creerAIRequest`/
+   `api.creerAIResponse`/`api.creerCitationsAIResponse`) a changé.
+   `executerBoucleRaisonnement` lui-même et tout le chargement des
+   domaines déjà migrés (Structure Système/ManufacturingContext/
+   QualityEvent/Requirement-Test/Execution/Evidence/
+   SourceIntelligence/ContextEngine) restent inchangés — seuls
+   `db.procedures`/`db.procedureSteps` restent lus directement en Dexie
+   (hors périmètre de ce chantier, Phase 9).
+8. **`persistance/db.ts`** : retrait de `aiConfigurations!`/
+   `aiRequests!`/`aiResponses!`/`citationsAIResponse!: EntityTable<...>`,
+   ajout de `aiConfigurationsAMigrer`/`aiRequestsAMigrer`/
+   `aiResponsesAMigrer`/`citationsAIResponseAMigrer` + migration
+   `.version(53)` nullant les 4 tables et capturant les lignes
+   existantes.
+9. **Fichiers de test corrigés** : `useReasoningEngineStore.test.ts`
+   (chaque test appelant `charger`/`assurerConfiguration`/
+   `executerRaisonnement` bascule vers `installerFauxWorkerAuth()` +
+   client réel, exigé par `exigerAccesClient` — plusieurs tests
+   n'avaient jusqu'ici besoin d'aucune authentification, patron
+   identique au reste du chantier), `MissionWorkspace.test.ts`
+   (`db.aiResponses.count()` → `ctx.reasoningEngineRepo.listerResponses(...)`).
+10. **Grep de complétude** (discipline §22.2 appliquée dès le départ,
+    pas après coup cette fois) : aucun `db.aiConfigurations`/
+    `db.aiRequests`/`db.aiResponses`/`db.citationsAIResponse` restant
+    dans `src/` ; tous les appelants de `useReasoningEngineStore()`
+    (`EditeurSection.vue`, `MissionWorkspace.vue`, leurs fichiers de
+    test) vérifiés compatibles avec la surface publique inchangée —
+    aucun incident CI cette fois.
+11. **Validation complète** : `npx vue-tsc --noEmit` (aucune erreur),
+    Worker `npx tsc --noEmit` (aucune erreur) + `npx vitest run`
+    (296/296), frontend `npx vitest run` (1424/1424), `npx eslint . --fix`
+    et `npx prettier --write .` propres.
+
+### 23.2 Phase 8c — terminée (18/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #74 ouverte, CI verte du premier coup (« Lint, typecheck, tests »
+   + builds Workers `validapharm-auth-worker`/`validapharm-ia-relay`).
+   Mergée sur `main` (squash, commit `7a37789`).
+3. ✅ Migration `0023_reasoning_engine.sql` appliquée en production D1
+   (`validapharm-auth`) en 11 requêtes séparées (4 `CREATE TABLE` + 7
+   `CREATE INDEX`), toutes réussies du premier coup. Vérification
+   `sqlite_master` confirmant les 4 tables + leurs 7 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `D1ReasoningEngineRepo`, les 6 routes `/reasoning-engine`, et les
+   handlers `gererObtenirReasoningEngine`/`gererAssurerConfiguration`
+   présents dans le bundle.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes).
+
+### 23.3 Phase 8 — entièrement close
+
+La Phase 8 (Mission/Activity, ContextSnapshot, Reasoning Engine) est
+désormais **entièrement migrée** : code, production D1, déploiement
+Worker vérifiés pour ses 3 sous-phases (8a §21, 8b §22, 8c §23).
+
+Reste au chantier (voir §3), Phase 9 :
+
+- `procedures`/`procedureSteps` (cerveau procédural)
+- `gabaritsExportClient` (gabarits d'export personnalisés client)
+- `aiChatSessionLogs`
+- `connexionDrive`/`etatMiroirDrive` (miroir Drive par client)
+- `connexionRelaisOCR` (même patron que Relais IA)
+- `clientConfigs`
+
 Enchaîner sans s'arrêter pour confirmation, conformément à la consigne
 permanente de l'utilisateur. Le problème des nœuds SAP (bug d'import
 original) reste explicitement reporté, comme depuis le début de ce
