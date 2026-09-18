@@ -16,6 +16,7 @@ import { D1MissionRepo } from './repos/d1/d1MissionRepo'
 import { D1OrganisationRepo } from './repos/d1/d1OrganisationRepo'
 import { D1ParametersRepo } from './repos/d1/d1ParametersRepo'
 import { D1ParametresInstallationRepo } from './repos/d1/d1ParametresInstallationRepo'
+import { D1ProcedureRepo } from './repos/d1/d1ProcedureRepo'
 import { D1ProjectDocumentsRepo } from './repos/d1/d1ProjectDocumentsRepo'
 import { D1ProcessContextRepo } from './repos/d1/d1ProcessContextRepo'
 import { D1ProjectsRepo } from './repos/d1/d1ProjectsRepo'
@@ -82,6 +83,7 @@ export default {
       missionRepo: new D1MissionRepo(env.DB),
       contextSnapshotRepo: new D1ContextSnapshotRepo(env.DB),
       reasoningEngineRepo: new D1ReasoningEngineRepo(env.DB),
+      procedureRepo: new D1ProcedureRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

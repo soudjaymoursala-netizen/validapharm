@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { ProcedureStepWire, ProcedureWire } from '../../connecteurs/auth/AuthApiClient'
 import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
 import type {
   CategorieProcedure,
@@ -9,7 +10,64 @@ import type {
 } from '../../logique-metier/domaine/types'
 import type { PropositionAvecSource } from '../../logique-metier/procedures/proposerStructureProcedureAvecRepli'
 import { proposerStructureProcedureAvecRepli } from '../../logique-metier/procedures/proposerStructureProcedureAvecRepli'
-import { db } from '../../persistance/db'
+import { proceduresAMigrer, procedureStepsAMigrer } from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
+
+function procedureWireVersDomaine(w: ProcedureWire): Procedure {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    reference: w.reference,
+    numero_version: w.numeroVersion,
+    titre: w.titre,
+    effective_date: w.effectiveDate,
+    categorie: w.categorie as CategorieProcedure,
+    source_id: w.sourceId,
+    created_at: w.createdAt,
+  }
+}
+
+function procedureDomaineVersWire(p: Procedure): ProcedureWire {
+  return {
+    id: p.id,
+    clientId: p.client_id,
+    reference: p.reference,
+    numeroVersion: p.numero_version,
+    titre: p.titre,
+    effectiveDate: p.effective_date,
+    categorie: p.categorie,
+    sourceId: p.source_id,
+    createdAt: p.created_at,
+  }
+}
+
+function procedureStepWireVersDomaine(w: ProcedureStepWire): ProcedureStep {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    procedure_id: w.procedureId,
+    ordre: w.ordre,
+    description: w.description,
+    obligatoire: w.obligatoire,
+    condition: w.condition,
+    responsable: w.responsable,
+    created_at: w.createdAt,
+  }
+}
+
+function procedureStepDomaineVersWire(e: ProcedureStep): ProcedureStepWire {
+  return {
+    id: e.id,
+    clientId: e.client_id,
+    procedureId: e.procedure_id,
+    ordre: e.ordre,
+    description: e.description,
+    obligatoire: e.obligatoire,
+    condition: e.condition,
+    responsable: e.responsable,
+    createdAt: e.created_at,
+  }
+}
 
 export interface NouvelleProcedureInput {
   reference: string
@@ -50,37 +108,91 @@ export const useProcedureStore = defineStore('procedure', () => {
   /** Dernière proposition générée — jamais persistée telle quelle, simple état d'écran en attente de confirmation humaine. */
   const derniereProposition = ref<PropositionAvecSource | null>(null)
 
+  /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que les autres stores de ce chantier. */
+  async function obtenirApi() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    return { api, jeton: authStore.jeton }
+  }
+
+  /**
+   * Envoie au serveur les enregistrements capturés depuis les anciennes
+   * tables IndexedDB locales juste avant leur suppression — n'a d'effet
+   * réel qu'une seule fois (voir migration Dexie v54, `persistance/db.ts`).
+   */
+  async function migrerProceduresLocalVersServeur(clientId: string): Promise<void> {
+    const proceduresDuClient = proceduresAMigrer.filter((p) => p.client_id === clientId)
+    const etapesDuClient = procedureStepsAMigrer.filter((e) => e.client_id === clientId)
+    if (proceduresDuClient.length === 0 && etapesDuClient.length === 0) {
+      return
+    }
+
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.migrerProceduresLocal(jeton, clientId, {
+      procedures: proceduresDuClient.map(procedureDomaineVersWire),
+      procedureSteps: etapesDuClient.map(procedureStepDomaineVersWire),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la migration Procedure : ${resultat.erreur}`)
+    }
+    for (const [tableau, duClient] of [
+      [proceduresAMigrer, proceduresDuClient],
+      [procedureStepsAMigrer, etapesDuClient],
+    ] as const) {
+      for (const entree of duClient) {
+        const index = (tableau as unknown[]).indexOf(entree)
+        if (index !== -1) (tableau as unknown[]).splice(index, 1)
+      }
+    }
+  }
+
   async function charger(clientId: string): Promise<void> {
     enChargement.value = true
     try {
-      procedures.value = await db.procedures.where('client_id').equals(clientId).toArray()
-      procedureSteps.value = await db.procedureSteps.where('client_id').equals(clientId).toArray()
+      try {
+        await migrerProceduresLocalVersServeur(clientId)
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
+      }
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.obtenirProcedures(jeton, clientId)
+      if (resultat.ok) {
+        procedures.value = resultat.donnees.procedures.map(procedureWireVersDomaine)
+        procedureSteps.value = resultat.donnees.procedureSteps.map(procedureStepWireVersDomaine)
+      } else {
+        procedures.value = []
+        procedureSteps.value = []
+      }
+    } catch {
+      // Panne réseau réelle ou relais non configuré : jamais une exception
+      // non gérée, même discipline que les autres stores de ce chantier.
+      procedures.value = []
+      procedureSteps.value = []
     } finally {
       enChargement.value = false
     }
   }
 
-  /** `numero_version` auto-incrémenté par `reference` — même logique que `creerSourceVersion`. */
+  /** `numero_version` auto-incrémenté par `reference` côté serveur — voir la route Worker `gererCreerProcedure`. */
   async function creerProcedure(
     clientId: string,
     input: NouvelleProcedureInput,
   ): Promise<Procedure> {
-    const versionsExistantes = procedures.value.filter((p) => p.reference === input.reference)
-    const numeroVersion =
-      versionsExistantes.reduce((max, p) => Math.max(max, p.numero_version), 0) + 1
-
-    const procedure: Procedure = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerProcedure(jeton, clientId, {
       reference: input.reference,
-      numero_version: numeroVersion,
       titre: input.titre,
-      effective_date: input.effectiveDate,
+      effectiveDate: input.effectiveDate,
       categorie: input.categorie,
-      source_id: input.sourceId ?? null,
-      created_at: new Date().toISOString(),
+      sourceId: input.sourceId ?? null,
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la création de la Procedure : ${resultat.erreur}`)
     }
-    await db.procedures.put(procedure)
+    const procedure = procedureWireVersDomaine(resultat.donnees.procedure)
     procedures.value = [...procedures.value, procedure]
     return procedure
   }
@@ -90,26 +202,20 @@ export const useProcedureStore = defineStore('procedure', () => {
     procedureId: string,
     input: NouvelleEtapeProcedureInput,
   ): Promise<ProcedureStep | { erreur: 'procedure_introuvable' }> {
-    const procedure = await db.procedures.get(procedureId)
-    if (!procedure || procedure.client_id !== clientId) {
-      return { erreur: 'procedure_introuvable' }
-    }
-
-    const etapesExistantes = procedureSteps.value.filter((e) => e.procedure_id === procedureId)
-    const ordre = etapesExistantes.reduce((max, e) => Math.max(max, e.ordre), 0) + 1
-
-    const etape: ProcedureStep = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      procedure_id: procedureId,
-      ordre,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.ajouterEtapeProcedure(jeton, clientId, procedureId, {
       description: input.description,
       obligatoire: input.obligatoire,
       condition: input.condition ?? null,
       responsable: input.responsable ?? null,
-      created_at: new Date().toISOString(),
+    })
+    if (!resultat.ok) {
+      if (resultat.erreur === 'procedure_introuvable') {
+        return { erreur: 'procedure_introuvable' }
+      }
+      throw new Error(`Échec de la création de l'étape : ${resultat.erreur}`)
     }
-    await db.procedureSteps.put(etape)
+    const etape = procedureStepWireVersDomaine(resultat.donnees.etape)
     procedureSteps.value = [...procedureSteps.value, etape]
     return etape
   }

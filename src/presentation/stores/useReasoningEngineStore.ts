@@ -25,11 +25,11 @@ import {
   aiRequestsAMigrer,
   aiResponsesAMigrer,
   citationsAIResponseAMigrer,
-  db,
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
 import { useEvidenceStore } from './useEvidenceStore'
 import { useExecutionStore } from './useExecutionStore'
+import { useProcedureStore } from './useProcedureStore'
 import { useProcessContextStore } from './useProcessContextStore'
 import { useQualityEventStore } from './useQualityEventStore'
 import { useSourceIntelligenceStore } from './useSourceIntelligenceStore'
@@ -320,11 +320,13 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
     // 8b du chantier de migration D1) — même patron que ci-dessus.
     const contextEngineStore = useContextEngineStore()
     await contextEngineStore.charger(clientId)
+    // Procedure/ProcedureStep migrés vers le Worker/D1 (Phase 9a du
+    // chantier de migration D1) — même patron que ci-dessus.
+    const procedureStore = useProcedureStore()
+    await procedureStore.charger(clientId)
 
-    const [procedures, procedureSteps] = await Promise.all([
-      db.procedures.where('client_id').equals(clientId).toArray(),
-      db.procedureSteps.where('client_id').equals(clientId).toArray(),
-    ])
+    const procedures = procedureStore.procedures
+    const procedureSteps = procedureStore.procedureSteps
     const contextSnapshotItems = entrees.contextSnapshotId
       ? contextEngineStore.elementsDuSnapshot(entrees.contextSnapshotId)
       : []

@@ -1065,6 +1065,45 @@ export interface SaisieCitationAIResponseWire {
   objetId: string
 }
 
+export interface ProcedureWire {
+  id: string
+  clientId: string
+  reference: string
+  numeroVersion: number
+  titre: string
+  effectiveDate: string
+  categorie: string
+  sourceId: string | null
+  createdAt: string
+}
+
+export interface ProcedureStepWire {
+  id: string
+  clientId: string
+  procedureId: string
+  ordre: number
+  description: string
+  obligatoire: boolean
+  condition: string | null
+  responsable: string | null
+  createdAt: string
+}
+
+export interface SaisieCreationProcedureWire {
+  reference: string
+  titre: string
+  effectiveDate: string
+  categorie: string
+  sourceId?: string | null
+}
+
+export interface SaisieCreationEtapeProcedureWire {
+  description: string
+  obligatoire: boolean
+  condition?: string | null
+  responsable?: string | null
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -2761,6 +2800,48 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/reasoning-engine/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Procedure/ProcedureStep (cerveau procédural, Phase 9a du chantier de migration D1) ---
+
+  obtenirProcedures(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ procedures: ProcedureWire[]; procedureSteps: ProcedureStepWire[] }>> {
+    return this.requete('GET', `/clients/${clientId}/procedures`, { jeton })
+  }
+
+  /** `numeroVersion` calculé côté serveur — voir la route Worker `gererCreerProcedure` : une nouvelle révision d'une `reference` existante incrémente toujours le numéro, jamais une mutation en place. */
+  creerProcedure(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationProcedureWire,
+  ): Promise<ResultatApi<{ procedure: ProcedureWire }>> {
+    return this.requete('POST', `/clients/${clientId}/procedures`, { jeton, body: saisie })
+  }
+
+  ajouterEtapeProcedure(
+    jeton: string,
+    clientId: string,
+    procedureId: string,
+    saisie: SaisieCreationEtapeProcedureWire,
+  ): Promise<ResultatApi<{ etape: ProcedureStepWire }>> {
+    return this.requete('POST', `/clients/${clientId}/procedures/${procedureId}/steps`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerProceduresLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerProceduresLocal(
+    jeton: string,
+    clientId: string,
+    donnees: { procedures: ProcedureWire[]; procedureSteps: ProcedureStepWire[] },
+  ): Promise<ResultatApi<{ procedures: ProcedureWire[]; procedureSteps: ProcedureStepWire[] }>> {
+    return this.requete('POST', `/clients/${clientId}/procedures/migration-locale`, {
       jeton,
       body: donnees,
     })

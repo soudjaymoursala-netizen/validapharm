@@ -4,7 +4,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Section } from '../../logique-metier/domaine/types'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -67,7 +66,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.procedures.clear()
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
@@ -178,7 +176,7 @@ describe('AssistantCreationLivrable — chaîne de création de livrable assembl
     // Étape 5 — procédure (réelle, sélectionnable).
     expect(wrapper.text()).toContain('5. Procédure applicable')
     expect(wrapper.text()).toContain('PQ-COMPRESSION')
-    const procedureEnBase = (await db.procedures.toArray())[0]
+    const procedureEnBase = procedureStore.procedures[0]
     const selectProcedure = wrapper.find('.etape select')
     await selectProcedure.setValue(procedureEnBase?.id)
     await wrapper.find('.actions button:last-child').trigger('click')

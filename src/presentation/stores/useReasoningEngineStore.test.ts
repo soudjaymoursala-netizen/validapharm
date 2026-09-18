@@ -8,7 +8,6 @@ import type {
   ProviderAdapter,
   Reponse,
 } from '../../connecteurs/ia/ProviderAdapter'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -54,10 +53,8 @@ function reponse(texte: string): Reponse {
   return { texte, version_moteur: 'v1', citations: [] }
 }
 
-beforeEach(async () => {
+beforeEach(() => {
   setActivePinia(createPinia())
-  await db.procedures.clear()
-  await db.procedureSteps.clear()
 })
 
 describe('useReasoningEngineStore — assurerConfiguration (versionnée, condition E4)', () => {
@@ -230,30 +227,30 @@ describe('useReasoningEngineStore — scénario réel : traversée Architecture 
 
 describe('useReasoningEngineStore — scénario réel : lecture de procédure', () => {
   test('exécute lister_etapes_procedure et résout une citation de type procedure_step', async () => {
-    const { demonter } = await installerAuthEtClient('client-1')
+    const { ctx, demonter } = await installerAuthEtClient('client-1')
     try {
       const maintenant = '2026-01-01T00:00:00.000Z'
-      await db.procedures.put({
+      await ctx.procedureRepo.creerProcedure({
         id: 'proc-1',
-        client_id: 'client-1',
+        clientId: 'client-1',
         reference: 'SOP-QA-012',
-        numero_version: 1,
+        numeroVersion: 1,
         titre: 'Impact Assessment',
-        effective_date: '2026-01-01',
+        effectiveDate: '2026-01-01',
         categorie: 'production',
-        source_id: null,
-        created_at: maintenant,
+        sourceId: null,
+        createdAt: maintenant,
       })
-      await db.procedureSteps.put({
+      await ctx.procedureRepo.creerEtape({
         id: 'step-1',
-        client_id: 'client-1',
-        procedure_id: 'proc-1',
+        clientId: 'client-1',
+        procedureId: 'proc-1',
         ordre: 1,
         description: 'Vérifier le contexte',
         obligatoire: true,
         condition: null,
         responsable: null,
-        created_at: maintenant,
+        createdAt: maintenant,
       })
 
       const store = useReasoningEngineStore()
