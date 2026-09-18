@@ -8,6 +8,7 @@ import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
 import { D1EvidenceRepo } from './repos/d1/d1EvidenceRepo'
 import { D1ExecutionRepo } from './repos/d1/d1ExecutionRepo'
 import { D1ImpactAssessmentRepo } from './repos/d1/d1ImpactAssessmentRepo'
+import { D1KnowledgeEngineRepo } from './repos/d1/d1KnowledgeEngineRepo'
 import { D1OrganisationRepo } from './repos/d1/d1OrganisationRepo'
 import { D1ParametersRepo } from './repos/d1/d1ParametersRepo'
 import { D1ParametresInstallationRepo } from './repos/d1/d1ParametresInstallationRepo'
@@ -70,6 +71,7 @@ export default {
       testDefinitionRepo: new D1TestDefinitionRepo(env.DB),
       executionRepo: new D1ExecutionRepo(env.DB),
       evidenceRepo: new D1EvidenceRepo(env.DB),
+      knowledgeEngineRepo: new D1KnowledgeEngineRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

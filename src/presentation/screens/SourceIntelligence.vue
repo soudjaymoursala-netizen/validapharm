@@ -7,7 +7,6 @@
 import { onMounted, ref } from 'vue'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useSourceIntelligenceStore } from '../stores/useSourceIntelligenceStore'
-import { identifiantActeurCourant } from '../identite/identiteLocale'
 import type {
   MethodeExtraction,
   SystemeLocalisationSource,
@@ -125,19 +124,11 @@ async function creerKnowledgeItem(): Promise<void> {
 }
 
 async function validerKnowledgeItem(knowledgeItemId: string): Promise<void> {
-  await sourceStore.validerKnowledgeItem(
-    props.clientId,
-    knowledgeItemId,
-    identifiantActeurCourant(),
-  )
+  await sourceStore.validerKnowledgeItem(props.clientId, knowledgeItemId)
 }
 
 async function rejeterKnowledgeItem(knowledgeItemId: string): Promise<void> {
-  await sourceStore.rejeterKnowledgeItem(
-    props.clientId,
-    knowledgeItemId,
-    identifiantActeurCourant(),
-  )
+  await sourceStore.rejeterKnowledgeItem(props.clientId, knowledgeItemId)
 }
 
 // --- Relations ---

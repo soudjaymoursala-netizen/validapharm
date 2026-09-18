@@ -5,7 +5,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -88,10 +87,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.sources.clear()
-  await db.sourceVersions.clear()
-  await db.extractions.clear()
-  await db.extractionItems.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   ctx = installation.ctx
@@ -181,7 +176,7 @@ describe('Process — écran Process/Fonction (§6 du prompt maître)', () => {
     expect(descriptionTextarea().value).toContain('Description du process de compression.')
     expect(wrapper.text()).toContain('Texte extrait de « Process compression.docx »')
 
-    const sourcesAvantSoumission = await db.sources.toArray()
+    const sourcesAvantSoumission = await ctx.knowledgeEngineRepo.listerSources(client.id)
     expect(sourcesAvantSoumission).toHaveLength(1)
     expect(sourcesAvantSoumission[0]?.titre).toBe('Process compression.docx')
 

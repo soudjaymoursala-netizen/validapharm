@@ -413,6 +413,26 @@ export const evidenceLocationsAMigrer: EvidenceLocation[] = []
 export const provenanceLinksAMigrer: ProvenanceLink[] = []
 
 /**
+ * Source/SourceLocation/SourceVersion/Extraction/ExtractionItem/
+ * KnowledgeItem/Confirmation/KnowledgeRelation/Conflict : migrés vers le
+ * Worker/D1 (Target Architecture, domaines "Source Intelligence" et
+ * "Knowledge", Phase 7a du chantier de migration D1) — même principe que
+ * `evidencesAMigrer` ci-dessus : formes domaine inchangées, pas de type
+ * "Ancien". Consommés et envoyés au serveur par
+ * `migrerKnowledgeEngineLocalVersServeur` (`useSourceIntelligenceStore`)
+ * au premier `charger()`.
+ */
+export const sourcesAMigrer: Source[] = []
+export const sourceLocationsAMigrer: SourceLocation[] = []
+export const sourceVersionsAMigrer: SourceVersion[] = []
+export const extractionsAMigrer: Extraction[] = []
+export const extractionItemsAMigrer: ExtractionItem[] = []
+export const knowledgeItemsAMigrer: KnowledgeItem[] = []
+export const confirmationsAMigrer: Confirmation[] = []
+export const knowledgeRelationsAMigrer: KnowledgeRelation[] = []
+export const conflictsAMigrer: Conflict[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -429,15 +449,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  sources!: EntityTable<Source, 'id'>
-  sourceVersions!: EntityTable<SourceVersion, 'id'>
-  sourceLocations!: EntityTable<SourceLocation, 'id'>
-  extractions!: EntityTable<Extraction, 'id'>
-  extractionItems!: EntityTable<ExtractionItem, 'id'>
-  knowledgeItems!: EntityTable<KnowledgeItem, 'id'>
-  confirmations!: EntityTable<Confirmation, 'id'>
-  knowledgeRelations!: EntityTable<KnowledgeRelation, 'id'>
-  conflicts!: EntityTable<Conflict, 'id'>
   contentPlans!: EntityTable<ContentPlan, 'id'>
   connectors!: EntityTable<Connector, 'id'>
   syncJobs!: EntityTable<SyncJob, 'id'>
@@ -1030,6 +1041,45 @@ export class ValidaPharmDatabase extends Dexie {
         evidenceLocationsAMigrer.push(...evidenceLocations)
         const provenanceLinks = await tx.table<ProvenanceLink>('provenanceLinks').toArray()
         provenanceLinksAMigrer.push(...provenanceLinks)
+      })
+
+    // Source/SourceLocation/SourceVersion/Extraction/ExtractionItem/
+    // KnowledgeItem/Confirmation/KnowledgeRelation/Conflict : migrés vers
+    // le Worker/D1 (Target Architecture, domaines "Source Intelligence" et
+    // "Knowledge", Phase 7a du chantier de migration D1,
+    // docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique de capture
+    // avant suppression physique que la version 47 ci-dessus.
+    this.version(48)
+      .stores({
+        sources: null,
+        sourceLocations: null,
+        sourceVersions: null,
+        extractions: null,
+        extractionItems: null,
+        knowledgeItems: null,
+        confirmations: null,
+        knowledgeRelations: null,
+        conflicts: null,
+      })
+      .upgrade(async (tx) => {
+        const sources = await tx.table<Source>('sources').toArray()
+        sourcesAMigrer.push(...sources)
+        const sourceLocations = await tx.table<SourceLocation>('sourceLocations').toArray()
+        sourceLocationsAMigrer.push(...sourceLocations)
+        const sourceVersions = await tx.table<SourceVersion>('sourceVersions').toArray()
+        sourceVersionsAMigrer.push(...sourceVersions)
+        const extractions = await tx.table<Extraction>('extractions').toArray()
+        extractionsAMigrer.push(...extractions)
+        const extractionItems = await tx.table<ExtractionItem>('extractionItems').toArray()
+        extractionItemsAMigrer.push(...extractionItems)
+        const knowledgeItems = await tx.table<KnowledgeItem>('knowledgeItems').toArray()
+        knowledgeItemsAMigrer.push(...knowledgeItems)
+        const confirmations = await tx.table<Confirmation>('confirmations').toArray()
+        confirmationsAMigrer.push(...confirmations)
+        const knowledgeRelations = await tx.table<KnowledgeRelation>('knowledgeRelations').toArray()
+        knowledgeRelationsAMigrer.push(...knowledgeRelations)
+        const conflicts = await tx.table<Conflict>('conflicts').toArray()
+        conflictsAMigrer.push(...conflicts)
       })
   }
 }

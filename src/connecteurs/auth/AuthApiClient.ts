@@ -728,6 +728,132 @@ export interface SaisieDeclarationProvenanceWire {
   requirementId: string
 }
 
+export interface SourceWire {
+  id: string
+  clientId: string
+  type: string
+  titre: string
+  createdAt: string
+}
+
+export interface SourceLocationWire {
+  id: string
+  clientId: string
+  sourceId: string
+  systeme: string
+  reference: string
+}
+
+export interface SourceVersionWire {
+  id: string
+  clientId: string
+  sourceId: string
+  numeroVersion: number
+  createdAt: string
+}
+
+export interface ExtractionWire {
+  id: string
+  clientId: string
+  sourceVersionId: string
+  methode: string
+  horodatage: string
+}
+
+export interface ExtractionItemWire {
+  id: string
+  clientId: string
+  extractionId: string
+  contenu: string
+  position: number
+}
+
+export interface KnowledgeItemWire {
+  id: string
+  clientId: string
+  extractionItemId: string
+  libelle: string
+  valeurInterpretee: string
+  statut: string
+  validePar: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ConfirmationWire {
+  id: string
+  clientId: string
+  knowledgeItemId: string
+  decision: string
+  confirmePar: string
+  horodatage: string
+}
+
+export interface KnowledgeRelationWire {
+  id: string
+  clientId: string
+  knowledgeItemSourceId: string
+  knowledgeItemCibleId: string
+  type: string
+  createdAt: string
+}
+
+export interface ConflictWire {
+  id: string
+  clientId: string
+  knowledgeItemSourceId: string
+  knowledgeItemCibleId: string
+  description: string
+  statut: string
+  resolution: string | null
+  createdAt: string
+}
+
+export interface SaisieCreationSourceWire {
+  type: string
+  titre: string
+}
+
+export interface SaisieAjoutLocalisationSourceWire {
+  systeme: string
+  reference: string
+}
+
+export interface SaisieEnregistrementExtractionWire {
+  methode: string
+}
+
+export interface SaisieAjoutExtractionItemWire {
+  contenu: string
+  position: number
+}
+
+export interface SaisieCreationKnowledgeItemWire {
+  libelle: string
+  valeurInterpretee: string
+}
+
+export interface SaisieConfirmationKnowledgeItemWire {
+  decision: 'confirme' | 'rejete'
+}
+
+export interface SaisieDeclarationRelationWire {
+  knowledgeItemSourceId: string
+  knowledgeItemCibleId: string
+  type: string
+}
+
+export interface SaisieDeclarationConflitWire {
+  knowledgeItemSourceId: string
+  knowledgeItemCibleId: string
+  description: string
+}
+
+export interface SaisieResolutionConflitWire {
+  resolution: string
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -1819,6 +1945,174 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/evidences/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Source/SourceLocation/SourceVersion/Extraction/ExtractionItem/
+  // KnowledgeItem/Confirmation/KnowledgeRelation/Conflict (Target
+  // Architecture, domaines "Source Intelligence" et "Knowledge", Phase 7a
+  // du chantier de migration D1) ---
+
+  obtenirKnowledgeEngine(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      sources: SourceWire[]
+      sourceLocations: SourceLocationWire[]
+      sourceVersions: SourceVersionWire[]
+      extractions: ExtractionWire[]
+      extractionItems: ExtractionItemWire[]
+      knowledgeItems: KnowledgeItemWire[]
+      confirmations: ConfirmationWire[]
+      knowledgeRelations: KnowledgeRelationWire[]
+      conflicts: ConflictWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/knowledge-engine`, { jeton })
+  }
+
+  creerSource(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationSourceWire,
+  ): Promise<ResultatApi<{ source: SourceWire }>> {
+    return this.requete('POST', `/clients/${clientId}/sources`, { jeton, body: saisie })
+  }
+
+  ajouterLocalisationSource(
+    jeton: string,
+    clientId: string,
+    sourceId: string,
+    saisie: SaisieAjoutLocalisationSourceWire,
+  ): Promise<ResultatApi<{ sourceLocation: SourceLocationWire }>> {
+    return this.requete('POST', `/clients/${clientId}/sources/${sourceId}/localisations`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerSourceVersion(
+    jeton: string,
+    clientId: string,
+    sourceId: string,
+  ): Promise<ResultatApi<{ sourceVersion: SourceVersionWire }>> {
+    return this.requete('POST', `/clients/${clientId}/sources/${sourceId}/versions`, { jeton })
+  }
+
+  enregistrerExtraction(
+    jeton: string,
+    clientId: string,
+    sourceVersionId: string,
+    saisie: SaisieEnregistrementExtractionWire,
+  ): Promise<ResultatApi<{ extraction: ExtractionWire }>> {
+    return this.requete(
+      'POST',
+      `/clients/${clientId}/source-versions/${sourceVersionId}/extractions`,
+      { jeton, body: saisie },
+    )
+  }
+
+  ajouterExtractionItem(
+    jeton: string,
+    clientId: string,
+    extractionId: string,
+    saisie: SaisieAjoutExtractionItemWire,
+  ): Promise<ResultatApi<{ extractionItem: ExtractionItemWire }>> {
+    return this.requete('POST', `/clients/${clientId}/extractions/${extractionId}/items`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerKnowledgeItem(
+    jeton: string,
+    clientId: string,
+    extractionItemId: string,
+    saisie: SaisieCreationKnowledgeItemWire,
+  ): Promise<ResultatApi<{ knowledgeItem: KnowledgeItemWire }>> {
+    return this.requete(
+      'POST',
+      `/clients/${clientId}/extraction-items/${extractionItemId}/knowledge-items`,
+      { jeton, body: saisie },
+    )
+  }
+
+  confirmerKnowledgeItem(
+    jeton: string,
+    clientId: string,
+    knowledgeItemId: string,
+    saisie: SaisieConfirmationKnowledgeItemWire,
+  ): Promise<ResultatApi<{ knowledgeItem: KnowledgeItemWire; confirmation: ConfirmationWire }>> {
+    return this.requete(
+      'PATCH',
+      `/clients/${clientId}/knowledge-items/${knowledgeItemId}/confirmer`,
+      { jeton, body: saisie },
+    )
+  }
+
+  declarerRelation(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieDeclarationRelationWire,
+  ): Promise<ResultatApi<{ knowledgeRelation: KnowledgeRelationWire }>> {
+    return this.requete('POST', `/clients/${clientId}/knowledge-relations`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  declarerConflit(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieDeclarationConflitWire,
+  ): Promise<ResultatApi<{ conflict: ConflictWire }>> {
+    return this.requete('POST', `/clients/${clientId}/conflicts`, { jeton, body: saisie })
+  }
+
+  resoudreConflit(
+    jeton: string,
+    clientId: string,
+    conflictId: string,
+    saisie: SaisieResolutionConflitWire,
+  ): Promise<ResultatApi<{ conflict: ConflictWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/conflicts/${conflictId}/resoudre`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerKnowledgeEngineLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerKnowledgeEngineLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      sources?: SourceWire[]
+      sourceLocations?: SourceLocationWire[]
+      sourceVersions?: SourceVersionWire[]
+      extractions?: ExtractionWire[]
+      extractionItems?: ExtractionItemWire[]
+      knowledgeItems?: KnowledgeItemWire[]
+      confirmations?: ConfirmationWire[]
+      knowledgeRelations?: KnowledgeRelationWire[]
+      conflicts?: ConflictWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      sources: SourceWire[]
+      sourceLocations: SourceLocationWire[]
+      sourceVersions: SourceVersionWire[]
+      extractions: ExtractionWire[]
+      extractionItems: ExtractionItemWire[]
+      knowledgeItems: KnowledgeItemWire[]
+      confirmations: ConfirmationWire[]
+      knowledgeRelations: KnowledgeRelationWire[]
+      conflicts: ConflictWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/knowledge-engine/migration-locale`, {
       jeton,
       body: donnees,
     })

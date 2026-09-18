@@ -18,6 +18,7 @@ import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from './repos/evidenceRepo'
 import { ExecutionRepoMemoire } from './repos/executionRepo'
 import { ImpactAssessmentRepoMemoire } from './repos/impactAssessmentRepo'
+import { KnowledgeEngineRepoMemoire } from './repos/knowledgeEngineRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametersRepoMemoire } from './repos/parametersRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
@@ -62,6 +63,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     testDefinitionRepo: new TestDefinitionRepoMemoire(),
     executionRepo: new ExecutionRepoMemoire(),
     evidenceRepo: new EvidenceRepoMemoire(),
+    knowledgeEngineRepo: new KnowledgeEngineRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -207,6 +209,24 @@ interface CorpsReponse {
   evidenceLocations: EvidenceLocationJson[]
   provenanceLink: ProvenanceLinkJson
   provenanceLinks: ProvenanceLinkJson[]
+  source: SourceJson
+  sources: SourceJson[]
+  sourceLocation: SourceLocationJson
+  sourceLocations: SourceLocationJson[]
+  sourceVersion: SourceVersionJson
+  sourceVersions: SourceVersionJson[]
+  extraction: ExtractionJson
+  extractions: ExtractionJson[]
+  extractionItem: ExtractionItemJson
+  extractionItems: ExtractionItemJson[]
+  knowledgeItem: KnowledgeItemJson
+  knowledgeItems: KnowledgeItemJson[]
+  confirmation: ConfirmationJson
+  confirmations: ConfirmationJson[]
+  knowledgeRelation: KnowledgeRelationJson
+  knowledgeRelations: KnowledgeRelationJson[]
+  conflict: ConflictJson
+  conflicts: ConflictJson[]
 }
 
 interface RequirementJson {
@@ -340,6 +360,88 @@ interface ProvenanceLinkJson {
   clientId: string
   evidenceId: string
   requirementId: string
+  createdAt: string
+}
+
+interface SourceJson {
+  id: string
+  clientId: string
+  type: string
+  titre: string
+  createdAt: string
+}
+
+interface SourceLocationJson {
+  id: string
+  clientId: string
+  sourceId: string
+  systeme: string
+  reference: string
+}
+
+interface SourceVersionJson {
+  id: string
+  clientId: string
+  sourceId: string
+  numeroVersion: number
+  createdAt: string
+}
+
+interface ExtractionJson {
+  id: string
+  clientId: string
+  sourceVersionId: string
+  methode: string
+  horodatage: string
+}
+
+interface ExtractionItemJson {
+  id: string
+  clientId: string
+  extractionId: string
+  contenu: string
+  position: number
+}
+
+interface KnowledgeItemJson {
+  id: string
+  clientId: string
+  extractionItemId: string
+  libelle: string
+  valeurInterpretee: string
+  statut: string
+  validePar: string | null
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface ConfirmationJson {
+  id: string
+  clientId: string
+  knowledgeItemId: string
+  decision: string
+  confirmePar: string
+  horodatage: string
+}
+
+interface KnowledgeRelationJson {
+  id: string
+  clientId: string
+  knowledgeItemSourceId: string
+  knowledgeItemCibleId: string
+  type: string
+  createdAt: string
+}
+
+interface ConflictJson {
+  id: string
+  clientId: string
+  knowledgeItemSourceId: string
+  knowledgeItemCibleId: string
+  description: string
+  statut: string
+  resolution: string | null
   createdAt: string
 }
 
@@ -3853,6 +3955,381 @@ describe('routerRequete — Evidence/EvidenceLocation/ProvenanceLink (Target Arc
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/evidences`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/ExtractionItem/KnowledgeItem/Confirmation/KnowledgeRelation/Conflict (Target Architecture, domaines "Source Intelligence" et "Knowledge", Phase 7a du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  /** Chaîne complète jusqu'à un ExtractionItem, prête à recevoir un KnowledgeItem. */
+  async function creerExtractionItemDeTest(
+    ctx: Contexte,
+    jeton: string,
+    clientId: string,
+  ): Promise<{
+    sourceId: string
+    sourceVersionId: string
+    extractionId: string
+    extractionItemId: string
+  }> {
+    const source = await requete(ctx, 'POST', `/clients/${clientId}/sources`, {
+      jeton,
+      body: { type: 'document_procedural', titre: 'SOP-001' },
+    })
+    const version = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/sources/${source.corps.source.id}/versions`,
+      { jeton },
+    )
+    const extraction = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/source-versions/${version.corps.sourceVersion.id}/extractions`,
+      { jeton, body: { methode: 'saisie_manuelle' } },
+    )
+    const item = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/extractions/${extraction.corps.extraction.id}/items`,
+      { jeton, body: { contenu: 'Le débit doit rester stable', position: 0 } },
+    )
+    return {
+      sourceId: source.corps.source.id,
+      sourceVersionId: version.corps.sourceVersion.id,
+      extractionId: extraction.corps.extraction.id,
+      extractionItemId: item.corps.extractionItem.id,
+    }
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/knowledge-engine`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.sources).toEqual([])
+    expect(obtenir.corps.sourceLocations).toEqual([])
+    expect(obtenir.corps.sourceVersions).toEqual([])
+    expect(obtenir.corps.extractions).toEqual([])
+    expect(obtenir.corps.extractionItems).toEqual([])
+    expect(obtenir.corps.knowledgeItems).toEqual([])
+    expect(obtenir.corps.confirmations).toEqual([])
+    expect(obtenir.corps.knowledgeRelations).toEqual([])
+    expect(obtenir.corps.conflicts).toEqual([])
+  })
+
+  test('créer une Source, puis lui ajouter une localisation', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/sources`, {
+      jeton: admin.jeton,
+      body: { type: 'document_procedural', titre: 'SOP-001' },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.source.titre).toBe('SOP-001')
+
+    const localisation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/sources/${creation.corps.source.id}/localisations`,
+      { jeton: admin.jeton, body: { systeme: 'github', reference: 'procedures/SOP-001.docx' } },
+    )
+    expect(localisation.status).toBe(201)
+    expect(localisation.corps.sourceLocation.reference).toBe('procedures/SOP-001.docx')
+  })
+
+  test('ajouter une localisation à une Source inconnue -> source_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const localisation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/sources/inconnue/localisations`,
+      { jeton: admin.jeton, body: { systeme: 'github', reference: 'x' } },
+    )
+    expect(localisation.status).toBe(404)
+    expect(localisation.corps.erreur).toBe('source_introuvable')
+  })
+
+  test('créer des SourceVersion successives : numeroVersion auto-incrémenté côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const source = await requete(ctx, 'POST', `/clients/${clientId}/sources`, {
+      jeton: admin.jeton,
+      body: { type: 'document_procedural', titre: 'SOP-001' },
+    })
+
+    const v1 = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/sources/${source.corps.source.id}/versions`,
+      { jeton: admin.jeton },
+    )
+    expect(v1.corps.sourceVersion.numeroVersion).toBe(1)
+
+    const v2 = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/sources/${source.corps.source.id}/versions`,
+      { jeton: admin.jeton },
+    )
+    expect(v2.corps.sourceVersion.numeroVersion).toBe(2)
+  })
+
+  test('créer une SourceVersion sur une Source inconnue -> source_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const version = await requete(ctx, 'POST', `/clients/${clientId}/sources/inconnue/versions`, {
+      jeton: admin.jeton,
+    })
+    expect(version.status).toBe(404)
+    expect(version.corps.erreur).toBe('source_introuvable')
+  })
+
+  test('enregistrer une Extraction sur une SourceVersion inconnue -> version_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const extraction = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/source-versions/inconnue/extractions`,
+      { jeton: admin.jeton, body: { methode: 'saisie_manuelle' } },
+    )
+    expect(extraction.status).toBe(404)
+    expect(extraction.corps.erreur).toBe('version_introuvable')
+  })
+
+  test('ajouter un ExtractionItem sur une Extraction inconnue -> extraction_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const item = await requete(ctx, 'POST', `/clients/${clientId}/extractions/inconnue/items`, {
+      jeton: admin.jeton,
+      body: { contenu: 'x', position: 0 },
+    })
+    expect(item.status).toBe(404)
+    expect(item.corps.erreur).toBe('extraction_introuvable')
+  })
+
+  test('créer un KnowledgeItem : toujours a_valider à la création, jamais valide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { extractionItemId } = await creerExtractionItemDeTest(ctx, admin.jeton, clientId)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/extraction-items/${extractionItemId}/knowledge-items`,
+      { jeton: admin.jeton, body: { libelle: 'Débit', valeurInterpretee: 'Stable' } },
+    )
+    expect(creation.status).toBe(201)
+    expect(creation.corps.knowledgeItem.statut).toBe('a_valider')
+    expect(creation.corps.knowledgeItem.validePar).toBeNull()
+    expect(creation.corps.knowledgeItem.auditLog).toHaveLength(1)
+  })
+
+  test('créer un KnowledgeItem sur un ExtractionItem inconnu -> extraction_item_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/extraction-items/inconnu/knowledge-items`,
+      { jeton: admin.jeton, body: { libelle: 'Débit', valeurInterpretee: 'Stable' } },
+    )
+    expect(creation.status).toBe(404)
+    expect(creation.corps.erreur).toBe('extraction_item_introuvable')
+  })
+
+  test('confirmer un KnowledgeItem : crée une Confirmation, confirmePar dérivé côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { extractionItemId } = await creerExtractionItemDeTest(ctx, admin.jeton, clientId)
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/extraction-items/${extractionItemId}/knowledge-items`,
+      { jeton: admin.jeton, body: { libelle: 'Débit', valeurInterpretee: 'Stable' } },
+    )
+
+    const confirmation = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/knowledge-items/${creation.corps.knowledgeItem.id}/confirmer`,
+      { jeton: admin.jeton, body: { decision: 'confirme' } },
+    )
+    expect(confirmation.status).toBe(200)
+    expect(confirmation.corps.knowledgeItem.statut).toBe('valide')
+    expect(confirmation.corps.knowledgeItem.validePar).toBe('admin@pharmatech.example')
+    expect(confirmation.corps.confirmation.confirmePar).toBe('admin@pharmatech.example')
+    expect(confirmation.corps.confirmation.decision).toBe('confirme')
+  })
+
+  test('rejeter un KnowledgeItem', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { extractionItemId } = await creerExtractionItemDeTest(ctx, admin.jeton, clientId)
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/extraction-items/${extractionItemId}/knowledge-items`,
+      { jeton: admin.jeton, body: { libelle: 'Débit', valeurInterpretee: 'Stable' } },
+    )
+
+    const rejet = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/knowledge-items/${creation.corps.knowledgeItem.id}/confirmer`,
+      { jeton: admin.jeton, body: { decision: 'rejete' } },
+    )
+    expect(rejet.corps.knowledgeItem.statut).toBe('rejete')
+  })
+
+  test('confirmer un KnowledgeItem inconnu -> knowledge_item_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const confirmation = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/knowledge-items/inconnu/confirmer`,
+      { jeton: admin.jeton, body: { decision: 'confirme' } },
+    )
+    expect(confirmation.status).toBe(404)
+    expect(confirmation.corps.erreur).toBe('knowledge_item_introuvable')
+  })
+
+  test('déclarer deux fois la même relation entre deux KnowledgeItem est idempotent', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const premiere = await requete(ctx, 'POST', `/clients/${clientId}/knowledge-relations`, {
+      jeton: admin.jeton,
+      body: { knowledgeItemSourceId: 'ki-1', knowledgeItemCibleId: 'ki-2', type: 'precise' },
+    })
+    expect(premiere.status).toBe(201)
+
+    const seconde = await requete(ctx, 'POST', `/clients/${clientId}/knowledge-relations`, {
+      jeton: admin.jeton,
+      body: { knowledgeItemSourceId: 'ki-1', knowledgeItemCibleId: 'ki-2', type: 'precise' },
+    })
+    expect(seconde.status).toBe(200)
+    expect(seconde.corps.knowledgeRelation.id).toBe(premiere.corps.knowledgeRelation.id)
+  })
+
+  test('déclarer un Conflict puis le résoudre : reste ouvert tant qu’aucune résolution explicite', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/conflicts`, {
+      jeton: admin.jeton,
+      body: {
+        knowledgeItemSourceId: 'ki-1',
+        knowledgeItemCibleId: 'ki-2',
+        description: 'Deux valeurs différentes pour le même débit',
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.conflict.statut).toBe('ouvert')
+    expect(creation.corps.conflict.resolution).toBeNull()
+
+    const resolution = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/conflicts/${creation.corps.conflict.id}/resoudre`,
+      { jeton: admin.jeton, body: { resolution: 'La valeur la plus récente fait foi' } },
+    )
+    expect(resolution.status).toBe(200)
+    expect(resolution.corps.conflict.statut).toBe('resolu')
+    expect(resolution.corps.conflict.resolution).toBe('La valeur la plus récente fait foi')
+  })
+
+  test('résoudre un Conflict inconnu -> conflict_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const resolution = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/conflicts/inconnu/resoudre`,
+      { jeton: admin.jeton, body: { resolution: 'x' } },
+    )
+    expect(resolution.status).toBe(404)
+    expect(resolution.corps.erreur).toBe('conflict_introuvable')
+  })
+
+  test('migration locale idempotente : la première valeur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const sourceLocale = {
+      id: 'source-locale-1',
+      clientId,
+      type: 'document_procedural',
+      titre: 'Ancien titre',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/knowledge-engine/migration-locale`,
+      { jeton: admin.jeton, body: { sources: [sourceLocale] } },
+    )
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/knowledge-engine/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { sources: [{ ...sourceLocale, titre: 'Tentative d’écrasement' }] },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/knowledge-engine`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.sources).toHaveLength(1)
+    expect(liste.corps.sources[0]?.titre).toBe('Ancien titre')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/knowledge-engine`)
     expect(obtenir.status).toBe(401)
   })
 })

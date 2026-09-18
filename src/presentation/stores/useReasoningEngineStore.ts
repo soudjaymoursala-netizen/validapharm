@@ -17,6 +17,7 @@ import { useEvidenceStore } from './useEvidenceStore'
 import { useExecutionStore } from './useExecutionStore'
 import { useProcessContextStore } from './useProcessContextStore'
 import { useQualityEventStore } from './useQualityEventStore'
+import { useSourceIntelligenceStore } from './useSourceIntelligenceStore'
 import { useStructureSystemeStore } from './useStructureSystemeStore'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
 
@@ -127,25 +128,29 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
     // migration D1) — même patron que ci-dessus.
     const evidenceStore = useEvidenceStore()
     await evidenceStore.charger(clientId)
+    // Source/SourceVersion/Extraction/ExtractionItem/KnowledgeItem/
+    // Confirmation/KnowledgeRelation/Conflict migrés vers le Worker/D1
+    // (Phase 7a du chantier de migration D1) — même patron que ci-dessus.
+    const sourceIntelligenceStore = useSourceIntelligenceStore()
+    await sourceIntelligenceStore.charger(clientId)
 
-    const [knowledgeItems, procedures, procedureSteps, knowledgeRelations, contextSnapshotItems] =
-      await Promise.all([
-        db.knowledgeItems.where('client_id').equals(clientId).toArray(),
-        db.procedures.where('client_id').equals(clientId).toArray(),
-        db.procedureSteps.where('client_id').equals(clientId).toArray(),
-        db.knowledgeRelations.where('client_id').equals(clientId).toArray(),
-        entrees.contextSnapshotId
-          ? db.contextSnapshotItems
-              .where('context_snapshot_id')
-              .equals(entrees.contextSnapshotId)
-              .toArray()
-          : Promise.resolve([]),
-      ])
+    const [procedures, procedureSteps, contextSnapshotItems] = await Promise.all([
+      db.procedures.where('client_id').equals(clientId).toArray(),
+      db.procedureSteps.where('client_id').equals(clientId).toArray(),
+      entrees.contextSnapshotId
+        ? db.contextSnapshotItems
+            .where('context_snapshot_id')
+            .equals(entrees.contextSnapshotId)
+            .toArray()
+        : Promise.resolve([]),
+    ])
     const requirements = testDefinitionStore.requirements
     const couvertures = testDefinitionStore.couvertures
     const tests = testDefinitionStore.tests
     const executions = executionStore.executions
     const evidences = evidenceStore.evidences
+    const knowledgeItems = sourceIntelligenceStore.knowledgeItems
+    const knowledgeRelations = sourceIntelligenceStore.knowledgeRelations
     const manufacturingContexts = processContextStore.manufacturingContexts
     const qualityEvents = qualityEventStore.evenements
     const assetNodes = structureStore.noeuds
