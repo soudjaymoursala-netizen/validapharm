@@ -15,6 +15,7 @@ import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
 import { CSVAssessmentRepoMemoire } from './repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
+import { EvidenceRepoMemoire } from './repos/evidenceRepo'
 import { ExecutionRepoMemoire } from './repos/executionRepo'
 import { ImpactAssessmentRepoMemoire } from './repos/impactAssessmentRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
@@ -60,6 +61,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     qualityEventRepo: new QualityEventRepoMemoire(),
     testDefinitionRepo: new TestDefinitionRepoMemoire(),
     executionRepo: new ExecutionRepoMemoire(),
+    evidenceRepo: new EvidenceRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -199,6 +201,12 @@ interface CorpsReponse {
   measurements: MeasurementJson[]
   executionEvent: ExecutionEventJson
   executionEvents: ExecutionEventJson[]
+  evidence: EvidenceJson
+  evidences: EvidenceJson[]
+  evidenceLocation: EvidenceLocationJson
+  evidenceLocations: EvidenceLocationJson[]
+  provenanceLink: ProvenanceLinkJson
+  provenanceLinks: ProvenanceLinkJson[]
 }
 
 interface RequirementJson {
@@ -305,6 +313,34 @@ interface ExecutionEventJson {
   qualityEventId: string | null
   horodatage: string
   actor: string
+}
+
+interface EvidenceJson {
+  id: string
+  clientId: string
+  executionId: string
+  executionStepId: string | null
+  type: string
+  titre: string
+  description: string
+  horodatage: string
+  actor: string
+}
+
+interface EvidenceLocationJson {
+  id: string
+  clientId: string
+  evidenceId: string
+  systeme: string
+  reference: string
+}
+
+interface ProvenanceLinkJson {
+  id: string
+  clientId: string
+  evidenceId: string
+  requirementId: string
+  createdAt: string
 }
 
 interface QualityEventJson {
@@ -3509,6 +3545,314 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/executions`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Evidence/EvidenceLocation/ProvenanceLink (Target Architecture, domaine "Evidence", Phase 6c du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  /** Chaîne complète jusqu'à une Execution en cours, avec une étape, prête à recevoir une Evidence. */
+  async function creerExecutionEnCoursDeTest(
+    ctx: Contexte,
+    jeton: string,
+    clientId: string,
+  ): Promise<{ executionId: string; requirementId: string }> {
+    const requirement = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/requirements`,
+      { jeton, body: { reference: 'REQ-1', titre: 'Débit stable', description: 'x' } },
+    )
+    const objectif = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-objectives`,
+      {
+        jeton,
+        body: {
+          requirementId: requirement.corps.requirement.id,
+          titre: 'Objectif',
+          description: 'x',
+        },
+      },
+    )
+    const candidat = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-candidates`,
+      {
+        jeton,
+        body: { testObjectiveId: objectif.corps.testObjective.id, titre: 'C', description: 'x' },
+      },
+    )
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${candidat.corps.testCandidate.id}/statut`,
+      { jeton, body: { statut: 'accepte' } },
+    )
+    const test = await requete(ctx, 'POST', `/clients/${clientId}/test-definition/tests`, {
+      jeton,
+      body: {
+        testCandidateId: candidat.corps.testCandidate.id,
+        titre: 'Test débit',
+        description: 'x',
+        etapes: [{ ordre: 1, action: 'Démarrer', resultatAttendu: 'Débit stable' }],
+      },
+    })
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/tests/${test.corps.test.id}/approuver`,
+      { jeton },
+    )
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton,
+      body: { testId: test.corps.test.id, assetNodeId: null },
+    })
+    return {
+      executionId: demarrage.corps.execution.id,
+      requirementId: requirement.corps.requirement.id,
+    }
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.evidences).toEqual([])
+    expect(obtenir.corps.evidenceLocations).toEqual([])
+    expect(obtenir.corps.provenanceLinks).toEqual([])
+  })
+
+  test('enregistrer une preuve native : id/horodatage/actor dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { executionId } = await creerExecutionEnCoursDeTest(ctx, admin.jeton, clientId)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+      body: {
+        executionId,
+        executionStepId: null,
+        type: 'native',
+        titre: 'Observation directe',
+        description: 'Cycle sans alarme',
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.evidence.actor).toBe('admin@pharmatech.example')
+    expect(creation.corps.evidence.horodatage).toEqual(expect.any(String))
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.evidences.map((e) => e.id)).toContain(creation.corps.evidence.id)
+  })
+
+  test('enregistrer une preuve sur une exécution inconnue -> execution_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+      body: {
+        executionId: 'inconnue',
+        executionStepId: null,
+        type: 'native',
+        titre: 'x',
+        description: '',
+      },
+    })
+    expect(creation.status).toBe(404)
+    expect(creation.corps.erreur).toBe('execution_introuvable')
+  })
+
+  test('enregistrer une preuve sur une exécution clôturée -> execution_deja_cloturee', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { executionId } = await creerExecutionEnCoursDeTest(ctx, admin.jeton, clientId)
+    await requete(ctx, 'PATCH', `/clients/${clientId}/executions/${executionId}/cloturer`, {
+      jeton: admin.jeton,
+      body: { verdict: 'conforme' },
+    })
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+      body: { executionId, executionStepId: null, type: 'native', titre: 'x', description: '' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('execution_deja_cloturee')
+  })
+
+  test('enregistrer une preuve avec un executionStepId inconnu -> etape_inconnue', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { executionId } = await creerExecutionEnCoursDeTest(ctx, admin.jeton, clientId)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+      body: {
+        executionId,
+        executionStepId: 'etape-inconnue',
+        type: 'native',
+        titre: 'x',
+        description: '',
+      },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('etape_inconnue')
+  })
+
+  test('ajouter une localisation à une Evidence de type document', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { executionId } = await creerExecutionEnCoursDeTest(ctx, admin.jeton, clientId)
+    const preuve = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+      body: {
+        executionId,
+        executionStepId: null,
+        type: 'document',
+        titre: 'Export capteur',
+        description: '',
+      },
+    })
+
+    const localisation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/evidences/${preuve.corps.evidence.id}/localisations`,
+      { jeton: admin.jeton, body: { systeme: 'drive', reference: '/preuves/export.csv' } },
+    )
+    expect(localisation.status).toBe(201)
+    expect(localisation.corps.evidenceLocation.reference).toBe('/preuves/export.csv')
+  })
+
+  test('ajouter une localisation à une Evidence de type native -> type_non_document', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { executionId } = await creerExecutionEnCoursDeTest(ctx, admin.jeton, clientId)
+    const preuve = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+      body: { executionId, executionStepId: null, type: 'native', titre: 'x', description: '' },
+    })
+
+    const localisation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/evidences/${preuve.corps.evidence.id}/localisations`,
+      { jeton: admin.jeton, body: { systeme: 'drive', reference: '/inutile' } },
+    )
+    expect(localisation.status).toBe(400)
+    expect(localisation.corps.erreur).toBe('type_non_document')
+  })
+
+  test('ajouter une localisation à une Evidence inconnue -> evidence_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const localisation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/evidences/inconnue/localisations`,
+      { jeton: admin.jeton, body: { systeme: 'drive', reference: '/x' } },
+    )
+    expect(localisation.status).toBe(404)
+    expect(localisation.corps.erreur).toBe('evidence_introuvable')
+  })
+
+  test('déclarer une provenance : idempotente', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { executionId, requirementId } = await creerExecutionEnCoursDeTest(
+      ctx,
+      admin.jeton,
+      clientId,
+    )
+    const preuve = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+      body: { executionId, executionStepId: null, type: 'native', titre: 'x', description: '' },
+    })
+
+    const premiere = await requete(ctx, 'POST', `/clients/${clientId}/provenance-links`, {
+      jeton: admin.jeton,
+      body: { evidenceId: preuve.corps.evidence.id, requirementId },
+    })
+    expect(premiere.status).toBe(201)
+
+    const seconde = await requete(ctx, 'POST', `/clients/${clientId}/provenance-links`, {
+      jeton: admin.jeton,
+      body: { evidenceId: preuve.corps.evidence.id, requirementId },
+    })
+    expect(seconde.status).toBe(200)
+    expect(seconde.corps.provenanceLink.id).toBe(premiere.corps.provenanceLink.id)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.provenanceLinks).toHaveLength(1)
+  })
+
+  test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const evidenceLocale = {
+      id: 'evidence-locale-1',
+      clientId,
+      executionId: 'exec-x',
+      executionStepId: null,
+      type: 'native',
+      titre: 'Ancien titre',
+      description: '',
+      horodatage: '2026-01-01T00:00:00.000Z',
+      actor: 'local',
+    }
+
+    const premiere = await requete(ctx, 'POST', `/clients/${clientId}/evidences/migration-locale`, {
+      jeton: admin.jeton,
+      body: { evidences: [evidenceLocale] },
+    })
+    expect(premiere.status).toBe(200)
+
+    const rejouee = await requete(ctx, 'POST', `/clients/${clientId}/evidences/migration-locale`, {
+      jeton: admin.jeton,
+      body: { evidences: [{ ...evidenceLocale, titre: 'Tentative d’écrasement' }] },
+    })
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.evidences).toHaveLength(1)
+    expect(liste.corps.evidences[0]?.titre).toBe('Ancien titre')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/evidences`)
     expect(obtenir.status).toBe(401)
   })
 })

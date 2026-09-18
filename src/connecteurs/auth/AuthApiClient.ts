@@ -682,6 +682,52 @@ export interface SaisieEvenementExecutionWire {
   qualityEventId: string | null
 }
 
+export interface EvidenceWire {
+  id: string
+  clientId: string
+  executionId: string
+  executionStepId: string | null
+  type: string
+  titre: string
+  description: string
+  horodatage: string
+  actor: string
+}
+
+export interface EvidenceLocationWire {
+  id: string
+  clientId: string
+  evidenceId: string
+  systeme: string
+  reference: string
+}
+
+export interface ProvenanceLinkWire {
+  id: string
+  clientId: string
+  evidenceId: string
+  requirementId: string
+  createdAt: string
+}
+
+export interface SaisieEnregistrementPreuveWire {
+  executionId: string
+  executionStepId: string | null
+  type: string
+  titre: string
+  description: string
+}
+
+export interface SaisieAjoutLocalisationWire {
+  systeme: string
+  reference: string
+}
+
+export interface SaisieDeclarationProvenanceWire {
+  evidenceId: string
+  requirementId: string
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -1708,6 +1754,71 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/executions/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Evidence/EvidenceLocation/ProvenanceLink (Target Architecture, domaine "Evidence", Phase 6c du chantier de migration D1) ---
+
+  obtenirEvidences(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      evidences: EvidenceWire[]
+      evidenceLocations: EvidenceLocationWire[]
+      provenanceLinks: ProvenanceLinkWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/evidences`, { jeton })
+  }
+
+  enregistrerPreuve(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieEnregistrementPreuveWire,
+  ): Promise<ResultatApi<{ evidence: EvidenceWire }>> {
+    return this.requete('POST', `/clients/${clientId}/evidences`, { jeton, body: saisie })
+  }
+
+  ajouterLocalisation(
+    jeton: string,
+    clientId: string,
+    evidenceId: string,
+    saisie: SaisieAjoutLocalisationWire,
+  ): Promise<ResultatApi<{ evidenceLocation: EvidenceLocationWire }>> {
+    return this.requete('POST', `/clients/${clientId}/evidences/${evidenceId}/localisations`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  declarerProvenance(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieDeclarationProvenanceWire,
+  ): Promise<ResultatApi<{ provenanceLink: ProvenanceLinkWire }>> {
+    return this.requete('POST', `/clients/${clientId}/provenance-links`, { jeton, body: saisie })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerEvidencesLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerEvidencesLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      evidences: EvidenceWire[]
+      evidenceLocations: EvidenceLocationWire[]
+      provenanceLinks: ProvenanceLinkWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      evidences: EvidenceWire[]
+      evidenceLocations: EvidenceLocationWire[]
+      provenanceLinks: ProvenanceLinkWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/evidences/migration-locale`, {
       jeton,
       body: donnees,
     })

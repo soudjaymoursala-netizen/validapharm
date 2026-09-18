@@ -1,15 +1,92 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
+  EvidenceLocationWire,
+  EvidenceWire,
+  ProvenanceLinkWire,
+} from '../../connecteurs/auth/AuthApiClient'
+import type {
   Evidence,
   EvidenceLocation,
   ProvenanceLink,
   SystemeEvidenceLocation,
   TypeEvidence,
 } from '../../logique-metier/domaine/types'
-import { identifiantActeurCourant } from '../identite/identiteLocale'
-import { db } from '../../persistance/db'
+import {
+  evidenceLocationsAMigrer,
+  evidencesAMigrer,
+  provenanceLinksAMigrer,
+} from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 import { useExecutionStore } from './useExecutionStore'
+
+export function evidenceWireVersDomaine(wire: EvidenceWire): Evidence {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    execution_id: wire.executionId,
+    execution_step_id: wire.executionStepId,
+    type: wire.type as TypeEvidence,
+    titre: wire.titre,
+    description: wire.description,
+    horodatage: wire.horodatage,
+    actor: wire.actor,
+  }
+}
+
+export function evidenceLocationWireVersDomaine(wire: EvidenceLocationWire): EvidenceLocation {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    evidence_id: wire.evidenceId,
+    systeme: wire.systeme as SystemeEvidenceLocation,
+    reference: wire.reference,
+  }
+}
+
+export function provenanceLinkWireVersDomaine(wire: ProvenanceLinkWire): ProvenanceLink {
+  return {
+    id: wire.id,
+    client_id: wire.clientId,
+    evidence_id: wire.evidenceId,
+    requirement_id: wire.requirementId,
+    created_at: wire.createdAt,
+  }
+}
+
+function evidenceDomaineVersWire(e: Evidence): EvidenceWire {
+  return {
+    id: e.id,
+    clientId: e.client_id,
+    executionId: e.execution_id,
+    executionStepId: e.execution_step_id,
+    type: e.type,
+    titre: e.titre,
+    description: e.description,
+    horodatage: e.horodatage,
+    actor: e.actor,
+  }
+}
+
+function evidenceLocationDomaineVersWire(l: EvidenceLocation): EvidenceLocationWire {
+  return {
+    id: l.id,
+    clientId: l.client_id,
+    evidenceId: l.evidence_id,
+    systeme: l.systeme,
+    reference: l.reference,
+  }
+}
+
+function provenanceLinkDomaineVersWire(p: ProvenanceLink): ProvenanceLinkWire {
+  return {
+    id: p.id,
+    clientId: p.client_id,
+    evidenceId: p.evidence_id,
+    requirementId: p.requirement_id,
+    createdAt: p.created_at,
+  }
+}
 
 export interface NouvellePreuveInput {
   executionStepId: string | null
@@ -36,6 +113,13 @@ export type ErreurEcriturePreuve = {
  * Ne construit aucun stockage de fichier réel — `EvidenceLocation` est un
  * pointeur déclaratif, jamais un flux binaire (limite assumée, §5 de la spec).
  *
+ * **Phase 6c du chantier de migration D1**
+ * (docs/CHANTIER-MIGRATION-D1-RECAP.md) : Cloudflare D1 devient la source
+ * de vérité — mêmes routes authentifiées scopées par client que les
+ * autres domaines de ce chantier. Dernière brique du Test/Execution/
+ * Evidence engine — la Phase 6 est entièrement close une fois cette
+ * migration mergée.
+ *
  * @requirement Target Architecture, domaine "Evidence"
  */
 export const useEvidenceStore = defineStore('evidence', () => {
@@ -44,21 +128,93 @@ export const useEvidenceStore = defineStore('evidence', () => {
   const provenanceLinks = ref<ProvenanceLink[]>([])
   const enChargement = ref(false)
 
+  /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que les autres stores de ce chantier. */
+  async function obtenirApi() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    return { api, jeton: authStore.jeton }
+  }
+
+  /**
+   * Envoie au serveur les enregistrements capturés depuis les anciennes
+   * tables IndexedDB locales juste avant leur suppression — n'a d'effet
+   * réel qu'une seule fois (voir migration Dexie v47, `persistance/db.ts`).
+   * Filtre par client avant envoi, même patron que les autres domaines de
+   * ce chantier.
+   */
+  async function migrerEvidencesLocalVersServeur(clientId: string): Promise<void> {
+    const evidencesDuClient = evidencesAMigrer.filter((e) => e.client_id === clientId)
+    const evidenceLocationsDuClient = evidenceLocationsAMigrer.filter(
+      (l) => l.client_id === clientId,
+    )
+    const provenanceLinksDuClient = provenanceLinksAMigrer.filter((p) => p.client_id === clientId)
+    if (
+      evidencesDuClient.length === 0 &&
+      evidenceLocationsDuClient.length === 0 &&
+      provenanceLinksDuClient.length === 0
+    ) {
+      return
+    }
+
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.migrerEvidencesLocal(jeton, clientId, {
+      evidences: evidencesDuClient.map(evidenceDomaineVersWire),
+      evidenceLocations: evidenceLocationsDuClient.map(evidenceLocationDomaineVersWire),
+      provenanceLinks: provenanceLinksDuClient.map(provenanceLinkDomaineVersWire),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la migration Evidence : ${resultat.erreur}`)
+    }
+    for (const e of evidencesDuClient) {
+      const index = evidencesAMigrer.indexOf(e)
+      if (index !== -1) evidencesAMigrer.splice(index, 1)
+    }
+    for (const l of evidenceLocationsDuClient) {
+      const index = evidenceLocationsAMigrer.indexOf(l)
+      if (index !== -1) evidenceLocationsAMigrer.splice(index, 1)
+    }
+    for (const p of provenanceLinksDuClient) {
+      const index = provenanceLinksAMigrer.indexOf(p)
+      if (index !== -1) provenanceLinksAMigrer.splice(index, 1)
+    }
+  }
+
   async function charger(clientId: string): Promise<void> {
     enChargement.value = true
     try {
-      evidences.value = await db.evidences.where('client_id').equals(clientId).toArray()
-      evidenceLocations.value = await db.evidenceLocations
-        .where('client_id')
-        .equals(clientId)
-        .toArray()
-      provenanceLinks.value = await db.provenanceLinks.where('client_id').equals(clientId).toArray()
+      try {
+        await migrerEvidencesLocalVersServeur(clientId)
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
+      }
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.obtenirEvidences(jeton, clientId)
+      if (resultat.ok) {
+        evidences.value = resultat.donnees.evidences.map(evidenceWireVersDomaine)
+        evidenceLocations.value = resultat.donnees.evidenceLocations.map(
+          evidenceLocationWireVersDomaine,
+        )
+        provenanceLinks.value = resultat.donnees.provenanceLinks.map(provenanceLinkWireVersDomaine)
+      } else {
+        evidences.value = []
+        evidenceLocations.value = []
+        provenanceLinks.value = []
+      }
+    } catch {
+      // Panne réseau réelle ou relais non configuré : jamais une exception
+      // non gérée, même discipline que les autres stores de ce chantier.
+      evidences.value = []
+      evidenceLocations.value = []
+      provenanceLinks.value = []
     } finally {
       enChargement.value = false
     }
   }
 
-  /** Une Evidence n'existe que pour une Execution réelle, non clôturée (immutabilité post-clôture, cohérent avec 7b). */
+  /** Une Evidence n'existe que pour une Execution réelle, non clôturée (immutabilité post-clôture, cohérent avec Phase 6b). */
   async function enregistrerPreuve(
     clientId: string,
     executionId: string,
@@ -78,18 +234,25 @@ export const useEvidenceStore = defineStore('evidence', () => {
       if (!etape || etape.execution_id !== executionId) return { erreur: 'etape_inconnue' }
     }
 
-    const preuve: Evidence = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      execution_id: executionId,
-      execution_step_id: input.executionStepId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.enregistrerPreuve(jeton, clientId, {
+      executionId,
+      executionStepId: input.executionStepId,
       type: input.type,
       titre: input.titre,
       description: input.description,
-      horodatage: new Date().toISOString(),
-      actor: identifiantActeurCourant(),
+    })
+    if (!resultat.ok) {
+      if (
+        resultat.erreur === 'execution_introuvable' ||
+        resultat.erreur === 'execution_deja_cloturee' ||
+        resultat.erreur === 'etape_inconnue'
+      ) {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec de l'enregistrement de la preuve : ${resultat.erreur}`)
     }
-    await db.evidences.put(preuve)
+    const preuve = evidenceWireVersDomaine(resultat.donnees.evidence)
     evidences.value = [...evidences.value, preuve]
     return preuve
   }
@@ -100,23 +263,23 @@ export const useEvidenceStore = defineStore('evidence', () => {
     evidenceId: string,
     input: NouvelleLocalisationInput,
   ): Promise<EvidenceLocation | { erreur: 'evidence_introuvable' | 'type_non_document' }> {
-    const preuve = await db.evidences.get(evidenceId)
-    if (!preuve || preuve.client_id !== clientId) return { erreur: 'evidence_introuvable' }
-    if (preuve.type !== 'document') return { erreur: 'type_non_document' }
-
-    const localisation: EvidenceLocation = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      evidence_id: evidenceId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.ajouterLocalisation(jeton, clientId, evidenceId, {
       systeme: input.systeme,
       reference: input.reference,
+    })
+    if (!resultat.ok) {
+      if (resultat.erreur === 'evidence_introuvable' || resultat.erreur === 'type_non_document') {
+        return { erreur: resultat.erreur }
+      }
+      throw new Error(`Échec de l'ajout de la localisation : ${resultat.erreur}`)
     }
-    await db.evidenceLocations.put(localisation)
+    const localisation = evidenceLocationWireVersDomaine(resultat.donnees.evidenceLocation)
     evidenceLocations.value = [...evidenceLocations.value, localisation]
     return localisation
   }
 
-  /** Déclaration explicite, jamais déduite — idempotente, même logique que `declarerCouverture` (7a). */
+  /** Déclaration explicite, jamais déduite — idempotente, même logique que `declarerCouverture` (Phase 6a). */
   async function declarerProvenance(
     clientId: string,
     evidenceId: string,
@@ -127,14 +290,12 @@ export const useEvidenceStore = defineStore('evidence', () => {
     )
     if (existant) return existant
 
-    const lien: ProvenanceLink = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      evidence_id: evidenceId,
-      requirement_id: requirementId,
-      created_at: new Date().toISOString(),
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.declarerProvenance(jeton, clientId, { evidenceId, requirementId })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la déclaration de provenance : ${resultat.erreur}`)
     }
-    await db.provenanceLinks.put(lien)
+    const lien = provenanceLinkWireVersDomaine(resultat.donnees.provenanceLink)
     provenanceLinks.value = [...provenanceLinks.value, lien]
     return lien
   }

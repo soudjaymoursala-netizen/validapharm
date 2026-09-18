@@ -13,6 +13,7 @@ import type {
 import { executerBoucleRaisonnement } from '../../logique-metier/raisonnement/boucleRaisonnement'
 import { CATALOGUE_OUTILS_RAISONNEMENT } from '../../logique-metier/raisonnement/outilsRaisonnement'
 import { db } from '../../persistance/db'
+import { useEvidenceStore } from './useEvidenceStore'
 import { useExecutionStore } from './useExecutionStore'
 import { useProcessContextStore } from './useProcessContextStore'
 import { useQualityEventStore } from './useQualityEventStore'
@@ -122,31 +123,29 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
     // migration D1) — même patron que ci-dessus.
     const executionStore = useExecutionStore()
     await executionStore.charger(clientId)
+    // Evidence migrée vers le Worker/D1 (Phase 6c du chantier de
+    // migration D1) — même patron que ci-dessus.
+    const evidenceStore = useEvidenceStore()
+    await evidenceStore.charger(clientId)
 
-    const [
-      evidences,
-      knowledgeItems,
-      procedures,
-      procedureSteps,
-      knowledgeRelations,
-      contextSnapshotItems,
-    ] = await Promise.all([
-      db.evidences.where('client_id').equals(clientId).toArray(),
-      db.knowledgeItems.where('client_id').equals(clientId).toArray(),
-      db.procedures.where('client_id').equals(clientId).toArray(),
-      db.procedureSteps.where('client_id').equals(clientId).toArray(),
-      db.knowledgeRelations.where('client_id').equals(clientId).toArray(),
-      entrees.contextSnapshotId
-        ? db.contextSnapshotItems
-            .where('context_snapshot_id')
-            .equals(entrees.contextSnapshotId)
-            .toArray()
-        : Promise.resolve([]),
-    ])
+    const [knowledgeItems, procedures, procedureSteps, knowledgeRelations, contextSnapshotItems] =
+      await Promise.all([
+        db.knowledgeItems.where('client_id').equals(clientId).toArray(),
+        db.procedures.where('client_id').equals(clientId).toArray(),
+        db.procedureSteps.where('client_id').equals(clientId).toArray(),
+        db.knowledgeRelations.where('client_id').equals(clientId).toArray(),
+        entrees.contextSnapshotId
+          ? db.contextSnapshotItems
+              .where('context_snapshot_id')
+              .equals(entrees.contextSnapshotId)
+              .toArray()
+          : Promise.resolve([]),
+      ])
     const requirements = testDefinitionStore.requirements
     const couvertures = testDefinitionStore.couvertures
     const tests = testDefinitionStore.tests
     const executions = executionStore.executions
+    const evidences = evidenceStore.evidences
     const manufacturingContexts = processContextStore.manufacturingContexts
     const qualityEvents = qualityEventStore.evenements
     const assetNodes = structureStore.noeuds

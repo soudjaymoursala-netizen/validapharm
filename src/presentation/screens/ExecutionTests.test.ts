@@ -4,7 +4,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -68,8 +67,6 @@ async function creerTestApprouve(): Promise<string> {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.evidences.clear()
-  await db.evidenceLocations.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   ctx = installation.ctx
@@ -156,9 +153,12 @@ describe('ExecutionTests', () => {
     await inputsPreuve[0]?.setValue('Observation directe du cycle')
     await zonePreuve?.find('button').trigger('click')
     await attendreQue(
-      async () => (await db.evidences.where('execution_id').equals(execution.id).count()) > 0,
+      async () =>
+        (await ctx.evidenceRepo.listerEvidences(CLIENT_ID)).filter(
+          (e) => e.executionId === execution.id,
+        ).length > 0,
     )
-    expect((await db.evidences.toArray())[0]?.type).toBe('native')
+    expect((await ctx.evidenceRepo.listerEvidences(CLIENT_ID))[0]?.type).toBe('native')
 
     // Clôture avec verdict explicite — jamais déduit des résultats d'étape
     const zoneCloture = wrapper.find('.carte-execution').findAll('.ligne-formulaire').at(-1)

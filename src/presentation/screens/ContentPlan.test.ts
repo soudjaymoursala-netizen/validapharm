@@ -111,24 +111,22 @@ async function seedChainePrete(assetNodeId: string): Promise<void> {
     createdAt: maintenant,
     updatedAt: maintenant,
   })
-  await db.evidences.put({
+  await ctx.evidenceRepo.creerEvidence({
     id: 'ev-1',
-    client_id: clientId,
-    execution_id: 'exec-1',
-    execution_step_id: null,
+    clientId,
+    executionId: 'exec-1',
+    executionStepId: null,
     type: 'native',
     titre: 'Observation',
     description: '',
-    audit_log: [],
-    created_at: maintenant,
-    updated_at: maintenant,
-  } as never)
+    horodatage: maintenant,
+    actor: 'local',
+  })
 }
 
 beforeEach(async () => {
   setActivePinia(createPinia())
   await db.contentPlans.clear()
-  await db.evidences.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   ctx = installation.ctx

@@ -401,6 +401,18 @@ export const measurementsAMigrer: Measurement[] = []
 export const executionEventsAMigrer: ExecutionEvent[] = []
 
 /**
+ * Evidence/EvidenceLocation/ProvenanceLink : migrés vers le Worker/D1
+ * (Target Architecture, domaine "Evidence", Phase 6c du chantier de
+ * migration D1) — même principe que `executionsAMigrer` ci-dessus :
+ * formes domaine inchangées, pas de type "Ancien". Consommés et envoyés
+ * au serveur par `migrerEvidencesLocalVersServeur` (`useEvidenceStore`)
+ * au premier `charger()`.
+ */
+export const evidencesAMigrer: Evidence[] = []
+export const evidenceLocationsAMigrer: EvidenceLocation[] = []
+export const provenanceLinksAMigrer: ProvenanceLink[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -417,9 +429,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  evidences!: EntityTable<Evidence, 'id'>
-  evidenceLocations!: EntityTable<EvidenceLocation, 'id'>
-  provenanceLinks!: EntityTable<ProvenanceLink, 'id'>
   sources!: EntityTable<Source, 'id'>
   sourceVersions!: EntityTable<SourceVersion, 'id'>
   sourceLocations!: EntityTable<SourceLocation, 'id'>
@@ -1001,6 +1010,26 @@ export class ValidaPharmDatabase extends Dexie {
         measurementsAMigrer.push(...measurements)
         const executionEvents = await tx.table<ExecutionEvent>('executionEvents').toArray()
         executionEventsAMigrer.push(...executionEvents)
+      })
+
+    // Evidence/EvidenceLocation/ProvenanceLink : migrés vers le
+    // Worker/D1 (Target Architecture, domaine "Evidence", Phase 6c du
+    // chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) —
+    // même technique de capture avant suppression physique que la
+    // version 46 ci-dessus.
+    this.version(47)
+      .stores({
+        evidences: null,
+        evidenceLocations: null,
+        provenanceLinks: null,
+      })
+      .upgrade(async (tx) => {
+        const evidences = await tx.table<Evidence>('evidences').toArray()
+        evidencesAMigrer.push(...evidences)
+        const evidenceLocations = await tx.table<EvidenceLocation>('evidenceLocations').toArray()
+        evidenceLocationsAMigrer.push(...evidenceLocations)
+        const provenanceLinks = await tx.table<ProvenanceLink>('provenanceLinks').toArray()
+        provenanceLinksAMigrer.push(...provenanceLinks)
       })
   }
 }
