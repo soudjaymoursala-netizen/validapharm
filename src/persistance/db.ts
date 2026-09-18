@@ -495,6 +495,16 @@ export const aiResponsesAMigrer: AIResponse[] = []
 export const citationsAIResponseAMigrer: CitationAIResponse[] = []
 
 /**
+ * Procedure/ProcedureStep (cerveau procédural) : migrés vers le Worker/D1
+ * (Phase 9a du chantier de migration D1) — même principe que
+ * `aiConfigurationsAMigrer` ci-dessus. Consommés et envoyés au serveur par
+ * `migrerProceduresLocalVersServeur` (`useProcedureStore`) au premier
+ * `charger()`.
+ */
+export const proceduresAMigrer: Procedure[] = []
+export const procedureStepsAMigrer: ProcedureStep[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -511,8 +521,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  procedures!: EntityTable<Procedure, 'id'>
-  procedureSteps!: EntityTable<ProcedureStep, 'id'>
   gabaritsExportClient!: EntityTable<GabaritExportClient, 'id'>
   profilLocal!: EntityTable<EnregistrementProfilLocal, 'id'>
   connexionAuthentification!: EntityTable<EnregistrementConnexionAuthentification, 'id'>
@@ -1220,6 +1228,18 @@ export class ValidaPharmDatabase extends Dexie {
           .table<CitationAIResponse>('citationsAIResponse')
           .toArray()
         citationsAIResponseAMigrer.push(...citationsAIResponse)
+      })
+
+    // Procedure/ProcedureStep (cerveau procédural) : migrés vers le
+    // Worker/D1 (Phase 9a du chantier de migration D1) — même technique
+    // de capture avant suppression physique que la version 53 ci-dessus.
+    this.version(54)
+      .stores({ procedures: null, procedureSteps: null })
+      .upgrade(async (tx) => {
+        const procedures = await tx.table<Procedure>('procedures').toArray()
+        proceduresAMigrer.push(...procedures)
+        const procedureSteps = await tx.table<ProcedureStep>('procedureSteps').toArray()
+        procedureStepsAMigrer.push(...procedureSteps)
       })
   }
 }

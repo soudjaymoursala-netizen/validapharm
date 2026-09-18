@@ -4,7 +4,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Section } from '../../logique-metier/domaine/types'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -64,11 +63,24 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.procedures.clear()
-  await db.procedureSteps.clear()
   await reinitialiserAuthDeTest()
-  demonter = installerFauxWorkerAuth().demonter
+  const installation = installerFauxWorkerAuth()
+  demonter = installation.demonter
   await connecterAdminDeTest()
+  await installation.ctx.clientsRepo.creer({
+    id: 'client-1',
+    name: 'Client de test',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
 })
 
 afterEach(() => {

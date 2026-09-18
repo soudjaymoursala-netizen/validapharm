@@ -3,9 +3,9 @@ import { ref } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 import type { Client } from '../../logique-metier/domaine/types'
 import { correspondPourRecherche } from '../../logique-metier/recherche/correspondPourRecherche'
-import { db } from '../../persistance/db'
 import { documentProjetWireVersDomaine } from './useProjectDocumentsStore'
 import { useAuthStore } from './useAuthStore'
+import { useProcedureStore } from './useProcedureStore'
 import { useProcessContextStore } from './useProcessContextStore'
 import { useSourceIntelligenceStore } from './useSourceIntelligenceStore'
 import { sectionWireVersDomaine } from './useSectionsStore'
@@ -80,14 +80,19 @@ export const useRechercheGlobaleStore = defineStore('rechercheGlobale', () => {
       // chantier de migration D1) — chargés via le store dédié plutôt
       // qu'un accès Dexie direct, devenu impossible depuis cette migration.
       const sourceIntelligenceStore = useSourceIntelligenceStore()
-      const [resultatProjets, procedures] = await Promise.all([
+      // Procedure/ProcedureStep migrés vers le Worker/D1 (Phase 9a du
+      // chantier de migration D1) — chargées via le store dédié plutôt
+      // qu'un accès Dexie direct, devenu impossible depuis cette migration.
+      const procedureStore = useProcedureStore()
+      const [resultatProjets] = await Promise.all([
         api && authStore.jeton
           ? api.listerProjetsClient(authStore.jeton, clientId)
           : Promise.resolve(null),
-        db.procedures.where('client_id').equals(clientId).toArray(),
+        procedureStore.charger(clientId),
         processContextStore.charger(clientId),
         sourceIntelligenceStore.charger(clientId),
       ])
+      const procedures = procedureStore.procedures
       const knowledgeItems = sourceIntelligenceStore.knowledgeItems
       const processes = processContextStore.processes
       const projetsDuClient = resultatProjets?.ok ? resultatProjets.donnees.projects : []

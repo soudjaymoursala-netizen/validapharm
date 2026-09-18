@@ -28,6 +28,7 @@ import { MissionRepoMemoire } from '../../workers/auth-worker/src/repos/missionR
 import { OrganisationRepoMemoire } from '../../workers/auth-worker/src/repos/organisationRepo'
 import { ParametersRepoMemoire } from '../../workers/auth-worker/src/repos/parametersRepo'
 import { ParametresInstallationRepoMemoire } from '../../workers/auth-worker/src/repos/parametresInstallationRepo'
+import { ProcedureRepoMemoire } from '../../workers/auth-worker/src/repos/procedureRepo'
 import { ProjectDocumentsRepoMemoire } from '../../workers/auth-worker/src/repos/projectDocumentsRepo'
 import { ProcessContextRepoMemoire } from '../../workers/auth-worker/src/repos/processContextRepo'
 import { ProjectsRepoMemoire } from '../../workers/auth-worker/src/repos/projectsRepo'
@@ -83,6 +84,7 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     missionRepo: new MissionRepoMemoire(),
     contextSnapshotRepo: new ContextSnapshotRepoMemoire(),
     reasoningEngineRepo: new ReasoningEngineRepoMemoire(),
+    procedureRepo: new ProcedureRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,

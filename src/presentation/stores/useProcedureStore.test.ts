@@ -7,7 +7,12 @@ import type {
   ProviderAdapter,
   Reponse,
 } from '../../connecteurs/ia/ProviderAdapter'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useProcedureStore } from './useProcedureStore'
 
 function providerMock(texteReponse: string): ProviderAdapter {
@@ -20,245 +25,329 @@ function providerMock(texteReponse: string): ProviderAdapter {
   }
 }
 
-beforeEach(async () => {
+async function creerClient(ctx: Contexte, id: string): Promise<void> {
+  await ctx.clientsRepo.creer({
+    id,
+    name: id,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
+
+async function installerAuthEtClient(
+  clientId: string,
+): Promise<{ ctx: Contexte; demonter: () => void }> {
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  await connecterAdminDeTest()
+  await creerClient(installation.ctx, clientId)
+  return installation
+}
+
+beforeEach(() => {
   setActivePinia(createPinia())
-  await db.procedures.clear()
-  await db.procedureSteps.clear()
 })
 
 describe('useProcedureStore — creerProcedure (versionnée)', () => {
   test('première création : numero_version = 1', async () => {
-    const store = useProcedureStore()
-    await store.charger('client-1')
-    const procedure = await store.creerProcedure('client-1', {
-      reference: 'SOP-QA-012',
-      titre: 'Impact Assessment',
-      effectiveDate: '2026-01-01',
-      categorie: 'production',
-    })
-    expect(procedure.numero_version).toBe(1)
+    const { demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useProcedureStore()
+      await store.charger('client-1')
+      const procedure = await store.creerProcedure('client-1', {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      })
+      expect(procedure.numero_version).toBe(1)
+    } finally {
+      demonter()
+    }
   })
 
   test("une nouvelle révision de la même référence incrémente numero_version, jamais ne mute l'ancienne (R-21)", async () => {
-    const store = useProcedureStore()
-    await store.charger('client-1')
-    const v1 = await store.creerProcedure('client-1', {
-      reference: 'SOP-QA-012',
-      titre: 'Impact Assessment',
-      effectiveDate: '2026-01-01',
-      categorie: 'production',
-    })
-    const v2 = await store.creerProcedure('client-1', {
-      reference: 'SOP-QA-012',
-      titre: 'Impact Assessment (révisée)',
-      effectiveDate: '2026-06-01',
-      categorie: 'production',
-    })
+    const { ctx, demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useProcedureStore()
+      await store.charger('client-1')
+      const v1 = await store.creerProcedure('client-1', {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      })
+      const v2 = await store.creerProcedure('client-1', {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment (révisée)',
+        effectiveDate: '2026-06-01',
+        categorie: 'production',
+      })
 
-    expect(v2.numero_version).toBe(2)
-    expect(store.procedures).toHaveLength(2)
+      expect(v2.numero_version).toBe(2)
+      expect(store.procedures).toHaveLength(2)
 
-    const v1Relue = await db.procedures.get(v1.id)
-    expect(v1Relue?.numero_version).toBe(1)
-    expect(v1Relue?.titre).toBe('Impact Assessment')
+      const v1Relue = await ctx.procedureRepo.procedureParId('client-1', v1.id)
+      expect(v1Relue?.numeroVersion).toBe(1)
+      expect(v1Relue?.titre).toBe('Impact Assessment')
+    } finally {
+      demonter()
+    }
   })
 
   test('isolation stricte par client : même référence acceptée pour un autre client, numero_version repart à 1', async () => {
-    const store = useProcedureStore()
-    await store.charger('client-A')
-    await store.creerProcedure('client-A', {
-      reference: 'SOP-QA-012',
-      titre: 'Impact Assessment',
-      effectiveDate: '2026-01-01',
-      categorie: 'production',
-    })
-    await store.charger('client-B')
-    const procedureB = await store.creerProcedure('client-B', {
-      reference: 'SOP-QA-012',
-      titre: 'Impact Assessment (client B)',
-      effectiveDate: '2026-01-01',
-      categorie: 'production',
-    })
-    expect(procedureB.numero_version).toBe(1)
+    const { ctx, demonter } = await installerAuthEtClient('client-A')
+    try {
+      await creerClient(ctx, 'client-B')
+      const store = useProcedureStore()
+      await store.charger('client-A')
+      await store.creerProcedure('client-A', {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      })
+      await store.charger('client-B')
+      const procedureB = await store.creerProcedure('client-B', {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment (client B)',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      })
+      expect(procedureB.numero_version).toBe(1)
+    } finally {
+      demonter()
+    }
   })
 })
 
 describe('useProcedureStore — ajouterEtape', () => {
   test('les étapes sont ordonnées et retournées dans cet ordre', async () => {
-    const store = useProcedureStore()
-    await store.charger('client-1')
-    const procedure = await store.creerProcedure('client-1', {
-      reference: 'SOP-QA-012',
-      titre: 'Impact Assessment',
-      effectiveDate: '2026-01-01',
-      categorie: 'production',
-    })
-    await store.ajouterEtape('client-1', procedure.id, {
-      description: 'Vérifier le contexte',
-      obligatoire: true,
-    })
-    await store.ajouterEtape('client-1', procedure.id, {
-      description: 'Identifier les impacts',
-      obligatoire: true,
-      condition: "si l'équipement est GxP",
-      responsable: 'Ingénieur qualité',
-    })
+    const { demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useProcedureStore()
+      await store.charger('client-1')
+      const procedure = await store.creerProcedure('client-1', {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      })
+      await store.ajouterEtape('client-1', procedure.id, {
+        description: 'Vérifier le contexte',
+        obligatoire: true,
+      })
+      await store.ajouterEtape('client-1', procedure.id, {
+        description: 'Identifier les impacts',
+        obligatoire: true,
+        condition: "si l'équipement est GxP",
+        responsable: 'Ingénieur qualité',
+      })
 
-    const etapes = store.etapesDeProcedure(procedure.id)
-    expect(etapes.map((e) => e.description)).toEqual([
-      'Vérifier le contexte',
-      'Identifier les impacts',
-    ])
-    expect(etapes[1]?.condition).toBe("si l'équipement est GxP")
-    expect(etapes[1]?.responsable).toBe('Ingénieur qualité')
+      const etapes = store.etapesDeProcedure(procedure.id)
+      expect(etapes.map((e) => e.description)).toEqual([
+        'Vérifier le contexte',
+        'Identifier les impacts',
+      ])
+      expect(etapes[1]?.condition).toBe("si l'équipement est GxP")
+      expect(etapes[1]?.responsable).toBe('Ingénieur qualité')
+    } finally {
+      demonter()
+    }
   })
 
   test("rejette une étape pour une procédure introuvable ou d'un autre client", async () => {
-    const store = useProcedureStore()
-    await store.charger('client-1')
-    const procedure = await store.creerProcedure('client-1', {
-      reference: 'SOP-QA-012',
-      titre: 'Impact Assessment',
-      effectiveDate: '2026-01-01',
-      categorie: 'production',
-    })
+    const { ctx, demonter } = await installerAuthEtClient('client-1')
+    try {
+      await creerClient(ctx, 'client-2')
+      const store = useProcedureStore()
+      await store.charger('client-1')
+      const procedure = await store.creerProcedure('client-1', {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      })
 
-    const resultatIntrouvable = await store.ajouterEtape('client-1', 'id-inconnu', {
-      description: 'Étape',
-      obligatoire: true,
-    })
-    expect(resultatIntrouvable).toEqual({ erreur: 'procedure_introuvable' })
+      const resultatIntrouvable = await store.ajouterEtape('client-1', 'id-inconnu', {
+        description: 'Étape',
+        obligatoire: true,
+      })
+      expect(resultatIntrouvable).toEqual({ erreur: 'procedure_introuvable' })
 
-    const resultatMauvaisClient = await store.ajouterEtape('client-2', procedure.id, {
-      description: 'Étape',
-      obligatoire: true,
-    })
-    expect(resultatMauvaisClient).toEqual({ erreur: 'procedure_introuvable' })
+      const resultatMauvaisClient = await store.ajouterEtape('client-2', procedure.id, {
+        description: 'Étape',
+        obligatoire: true,
+      })
+      expect(resultatMauvaisClient).toEqual({ erreur: 'procedure_introuvable' })
+    } finally {
+      demonter()
+    }
   })
 })
 
 describe('useProcedureStore — proceduresParCategorie (§4.20, tâche #114)', () => {
   test('filtre les procédures par catégorie CQV/CSV/Production, jamais mélangées', async () => {
-    const store = useProcedureStore()
-    await store.charger('client-1')
-    await store.creerProcedure('client-1', {
-      reference: 'PQ-COMPRESSION',
-      titre: 'Protocole de qualification presse',
-      effectiveDate: '2026-01-01',
-      categorie: 'cqv',
-    })
-    await store.creerProcedure('client-1', {
-      reference: 'VAL-MES-01',
-      titre: 'Validation du système de supervision',
-      effectiveDate: '2026-01-01',
-      categorie: 'csv',
-    })
-    await store.creerProcedure('client-1', {
-      reference: 'SOP-PROD-04',
-      titre: 'Conduite de la compression',
-      effectiveDate: '2026-01-01',
-      categorie: 'production',
-    })
+    const { demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useProcedureStore()
+      await store.charger('client-1')
+      await store.creerProcedure('client-1', {
+        reference: 'PQ-COMPRESSION',
+        titre: 'Protocole de qualification presse',
+        effectiveDate: '2026-01-01',
+        categorie: 'cqv',
+      })
+      await store.creerProcedure('client-1', {
+        reference: 'VAL-MES-01',
+        titre: 'Validation du système de supervision',
+        effectiveDate: '2026-01-01',
+        categorie: 'csv',
+      })
+      await store.creerProcedure('client-1', {
+        reference: 'SOP-PROD-04',
+        titre: 'Conduite de la compression',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      })
 
-    expect(store.proceduresParCategorie('cqv').map((p) => p.reference)).toEqual(['PQ-COMPRESSION'])
-    expect(store.proceduresParCategorie('csv').map((p) => p.reference)).toEqual(['VAL-MES-01'])
-    expect(store.proceduresParCategorie('production').map((p) => p.reference)).toEqual([
-      'SOP-PROD-04',
-    ])
+      expect(store.proceduresParCategorie('cqv').map((p) => p.reference)).toEqual([
+        'PQ-COMPRESSION',
+      ])
+      expect(store.proceduresParCategorie('csv').map((p) => p.reference)).toEqual(['VAL-MES-01'])
+      expect(store.proceduresParCategorie('production').map((p) => p.reference)).toEqual([
+        'SOP-PROD-04',
+      ])
+    } finally {
+      demonter()
+    }
   })
 })
 
 describe('useProcedureStore — derniereVersion', () => {
   test('retourne toujours le numero_version le plus élevé, jamais une version arbitraire', async () => {
-    const store = useProcedureStore()
-    await store.charger('client-1')
-    await store.creerProcedure('client-1', {
-      reference: 'SOP-QA-012',
-      titre: 'v1',
-      effectiveDate: '2026-01-01',
-      categorie: 'production',
-    })
-    await store.creerProcedure('client-1', {
-      reference: 'SOP-QA-012',
-      titre: 'v2',
-      effectiveDate: '2026-06-01',
-      categorie: 'production',
-    })
-    await store.creerProcedure('client-1', {
-      reference: 'AUTRE-SOP',
-      titre: 'autre',
-      effectiveDate: '2026-01-01',
-      categorie: 'production',
-    })
+    const { demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useProcedureStore()
+      await store.charger('client-1')
+      await store.creerProcedure('client-1', {
+        reference: 'SOP-QA-012',
+        titre: 'v1',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      })
+      await store.creerProcedure('client-1', {
+        reference: 'SOP-QA-012',
+        titre: 'v2',
+        effectiveDate: '2026-06-01',
+        categorie: 'production',
+      })
+      await store.creerProcedure('client-1', {
+        reference: 'AUTRE-SOP',
+        titre: 'autre',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      })
 
-    const derniere = store.derniereVersion('SOP-QA-012')
-    expect(derniere?.titre).toBe('v2')
-    expect(derniere?.numero_version).toBe(2)
+      const derniere = store.derniereVersion('SOP-QA-012')
+      expect(derniere?.titre).toBe('v2')
+      expect(derniere?.numero_version).toBe(2)
+    } finally {
+      demonter()
+    }
   })
 
   test('référence inconnue retourne null', async () => {
-    const store = useProcedureStore()
-    await store.charger('client-1')
-    expect(store.derniereVersion('INCONNUE')).toBeNull()
+    const { demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useProcedureStore()
+      await store.charger('client-1')
+      expect(store.derniereVersion('INCONNUE')).toBeNull()
+    } finally {
+      demonter()
+    }
   })
 })
 
 describe('useProcedureStore — genererProposition/annulerProposition/confirmerProposition', () => {
   test('genererProposition stocke la proposition déterministe dans derniereProposition, sans jamais persister', async () => {
-    const store = useProcedureStore()
-    await store.charger('client-1')
-    const texte = ['1 But', 'Décrire la procédure.', '2 Procédure', '- Étape unique.'].join('\n')
+    const { demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useProcedureStore()
+      await store.charger('client-1')
+      const texte = ['1 But', 'Décrire la procédure.', '2 Procédure', '- Étape unique.'].join('\n')
 
-    const proposition = await store.genererProposition(texte, [], providerMock('jamais utilisé'))
+      const proposition = await store.genererProposition(texte, [], providerMock('jamais utilisé'))
 
-    expect(store.derniereProposition).toEqual(proposition)
-    expect(proposition.source).toBe('deterministe')
-    expect(store.procedures).toHaveLength(0)
-    expect(store.procedureSteps).toHaveLength(0)
+      expect(store.derniereProposition).toEqual(proposition)
+      expect(proposition.source).toBe('deterministe')
+      expect(store.procedures).toHaveLength(0)
+      expect(store.procedureSteps).toHaveLength(0)
+    } finally {
+      demonter()
+    }
   })
 
   test('annulerProposition efface la proposition en attente sans rien écrire', async () => {
-    const store = useProcedureStore()
-    await store.charger('client-1')
-    await store.genererProposition(
-      ['1 But', 'Décrire la procédure.', '2 Procédure', '- Étape unique.'].join('\n'),
-      [],
-      providerMock('jamais utilisé'),
-    )
-    expect(store.derniereProposition).not.toBeNull()
+    const { demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useProcedureStore()
+      await store.charger('client-1')
+      await store.genererProposition(
+        ['1 But', 'Décrire la procédure.', '2 Procédure', '- Étape unique.'].join('\n'),
+        [],
+        providerMock('jamais utilisé'),
+      )
+      expect(store.derniereProposition).not.toBeNull()
 
-    store.annulerProposition()
+      store.annulerProposition()
 
-    expect(store.derniereProposition).toBeNull()
-    expect(store.procedures).toHaveLength(0)
+      expect(store.derniereProposition).toBeNull()
+      expect(store.procedures).toHaveLength(0)
+    } finally {
+      demonter()
+    }
   })
 
   test('confirmerProposition crée la Procedure puis les étapes retenues, dans l’ordre fourni par l’appelant, et efface la proposition', async () => {
-    const store = useProcedureStore()
-    await store.charger('client-1')
+    const { ctx, demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useProcedureStore()
+      await store.charger('client-1')
 
-    const procedure = await store.confirmerProposition(
-      'client-1',
-      {
-        reference: 'SOP-QA-020',
-        titre: 'Structuration confirmée',
-        effectiveDate: '2026-01-01',
-        categorie: 'production',
-      },
-      [
-        { description: 'Première étape retenue', obligatoire: true },
-        { description: 'Deuxième étape retenue', obligatoire: false, responsable: 'QA' },
-      ],
-    )
+      const procedure = await store.confirmerProposition(
+        'client-1',
+        {
+          reference: 'SOP-QA-020',
+          titre: 'Structuration confirmée',
+          effectiveDate: '2026-01-01',
+          categorie: 'production',
+        },
+        [
+          { description: 'Première étape retenue', obligatoire: true },
+          { description: 'Deuxième étape retenue', obligatoire: false, responsable: 'QA' },
+        ],
+      )
 
-    expect(procedure.reference).toBe('SOP-QA-020')
-    expect(store.etapesDeProcedure(procedure.id).map((e) => e.description)).toEqual([
-      'Première étape retenue',
-      'Deuxième étape retenue',
-    ])
-    expect(store.derniereProposition).toBeNull()
+      expect(procedure.reference).toBe('SOP-QA-020')
+      expect(store.etapesDeProcedure(procedure.id).map((e) => e.description)).toEqual([
+        'Première étape retenue',
+        'Deuxième étape retenue',
+      ])
+      expect(store.derniereProposition).toBeNull()
 
-    const procedureRelue = await db.procedures.get(procedure.id)
-    expect(procedureRelue).toBeDefined()
+      const procedureRelue = await ctx.procedureRepo.procedureParId('client-1', procedure.id)
+      expect(procedureRelue).toBeDefined()
+    } finally {
+      demonter()
+    }
   })
 })

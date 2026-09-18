@@ -26,6 +26,7 @@ import { MissionRepoMemoire } from './repos/missionRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametersRepoMemoire } from './repos/parametersRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
+import { ProcedureRepoMemoire } from './repos/procedureRepo'
 import { ProjectDocumentsRepoMemoire } from './repos/projectDocumentsRepo'
 import { ProcessContextRepoMemoire } from './repos/processContextRepo'
 import { ProjectsRepoMemoire } from './repos/projectsRepo'
@@ -74,6 +75,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     missionRepo: new MissionRepoMemoire(),
     contextSnapshotRepo: new ContextSnapshotRepoMemoire(),
     reasoningEngineRepo: new ReasoningEngineRepoMemoire(),
+    procedureRepo: new ProcedureRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -263,6 +265,10 @@ interface CorpsReponse {
   responses: AIResponseJson[]
   response: AIResponseJson
   citations: CitationAIResponseJson[]
+  procedures: ProcedureJson[]
+  procedure: ProcedureJson
+  procedureSteps: ProcedureStepJson[]
+  etape: ProcedureStepJson
 }
 
 interface RequirementJson {
@@ -624,6 +630,30 @@ interface CitationAIResponseJson {
   aiResponseId: string
   typeObjetCite: string
   objetId: string
+}
+
+interface ProcedureJson {
+  id: string
+  clientId: string
+  reference: string
+  numeroVersion: number
+  titre: string
+  effectiveDate: string
+  categorie: string
+  sourceId: string | null
+  createdAt: string
+}
+
+interface ProcedureStepJson {
+  id: string
+  clientId: string
+  procedureId: string
+  ordre: number
+  description: string
+  obligatoire: boolean
+  condition: string | null
+  responsable: string | null
+  createdAt: string
 }
 
 interface QualityEventJson {
@@ -6292,6 +6322,261 @@ describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reas
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/reasoning-engine`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Procedure/ProcedureStep (cerveau procédural, Phase 9a du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.procedures).toEqual([])
+    expect(obtenir.corps.procedureSteps).toEqual([])
+  })
+
+  test('créer une Procedure : numeroVersion = 1 pour une première référence', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+      body: {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.procedure.numeroVersion).toBe(1)
+    expect(creation.corps.procedure.reference).toBe('SOP-QA-012')
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.procedures).toHaveLength(1)
+  })
+
+  test('créer une deuxième Procedure pour la même référence : numeroVersion incrémenté, jamais une mutation', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const premiere = await requete(ctx, 'POST', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+      body: {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      },
+    })
+    const seconde = await requete(ctx, 'POST', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+      body: {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment (révision)',
+        effectiveDate: '2026-06-01',
+        categorie: 'production',
+      },
+    })
+    expect(seconde.corps.procedure.numeroVersion).toBe(2)
+    expect(seconde.corps.procedure.id).not.toBe(premiere.corps.procedure.id)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.procedures).toHaveLength(2)
+  })
+
+  test('créer une Procedure avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+      body: { reference: 'SOP-QA-012' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('ajouter une étape : ordre auto-incrémenté', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const procedure = await requete(ctx, 'POST', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+      body: {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      },
+    })
+    const procedureId = procedure.corps.procedure.id
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/procedures/${procedureId}/steps`,
+      {
+        jeton: admin.jeton,
+        body: { description: 'Vérifier le contexte', obligatoire: true },
+      },
+    )
+    expect(premiere.status).toBe(201)
+    expect(premiere.corps.etape.ordre).toBe(1)
+
+    const seconde = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/procedures/${procedureId}/steps`,
+      {
+        jeton: admin.jeton,
+        body: { description: 'Documenter la décision', obligatoire: false, responsable: 'QA' },
+      },
+    )
+    expect(seconde.corps.etape.ordre).toBe(2)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.procedureSteps).toHaveLength(2)
+  })
+
+  test('ajouter une étape à une procédure inexistante -> procedure_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/procedures/procedure-inexistante/steps`,
+      { jeton: admin.jeton, body: { description: 'x', obligatoire: true } },
+    )
+    expect(creation.status).toBe(404)
+    expect(creation.corps.erreur).toBe('procedure_introuvable')
+  })
+
+  test('ajouter une étape avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const procedure = await requete(ctx, 'POST', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+      body: {
+        reference: 'SOP-QA-012',
+        titre: 'Impact Assessment',
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      },
+    })
+    const procedureId = procedure.corps.procedure.id
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/procedures/${procedureId}/steps`,
+      {
+        jeton: admin.jeton,
+        body: { description: 'x' },
+      },
+    )
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('migration locale : idempotente, id existant ignoré', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const procedureLocale: ProcedureJson = {
+      id: 'procedure-locale-1',
+      clientId,
+      reference: 'SOP-QA-012',
+      numeroVersion: 1,
+      titre: 'Impact Assessment',
+      effectiveDate: '2024-01-01',
+      categorie: 'production',
+      sourceId: null,
+      createdAt: '2024-01-01T00:00:00.000Z',
+    }
+    const etapeLocale: ProcedureStepJson = {
+      id: 'etape-locale-1',
+      clientId,
+      procedureId: 'procedure-locale-1',
+      ordre: 1,
+      description: 'Vérifier le contexte',
+      obligatoire: true,
+      condition: null,
+      responsable: null,
+      createdAt: '2024-01-01T00:00:00.000Z',
+    }
+
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/procedures/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { procedures: [procedureLocale], procedureSteps: [etapeLocale] },
+      },
+    )
+    expect(migration.status).toBe(200)
+
+    const rejouee = await requete(ctx, 'POST', `/clients/${clientId}/procedures/migration-locale`, {
+      jeton: admin.jeton,
+      body: { procedures: [procedureLocale], procedureSteps: [etapeLocale] },
+    })
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/procedures`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.procedures).toHaveLength(1)
+    expect(liste.corps.procedureSteps).toHaveLength(1)
+  })
+
+  test('migration locale avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/procedures/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { procedures: [] },
+      },
+    )
+    expect(migration.status).toBe(400)
+    expect(migration.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/procedures`)
     expect(obtenir.status).toBe(401)
   })
 })

@@ -91,6 +91,11 @@ import type {
   ValeurParametreInstallation,
 } from './repos/parametresInstallationRepo'
 import type {
+  ProcedureEnregistree,
+  ProcedureRepo,
+  ProcedureStepEnregistree,
+} from './repos/procedureRepo'
+import type {
   AssociationFonctionAssetNodeEnregistree,
   AssociationFonctionProcessEnregistree,
   FonctionActifEnregistree,
@@ -172,6 +177,7 @@ export interface Contexte {
   missionRepo: MissionRepo
   contextSnapshotRepo: ContextSnapshotRepo
   reasoningEngineRepo: ReasoningEngineRepo
+  procedureRepo: ProcedureRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -1341,6 +1347,39 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchReasoningEngineMigrationLocale[1] as string,
+    )
+  }
+
+  // --- Procedure/ProcedureStep (cerveau procédural, Phase 9a du chantier
+  // de migration D1) ---
+  const matchProcedures = chemin.match(/^\/clients\/([^/]+)\/procedures$/)
+  if (matchProcedures && request.method === 'GET') {
+    return gererObtenirProcedures(request, ctx, entetes, matchProcedures[1] as string)
+  }
+  if (matchProcedures && request.method === 'POST') {
+    return gererCreerProcedure(request, ctx, entetes, matchProcedures[1] as string)
+  }
+  const matchAjouterEtapeProcedure = chemin.match(
+    /^\/clients\/([^/]+)\/procedures\/([^/]+)\/steps$/,
+  )
+  if (matchAjouterEtapeProcedure && request.method === 'POST') {
+    return gererAjouterEtapeProcedure(
+      request,
+      ctx,
+      entetes,
+      matchAjouterEtapeProcedure[1] as string,
+      matchAjouterEtapeProcedure[2] as string,
+    )
+  }
+  const matchProceduresMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/procedures\/migration-locale$/,
+  )
+  if (matchProceduresMigrationLocale && request.method === 'POST') {
+    return gererMigrerProceduresLocal(
+      request,
+      ctx,
+      entetes,
+      matchProceduresMigrationLocale[1] as string,
     )
   }
 
@@ -6666,6 +6705,144 @@ async function gererMigrerReasoningEngineLocal(
       responses: corps.responses,
       citations: corps.citations,
     },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : Procedure/ProcedureStep (cerveau procédural, Phase 9a du
+// chantier de migration D1) — les deux entités sont entièrement
+// immuables une fois créées (INSERT-only) : une nouvelle révision d'une
+// `reference` crée une nouvelle Procedure avec un numeroVersion
+// incrémenté, jamais une mutation en place.
+
+async function gererObtenirProcedures(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const [procedures, procedureSteps] = await Promise.all([
+    ctx.procedureRepo.listerProcedures(clientId),
+    ctx.procedureRepo.listerEtapes(clientId),
+  ])
+  return reponseJson({ procedures, procedureSteps }, 200, entetes)
+}
+
+interface SaisieCreationProcedure {
+  reference?: string
+  titre?: string
+  effectiveDate?: string
+  categorie?: string
+  sourceId?: string | null
+}
+
+async function gererCreerProcedure(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieCreationProcedure>(request)
+  if (!corps?.reference || !corps.titre || !corps.effectiveDate || !corps.categorie) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const versionsExistantes = (await ctx.procedureRepo.listerProcedures(clientId)).filter(
+    (p) => p.reference === corps.reference,
+  )
+  const numeroVersion = versionsExistantes.reduce((max, p) => Math.max(max, p.numeroVersion), 0) + 1
+  const procedure: ProcedureEnregistree = {
+    id: genererId(),
+    clientId,
+    reference: corps.reference,
+    numeroVersion,
+    titre: corps.titre,
+    effectiveDate: corps.effectiveDate,
+    categorie: corps.categorie,
+    sourceId: corps.sourceId ?? null,
+    createdAt: horodatage(),
+  }
+  await ctx.procedureRepo.creerProcedure(procedure)
+  return reponseJson({ procedure }, 201, entetes)
+}
+
+interface SaisieCreationEtapeProcedure {
+  description?: string
+  obligatoire?: boolean
+  condition?: string | null
+  responsable?: string | null
+}
+
+async function gererAjouterEtapeProcedure(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  procedureId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const procedure = await ctx.procedureRepo.procedureParId(clientId, procedureId)
+  if (!procedure) {
+    return reponseJson({ erreur: 'procedure_introuvable' }, 404, entetes)
+  }
+  const corps = await lireCorpsJson<SaisieCreationEtapeProcedure>(request)
+  if (!corps || corps.description === undefined || corps.obligatoire === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const etapesExistantes = (await ctx.procedureRepo.listerEtapes(clientId)).filter(
+    (e) => e.procedureId === procedureId,
+  )
+  const ordre = etapesExistantes.reduce((max, e) => Math.max(max, e.ordre), 0) + 1
+  const etape: ProcedureStepEnregistree = {
+    id: genererId(),
+    clientId,
+    procedureId,
+    ordre,
+    description: corps.description,
+    obligatoire: corps.obligatoire,
+    condition: corps.condition ?? null,
+    responsable: corps.responsable ?? null,
+    createdAt: horodatage(),
+  }
+  await ctx.procedureRepo.creerEtape(etape)
+  return reponseJson({ etape }, 201, entetes)
+}
+
+interface SaisieMigrationProcedures {
+  procedures?: ProcedureEnregistree[]
+  procedureSteps?: ProcedureStepEnregistree[]
+}
+
+async function gererMigrerProceduresLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieMigrationProcedures>(request)
+  if (!corps || !Array.isArray(corps.procedures) || !Array.isArray(corps.procedureSteps)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const p of corps.procedures) {
+    if (p.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.procedureRepo.creerProcedure(p)
+  }
+  for (const e of corps.procedureSteps) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.procedureRepo.creerEtape(e)
+  }
+  return reponseJson(
+    { procedures: corps.procedures, procedureSteps: corps.procedureSteps },
     200,
     entetes,
   )
