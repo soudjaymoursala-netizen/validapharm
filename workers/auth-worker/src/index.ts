@@ -3,6 +3,7 @@ import { ResendEnvoyeurEmail } from './notifications/resendEnvoyeurEmail'
 import { D1AcfcRepo } from './repos/d1/d1AcfcRepo'
 import { D1AuditRepo } from './repos/d1/d1AuditRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
+import { D1ContentPlanRepo } from './repos/d1/d1ContentPlanRepo'
 import { D1CsvAssessmentRepo } from './repos/d1/d1CsvAssessmentRepo'
 import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
 import { D1EvidenceRepo } from './repos/d1/d1EvidenceRepo'
@@ -72,6 +73,7 @@ export default {
       executionRepo: new D1ExecutionRepo(env.DB),
       evidenceRepo: new D1EvidenceRepo(env.DB),
       knowledgeEngineRepo: new D1KnowledgeEngineRepo(env.DB),
+      contentPlanRepo: new D1ContentPlanRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

@@ -433,6 +433,16 @@ export const knowledgeRelationsAMigrer: KnowledgeRelation[] = []
 export const conflictsAMigrer: Conflict[] = []
 
 /**
+ * ContentPlan : migré vers le Worker/D1 (Target Architecture, domaine
+ * "Deliverable Engine", Phase 7b du chantier de migration D1) — même
+ * principe que `conflictsAMigrer` ci-dessus : forme domaine inchangée, pas
+ * de type "Ancien". Consommé et envoyé au serveur par
+ * `migrerContentPlansLocalVersServeur` (`useContentPlanStore`) au premier
+ * `charger()`.
+ */
+export const contentPlansAMigrer: ContentPlan[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -449,7 +459,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  contentPlans!: EntityTable<ContentPlan, 'id'>
   connectors!: EntityTable<Connector, 'id'>
   syncJobs!: EntityTable<SyncJob, 'id'>
   externalReferences!: EntityTable<ExternalReference, 'id'>
@@ -1080,6 +1089,17 @@ export class ValidaPharmDatabase extends Dexie {
         knowledgeRelationsAMigrer.push(...knowledgeRelations)
         const conflicts = await tx.table<Conflict>('conflicts').toArray()
         conflictsAMigrer.push(...conflicts)
+      })
+
+    // ContentPlan : migré vers le Worker/D1 (Target Architecture, domaine
+    // "Deliverable Engine", Phase 7b du chantier de migration D1,
+    // docs/CHANTIER-MIGRATION-D1-RECAP.md) — même technique de capture
+    // avant suppression physique que la version 48 ci-dessus.
+    this.version(49)
+      .stores({ contentPlans: null })
+      .upgrade(async (tx) => {
+        const contentPlans = await tx.table<ContentPlan>('contentPlans').toArray()
+        contentPlansAMigrer.push(...contentPlans)
       })
   }
 }
