@@ -11,6 +11,11 @@ import type { AuditRepo } from './repos/auditRepo'
 import type { ClientsRepo } from './repos/clientsRepo'
 import type { ContentPlanEnregistre, ContentPlanRepo } from './repos/contentPlanRepo'
 import type {
+  ContextSnapshotEnregistre,
+  ContextSnapshotItemEnregistre,
+  ContextSnapshotRepo,
+} from './repos/contextSnapshotRepo'
+import type {
   CSVAssessmentRepo,
   EvaluationCSVAssessmentEnregistree,
 } from './repos/csvAssessmentRepo'
@@ -158,6 +163,7 @@ export interface Contexte {
   contentPlanRepo: ContentPlanRepo
   integrationRepo: IntegrationRepo
   missionRepo: MissionRepo
+  contextSnapshotRepo: ContextSnapshotRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -1269,6 +1275,27 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchMissionsMigrationLocale[1] as string,
+    )
+  }
+
+  // --- ContextSnapshot/ContextSnapshotItem (Target Architecture, domaine
+  // "Context Engine", Phase 8b du chantier de migration D1) ---
+  const matchContextSnapshots = chemin.match(/^\/clients\/([^/]+)\/context-snapshots$/)
+  if (matchContextSnapshots && request.method === 'GET') {
+    return gererObtenirContextSnapshots(request, ctx, entetes, matchContextSnapshots[1] as string)
+  }
+  if (matchContextSnapshots && request.method === 'POST') {
+    return gererAssemblerContextSnapshot(request, ctx, entetes, matchContextSnapshots[1] as string)
+  }
+  const matchContextSnapshotsMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/context-snapshots\/migration-locale$/,
+  )
+  if (matchContextSnapshotsMigrationLocale && request.method === 'POST') {
+    return gererMigrerContextSnapshotsLocal(
+      request,
+      ctx,
+      entetes,
+      matchContextSnapshotsMigrationLocale[1] as string,
     )
   }
 
@@ -6152,6 +6179,212 @@ async function gererMigrerMissionsLocal(
       activities: corps.activities,
       dependencies: corps.dependencies,
       associationsQualityEvent: corps.associationsQualityEvent,
+    },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : ContextSnapshot/ContextSnapshotItem (Target Architecture, domaine "Context Engine", Phase 8b du chantier de migration D1) ---
+
+interface ElementContextSnapshotServeur {
+  typeObjet: string
+  objetId: string
+}
+
+/**
+ * Remonte l'arbre `Workspace` depuis `workspaceId` vers la racine via
+ * `parentWorkspaceId`, et retourne la liste des id traversés (lui-même
+ * inclus). Garde anti-cycle : un id déjà visité arrête la remontée.
+ * Porté côté serveur depuis `logique-metier/organisation/
+ * ancetresWorkspace.ts` (frontend) — même logique, champs camelCase des
+ * dépôts Worker.
+ */
+function ancetresWorkspaceServeur(
+  workspaceId: string,
+  arbre: ReadonlyMap<string, WorkspaceEnregistre>,
+): string[] {
+  const chemin: string[] = []
+  const visites = new Set<string>()
+  let courant: string | null = workspaceId
+
+  while (courant !== null) {
+    if (visites.has(courant)) break
+    visites.add(courant)
+    chemin.push(courant)
+    courant = arbre.get(courant)?.parentWorkspaceId ?? null
+  }
+
+  return chemin
+}
+
+/**
+ * Un nœud est visible depuis `workspaceId` s'il y est assigné, s'il est
+ * assigné à l'un de ses ancêtres (héritage descendant), ou s'il n'a pas
+ * encore été assigné (`workspaceId: null`). Porté côté serveur depuis
+ * `logique-metier/organisation/noeudsVisiblesDepuisWorkspace.ts`.
+ */
+function noeudsVisiblesDepuisWorkspaceServeur(
+  workspaceId: string,
+  arbre: ReadonlyMap<string, WorkspaceEnregistre>,
+  noeuds: readonly AssetNodeEnregistre[],
+): AssetNodeEnregistre[] {
+  const ancetres = new Set(ancetresWorkspaceServeur(workspaceId, arbre))
+  return noeuds.filter((n) => n.workspaceId === null || ancetres.has(n.workspaceId))
+}
+
+/**
+ * Assemble les éléments de contexte pertinents pour une ancre donnée —
+ * porté côté serveur depuis `logique-metier/contexte/
+ * assemblageContextSnapshot.ts` (fonction pure, frontend), à partir des
+ * mêmes dépôts D1 déjà migrés (Organization/Workspace Phase 2, Structure
+ * Système Phase 1, ManufacturingContext Phase 5a, QualityEvent Phase
+ * 5b). Si `assetNodeId` est fourni, résolution exacte sur ce nœud précis
+ * (pas ses descendants). Sinon, si `workspaceId` est fourni, résolution
+ * par visibilité de site. Si ni l'un ni l'autre, aucun élément assemblé.
+ */
+async function assemblerElementsContextSnapshot(
+  ctx: Contexte,
+  clientId: string,
+  workspaceId: string | null,
+  assetNodeId: string | null,
+): Promise<ElementContextSnapshotServeur[]> {
+  const [workspaces, assetNodes, manufacturingContexts, qualityEvents] = await Promise.all([
+    ctx.organisationRepo.listerWorkspaces(clientId),
+    ctx.structureSystemeRepo.listerNoeuds(clientId),
+    ctx.processContextRepo.listerManufacturingContexts(clientId),
+    ctx.qualityEventRepo.listerEvenements(clientId),
+  ])
+  const arbre = new Map(workspaces.map((w) => [w.id, w]))
+
+  const noeudsPertinents: readonly AssetNodeEnregistre[] = assetNodeId
+    ? assetNodes.filter((n) => n.id === assetNodeId)
+    : workspaceId
+      ? noeudsVisiblesDepuisWorkspaceServeur(workspaceId, arbre, assetNodes)
+      : []
+
+  const idsNoeudsPertinents = new Set(noeudsPertinents.map((n) => n.id))
+
+  const elements: ElementContextSnapshotServeur[] = noeudsPertinents.map((n) => ({
+    typeObjet: 'asset_node',
+    objetId: n.id,
+  }))
+
+  for (const contexte of manufacturingContexts) {
+    if (idsNoeudsPertinents.has(contexte.assetNodeId)) {
+      elements.push({ typeObjet: 'manufacturing_context', objetId: contexte.id })
+    }
+  }
+
+  for (const evenement of qualityEvents) {
+    if (evenement.assetNodeId !== null && idsNoeudsPertinents.has(evenement.assetNodeId)) {
+      elements.push({ typeObjet: 'quality_event', objetId: evenement.id })
+    }
+  }
+
+  return elements
+}
+
+async function gererObtenirContextSnapshots(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const [contextSnapshots, contextSnapshotItems] = await Promise.all([
+    ctx.contextSnapshotRepo.listerSnapshots(clientId),
+    ctx.contextSnapshotRepo.listerItems(clientId),
+  ])
+  return reponseJson({ contextSnapshots, contextSnapshotItems }, 200, entetes)
+}
+
+interface SaisieAssemblageContextSnapshot {
+  workspaceId?: string | null
+  assetNodeId?: string | null
+}
+
+/**
+ * Assemble et persiste un nouveau `ContextSnapshot` — l'assemblage est
+ * calculé côté serveur (`assemblerElementsContextSnapshot`), jamais fait
+ * confiance à une liste d'éléments fournie par le client. Immuable une
+ * fois créé (invariant #12) : aucune route de mise à jour n'existe pour
+ * ce domaine.
+ */
+async function gererAssemblerContextSnapshot(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieAssemblageContextSnapshot>(request)
+  const workspaceId = corps?.workspaceId ?? null
+  const assetNodeId = corps?.assetNodeId ?? null
+
+  const elements = await assemblerElementsContextSnapshot(ctx, clientId, workspaceId, assetNodeId)
+
+  const contextSnapshot: ContextSnapshotEnregistre = {
+    id: genererId(),
+    clientId,
+    workspaceId,
+    assetNodeId,
+    createdAt: horodatage(),
+  }
+  await ctx.contextSnapshotRepo.creerSnapshot(contextSnapshot)
+
+  const contextSnapshotItems: ContextSnapshotItemEnregistre[] = elements.map((element) => ({
+    id: genererId(),
+    clientId,
+    contextSnapshotId: contextSnapshot.id,
+    typeObjet: element.typeObjet,
+    objetId: element.objetId,
+  }))
+  for (const item of contextSnapshotItems) {
+    await ctx.contextSnapshotRepo.creerItem(item)
+  }
+
+  return reponseJson({ contextSnapshot, contextSnapshotItems }, 201, entetes)
+}
+
+interface SaisieMigrationContextSnapshots {
+  contextSnapshots?: ContextSnapshotEnregistre[]
+  contextSnapshotItems?: ContextSnapshotItemEnregistre[]
+}
+
+async function gererMigrerContextSnapshotsLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieMigrationContextSnapshots>(request)
+  if (
+    !corps ||
+    !Array.isArray(corps.contextSnapshots) ||
+    !Array.isArray(corps.contextSnapshotItems)
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const s of corps.contextSnapshots) {
+    if (s.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.contextSnapshotRepo.creerSnapshot(s)
+  }
+  for (const i of corps.contextSnapshotItems) {
+    if (i.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.contextSnapshotRepo.creerItem(i)
+  }
+  return reponseJson(
+    {
+      contextSnapshots: corps.contextSnapshots,
+      contextSnapshotItems: corps.contextSnapshotItems,
     },
     200,
     entetes,

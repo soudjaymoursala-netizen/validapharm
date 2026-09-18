@@ -114,8 +114,6 @@ let demonter: () => void
 beforeEach(async () => {
   setActivePinia(createPinia())
   fournisseurEnvoyerMessage.mockReset()
-  await db.contextSnapshots.clear()
-  await db.contextSnapshotItems.clear()
   await db.aiConfigurations.clear()
   await db.aiRequests.clear()
   await db.aiResponses.clear()
@@ -261,7 +259,9 @@ describe('MissionWorkspace — Contexte', () => {
     const wrapper = await monter()
 
     await wrapper.find('section.contexte button').trigger('click')
-    await attendreQue(async () => (await db.contextSnapshots.count()) === 1)
+    await attendreQue(
+      async () => (await ctx.contextSnapshotRepo.listerSnapshots(CLIENT_ID)).length === 1,
+    )
 
     expect(wrapper.text()).toContain('Aucun élément de contexte résolu.')
   })

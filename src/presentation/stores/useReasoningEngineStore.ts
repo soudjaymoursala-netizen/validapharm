@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
 import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
 import { construireNarratifContexte } from '../../logique-metier/contexte/narratifContexteSnapshot'
+import { useContextEngineStore } from './useContextEngineStore'
 import type {
   AIConfiguration,
   AIRequest,
@@ -133,17 +134,18 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
     // (Phase 7a du chantier de migration D1) — même patron que ci-dessus.
     const sourceIntelligenceStore = useSourceIntelligenceStore()
     await sourceIntelligenceStore.charger(clientId)
+    // ContextSnapshot/ContextSnapshotItem migrés vers le Worker/D1 (Phase
+    // 8b du chantier de migration D1) — même patron que ci-dessus.
+    const contextEngineStore = useContextEngineStore()
+    await contextEngineStore.charger(clientId)
 
-    const [procedures, procedureSteps, contextSnapshotItems] = await Promise.all([
+    const [procedures, procedureSteps] = await Promise.all([
       db.procedures.where('client_id').equals(clientId).toArray(),
       db.procedureSteps.where('client_id').equals(clientId).toArray(),
-      entrees.contextSnapshotId
-        ? db.contextSnapshotItems
-            .where('context_snapshot_id')
-            .equals(entrees.contextSnapshotId)
-            .toArray()
-        : Promise.resolve([]),
     ])
+    const contextSnapshotItems = entrees.contextSnapshotId
+      ? contextEngineStore.elementsDuSnapshot(entrees.contextSnapshotId)
+      : []
     const requirements = testDefinitionStore.requirements
     const couvertures = testDefinitionStore.couvertures
     const tests = testDefinitionStore.tests

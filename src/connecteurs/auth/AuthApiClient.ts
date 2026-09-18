@@ -974,6 +974,27 @@ export interface SaisieCreationActivityWire {
   description: string
 }
 
+export interface ContextSnapshotWire {
+  id: string
+  clientId: string
+  workspaceId: string | null
+  assetNodeId: string | null
+  createdAt: string
+}
+
+export interface ContextSnapshotItemWire {
+  id: string
+  clientId: string
+  contextSnapshotId: string
+  typeObjet: string
+  objetId: string
+}
+
+export interface SaisieAssemblageContextSnapshotWire {
+  workspaceId?: string | null
+  assetNodeId?: string | null
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -2537,6 +2558,54 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/missions/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- ContextSnapshot/ContextSnapshotItem (Target Architecture, domaine "Context Engine", Phase 8b du chantier de migration D1) ---
+
+  obtenirContextSnapshots(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      contextSnapshots: ContextSnapshotWire[]
+      contextSnapshotItems: ContextSnapshotItemWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/context-snapshots`, { jeton })
+  }
+
+  /** L'assemblage (résolution des éléments de contexte pertinents) est calculé côté serveur — voir la route Worker `gererAssemblerContextSnapshot`. */
+  assemblerContextSnapshot(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieAssemblageContextSnapshotWire,
+  ): Promise<
+    ResultatApi<{
+      contextSnapshot: ContextSnapshotWire
+      contextSnapshotItems: ContextSnapshotItemWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/context-snapshots`, { jeton, body: saisie })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerContextSnapshotsLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerContextSnapshotsLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      contextSnapshots: ContextSnapshotWire[]
+      contextSnapshotItems: ContextSnapshotItemWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      contextSnapshots: ContextSnapshotWire[]
+      contextSnapshotItems: ContextSnapshotItemWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/context-snapshots/migration-locale`, {
       jeton,
       body: donnees,
     })
