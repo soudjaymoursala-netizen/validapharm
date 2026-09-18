@@ -30,6 +30,7 @@ import { ProjectDocumentsRepoMemoire } from './repos/projectDocumentsRepo'
 import { ProcessContextRepoMemoire } from './repos/processContextRepo'
 import { ProjectsRepoMemoire } from './repos/projectsRepo'
 import { QualityEventRepoMemoire } from './repos/qualityEventRepo'
+import { ReasoningEngineRepoMemoire } from './repos/reasoningEngineRepo'
 import { RiskAssessmentRepoMemoire } from './repos/riskAssessmentRepo'
 import { TestDefinitionRepoMemoire } from './repos/testDefinitionRepo'
 import { SectionsRepoMemoire } from './repos/sectionsRepo'
@@ -72,6 +73,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     integrationRepo: new IntegrationRepoMemoire(),
     missionRepo: new MissionRepoMemoire(),
     contextSnapshotRepo: new ContextSnapshotRepoMemoire(),
+    reasoningEngineRepo: new ReasoningEngineRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -254,6 +256,13 @@ interface CorpsReponse {
   contextSnapshots: ContextSnapshotJson[]
   contextSnapshot: ContextSnapshotJson
   contextSnapshotItems: ContextSnapshotItemJson[]
+  configurations: AIConfigurationJson[]
+  configuration: AIConfigurationJson
+  requests: AIRequestJson[]
+  request: AIRequestJson
+  responses: AIResponseJson[]
+  response: AIResponseJson
+  citations: CitationAIResponseJson[]
 }
 
 interface RequirementJson {
@@ -572,6 +581,48 @@ interface ContextSnapshotItemJson {
   clientId: string
   contextSnapshotId: string
   typeObjet: string
+  objetId: string
+}
+
+interface AIConfigurationJson {
+  id: string
+  clientId: string
+  version: string
+  outilsDisponibles: string[]
+  createdAt: string
+}
+
+interface AIRequestJson {
+  id: string
+  clientId: string
+  missionId: string | null
+  contextSnapshotId: string | null
+  aiConfigurationId: string
+  objectif: string
+  createdAt: string
+}
+
+interface AIResponseJson {
+  id: string
+  clientId: string
+  aiRequestId: string
+  texte: string
+  etatConfiance: string
+  traceAppelsOutils: {
+    outil: string
+    parametres: Record<string, string>
+    resultat: string
+    horodatage: string
+  }[]
+  versionMoteur: string | null
+  createdAt: string
+}
+
+interface CitationAIResponseJson {
+  id: string
+  clientId: string
+  aiResponseId: string
+  typeObjetCite: string
   objetId: string
 }
 
@@ -5883,6 +5934,364 @@ describe('routerRequete — ContextSnapshot (Target Architecture, domaine "Conte
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/context-snapshots`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reasoning Engine", Phase 8c du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/reasoning-engine`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.configurations).toEqual([])
+    expect(obtenir.corps.requests).toEqual([])
+    expect(obtenir.corps.responses).toEqual([])
+    expect(obtenir.corps.citations).toEqual([])
+  })
+
+  test('assurer une configuration : crée puis retourne la même par version (idempotent)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/reasoning-engine/configurations`,
+      {
+        jeton: admin.jeton,
+        body: {
+          version: '1.0.0',
+          outilsDisponibles: ['recherche_documents', 'lecture_asset_node'],
+        },
+      },
+    )
+    expect(creation.status).toBe(201)
+    expect(creation.corps.configuration.version).toBe('1.0.0')
+    expect(creation.corps.configuration.outilsDisponibles).toEqual([
+      'recherche_documents',
+      'lecture_asset_node',
+    ])
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/reasoning-engine/configurations`,
+      {
+        jeton: admin.jeton,
+        body: {
+          version: '1.0.0',
+          outilsDisponibles: ['recherche_documents', 'lecture_asset_node'],
+        },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+    expect(rejouee.corps.configuration.id).toBe(creation.corps.configuration.id)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/reasoning-engine`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.configurations).toHaveLength(1)
+  })
+
+  test('assurer une configuration avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/reasoning-engine/configurations`,
+      {
+        jeton: admin.jeton,
+        body: { version: '1.0.0' },
+      },
+    )
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('créer une AIRequest', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const configuration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/reasoning-engine/configurations`,
+      {
+        jeton: admin.jeton,
+        body: { version: '1.0.0', outilsDisponibles: [] },
+      },
+    )
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/reasoning-engine/requests`, {
+      jeton: admin.jeton,
+      body: {
+        missionId: null,
+        contextSnapshotId: null,
+        aiConfigurationId: configuration.corps.configuration.id,
+        objectif: 'Évaluer un impact de changement',
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.request.objectif).toBe('Évaluer un impact de changement')
+    expect(creation.corps.request.aiConfigurationId).toBe(configuration.corps.configuration.id)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/reasoning-engine`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.requests).toHaveLength(1)
+  })
+
+  test('créer une AIRequest avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/reasoning-engine/requests`, {
+      jeton: admin.jeton,
+      body: { objectif: 'Évaluer' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('créer une AIResponse', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const configuration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/reasoning-engine/configurations`,
+      {
+        jeton: admin.jeton,
+        body: { version: '1.0.0', outilsDisponibles: [] },
+      },
+    )
+    const aiRequest = await requete(ctx, 'POST', `/clients/${clientId}/reasoning-engine/requests`, {
+      jeton: admin.jeton,
+      body: {
+        aiConfigurationId: configuration.corps.configuration.id,
+        objectif: 'Évaluer un impact de changement',
+      },
+    })
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/reasoning-engine/responses`, {
+      jeton: admin.jeton,
+      body: {
+        aiRequestId: aiRequest.corps.request.id,
+        texte: 'Voici la réponse.',
+        etatConfiance: 'eleve',
+        traceAppelsOutils: [
+          {
+            outil: 'recherche_documents',
+            parametres: { requete: 'granulation' },
+            resultat: 'ok',
+            horodatage: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        versionMoteur: 'moteur-1',
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.response.texte).toBe('Voici la réponse.')
+    expect(creation.corps.response.traceAppelsOutils).toHaveLength(1)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/reasoning-engine`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.responses).toHaveLength(1)
+  })
+
+  test('créer une AIResponse avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/reasoning-engine/responses`, {
+      jeton: admin.jeton,
+      body: { texte: 'x' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('créer des citations en masse', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const configuration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/reasoning-engine/configurations`,
+      {
+        jeton: admin.jeton,
+        body: { version: '1.0.0', outilsDisponibles: [] },
+      },
+    )
+    const aiRequest = await requete(ctx, 'POST', `/clients/${clientId}/reasoning-engine/requests`, {
+      jeton: admin.jeton,
+      body: { aiConfigurationId: configuration.corps.configuration.id, objectif: 'Évaluer' },
+    })
+    const aiResponse = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/reasoning-engine/responses`,
+      {
+        jeton: admin.jeton,
+        body: {
+          aiRequestId: aiRequest.corps.request.id,
+          texte: 'Réponse',
+          etatConfiance: 'eleve',
+          traceAppelsOutils: [],
+        },
+      },
+    )
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/reasoning-engine/citations`, {
+      jeton: admin.jeton,
+      body: {
+        citations: [
+          {
+            aiResponseId: aiResponse.corps.response.id,
+            typeObjetCite: 'asset_node',
+            objetId: 'noeud-1',
+          },
+          {
+            aiResponseId: aiResponse.corps.response.id,
+            typeObjetCite: 'quality_event',
+            objetId: 'qe-1',
+          },
+        ],
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.citations).toHaveLength(2)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/reasoning-engine`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.citations).toHaveLength(2)
+  })
+
+  test('créer des citations avec une entrée malformée -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/reasoning-engine/citations`, {
+      jeton: admin.jeton,
+      body: { citations: [{ aiResponseId: 'r1', typeObjetCite: 'asset_node' }] },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('migration locale : idempotente, id existant ignoré', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const configurationLocale: AIConfigurationJson = {
+      id: 'config-locale-1',
+      clientId,
+      version: '1.0.0',
+      outilsDisponibles: ['recherche_documents'],
+      createdAt: '2024-01-01T00:00:00.000Z',
+    }
+    const requestLocale: AIRequestJson = {
+      id: 'request-locale-1',
+      clientId,
+      missionId: null,
+      contextSnapshotId: null,
+      aiConfigurationId: 'config-locale-1',
+      objectif: 'Évaluer',
+      createdAt: '2024-01-01T00:00:00.000Z',
+    }
+    const responseLocale: AIResponseJson = {
+      id: 'response-locale-1',
+      clientId,
+      aiRequestId: 'request-locale-1',
+      texte: 'Réponse locale',
+      etatConfiance: 'moyen',
+      traceAppelsOutils: [],
+      versionMoteur: null,
+      createdAt: '2024-01-01T00:00:00.000Z',
+    }
+    const citationLocale: CitationAIResponseJson = {
+      id: 'citation-locale-1',
+      clientId,
+      aiResponseId: 'response-locale-1',
+      typeObjetCite: 'asset_node',
+      objetId: 'noeud-1',
+    }
+
+    const corps = {
+      configurations: [configurationLocale],
+      requests: [requestLocale],
+      responses: [responseLocale],
+      citations: [citationLocale],
+    }
+
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/reasoning-engine/migration-locale`,
+      { jeton: admin.jeton, body: corps },
+    )
+    expect(migration.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/reasoning-engine/migration-locale`,
+      { jeton: admin.jeton, body: corps },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/reasoning-engine`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.configurations).toHaveLength(1)
+    expect(liste.corps.requests).toHaveLength(1)
+    expect(liste.corps.responses).toHaveLength(1)
+    expect(liste.corps.citations).toHaveLength(1)
+  })
+
+  test('migration locale avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/reasoning-engine/migration-locale`,
+      { jeton: admin.jeton, body: { configurations: [] } },
+    )
+    expect(migration.status).toBe(400)
+    expect(migration.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/reasoning-engine`)
     expect(obtenir.status).toBe(401)
   })
 })

@@ -73,6 +73,13 @@ import type {
   WorkspaceEnregistre,
 } from './repos/organisationRepo'
 import type {
+  AIConfigurationEnregistree,
+  AIRequestEnregistree,
+  AIResponseEnregistree,
+  CitationAIResponseEnregistree,
+  ReasoningEngineRepo,
+} from './repos/reasoningEngineRepo'
+import type {
   CPPEnregistre,
   CQAEnregistre,
   ClassificationCriticiteParametreEnregistree,
@@ -164,6 +171,7 @@ export interface Contexte {
   integrationRepo: IntegrationRepo
   missionRepo: MissionRepo
   contextSnapshotRepo: ContextSnapshotRepo
+  reasoningEngineRepo: ReasoningEngineRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -1296,6 +1304,43 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchContextSnapshotsMigrationLocale[1] as string,
+    )
+  }
+
+  // --- AIConfiguration/AIRequest/AIResponse/CitationAIResponse (Target
+  // Architecture, domaine "Reasoning Engine", Phase 8c du chantier de
+  // migration D1) ---
+  const matchReasoningEngine = chemin.match(/^\/clients\/([^/]+)\/reasoning-engine$/)
+  if (matchReasoningEngine && request.method === 'GET') {
+    return gererObtenirReasoningEngine(request, ctx, entetes, matchReasoningEngine[1] as string)
+  }
+  const matchAssurerConfiguration = chemin.match(
+    /^\/clients\/([^/]+)\/reasoning-engine\/configurations$/,
+  )
+  if (matchAssurerConfiguration && request.method === 'POST') {
+    return gererAssurerConfiguration(request, ctx, entetes, matchAssurerConfiguration[1] as string)
+  }
+  const matchCreerAIRequest = chemin.match(/^\/clients\/([^/]+)\/reasoning-engine\/requests$/)
+  if (matchCreerAIRequest && request.method === 'POST') {
+    return gererCreerAIRequest(request, ctx, entetes, matchCreerAIRequest[1] as string)
+  }
+  const matchCreerAIResponse = chemin.match(/^\/clients\/([^/]+)\/reasoning-engine\/responses$/)
+  if (matchCreerAIResponse && request.method === 'POST') {
+    return gererCreerAIResponse(request, ctx, entetes, matchCreerAIResponse[1] as string)
+  }
+  const matchCreerCitations = chemin.match(/^\/clients\/([^/]+)\/reasoning-engine\/citations$/)
+  if (matchCreerCitations && request.method === 'POST') {
+    return gererCreerCitations(request, ctx, entetes, matchCreerCitations[1] as string)
+  }
+  const matchReasoningEngineMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/reasoning-engine\/migration-locale$/,
+  )
+  if (matchReasoningEngineMigrationLocale && request.method === 'POST') {
+    return gererMigrerReasoningEngineLocal(
+      request,
+      ctx,
+      entetes,
+      matchReasoningEngineMigrationLocale[1] as string,
     )
   }
 
@@ -6385,6 +6430,241 @@ async function gererMigrerContextSnapshotsLocal(
     {
       contextSnapshots: corps.contextSnapshots,
       contextSnapshotItems: corps.contextSnapshotItems,
+    },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : AIConfiguration/AIRequest/AIResponse/CitationAIResponse
+// (Target Architecture, domaine "Reasoning Engine", Phase 8c du chantier
+// de migration D1) — seule la persistance CRUD migre ici : l'orchestration
+// du raisonnement (appels réseau réels au fournisseur LLM) reste côté
+// client, hors périmètre de ce chantier. Les 4 entités sont entièrement
+// immuables une fois créées, INSERT-only.
+
+async function gererObtenirReasoningEngine(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const [configurations, requests, responses, citations] = await Promise.all([
+    ctx.reasoningEngineRepo.listerConfigurations(clientId),
+    ctx.reasoningEngineRepo.listerRequests(clientId),
+    ctx.reasoningEngineRepo.listerResponses(clientId),
+    ctx.reasoningEngineRepo.listerCitations(clientId),
+  ])
+  return reponseJson({ configurations, requests, responses, citations }, 200, entetes)
+}
+
+interface SaisieAssurerConfiguration {
+  version?: string
+  outilsDisponibles?: string[]
+}
+
+/**
+ * Idempotent : le catalogue d'outils disponibles (`CATALOGUE_OUTILS_RAISONNEMENT`)
+ * et le numéro de version courante sont un concept purement client
+ * (`logique-metier/raisonnement/outilsRaisonnement.ts`) — le serveur ne
+ * fait que chercher une configuration existante pour cette version avant
+ * d'en créer une nouvelle, jamais de modification en place (condition E4).
+ */
+async function gererAssurerConfiguration(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieAssurerConfiguration>(request)
+  if (!corps?.version || !Array.isArray(corps.outilsDisponibles)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const existante = await ctx.reasoningEngineRepo.configurationParVersion(clientId, corps.version)
+  if (existante) return reponseJson({ configuration: existante }, 200, entetes)
+  const configuration: AIConfigurationEnregistree = {
+    id: genererId(),
+    clientId,
+    version: corps.version,
+    outilsDisponibles: corps.outilsDisponibles,
+    createdAt: horodatage(),
+  }
+  await ctx.reasoningEngineRepo.creerConfiguration(configuration)
+  return reponseJson({ configuration }, 201, entetes)
+}
+
+interface SaisieCreationAIRequest {
+  missionId?: string | null
+  contextSnapshotId?: string | null
+  aiConfigurationId?: string
+  objectif?: string
+}
+
+async function gererCreerAIRequest(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieCreationAIRequest>(request)
+  if (!corps?.aiConfigurationId || !corps.objectif) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const aiRequest: AIRequestEnregistree = {
+    id: genererId(),
+    clientId,
+    missionId: corps.missionId ?? null,
+    contextSnapshotId: corps.contextSnapshotId ?? null,
+    aiConfigurationId: corps.aiConfigurationId,
+    objectif: corps.objectif,
+    createdAt: horodatage(),
+  }
+  await ctx.reasoningEngineRepo.creerRequest(aiRequest)
+  return reponseJson({ request: aiRequest }, 201, entetes)
+}
+
+interface SaisieCreationAIResponse {
+  aiRequestId?: string
+  texte?: string
+  etatConfiance?: string
+  traceAppelsOutils?: AIResponseEnregistree['traceAppelsOutils']
+  versionMoteur?: string | null
+}
+
+async function gererCreerAIResponse(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieCreationAIResponse>(request)
+  if (
+    !corps?.aiRequestId ||
+    corps.texte === undefined ||
+    !corps.etatConfiance ||
+    !Array.isArray(corps.traceAppelsOutils)
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const aiResponse: AIResponseEnregistree = {
+    id: genererId(),
+    clientId,
+    aiRequestId: corps.aiRequestId,
+    texte: corps.texte,
+    etatConfiance: corps.etatConfiance,
+    traceAppelsOutils: corps.traceAppelsOutils,
+    versionMoteur: corps.versionMoteur ?? null,
+    createdAt: horodatage(),
+  }
+  await ctx.reasoningEngineRepo.creerResponse(aiResponse)
+  return reponseJson({ response: aiResponse }, 201, entetes)
+}
+
+interface SaisieCitationAIResponse {
+  aiResponseId?: string
+  typeObjetCite?: string
+  objetId?: string
+}
+
+interface SaisieCreationCitations {
+  citations?: SaisieCitationAIResponse[]
+}
+
+/**
+ * Création groupée — les citations d'une `AIResponse` sont toujours
+ * créées ensemble juste après elle (même lot que `bulkPut` côté client
+ * avant cette migration), jamais une à une dans le flux normal.
+ */
+async function gererCreerCitations(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieCreationCitations>(request)
+  if (!corps || !Array.isArray(corps.citations)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const citations: CitationAIResponseEnregistree[] = []
+  for (const c of corps.citations) {
+    if (!c.aiResponseId || !c.typeObjetCite || !c.objetId) {
+      return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    }
+    const citation: CitationAIResponseEnregistree = {
+      id: genererId(),
+      clientId,
+      aiResponseId: c.aiResponseId,
+      typeObjetCite: c.typeObjetCite,
+      objetId: c.objetId,
+    }
+    await ctx.reasoningEngineRepo.creerCitation(citation)
+    citations.push(citation)
+  }
+  return reponseJson({ citations }, 201, entetes)
+}
+
+interface SaisieMigrationReasoningEngine {
+  configurations?: AIConfigurationEnregistree[]
+  requests?: AIRequestEnregistree[]
+  responses?: AIResponseEnregistree[]
+  citations?: CitationAIResponseEnregistree[]
+}
+
+async function gererMigrerReasoningEngineLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieMigrationReasoningEngine>(request)
+  if (
+    !corps ||
+    !Array.isArray(corps.configurations) ||
+    !Array.isArray(corps.requests) ||
+    !Array.isArray(corps.responses) ||
+    !Array.isArray(corps.citations)
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const c of corps.configurations) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.reasoningEngineRepo.creerConfiguration(c)
+  }
+  for (const r of corps.requests) {
+    if (r.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.reasoningEngineRepo.creerRequest(r)
+  }
+  for (const r of corps.responses) {
+    if (r.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.reasoningEngineRepo.creerResponse(r)
+  }
+  for (const c of corps.citations) {
+    if (c.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.reasoningEngineRepo.creerCitation(c)
+  }
+  return reponseJson(
+    {
+      configurations: corps.configurations,
+      requests: corps.requests,
+      responses: corps.responses,
+      citations: corps.citations,
     },
     200,
     entetes,

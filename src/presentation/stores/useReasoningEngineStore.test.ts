@@ -56,23 +56,24 @@ function reponse(texte: string): Reponse {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.aiConfigurations.clear()
-  await db.aiRequests.clear()
-  await db.aiResponses.clear()
-  await db.citationsAIResponse.clear()
   await db.procedures.clear()
   await db.procedureSteps.clear()
 })
 
 describe('useReasoningEngineStore — assurerConfiguration (versionnée, condition E4)', () => {
   test('crée la configuration une seule fois, idempotent', async () => {
-    const store = useReasoningEngineStore()
-    await store.charger('client-1')
-    const a = await store.assurerConfiguration('client-1')
-    const b = await store.assurerConfiguration('client-1')
-    expect(a.id).toBe(b.id)
-    expect(store.configurations).toHaveLength(1)
-    expect(a.outils_disponibles.length).toBeGreaterThan(0)
+    const { demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useReasoningEngineStore()
+      await store.charger('client-1')
+      const a = await store.assurerConfiguration('client-1')
+      const b = await store.assurerConfiguration('client-1')
+      expect(a.id).toBe(b.id)
+      expect(store.configurations).toHaveLength(1)
+      expect(a.outils_disponibles.length).toBeGreaterThan(0)
+    } finally {
+      demonter()
+    }
   })
 })
 
@@ -128,27 +129,32 @@ describe('useReasoningEngineStore — scénario réel : changement de recette (s
   })
 
   test("une citation non résolvable n'est pas persistée avec un type deviné", async () => {
-    const store = useReasoningEngineStore()
-    await store.charger('client-1')
+    const { demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useReasoningEngineStore()
+      await store.charger('client-1')
 
-    const fournisseur = fournisseurMock()
-    fournisseur.envoyerMessage.mockResolvedValueOnce(
-      reponse(
-        'REPONSE_FINALE: {"texte": "Réponse", "etat_confiance": "connu", "citations": ["id-jamais-vu"]}',
-      ),
-    )
+      const fournisseur = fournisseurMock()
+      fournisseur.envoyerMessage.mockResolvedValueOnce(
+        reponse(
+          'REPONSE_FINALE: {"texte": "Réponse", "etat_confiance": "connu", "citations": ["id-jamais-vu"]}',
+        ),
+      )
 
-    const { response } = await store.executerRaisonnement('client-1', {
-      objectif: 'Objectif',
-      missionId: null,
-      contextSnapshotId: null,
-      fournisseur,
-      mode: 'chat_normatif',
-    })
+      const { response } = await store.executerRaisonnement('client-1', {
+        objectif: 'Objectif',
+        missionId: null,
+        contextSnapshotId: null,
+        fournisseur,
+        mode: 'chat_normatif',
+      })
 
-    // La vérification déterministe de la boucle a déjà rétrogradé la confiance.
-    expect(response.etat_confiance).toBe('a_verifier')
-    expect(store.citationsDeReponse(response.id)).toHaveLength(0)
+      // La vérification déterministe de la boucle a déjà rétrogradé la confiance.
+      expect(response.etat_confiance).toBe('a_verifier')
+      expect(store.citationsDeReponse(response.id)).toHaveLength(0)
+    } finally {
+      demonter()
+    }
   })
 })
 
@@ -224,57 +230,62 @@ describe('useReasoningEngineStore — scénario réel : traversée Architecture 
 
 describe('useReasoningEngineStore — scénario réel : lecture de procédure', () => {
   test('exécute lister_etapes_procedure et résout une citation de type procedure_step', async () => {
-    const maintenant = '2026-01-01T00:00:00.000Z'
-    await db.procedures.put({
-      id: 'proc-1',
-      client_id: 'client-1',
-      reference: 'SOP-QA-012',
-      numero_version: 1,
-      titre: 'Impact Assessment',
-      effective_date: '2026-01-01',
-      categorie: 'production',
-      source_id: null,
-      created_at: maintenant,
-    })
-    await db.procedureSteps.put({
-      id: 'step-1',
-      client_id: 'client-1',
-      procedure_id: 'proc-1',
-      ordre: 1,
-      description: 'Vérifier le contexte',
-      obligatoire: true,
-      condition: null,
-      responsable: null,
-      created_at: maintenant,
-    })
+    const { demonter } = await installerAuthEtClient('client-1')
+    try {
+      const maintenant = '2026-01-01T00:00:00.000Z'
+      await db.procedures.put({
+        id: 'proc-1',
+        client_id: 'client-1',
+        reference: 'SOP-QA-012',
+        numero_version: 1,
+        titre: 'Impact Assessment',
+        effective_date: '2026-01-01',
+        categorie: 'production',
+        source_id: null,
+        created_at: maintenant,
+      })
+      await db.procedureSteps.put({
+        id: 'step-1',
+        client_id: 'client-1',
+        procedure_id: 'proc-1',
+        ordre: 1,
+        description: 'Vérifier le contexte',
+        obligatoire: true,
+        condition: null,
+        responsable: null,
+        created_at: maintenant,
+      })
 
-    const store = useReasoningEngineStore()
-    await store.charger('client-1')
+      const store = useReasoningEngineStore()
+      await store.charger('client-1')
 
-    const fournisseur = fournisseurMock()
-    fournisseur.envoyerMessage
-      .mockResolvedValueOnce(
-        reponse(
-          'APPEL_OUTIL: {"nom": "lister_etapes_procedure", "parametres": {"reference": "SOP-QA-012"}}',
-        ),
-      )
-      .mockResolvedValueOnce(
-        reponse(
-          'REPONSE_FINALE: {"texte": "La première étape est de vérifier le contexte", "etat_confiance": "connu", "citations": ["step-1"]}',
-        ),
-      )
+      const fournisseur = fournisseurMock()
+      fournisseur.envoyerMessage
+        .mockResolvedValueOnce(
+          reponse(
+            'APPEL_OUTIL: {"nom": "lister_etapes_procedure", "parametres": {"reference": "SOP-QA-012"}}',
+          ),
+        )
+        .mockResolvedValueOnce(
+          reponse(
+            'REPONSE_FINALE: {"texte": "La première étape est de vérifier le contexte", "etat_confiance": "connu", "citations": ["step-1"]}',
+          ),
+        )
 
-    const { response } = await store.executerRaisonnement('client-1', {
-      objectif: 'Applique la SOP-QA-012 à ce changement',
-      missionId: null,
-      contextSnapshotId: null,
-      fournisseur,
-      mode: 'chat_normatif',
-    })
+      const { response } = await store.executerRaisonnement('client-1', {
+        objectif: 'Applique la SOP-QA-012 à ce changement',
+        missionId: null,
+        contextSnapshotId: null,
+        fournisseur,
+        mode: 'chat_normatif',
+      })
 
-    expect(response.etat_confiance).toBe('connu')
-    expect(response.trace_appels_outils[0]?.outil).toBe('lister_etapes_procedure')
-    expect(store.citationsDeReponse(response.id)[0]?.type_objet_cite).toBe('procedure_step')
+      expect(response.etat_confiance).toBe('connu')
+      expect(response.trace_appels_outils[0]?.outil).toBe('lister_etapes_procedure')
+      expect(store.citationsDeReponse(response.id)[0]?.type_objet_cite).toBe('procedure_step')
+    } finally {
+      demonter()
+    }
   })
 })
 
@@ -295,22 +306,42 @@ describe('useReasoningEngineStore — garde-fous non négociables', () => {
   })
 
   test('isolation stricte par client', async () => {
-    const store = useReasoningEngineStore()
-    await store.charger('client-A')
-    const fournisseur = fournisseurMock()
-    fournisseur.envoyerMessage.mockResolvedValueOnce(
-      reponse('REPONSE_FINALE: {"texte": "x", "etat_confiance": "inconnu", "citations": []}'),
-    )
-    await store.executerRaisonnement('client-A', {
-      objectif: 'Objectif',
-      missionId: null,
-      contextSnapshotId: null,
-      fournisseur,
-      mode: 'chat_normatif',
-    })
-    await store.charger('client-B')
-    expect(store.requests).toHaveLength(0)
-    expect(store.responses).toHaveLength(0)
+    const { ctx, demonter } = await installerAuthEtClient('client-A')
+    try {
+      await ctx.clientsRepo.creer({
+        id: 'client-B',
+        name: 'client-B',
+        adresse: null,
+        secteur: null,
+        details: null,
+        statut: 'actif',
+        archivedAt: null,
+        archivedBy: null,
+        createdByUserId: 'admin-test',
+        sharedWith: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })
+
+      const store = useReasoningEngineStore()
+      await store.charger('client-A')
+      const fournisseur = fournisseurMock()
+      fournisseur.envoyerMessage.mockResolvedValueOnce(
+        reponse('REPONSE_FINALE: {"texte": "x", "etat_confiance": "inconnu", "citations": []}'),
+      )
+      await store.executerRaisonnement('client-A', {
+        objectif: 'Objectif',
+        missionId: null,
+        contextSnapshotId: null,
+        fournisseur,
+        mode: 'chat_normatif',
+      })
+      await store.charger('client-B')
+      expect(store.requests).toHaveLength(0)
+      expect(store.responses).toHaveLength(0)
+    } finally {
+      demonter()
+    }
   })
 })
 
@@ -374,6 +405,8 @@ describe('useReasoningEngineStore — narratif de contexte assemblé', () => {
   })
 
   test('contextSnapshotId absent (null) : aucun narratif, comportement inchangé', async () => {
+    const { demonter: d } = await installerAuthEtClient('client-1')
+    demonter = d
     const store = useReasoningEngineStore()
     await store.charger('client-1')
 

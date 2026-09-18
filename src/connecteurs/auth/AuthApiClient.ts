@@ -995,6 +995,76 @@ export interface SaisieAssemblageContextSnapshotWire {
   assetNodeId?: string | null
 }
 
+export interface AIConfigurationWire {
+  id: string
+  clientId: string
+  version: string
+  outilsDisponibles: string[]
+  createdAt: string
+}
+
+export interface TraceAppelOutilWire {
+  outil: string
+  parametres: Record<string, string>
+  resultat: string
+  horodatage: string
+}
+
+export interface AIRequestWire {
+  id: string
+  clientId: string
+  missionId: string | null
+  contextSnapshotId: string | null
+  aiConfigurationId: string
+  objectif: string
+  createdAt: string
+}
+
+export interface AIResponseWire {
+  id: string
+  clientId: string
+  aiRequestId: string
+  texte: string
+  etatConfiance: string
+  traceAppelsOutils: TraceAppelOutilWire[]
+  versionMoteur: string | null
+  createdAt: string
+}
+
+export interface CitationAIResponseWire {
+  id: string
+  clientId: string
+  aiResponseId: string
+  typeObjetCite: string
+  objetId: string
+}
+
+export interface SaisieAssurerConfigurationWire {
+  version: string
+  outilsDisponibles: string[]
+}
+
+export interface SaisieCreationAIRequestWire {
+  missionId?: string | null
+  contextSnapshotId?: string | null
+  aiConfigurationId: string
+  objectif: string
+}
+
+export interface SaisieCreationAIResponseWire {
+  aiRequestId: string
+  texte: string
+  etatConfiance: string
+  traceAppelsOutils: TraceAppelOutilWire[]
+  versionMoteur?: string | null
+}
+
+export interface SaisieCitationAIResponseWire {
+  aiResponseId: string
+  typeObjetCite: string
+  objetId: string
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -2606,6 +2676,91 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/context-snapshots/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- AIConfiguration/AIRequest/AIResponse/CitationAIResponse (Target Architecture, domaine "Reasoning Engine", Phase 8c du chantier de migration D1) — seule la persistance CRUD migre ici, l'orchestration du raisonnement reste côté client. ---
+
+  obtenirReasoningEngine(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      configurations: AIConfigurationWire[]
+      requests: AIRequestWire[]
+      responses: AIResponseWire[]
+      citations: CitationAIResponseWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/reasoning-engine`, { jeton })
+  }
+
+  /** Idempotent : une configuration existante pour la même version est retournée telle quelle, jamais dupliquée — voir la route Worker `gererAssurerConfiguration`. */
+  assurerConfiguration(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieAssurerConfigurationWire,
+  ): Promise<ResultatApi<{ configuration: AIConfigurationWire }>> {
+    return this.requete('POST', `/clients/${clientId}/reasoning-engine/configurations`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerAIRequest(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationAIRequestWire,
+  ): Promise<ResultatApi<{ request: AIRequestWire }>> {
+    return this.requete('POST', `/clients/${clientId}/reasoning-engine/requests`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerAIResponse(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationAIResponseWire,
+  ): Promise<ResultatApi<{ response: AIResponseWire }>> {
+    return this.requete('POST', `/clients/${clientId}/reasoning-engine/responses`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  creerCitationsAIResponse(
+    jeton: string,
+    clientId: string,
+    citations: SaisieCitationAIResponseWire[],
+  ): Promise<ResultatApi<{ citations: CitationAIResponseWire[] }>> {
+    return this.requete('POST', `/clients/${clientId}/reasoning-engine/citations`, {
+      jeton,
+      body: { citations },
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerReasoningEngineLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerReasoningEngineLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      configurations: AIConfigurationWire[]
+      requests: AIRequestWire[]
+      responses: AIResponseWire[]
+      citations: CitationAIResponseWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      configurations: AIConfigurationWire[]
+      requests: AIRequestWire[]
+      responses: AIResponseWire[]
+      citations: CitationAIResponseWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/reasoning-engine/migration-locale`, {
       jeton,
       body: donnees,
     })
