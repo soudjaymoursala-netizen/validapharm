@@ -96,6 +96,10 @@ import type {
   ProcedureStepEnregistree,
 } from './repos/procedureRepo'
 import type {
+  GabaritExportClientEnregistre,
+  GabaritExportClientRepo,
+} from './repos/gabaritExportClientRepo'
+import type {
   AssociationFonctionAssetNodeEnregistree,
   AssociationFonctionProcessEnregistree,
   FonctionActifEnregistree,
@@ -178,6 +182,7 @@ export interface Contexte {
   contextSnapshotRepo: ContextSnapshotRepo
   reasoningEngineRepo: ReasoningEngineRepo
   procedureRepo: ProcedureRepo
+  gabaritExportClientRepo: GabaritExportClientRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -1380,6 +1385,55 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchProceduresMigrationLocale[1] as string,
+    )
+  }
+
+  // --- GabaritExportClient (gabarits d'export .docx personnalisés
+  // client, §4.3bis, Phase 9b du chantier de migration D1) ---
+  const matchGabaritsExportClient = chemin.match(/^\/clients\/([^/]+)\/gabarits-export$/)
+  if (matchGabaritsExportClient && request.method === 'GET') {
+    return gererListerGabaritsExportClient(
+      request,
+      ctx,
+      entetes,
+      matchGabaritsExportClient[1] as string,
+    )
+  }
+  if (matchGabaritsExportClient && request.method === 'POST') {
+    return gererCreerGabaritExportClient(
+      request,
+      ctx,
+      entetes,
+      matchGabaritsExportClient[1] as string,
+    )
+  }
+  const matchGabaritsExportClientMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/gabarits-export\/migration-locale$/,
+  )
+  if (matchGabaritsExportClientMigrationLocale && request.method === 'POST') {
+    return gererMigrerGabaritExportClientLocal(
+      request,
+      ctx,
+      entetes,
+      matchGabaritsExportClientMigrationLocale[1] as string,
+    )
+  }
+  const matchContenuGabaritExportClient = chemin.match(/^\/gabarits-export\/([^/]+)\/contenu$/)
+  if (matchContenuGabaritExportClient && request.method === 'GET') {
+    return gererObtenirContenuGabaritExportClient(
+      request,
+      ctx,
+      entetes,
+      matchContenuGabaritExportClient[1] as string,
+    )
+  }
+  const matchGabaritExportClientId = chemin.match(/^\/gabarits-export\/([^/]+)$/)
+  if (matchGabaritExportClientId && request.method === 'DELETE') {
+    return gererSupprimerGabaritExportClient(
+      request,
+      ctx,
+      entetes,
+      matchGabaritExportClientId[1] as string,
     )
   }
 
@@ -6846,6 +6900,228 @@ async function gererMigrerProceduresLocal(
     200,
     entetes,
   )
+}
+
+// --- Handlers : GabaritExportClient (gabarits d'export .docx
+// personnalisés client, §4.3bis, Phase 9b du chantier de migration D1) —
+// le contenu binaire du fichier vit dans R2 (`stockageBinaireRepo`),
+// jamais en D1 (voir migration 0025), même répartition que
+// `ProjectDocument`. La vérification des balises obligatoires
+// (`verifierGabaritExportClient`) reste côté client (bibliothèque
+// `docxtemplater`/`pizzip`, non portée dans le Worker) — le serveur fait
+// confiance à `tagsTrouves` fourni par l'appelant, déjà vérifié avant
+// l'appel.
+
+function cleContenuGabaritExportClient(id: string): string {
+  return `gabarits-export-client/${id}/contenu`
+}
+
+interface GabaritExportClientJson {
+  id: string
+  clientId: string
+  nom: string
+  tagsTrouves: string[]
+  createdAt: string
+}
+
+function assemblerGabaritExportClient(g: GabaritExportClientEnregistre): GabaritExportClientJson {
+  return {
+    id: g.id,
+    clientId: g.clientId,
+    nom: g.nom,
+    tagsTrouves: g.tagsTrouves,
+    createdAt: g.createdAt,
+  }
+}
+
+async function gererListerGabaritsExportClient(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const gabarits = await ctx.gabaritExportClientRepo.listerParClient(clientId)
+  return reponseJson({ gabarits: gabarits.map(assemblerGabaritExportClient) }, 200, entetes)
+}
+
+interface CorpsCreationGabaritExportClient {
+  /** Réservé à la migration locale (`gererMigrerGabaritExportClientLocal`) — ignoré par `gererCreerGabaritExportClient` (création normale). */
+  id?: string
+  nom?: string
+  tagsTrouves?: string[]
+}
+
+/** Lit et valide le `FormData` commun à la création et à la migration locale — même patron que `lireFormDataDocumentProjet`. */
+async function lireFormDataGabaritExportClient(
+  request: Request,
+): Promise<
+  { ok: true; corps: CorpsCreationGabaritExportClient; fichierBlob: Blob } | { ok: false }
+> {
+  let formData: FormData
+  try {
+    formData = await request.formData()
+  } catch {
+    return { ok: false }
+  }
+
+  const metadataBrut = formData.get('metadata')
+  if (typeof metadataBrut !== 'string') return { ok: false }
+  let corps: CorpsCreationGabaritExportClient
+  try {
+    corps = JSON.parse(metadataBrut) as CorpsCreationGabaritExportClient
+  } catch {
+    return { ok: false }
+  }
+
+  const fichierValeur = formData.get('fichier')
+  // Même vérification structurelle (jamais `instanceof Blob`) et même
+  // exigence `size > 0` que `gererCreerDocumentProjet` — voir sa
+  // docstring pour le bug réel qu'elle évite.
+  if (
+    fichierValeur === null ||
+    typeof fichierValeur !== 'object' ||
+    typeof (fichierValeur as Blob).arrayBuffer !== 'function' ||
+    (fichierValeur as Blob).size === 0
+  ) {
+    return { ok: false }
+  }
+
+  return { ok: true, corps, fichierBlob: fichierValeur as Blob }
+}
+
+async function gererCreerGabaritExportClient(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const lecture = await lireFormDataGabaritExportClient(request)
+  if (!lecture.ok) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const { corps, fichierBlob } = lecture
+  if (!corps.nom || corps.nom.trim().length === 0) {
+    return reponseJson({ erreur: 'nom_obligatoire' }, 400, entetes)
+  }
+
+  const id = genererId()
+  await ctx.stockageBinaireRepo.enregistrer(
+    cleContenuGabaritExportClient(id),
+    await fichierBlob.arrayBuffer(),
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  )
+  const gabarit: GabaritExportClientEnregistre = {
+    id,
+    clientId,
+    nom: corps.nom.trim(),
+    tagsTrouves: corps.tagsTrouves ?? [],
+    createdAt: horodatage(),
+  }
+  await ctx.gabaritExportClientRepo.creer(gabarit)
+  await consignerAudit(
+    ctx,
+    acteur,
+    'import_gabarit_export_client',
+    'gabarit_export_client',
+    id,
+    null,
+  )
+
+  return reponseJson({ gabarit: assemblerGabaritExportClient(gabarit) }, 201, entetes)
+}
+
+/**
+ * Migration ponctuelle (filet de sécurité `gabaritsExportClientAMigrer`,
+ * `useGabaritExportStore.migrerGabaritsLocauxVersServeur`) — même patron
+ * d'idempotence que `gererMigrerDocumentProjetLocal` (l'existant côté
+ * serveur gagne toujours, jamais un écrasement), un seul gabarit par
+ * appel (le fichier `.docx` est un `Blob`, non sérialisable dans un lot
+ * JSON). L'id est imposé par l'appelant, jamais fabriqué ici.
+ */
+async function gererMigrerGabaritExportClientLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const lecture = await lireFormDataGabaritExportClient(request)
+  if (!lecture.ok) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const { corps, fichierBlob } = lecture
+  const id = corps.id
+  if (!id || !corps.nom) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+
+  const existant = await ctx.gabaritExportClientRepo.parId(id)
+  if (existant) {
+    return reponseJson({ gabarit: assemblerGabaritExportClient(existant) }, 201, entetes)
+  }
+
+  await ctx.stockageBinaireRepo.enregistrer(
+    cleContenuGabaritExportClient(id),
+    await fichierBlob.arrayBuffer(),
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  )
+  const gabarit: GabaritExportClientEnregistre = {
+    id,
+    clientId,
+    nom: corps.nom.trim(),
+    tagsTrouves: corps.tagsTrouves ?? [],
+    createdAt: horodatage(),
+  }
+  await ctx.gabaritExportClientRepo.creer(gabarit)
+  return reponseJson({ gabarit: assemblerGabaritExportClient(gabarit) }, 201, entetes)
+}
+
+async function gererObtenirContenuGabaritExportClient(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const gabarit = await ctx.gabaritExportClientRepo.parId(id)
+  if (!gabarit) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  const contenu = await ctx.stockageBinaireRepo.lire(cleContenuGabaritExportClient(id))
+  if (!contenu) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+
+  return new Response(contenu.contenu, {
+    status: 200,
+    headers: {
+      ...entetes,
+      'Content-Type': contenu.typeContenu,
+      'Content-Disposition': `attachment; filename="${gabarit.nom.replace(/"/g, '')}.docx"`,
+    },
+  })
+}
+
+async function gererSupprimerGabaritExportClient(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  await ctx.stockageBinaireRepo.supprimer(cleContenuGabaritExportClient(id))
+  await ctx.gabaritExportClientRepo.supprimer(id)
+  await consignerAudit(
+    ctx,
+    utilisateur,
+    'suppression_gabarit_export_client',
+    'gabarit_export_client',
+    id,
+    null,
+  )
+  return reponseJson({ ok: true }, 200, entetes)
 }
 
 // --- Handlers : Organization/Workspace (Phase 2 du chantier de migration D1) ---

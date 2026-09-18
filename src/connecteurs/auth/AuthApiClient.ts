@@ -1104,6 +1104,22 @@ export interface SaisieCreationEtapeProcedureWire {
   responsable?: string | null
 }
 
+export interface GabaritExportClientWire {
+  id: string
+  clientId: string
+  nom: string
+  tagsTrouves: string[]
+  createdAt: string
+}
+
+export interface SaisieCreationGabaritExportClientWire {
+  /** Réservé au filet de sécurité de migration locale (`migrerGabaritExportClientLocal`) — jamais fabriqué par un appel de création normal. */
+  id?: string
+  nom: string
+  tagsTrouves: string[]
+  fichier: Blob
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -2845,6 +2861,89 @@ export class AuthApiClient {
       jeton,
       body: donnees,
     })
+  }
+
+  // --- GabaritExportClient (gabarits d'export .docx personnalisés client, §4.3bis, Phase 9b du chantier de migration D1) ---
+
+  obtenirGabaritsExportClient(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ gabarits: GabaritExportClientWire[] }>> {
+    return this.requete('GET', `/clients/${clientId}/gabarits-export`, { jeton })
+  }
+
+  /** Corps `multipart/form-data` (jamais JSON) — le fichier `.docx` peut être volumineux, jamais adapté à un `JSON.stringify` (même contrainte que `creerDocumentProjet`). */
+  creerGabaritExportClient(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationGabaritExportClientWire,
+  ): Promise<ResultatApi<{ gabarit: GabaritExportClientWire }>> {
+    const formData = new FormData()
+    formData.set(
+      'metadata',
+      JSON.stringify({
+        id: saisie.id ?? undefined,
+        nom: saisie.nom,
+        tagsTrouves: saisie.tagsTrouves,
+      }),
+    )
+    formData.set('fichier', saisie.fichier, saisie.nom)
+    return this.requeteFormData('POST', `/clients/${clientId}/gabarits-export`, jeton, formData)
+  }
+
+  supprimerGabaritExportClient(jeton: string, id: string): Promise<ResultatApi<{ ok: true }>> {
+    return this.requete('DELETE', `/gabarits-export/${id}`, { jeton })
+  }
+
+  /** Contenu binaire brut d'un gabarit — jamais du JSON, contourne `requete()` (même patron que `obtenirContenuDocumentProjet`). */
+  async obtenirContenuGabaritExportClient(
+    jeton: string,
+    id: string,
+  ): Promise<{ ok: true; blob: Blob } | { ok: false; erreur: string }> {
+    const controleur = new AbortController()
+    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
+    let reponse: Response
+    try {
+      reponse = await fetch(`${this.relayUrl}/gabarits-export/${id}/contenu`, {
+        signal: controleur.signal,
+        headers: { Authorization: `Bearer ${jeton}` },
+      })
+    } catch (erreur) {
+      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
+      throw new IndisponibleAuthError()
+    } finally {
+      clearTimeout(minuteur)
+    }
+    if (reponse.status >= 500) throw new IndisponibleAuthError()
+    if (!reponse.ok) {
+      const corps = await reponse.json().catch(() => null)
+      const erreur =
+        corps && typeof corps === 'object' && 'erreur' in corps && typeof corps.erreur === 'string'
+          ? corps.erreur
+          : 'erreur_inconnue'
+      return { ok: false, erreur }
+    }
+    return { ok: true, blob: await reponse.blob() }
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerGabaritExportClientLocal` : idempotente, l'existant côté serveur gagne toujours. Même corps `multipart/form-data` que `creerGabaritExportClient`, avec `saisie.id` imposé. */
+  migrerGabaritExportClientLocal(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationGabaritExportClientWire & { id: string },
+  ): Promise<ResultatApi<{ gabarit: GabaritExportClientWire }>> {
+    const formData = new FormData()
+    formData.set(
+      'metadata',
+      JSON.stringify({ id: saisie.id, nom: saisie.nom, tagsTrouves: saisie.tagsTrouves }),
+    )
+    formData.set('fichier', saisie.fichier, saisie.nom)
+    return this.requeteFormData(
+      'POST',
+      `/clients/${clientId}/gabarits-export/migration-locale`,
+      jeton,
+      formData,
+    )
   }
 
   // --- Organization/Workspace (Phase 2 du chantier de migration D1) ---
