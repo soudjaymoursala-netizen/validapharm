@@ -9,6 +9,7 @@ import { D1CsvAssessmentRepo } from './repos/d1/d1CsvAssessmentRepo'
 import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
 import { D1EvidenceRepo } from './repos/d1/d1EvidenceRepo'
 import { D1ExecutionRepo } from './repos/d1/d1ExecutionRepo'
+import { D1GabaritExportClientRepo } from './repos/d1/d1GabaritExportClientRepo'
 import { D1ImpactAssessmentRepo } from './repos/d1/d1ImpactAssessmentRepo'
 import { D1IntegrationRepo } from './repos/d1/d1IntegrationRepo'
 import { D1KnowledgeEngineRepo } from './repos/d1/d1KnowledgeEngineRepo'
@@ -84,6 +85,7 @@ export default {
       contextSnapshotRepo: new D1ContextSnapshotRepo(env.DB),
       reasoningEngineRepo: new D1ReasoningEngineRepo(env.DB),
       procedureRepo: new D1ProcedureRepo(env.DB),
+      gabaritExportClientRepo: new D1GabaritExportClientRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

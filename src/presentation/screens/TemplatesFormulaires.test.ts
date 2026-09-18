@@ -4,7 +4,7 @@ import JSZip from 'jszip'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -81,13 +81,15 @@ async function deposerFichier(
   await inputFichier.trigger('change')
 }
 
+let ctx: Contexte
 let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.gabaritsExportClient.clear()
   await reinitialiserAuthDeTest()
-  demonter = installerFauxWorkerAuth().demonter
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
   await connecterAdminDeTest()
 })
 
@@ -113,8 +115,7 @@ describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maî
     const buffer = await construireGabaritDocx(GABARIT_COMPLET)
     await deposerFichier(wrapper, buffer)
 
-    await attendreQue(async () => (await db.gabaritsExportClient.toArray()).length > 0)
-    expect(wrapper.text()).toContain('QD-0007 Protocole OQ')
+    await attendreQue(() => wrapper.text().includes('QD-0007 Protocole OQ'))
     expect(wrapper.find('.bandeau-erreur').exists()).toBe(false)
   })
 
@@ -137,7 +138,7 @@ describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maî
 
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
     expect(wrapper.find('.bandeau-erreur').text()).toContain('balises obligatoires manquantes')
-    expect(await db.gabaritsExportClient.toArray()).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('Gabarit incomplet')
   })
 
   test('supprimer un gabarit le retire de la liste et de la base', async () => {
@@ -156,27 +157,37 @@ describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maî
     await wrapper.find('input[type="text"]').setValue('QD-0007 Protocole OQ')
     const buffer = await construireGabaritDocx(GABARIT_COMPLET)
     await deposerFichier(wrapper, buffer)
-    await attendreQue(async () => (await db.gabaritsExportClient.toArray()).length > 0)
+    await attendreQue(() => wrapper.text().includes('QD-0007 Protocole OQ'))
 
     await wrapper.find('.bouton-danger').trigger('click')
-    await attendreQue(async () => (await db.gabaritsExportClient.toArray()).length === 0)
+    await attendreQue(() => !wrapper.text().includes('QD-0007 Protocole OQ'))
     expect(wrapper.text()).not.toContain('QD-0007 Protocole OQ')
   })
 
-  test("un Worker injoignable pour le nom du client n'empêche pas l'affichage des gabarits (purement locaux, déjà persistés)", async () => {
+  /**
+   * Depuis la migration D1 (Phase 9b, docs/CHANTIER-MIGRATION-D1-RECAP.md),
+   * les gabarits ne sont plus purement locaux : une panne réseau signifie
+   * réellement une absence de données pour cet écran, jamais un crash —
+   * même discipline que `StructureSysteme` (voir `useGabaritExportStore.
+   * charger`, catch autour de `api.obtenirGabaritsExportClient`).
+   */
+  test("un Worker injoignable n'empêche jamais l'affichage de l'écran (dégradation gracieuse, jamais une exception non gérée)", async () => {
     const clientId = 'client-test-templates'
-    await db.gabaritsExportClient.put({
-      id: 'gabarit-1',
-      client_id: clientId,
-      nom: 'QD-0007 Protocole OQ',
-      fichier: new ArrayBuffer(0),
-      tags_trouves: [],
-      created_at: new Date().toISOString(),
+    await ctx.clientsRepo.creer({
+      id: clientId,
+      name: 'PharmaTech Solutions',
+      adresse: null,
+      secteur: null,
+      details: null,
+      statut: 'actif',
+      archivedAt: null,
+      archivedBy: null,
+      createdByUserId: 'admin-test',
+      sharedWith: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     })
 
-    // Même bug que celui corrigé au niveau de `useClientsStore.obtenirClient`
-    // (voir StructureSysteme.test.ts) : cet écran enchaîne aussi ce même
-    // appel avant un charger purement local (gabaritStore).
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
 
     const router = routeurDeTest()
@@ -185,9 +196,12 @@ describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maî
       props: { clientId },
       global: { plugins: [router] },
     })
-    await attendreQue(() => wrapper.text().includes('QD-0007 Protocole OQ'))
 
-    expect(wrapper.text()).toContain('QD-0007 Protocole OQ')
+    await attendreQue(() => wrapper.text().includes("Aucun template importé pour l'instant"))
+    expect(wrapper.text()).toContain("Aucun template importé pour l'instant")
+
+    // Dégradation attendue pour le nom du client : jamais de plantage, le
+    // titre retombe sur l'identifiant brut du client.
     expect(wrapper.find('h1').text()).toContain(clientId)
   })
 })

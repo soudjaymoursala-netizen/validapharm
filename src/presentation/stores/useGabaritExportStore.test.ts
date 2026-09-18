@@ -2,7 +2,12 @@ import 'fake-indexeddb/auto'
 import JSZip from 'jszip'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useGabaritExportStore } from './useGabaritExportStore'
 
 async function construireGabaritDocx(corpsXml: string): Promise<ArrayBuffer> {
@@ -37,75 +42,122 @@ const GABARIT_COMPLET =
 
 const GABARIT_INCOMPLET = '<w:p><w:r><w:t>{titre}</w:t></w:r></w:p>'
 
-beforeEach(async () => {
+async function creerClient(ctx: Contexte, id: string): Promise<void> {
+  await ctx.clientsRepo.creer({
+    id,
+    name: id,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
+
+async function installerAuthEtClient(
+  clientId: string,
+): Promise<{ ctx: Contexte; demonter: () => void }> {
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  await connecterAdminDeTest()
+  await creerClient(installation.ctx, clientId)
+  return installation
+}
+
+beforeEach(() => {
   setActivePinia(createPinia())
-  await db.gabaritsExportClient.clear()
 })
 
 describe('useGabaritExportStore — importerGabarit', () => {
   test('un gabarit avec toutes les balises obligatoires est accepté et persisté', async () => {
-    const store = useGabaritExportStore()
-    await store.charger('client-1')
-    const fichier = await construireGabaritDocx(GABARIT_COMPLET)
+    const { ctx, demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useGabaritExportStore()
+      await store.charger('client-1')
+      const fichier = await construireGabaritDocx(GABARIT_COMPLET)
 
-    const resultat = await store.importerGabarit('client-1', 'Gabarit Sanofi', fichier)
+      const resultat = await store.importerGabarit('client-1', 'Gabarit Sanofi', fichier)
 
-    expect(resultat.ok).toBe(true)
-    expect(store.gabarits).toHaveLength(1)
-    const relu = await db.gabaritsExportClient.toArray()
-    expect(relu).toHaveLength(1)
-    expect(relu[0]?.nom).toBe('Gabarit Sanofi')
+      expect(resultat.ok).toBe(true)
+      expect(store.gabarits).toHaveLength(1)
+      const relus = await ctx.gabaritExportClientRepo.listerParClient('client-1')
+      expect(relus).toHaveLength(1)
+      expect(relus[0]?.nom).toBe('Gabarit Sanofi')
+    } finally {
+      demonter()
+    }
   })
 
   test('un gabarit sans les balises obligatoires est refusé, jamais enregistré', async () => {
-    const store = useGabaritExportStore()
-    await store.charger('client-1')
-    const fichier = await construireGabaritDocx(GABARIT_INCOMPLET)
+    const { ctx, demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useGabaritExportStore()
+      await store.charger('client-1')
+      const fichier = await construireGabaritDocx(GABARIT_INCOMPLET)
 
-    const resultat = await store.importerGabarit('client-1', 'Gabarit incomplet', fichier)
+      const resultat = await store.importerGabarit('client-1', 'Gabarit incomplet', fichier)
 
-    expect(resultat.ok).toBe(false)
-    if (!resultat.ok) {
-      expect(resultat.tagsManquants).toEqual([
-        'redacteurs',
-        'approbateur_final',
-        'historique_revisions',
-      ])
+      expect(resultat.ok).toBe(false)
+      if (!resultat.ok) {
+        expect(resultat.tagsManquants).toEqual([
+          'redacteurs',
+          'approbateur_final',
+          'historique_revisions',
+        ])
+      }
+      expect(store.gabarits).toHaveLength(0)
+      expect(await ctx.gabaritExportClientRepo.listerParClient('client-1')).toHaveLength(0)
+    } finally {
+      demonter()
     }
-    expect(store.gabarits).toHaveLength(0)
-    expect(await db.gabaritsExportClient.toArray()).toHaveLength(0)
   })
 
   test('isolation stricte par client : le gabarit d’un client n’apparaît jamais chez un autre', async () => {
-    const store = useGabaritExportStore()
-    await store.charger('client-A')
-    await store.importerGabarit(
-      'client-A',
-      'Gabarit A',
-      await construireGabaritDocx(GABARIT_COMPLET),
-    )
+    const { ctx, demonter } = await installerAuthEtClient('client-A')
+    try {
+      await creerClient(ctx, 'client-B')
+      const store = useGabaritExportStore()
+      await store.charger('client-A')
+      await store.importerGabarit(
+        'client-A',
+        'Gabarit A',
+        await construireGabaritDocx(GABARIT_COMPLET),
+      )
 
-    await store.charger('client-B')
-    expect(store.gabarits).toHaveLength(0)
+      await store.charger('client-B')
+      expect(store.gabarits).toHaveLength(0)
 
-    await store.charger('client-A')
-    expect(store.gabarits).toHaveLength(1)
+      await store.charger('client-A')
+      expect(store.gabarits).toHaveLength(1)
+    } finally {
+      demonter()
+    }
   })
 
   test('supprimerGabarit retire le gabarit de la liste et de la base', async () => {
-    const store = useGabaritExportStore()
-    await store.charger('client-1')
-    const resultat = await store.importerGabarit(
-      'client-1',
-      'À supprimer',
-      await construireGabaritDocx(GABARIT_COMPLET),
-    )
-    expect(resultat.ok).toBe(true)
-    if (!resultat.ok) return
+    const { ctx, demonter } = await installerAuthEtClient('client-1')
+    try {
+      const store = useGabaritExportStore()
+      await store.charger('client-1')
+      const resultat = await store.importerGabarit(
+        'client-1',
+        'À supprimer',
+        await construireGabaritDocx(GABARIT_COMPLET),
+      )
+      expect(resultat.ok).toBe(true)
+      if (!resultat.ok) return
 
-    await store.supprimerGabarit(resultat.gabarit.id)
+      await store.supprimerGabarit(resultat.gabarit.id)
 
-    expect(store.gabarits).toHaveLength(0)
-    expect(await db.gabaritsExportClient.get(resultat.gabarit.id)).toBeUndefined()
+      expect(store.gabarits).toHaveLength(0)
+      expect(await ctx.gabaritExportClientRepo.parId(resultat.gabarit.id)).toBeNull()
+    } finally {
+      demonter()
+    }
   })
 })

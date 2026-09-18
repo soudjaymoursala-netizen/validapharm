@@ -108,7 +108,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `aiConfigurations`, `aiRequests`, `aiResponses`, `citationsAIResponse` | D1 | ✅ **Phase 8c terminée — voir §23. Phase 8 entièrement close.** |
 | `relationsTechniques` | D1 (avec Structure Système, Phase 1) | ✅ Phase 1 terminée, même état que la ligne ci-dessus |
 | `procedures`, `procedureSteps` | D1 | ✅ **Phase 9a terminée — voir §24** |
-| `gabaritsExportClient` | D1 | ⬜ Phase 9 |
+| `gabaritsExportClient` | D1 + R2 (fichier `.docx` binaire) | ✅ **Phase 9b terminée — voir §25** |
 | `aiChatSessionLogs` | D1 | ⬜ Phase 9 |
 | `connexionDrive`, `etatMiroirDrive` (miroir Drive par client) | D1 | ⬜ Phase 9 |
 | `connexionRelaisOCR` | D1 (même patron que Relais IA) | ⬜ Phase 9 |
@@ -2675,10 +2675,122 @@ mutation en place — répond à R-21, `02-analyse-de-risque-outil.md`.
 
 ### 24.3 Suite du chantier
 
+Voir §25 pour la Phase 9b (`gabaritsExportClient`), puis §25.3 pour la
+suite (Phase 9c à 9f).
+
+---
+
+## 25. État détaillé — Phase 9b (`GabaritExportClient`, gabarits d'export
+`.docx` personnalisés client, §4.3bis), au 18/09/2026
+
+### 25.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. ✅ Migration `0025_gabarits_export_client.sql` — table
+   `gabarits_export_client` (id, client_id, nom, tags_trouves TEXT JSON,
+   created_at) + index `idx_gabarits_export_client_client`. Le contenu
+   binaire du fichier `.docx` **ne vit pas en D1** — même répartition que
+   `ProjectDocument`/`DocumentNormatif` (migration 0008/0003) : il est
+   stocké dans R2 via `StockageBinaireRepo`, sous la clé
+   `gabarits-export-client/<id>/contenu`.
+2. ✅ `workers/auth-worker/src/repos/gabaritExportClientRepo.ts` —
+   `GabaritExportClientEnregistre`, interface `GabaritExportClientRepo`
+   (`listerParClient`/`parId`/`creer`/`supprimer`), implémentation
+   mémoire `GabaritExportClientRepoMemoire`.
+3. ✅ `workers/auth-worker/src/repos/d1/d1GabaritExportClientRepo.ts` —
+   implémentation D1, `tagsTrouves` stocké en JSON `TEXT`
+   (`JSON.stringify`/`JSON.parse`, même patron que `ContentPlan.auditLog`).
+4. ✅ `workers/auth-worker/src/index.ts` — câblage
+   `gabaritExportClientRepo: new D1GabaritExportClientRepo(env.DB)`.
+5. ✅ `workers/auth-worker/src/routeur.ts` — `Contexte.gabaritExportClientRepo`,
+   5 routes : `GET /clients/:clientId/gabarits-export` (liste, scopée
+   `exigerAccesClient`), `POST /clients/:clientId/gabarits-export`
+   (création, corps `multipart/form-data` — `metadata` JSON + `fichier`
+   Blob), `POST /clients/:clientId/gabarits-export/migration-locale`
+   (idempotente, id imposé par l'appelant, même patron que
+   `gererMigrerDocumentProjetLocal`), `GET /gabarits-export/:id/contenu`
+   (contenu binaire brut, `authentifier` seul — même patron que
+   `gererObtenirContenuDocumentProjet`, pas de re-vérification
+   `client_id` à ce niveau, cohérent avec l'existant), `DELETE
+   /gabarits-export/:id` (supprime le contenu R2 puis l'enregistrement
+   D1). **Vérification des balises obligatoires
+   (`verifierGabaritExportClient`) volontairement laissée côté client** —
+   dépend de `docxtemplater`/`pizzip`, jamais portée dans le Worker ;
+   le serveur fait confiance à `tagsTrouves` déjà vérifié avant l'appel
+   (documenté explicitement dans le code).
+6. ✅ `workers/auth-worker/src/routeur.test.ts` — describe block
+   `'routerRequete — GabaritExportClient (gabarits d'export .docx
+   personnalisés client, §4.3bis, Phase 9b du chantier de migration D1)'`
+   avec 8 tests : GET vide, création + relecture identique via `/contenu`,
+   création sans nom (`nom_obligatoire`), création sans fichier
+   (`corps_invalide`), isolation stricte par client, suppression (liste +
+   contenu retirés), migration-locale idempotente, non-authentifié → 401.
+   **Résultat : 314/314 tests Worker** (306 existants + 8 nouveaux).
+7. ✅ `src/test-utils/fauxWorkerAuth.ts` — `gabaritExportClientRepo: new
+   GabaritExportClientRepoMemoire()` ajouté au `Contexte` de test.
+8. ✅ `src/connecteurs/auth/AuthApiClient.ts` — `GabaritExportClientWire`,
+   `SaisieCreationGabaritExportClientWire`, 5 méthodes :
+   `obtenirGabaritsExportClient`, `creerGabaritExportClient` (multipart),
+   `supprimerGabaritExportClient`, `obtenirContenuGabaritExportClient`
+   (contourne `requete()`, même patron que
+   `obtenirContenuDocumentProjet`), `migrerGabaritExportClientLocal`.
+9. ✅ `src/presentation/stores/useGabaritExportStore.ts` — entièrement
+   réécrit, **surface publique strictement inchangée**
+   (`gabarits`/`enChargement`/`charger`/`importerGabarit`/
+   `supprimerGabarit`). `charger()` liste les métadonnées puis récupère le
+   contenu binaire de chaque gabarit en parallèle (`Promise.all` +
+   `obtenirContenuGabaritExportClient`) pour reconstituer
+   `GabaritExportClient.fichier: ArrayBuffer` — délibérément différent du
+   patron « liste sans contenu » de `ProjectDocument` : le nombre de
+   gabarits personnalisés par client reste faible (quelques templates),
+   et les composants consommateurs (`EditeurSection.vue`) lisent
+   `gabarit.fichier` **de façon synchrone** depuis le tableau du store,
+   jamais via un second appel explicite — préserver cette surface était la
+   contrainte dominante. `importerGabarit()` garde la vérification
+   `verifierGabaritExportClient` (docxtemplater/pizzip) strictement côté
+   client, inchangée, avant tout appel réseau.
+10. ✅ `src/persistance/db.ts` — retrait de
+    `gabaritsExportClient!: EntityTable<...>`, ajout de
+    `gabaritsExportClientAMigrer: GabaritExportClient[]` + migration
+    `.version(55)` capturant les enregistrements existants avant
+    suppression physique de la table (même technique que `.version(54)`).
+11. ✅ Fichiers de test corrigés (grep exhaustif `db.gabaritsExportClient`
+    **et** appels à `useGabaritExportStore`/composants consommateurs) :
+    `src/presentation/stores/useGabaritExportStore.test.ts` (réécrit avec
+    `installerFauxWorkerAuth`/client créé via `ctx.clientsRepo.creer`),
+    `src/presentation/screens/TemplatesFormulaires.test.ts` (idem ; le
+    dernier test — ancien « Worker injoignable pour le nom du client
+    n'empêche pas l'affichage des gabarits, purement locaux » — n'avait
+    plus de sens une fois les gabarits eux-mêmes dépendants du réseau ;
+    remplacé par l'équivalent « dégradation gracieuse » déjà établi pour
+    `StructureSysteme.test.ts` lors de sa propre migration D1 : panne
+    réseau totale → écran affiché quand même, état vide explicite, titre
+    replié sur l'id brut du client, jamais un plantage).
+12. ✅ Validation complète : Worker `npx vitest run` (314/314), frontend
+    `npx vitest run` (1442/1442), `npx vue-tsc -b --noEmit` (rappel :
+    **jamais** `vue-tsc --noEmit` seul, qui ne vérifie rien dans ce dépôt
+    — voir §24.1 point 11), `npx eslint .` et `npx prettier --check .`
+    propres (6 avertissements prettier auto-corrigés via `--fix`).
+
+### 25.2 Phase 9b — commit/push/PR (18/09/2026)
+
+1. ✅ Commit sur `claude/contexte-reprise-session-tin77u` (branche
+   redémarrée depuis `main` après le merge de la PR #77 doc-only de la
+   Phase 9a).
+2. ✅ PR #78 ouverte (« Phase 9b migration D1 : GabaritExportClient »).
+3. ⬜ CI en cours au moment de la rédaction de cette section — suivi via
+   `subscribe_pr_activity` + relance programmée.
+4. ⬜ Merge sur `main`.
+5. ⬜ Migration `0025_gabarits_export_client.sql` à appliquer en
+   production D1 (`validapharm-auth`) + vérification `sqlite_master`.
+6. ⬜ Vérification du code déployé (`workers_get_worker_code`,
+   `validapharm-auth-worker`).
+7. ⬜ PR doc-only de clôture (mise à jour de cette section une fois tout
+   confirmé).
+
+### 25.3 Suite du chantier
+
 Reste à la Phase 9 (voir §3) :
 
-- `gabaritsExportClient` (gabarits d'export personnalisés client) —
-  Phase 9b
 - `aiChatSessionLogs` — Phase 9c
 - `connexionDrive`/`etatMiroirDrive` (miroir Drive par client) — Phase 9d
 - `connexionRelaisOCR` (même patron que Relais IA) — Phase 9e

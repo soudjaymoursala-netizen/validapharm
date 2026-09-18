@@ -19,6 +19,7 @@ import { CSVAssessmentRepoMemoire } from './repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from './repos/evidenceRepo'
 import { ExecutionRepoMemoire } from './repos/executionRepo'
+import { GabaritExportClientRepoMemoire } from './repos/gabaritExportClientRepo'
 import { ImpactAssessmentRepoMemoire } from './repos/impactAssessmentRepo'
 import { IntegrationRepoMemoire } from './repos/integrationRepo'
 import { KnowledgeEngineRepoMemoire } from './repos/knowledgeEngineRepo'
@@ -76,6 +77,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     contextSnapshotRepo: new ContextSnapshotRepoMemoire(),
     reasoningEngineRepo: new ReasoningEngineRepoMemoire(),
     procedureRepo: new ProcedureRepoMemoire(),
+    gabaritExportClientRepo: new GabaritExportClientRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -269,6 +271,8 @@ interface CorpsReponse {
   procedure: ProcedureJson
   procedureSteps: ProcedureStepJson[]
   etape: ProcedureStepJson
+  gabarits: GabaritExportClientJson[]
+  gabarit: GabaritExportClientJson
 }
 
 interface RequirementJson {
@@ -653,6 +657,14 @@ interface ProcedureStepJson {
   obligatoire: boolean
   condition: string | null
   responsable: string | null
+  createdAt: string
+}
+
+interface GabaritExportClientJson {
+  id: string
+  clientId: string
+  nom: string
+  tagsTrouves: string[]
   createdAt: string
 }
 
@@ -6577,6 +6589,189 @@ describe('routerRequete — Procedure/ProcedureStep (cerveau procédural, Phase 
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/procedures`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+async function creerGabaritExportClient(
+  ctx: Contexte,
+  jeton: string,
+  clientId: string,
+  options: {
+    metadata?: Record<string, unknown>
+    fichier?: { octets: Uint8Array; nomFichier: string }
+    sansFichier?: boolean
+  } = {},
+): Promise<{ status: number; corps: CorpsReponse }> {
+  const formData = new FormData()
+  formData.set(
+    'metadata',
+    JSON.stringify({ nom: 'Gabarit CQV', tagsTrouves: ['redacteurs'], ...options.metadata }),
+  )
+  if (!options.sansFichier) {
+    const octets = options.fichier?.octets ?? new Uint8Array([1, 2, 3, 4])
+    const nomFichier = options.fichier?.nomFichier ?? 'gabarit.docx'
+    formData.set(
+      'fichier',
+      new File([octets.buffer as ArrayBuffer], nomFichier, {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+    )
+  }
+  const url = options.metadata?.id
+    ? `https://relais.workers.dev/clients/${clientId}/gabarits-export/migration-locale`
+    : `https://relais.workers.dev/clients/${clientId}/gabarits-export`
+  const reponse = await routerRequete(
+    new Request(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jeton}` },
+      body: formData,
+    }),
+    ctx,
+  )
+  const corps = await reponse.json().catch(() => null)
+  return { status: reponse.status, corps }
+}
+
+describe("routerRequete — GabaritExportClient (gabarits d'export .docx personnalisés client, §4.3bis, Phase 9b du chantier de migration D1)", () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans rien configuré -> liste vide, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/gabarits-export`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.gabarits).toEqual([])
+  })
+
+  test('création -> métadonnées enregistrées, contenu relu identique via /contenu', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const octets = new Uint8Array([10, 20, 30, 40, 50])
+
+    const creation = await creerGabaritExportClient(ctx, admin.jeton, clientId, {
+      fichier: { octets, nomFichier: 'gabarit-cqv.docx' },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.gabarit.nom).toBe('Gabarit CQV')
+    expect(creation.corps.gabarit.tagsTrouves).toEqual(['redacteurs'])
+    expect(creation.corps.gabarit.clientId).toBe(clientId)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/gabarits-export`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.gabarits).toHaveLength(1)
+
+    const reponseContenu = await routerRequete(
+      new Request(
+        `https://relais.workers.dev/gabarits-export/${creation.corps.gabarit.id}/contenu`,
+        { headers: { Authorization: `Bearer ${admin.jeton}` } },
+      ),
+      ctx,
+    )
+    expect(reponseContenu.status).toBe(200)
+    expect(new Uint8Array(await reponseContenu.arrayBuffer())).toEqual(octets)
+  })
+
+  test('création sans nom -> nom_obligatoire', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await creerGabaritExportClient(ctx, admin.jeton, clientId, {
+      metadata: { nom: '' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('nom_obligatoire')
+  })
+
+  test('création sans fichier -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await creerGabaritExportClient(ctx, admin.jeton, clientId, {
+      sansFichier: true,
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('liste scopée à un client, jamais celle d’un autre', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientA = await creerClientDeTest(ctx, admin.jeton)
+    const clientB = await creerClientDeTest(ctx, admin.jeton)
+    await creerGabaritExportClient(ctx, admin.jeton, clientA, { metadata: { nom: 'Gabarit A' } })
+    await creerGabaritExportClient(ctx, admin.jeton, clientB, { metadata: { nom: 'Gabarit B' } })
+
+    const listeA = await requete(ctx, 'GET', `/clients/${clientA}/gabarits-export`, {
+      jeton: admin.jeton,
+    })
+    expect(listeA.corps.gabarits.map((g) => g.nom)).toEqual(['Gabarit A'])
+  })
+
+  test('suppression retire le gabarit de la liste et son contenu', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { corps } = await creerGabaritExportClient(ctx, admin.jeton, clientId)
+
+    const suppression = await requete(ctx, 'DELETE', `/gabarits-export/${corps.gabarit.id}`, {
+      jeton: admin.jeton,
+    })
+    expect(suppression.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/gabarits-export`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.gabarits).toEqual([])
+
+    const reponseContenu = await routerRequete(
+      new Request(`https://relais.workers.dev/gabarits-export/${corps.gabarit.id}/contenu`, {
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+      }),
+      ctx,
+    )
+    expect(reponseContenu.status).toBe(404)
+  })
+
+  test('migration locale : idempotente, id existant ignoré', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const migration = await creerGabaritExportClient(ctx, admin.jeton, clientId, {
+      metadata: { id: 'gabarit-local-1', nom: 'Gabarit migré' },
+    })
+    expect(migration.status).toBe(201)
+
+    const rejouee = await creerGabaritExportClient(ctx, admin.jeton, clientId, {
+      metadata: { id: 'gabarit-local-1', nom: 'Gabarit migré (ignoré au rejeu)' },
+    })
+    expect(rejouee.status).toBe(201)
+    expect(rejouee.corps.gabarit.nom).toBe('Gabarit migré')
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/gabarits-export`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.gabarits).toHaveLength(1)
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/gabarits-export`)
     expect(obtenir.status).toBe(401)
   })
 })

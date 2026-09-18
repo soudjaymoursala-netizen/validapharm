@@ -505,6 +505,15 @@ export const proceduresAMigrer: Procedure[] = []
 export const procedureStepsAMigrer: ProcedureStep[] = []
 
 /**
+ * GabaritExportClient (gabarits d'export `.docx` personnalisés client,
+ * §4.3bis) : migrés vers le Worker/D1 (Phase 9b du chantier de migration
+ * D1) — même principe que `proceduresAMigrer` ci-dessus. Consommés et
+ * envoyés au serveur par `migrerGabaritsExportClientLocalVersServeur`
+ * (`useGabaritExportStore`) au premier `charger()`.
+ */
+export const gabaritsExportClientAMigrer: GabaritExportClient[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -521,7 +530,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  gabaritsExportClient!: EntityTable<GabaritExportClient, 'id'>
   profilLocal!: EntityTable<EnregistrementProfilLocal, 'id'>
   connexionAuthentification!: EntityTable<EnregistrementConnexionAuthentification, 'id'>
   sessionAuthentification!: EntityTable<EnregistrementSessionAuthentification, 'id'>
@@ -1240,6 +1248,19 @@ export class ValidaPharmDatabase extends Dexie {
         proceduresAMigrer.push(...procedures)
         const procedureSteps = await tx.table<ProcedureStep>('procedureSteps').toArray()
         procedureStepsAMigrer.push(...procedureSteps)
+      })
+
+    // GabaritExportClient (gabarits d'export .docx personnalisés client) :
+    // migré vers le Worker/D1 (Phase 9b du chantier de migration D1) —
+    // même technique de capture avant suppression physique que la
+    // version 54 ci-dessus.
+    this.version(55)
+      .stores({ gabaritsExportClient: null })
+      .upgrade(async (tx) => {
+        const gabaritsExportClient = await tx
+          .table<GabaritExportClient>('gabaritsExportClient')
+          .toArray()
+        gabaritsExportClientAMigrer.push(...gabaritsExportClient)
       })
   }
 }
