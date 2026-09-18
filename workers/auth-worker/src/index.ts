@@ -9,6 +9,7 @@ import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
 import { D1EvidenceRepo } from './repos/d1/d1EvidenceRepo'
 import { D1ExecutionRepo } from './repos/d1/d1ExecutionRepo'
 import { D1ImpactAssessmentRepo } from './repos/d1/d1ImpactAssessmentRepo'
+import { D1IntegrationRepo } from './repos/d1/d1IntegrationRepo'
 import { D1KnowledgeEngineRepo } from './repos/d1/d1KnowledgeEngineRepo'
 import { D1OrganisationRepo } from './repos/d1/d1OrganisationRepo'
 import { D1ParametersRepo } from './repos/d1/d1ParametersRepo'
@@ -74,6 +75,7 @@ export default {
       evidenceRepo: new D1EvidenceRepo(env.DB),
       knowledgeEngineRepo: new D1KnowledgeEngineRepo(env.DB),
       contentPlanRepo: new D1ContentPlanRepo(env.DB),
+      integrationRepo: new D1IntegrationRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

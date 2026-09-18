@@ -19,6 +19,7 @@ import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from './repos/evidenceRepo'
 import { ExecutionRepoMemoire } from './repos/executionRepo'
 import { ImpactAssessmentRepoMemoire } from './repos/impactAssessmentRepo'
+import { IntegrationRepoMemoire } from './repos/integrationRepo'
 import { KnowledgeEngineRepoMemoire } from './repos/knowledgeEngineRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametersRepoMemoire } from './repos/parametersRepo'
@@ -66,6 +67,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     evidenceRepo: new EvidenceRepoMemoire(),
     knowledgeEngineRepo: new KnowledgeEngineRepoMemoire(),
     contentPlanRepo: new ContentPlanRepoMemoire(),
+    integrationRepo: new IntegrationRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -231,6 +233,12 @@ interface CorpsReponse {
   conflicts: ConflictJson[]
   contentPlan: ContentPlanJson
   contentPlans: ContentPlanJson[]
+  connectors: ConnectorJson[]
+  connector: ConnectorJson
+  syncJobs: SyncJobJson[]
+  syncJob: SyncJobJson
+  externalReferences: ExternalReferenceJson[]
+  externalReference: ExternalReferenceJson
 }
 
 interface RequirementJson {
@@ -463,6 +471,36 @@ interface ContentPlanJson {
   auditLog: { timestamp: string; actor: string; action: string }[]
   createdAt: string
   updatedAt: string
+}
+
+interface ConnectorJson {
+  id: string
+  clientId: string
+  nom: string
+  actif: boolean
+  type: string
+  config: string
+  createdAt: string
+}
+
+interface SyncJobJson {
+  id: string
+  clientId: string
+  connectorId: string
+  statut: string
+  tentative: number
+  derniereErreur: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface ExternalReferenceJson {
+  id: string
+  clientId: string
+  connectorId: string
+  identifiantExterne: string
+  libelle: string
+  createdAt: string
 }
 
 interface QualityEventJson {
@@ -4799,6 +4837,432 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/content-plans`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Integration (Target Architecture, domaine "Integration", Phase 7c du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  async function creerConnectorDeTest(
+    ctx: Contexte,
+    jeton: string,
+    clientId: string,
+  ): Promise<string> {
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/connectors`, {
+      jeton,
+      body: {
+        nom: 'Veeva Vault production',
+        type: 'veeva_vault',
+        config: { vaultDns: 'client.veevavault.com', nomUtilisateur: 'u', motDePasse: 'p' },
+      },
+    })
+    return creation.corps.connector.id
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/integration`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.connectors).toEqual([])
+    expect(obtenir.corps.syncJobs).toEqual([])
+    expect(obtenir.corps.externalReferences).toEqual([])
+  })
+
+  test('créer un connecteur : id/actif/createdAt dérivés côté serveur, config sérialisée', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/connectors`, {
+      jeton: admin.jeton,
+      body: {
+        nom: 'Dossier réseau usine',
+        type: 'dossier_reseau',
+        config: { chemin: '\\\\serveur\\qualite' },
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.connector.actif).toBe(true)
+    expect(creation.corps.connector.type).toBe('dossier_reseau')
+    expect(JSON.parse(creation.corps.connector.config)).toEqual({ chemin: '\\\\serveur\\qualite' })
+    expect(creation.corps.connector.createdAt).toEqual(expect.any(String))
+  })
+
+  test('créer un connecteur avec actif explicite -> respecté', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/connectors`, {
+      jeton: admin.jeton,
+      body: {
+        nom: 'EDMS interne',
+        actif: false,
+        type: 'edms_generique',
+        config: { url: 'https://edms.local', jeton: 't' },
+      },
+    })
+    expect(creation.corps.connector.actif).toBe(false)
+  })
+
+  test('créer un connecteur avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/connectors`, {
+      jeton: admin.jeton,
+      body: { nom: 'X' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('désactiver un connecteur : introuvable -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const desactivation = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/connectors/inconnu/desactiver`,
+      { jeton: admin.jeton },
+    )
+    expect(desactivation.status).toBe(404)
+    expect(desactivation.corps.erreur).toBe('introuvable')
+  })
+
+  test('désactiver un connecteur rend inactif sans le supprimer', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+
+    const desactivation = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/connectors/${connectorId}/desactiver`,
+      { jeton: admin.jeton },
+    )
+    expect(desactivation.status).toBe(200)
+    expect(desactivation.corps.connector.actif).toBe(false)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/integration`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.connectors).toHaveLength(1)
+  })
+
+  test('basculer actif : inverse actif -> inactif -> actif', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+
+    const premiereBascule = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/connectors/${connectorId}/basculer-actif`,
+      { jeton: admin.jeton },
+    )
+    expect(premiereBascule.corps.connector.actif).toBe(false)
+
+    const secondeBascule = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/connectors/${connectorId}/basculer-actif`,
+      { jeton: admin.jeton },
+    )
+    expect(secondeBascule.corps.connector.actif).toBe(true)
+  })
+
+  test('supprimer un connecteur : introuvable -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const suppression = await requete(ctx, 'DELETE', `/clients/${clientId}/connectors/inconnu`, {
+      jeton: admin.jeton,
+    })
+    expect(suppression.status).toBe(404)
+    expect(suppression.corps.erreur).toBe('introuvable')
+  })
+
+  test('supprimer un connecteur : vraie suppression physique', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+
+    const suppression = await requete(
+      ctx,
+      'DELETE',
+      `/clients/${clientId}/connectors/${connectorId}`,
+      { jeton: admin.jeton },
+    )
+    expect(suppression.status).toBe(200)
+    expect(suppression.corps.ok).toBe(true)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/integration`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.connectors).toEqual([])
+  })
+
+  test('démarrer un SyncJob sur un connecteur inconnu -> connector_introuvable', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const demarrage = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/connectors/inconnu/sync-jobs`,
+      { jeton: admin.jeton },
+    )
+    expect(demarrage.status).toBe(404)
+    expect(demarrage.corps.erreur).toBe('connector_introuvable')
+  })
+
+  test('démarrer un SyncJob : statut en_attente, tentative 1', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+
+    const demarrage = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/connectors/${connectorId}/sync-jobs`,
+      { jeton: admin.jeton },
+    )
+    expect(demarrage.status).toBe(201)
+    expect(demarrage.corps.syncJob.statut).toBe('en_attente')
+    expect(demarrage.corps.syncJob.tentative).toBe(1)
+  })
+
+  test('garde-fou non-bloquant : indisponible -> nouvelle_tentative -> echec ne bloque jamais declarerReference', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+    const demarrage = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/connectors/${connectorId}/sync-jobs`,
+      { jeton: admin.jeton },
+    )
+    const syncJobId = demarrage.corps.syncJob.id
+
+    await requete(ctx, 'PATCH', `/clients/${clientId}/sync-jobs/${syncJobId}/indisponible`, {
+      jeton: admin.jeton,
+    })
+    await requete(ctx, 'PATCH', `/clients/${clientId}/sync-jobs/${syncJobId}/nouvelle-tentative`, {
+      jeton: admin.jeton,
+    })
+    const echec = await requete(ctx, 'PATCH', `/clients/${clientId}/sync-jobs/${syncJobId}/echec`, {
+      jeton: admin.jeton,
+      body: { erreur: 'Timeout réseau' },
+    })
+    expect(echec.corps.syncJob.statut).toBe('echec')
+    expect(echec.corps.syncJob.derniereErreur).toBe('Timeout réseau')
+    expect(echec.corps.syncJob.tentative).toBe(2)
+
+    const reference = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/connectors/${connectorId}/references`,
+      {
+        jeton: admin.jeton,
+        body: { identifiantExterne: 'doc-1', libelle: 'Document indépendant' },
+      },
+    )
+    expect(reference.status).toBe(201)
+  })
+
+  test('marquer échec sans erreur fournie -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+    const demarrage = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/connectors/${connectorId}/sync-jobs`,
+      { jeton: admin.jeton },
+    )
+
+    const echec = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/sync-jobs/${demarrage.corps.syncJob.id}/echec`,
+      { jeton: admin.jeton, body: {} },
+    )
+    expect(echec.status).toBe(400)
+    expect(echec.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('marquer réussi met à jour le statut sans toucher aux tentatives précédentes', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+    const demarrage = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/connectors/${connectorId}/sync-jobs`,
+      { jeton: admin.jeton },
+    )
+    const syncJobId = demarrage.corps.syncJob.id
+
+    await requete(ctx, 'PATCH', `/clients/${clientId}/sync-jobs/${syncJobId}/nouvelle-tentative`, {
+      jeton: admin.jeton,
+    })
+    const reussi = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/sync-jobs/${syncJobId}/reussi`,
+      {
+        jeton: admin.jeton,
+      },
+    )
+    expect(reussi.corps.syncJob.statut).toBe('reussi')
+    expect(reussi.corps.syncJob.tentative).toBe(2)
+    expect(reussi.corps.syncJob.derniereErreur).toBeNull()
+  })
+
+  test('changer le statut d’un SyncJob introuvable -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const reussi = await requete(ctx, 'PATCH', `/clients/${clientId}/sync-jobs/inconnu/reussi`, {
+      jeton: admin.jeton,
+    })
+    expect(reussi.status).toBe(404)
+    expect(reussi.corps.erreur).toBe('introuvable')
+  })
+
+  test('déclarer une référence externe : pointeur, jamais le contenu dupliqué', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+
+    const reference = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/connectors/${connectorId}/references`,
+      {
+        jeton: admin.jeton,
+        body: { identifiantExterne: 'doc-42', libelle: 'Protocole IQ SCADA-305' },
+      },
+    )
+    expect(reference.status).toBe(201)
+    expect(reference.corps.externalReference.connectorId).toBe(connectorId)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/integration`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.externalReferences.map((r) => r.id)).toContain(
+      reference.corps.externalReference.id,
+    )
+  })
+
+  test('déclarer une référence avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+
+    const reference = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/connectors/${connectorId}/references`,
+      { jeton: admin.jeton, body: { identifiantExterne: 'doc-1' } },
+    )
+    expect(reference.status).toBe(400)
+    expect(reference.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('migration locale : idempotente, id existant ignoré', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const connectorLocal: ConnectorJson = {
+      id: 'connector-local-1',
+      clientId,
+      nom: 'Ancien nom',
+      actif: true,
+      type: 'dossier_reseau',
+      config: JSON.stringify({ chemin: '\\\\serveur\\qualite' }),
+      createdAt: '2024-01-01T00:00:00.000Z',
+    }
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/integration/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { connectors: [connectorLocal], syncJobs: [], externalReferences: [] },
+      },
+    )
+    expect(migration.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/integration/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: {
+          connectors: [{ ...connectorLocal, nom: 'Tentative d’écrasement' }],
+          syncJobs: [],
+          externalReferences: [],
+        },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/integration`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.connectors).toHaveLength(1)
+    expect(liste.corps.connectors[0]?.nom).toBe('Ancien nom')
+  })
+
+  test('migration locale avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/integration/migration-locale`,
+      { jeton: admin.jeton, body: { connectors: [] } },
+    )
+    expect(migration.status).toBe(400)
+    expect(migration.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/integration`)
     expect(obtenir.status).toBe(401)
   })
 })

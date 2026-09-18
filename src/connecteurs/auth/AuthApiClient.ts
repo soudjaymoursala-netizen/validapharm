@@ -879,6 +879,48 @@ export interface SaisieCreationContentPlanWire {
   contextSnapshot: string
 }
 
+export interface ConnectorWire {
+  id: string
+  clientId: string
+  nom: string
+  actif: boolean
+  type: string
+  config: string
+  createdAt: string
+}
+
+export interface SyncJobWire {
+  id: string
+  clientId: string
+  connectorId: string
+  statut: string
+  tentative: number
+  derniereErreur: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ExternalReferenceWire {
+  id: string
+  clientId: string
+  connectorId: string
+  identifiantExterne: string
+  libelle: string
+  createdAt: string
+}
+
+export interface SaisieCreationConnectorWire {
+  nom: string
+  actif?: boolean
+  type: string
+  config: unknown
+}
+
+export interface SaisieDeclarationReferenceWire {
+  identifiantExterne: string
+  libelle: string
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -2199,6 +2241,141 @@ export class AuthApiClient {
     donnees: { contentPlans: ContentPlanWire[] },
   ): Promise<ResultatApi<{ contentPlans: ContentPlanWire[] }>> {
     return this.requete('POST', `/clients/${clientId}/content-plans/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Integration (Target Architecture, domaine "Integration", Phase 7c du chantier de migration D1) ---
+
+  obtenirIntegration(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      connectors: ConnectorWire[]
+      syncJobs: SyncJobWire[]
+      externalReferences: ExternalReferenceWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/integration`, { jeton })
+  }
+
+  creerConnector(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationConnectorWire,
+  ): Promise<ResultatApi<{ connector: ConnectorWire }>> {
+    return this.requete('POST', `/clients/${clientId}/connectors`, { jeton, body: saisie })
+  }
+
+  desactiverConnector(
+    jeton: string,
+    clientId: string,
+    connectorId: string,
+  ): Promise<ResultatApi<{ connector: ConnectorWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/connectors/${connectorId}/desactiver`, {
+      jeton,
+    })
+  }
+
+  basculerActifConnector(
+    jeton: string,
+    clientId: string,
+    connectorId: string,
+  ): Promise<ResultatApi<{ connector: ConnectorWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/connectors/${connectorId}/basculer-actif`, {
+      jeton,
+    })
+  }
+
+  supprimerConnector(
+    jeton: string,
+    clientId: string,
+    connectorId: string,
+  ): Promise<ResultatApi<{ ok: boolean }>> {
+    return this.requete('DELETE', `/clients/${clientId}/connectors/${connectorId}`, { jeton })
+  }
+
+  demarrerSyncJob(
+    jeton: string,
+    clientId: string,
+    connectorId: string,
+  ): Promise<ResultatApi<{ syncJob: SyncJobWire }>> {
+    return this.requete('POST', `/clients/${clientId}/connectors/${connectorId}/sync-jobs`, {
+      jeton,
+    })
+  }
+
+  marquerSyncJobIndisponible(
+    jeton: string,
+    clientId: string,
+    syncJobId: string,
+  ): Promise<ResultatApi<{ syncJob: SyncJobWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/sync-jobs/${syncJobId}/indisponible`, {
+      jeton,
+    })
+  }
+
+  marquerSyncJobNouvelleTentative(
+    jeton: string,
+    clientId: string,
+    syncJobId: string,
+  ): Promise<ResultatApi<{ syncJob: SyncJobWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/sync-jobs/${syncJobId}/nouvelle-tentative`, {
+      jeton,
+    })
+  }
+
+  marquerSyncJobEchec(
+    jeton: string,
+    clientId: string,
+    syncJobId: string,
+    erreur: string,
+  ): Promise<ResultatApi<{ syncJob: SyncJobWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/sync-jobs/${syncJobId}/echec`, {
+      jeton,
+      body: { erreur },
+    })
+  }
+
+  marquerSyncJobReussi(
+    jeton: string,
+    clientId: string,
+    syncJobId: string,
+  ): Promise<ResultatApi<{ syncJob: SyncJobWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/sync-jobs/${syncJobId}/reussi`, { jeton })
+  }
+
+  declarerReference(
+    jeton: string,
+    clientId: string,
+    connectorId: string,
+    saisie: SaisieDeclarationReferenceWire,
+  ): Promise<ResultatApi<{ externalReference: ExternalReferenceWire }>> {
+    return this.requete('POST', `/clients/${clientId}/connectors/${connectorId}/references`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerIntegrationLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerIntegrationLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      connectors: ConnectorWire[]
+      syncJobs: SyncJobWire[]
+      externalReferences: ExternalReferenceWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      connectors: ConnectorWire[]
+      syncJobs: SyncJobWire[]
+      externalReferences: ExternalReferenceWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/integration/migration-locale`, {
       jeton,
       body: donnees,
     })

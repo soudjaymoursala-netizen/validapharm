@@ -1,18 +1,97 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
-  Connector,
+  ConnectorWire,
+  ExternalReferenceWire,
+  SyncJobWire,
+} from '../../connecteurs/auth/AuthApiClient'
+import type {
   ConfigConnector,
+  Connector,
   ExternalReference,
+  StatutSyncJob,
   SyncJob,
 } from '../../logique-metier/domaine/types'
-import { db } from '../../persistance/db'
+import { connectorsAMigrer, externalReferencesAMigrer, syncJobsAMigrer } from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 
 export type NouveauConnectorInput = ConfigConnector & { nom: string }
 
 export interface NouvelleReferenceInput {
   identifiantExterne: string
   libelle: string
+}
+
+export function connectorWireVersDomaine(w: ConnectorWire): Connector {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    nom: w.nom,
+    actif: w.actif,
+    created_at: w.createdAt,
+    type: w.type,
+    config: JSON.parse(w.config),
+  } as Connector
+}
+
+export function connectorDomaineVersWire(c: Connector): ConnectorWire {
+  return {
+    id: c.id,
+    clientId: c.client_id,
+    nom: c.nom,
+    actif: c.actif,
+    type: c.type,
+    config: JSON.stringify(c.config),
+    createdAt: c.created_at,
+  }
+}
+
+export function syncJobWireVersDomaine(w: SyncJobWire): SyncJob {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    connector_id: w.connectorId,
+    statut: w.statut as StatutSyncJob,
+    tentative: w.tentative,
+    derniere_erreur: w.derniereErreur,
+    created_at: w.createdAt,
+    updated_at: w.updatedAt,
+  }
+}
+
+export function syncJobDomaineVersWire(j: SyncJob): SyncJobWire {
+  return {
+    id: j.id,
+    clientId: j.client_id,
+    connectorId: j.connector_id,
+    statut: j.statut,
+    tentative: j.tentative,
+    derniereErreur: j.derniere_erreur,
+    createdAt: j.created_at,
+    updatedAt: j.updated_at,
+  }
+}
+
+export function externalReferenceWireVersDomaine(w: ExternalReferenceWire): ExternalReference {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    connector_id: w.connectorId,
+    identifiant_externe: w.identifiantExterne,
+    libelle: w.libelle,
+    created_at: w.createdAt,
+  }
+}
+
+export function externalReferenceDomaineVersWire(r: ExternalReference): ExternalReferenceWire {
+  return {
+    id: r.id,
+    clientId: r.client_id,
+    connectorId: r.connector_id,
+    identifiantExterne: r.identifiant_externe,
+    libelle: r.libelle,
+    createdAt: r.created_at,
+  }
 }
 
 /**
@@ -24,6 +103,12 @@ export interface NouvelleReferenceInput {
  * adaptateur `ConnecteurDocumentaire` (`src/connecteurs/integration/`),
  * instancié séparément à partir de `Connector.config`.
  *
+ * **Migré vers le Worker/D1 (Phase 7c du chantier de migration D1)** —
+ * même patron que les phases précédentes : `id`/timestamps toujours
+ * dérivés côté serveur, jamais fait confiance au client. `config`
+ * (secrets de connexion inclus) est stocké tel quel en JSON côté
+ * serveur, jamais interprété.
+ *
  * @requirement Target Architecture, domaine "Integration"
  */
 export const useIntegrationStore = defineStore('integration', () => {
@@ -32,15 +117,83 @@ export const useIntegrationStore = defineStore('integration', () => {
   const externalReferences = ref<ExternalReference[]>([])
   const enChargement = ref(false)
 
+  /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que les autres stores de ce chantier. */
+  async function obtenirApi() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    return { api, jeton: authStore.jeton }
+  }
+
+  /**
+   * Envoie au serveur les enregistrements capturés depuis les anciennes
+   * tables IndexedDB locales juste avant leur suppression — n'a d'effet
+   * réel qu'une seule fois (voir migration Dexie v50, `persistance/db.ts`).
+   */
+  async function migrerIntegrationLocalVersServeur(clientId: string): Promise<void> {
+    const connectorsDuClient = connectorsAMigrer.filter((c) => c.client_id === clientId)
+    const syncJobsDuClient = syncJobsAMigrer.filter((j) => j.client_id === clientId)
+    const externalReferencesDuClient = externalReferencesAMigrer.filter(
+      (r) => r.client_id === clientId,
+    )
+    if (
+      connectorsDuClient.length === 0 &&
+      syncJobsDuClient.length === 0 &&
+      externalReferencesDuClient.length === 0
+    ) {
+      return
+    }
+
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.migrerIntegrationLocal(jeton, clientId, {
+      connectors: connectorsDuClient.map(connectorDomaineVersWire),
+      syncJobs: syncJobsDuClient.map(syncJobDomaineVersWire),
+      externalReferences: externalReferencesDuClient.map(externalReferenceDomaineVersWire),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la migration Integration : ${resultat.erreur}`)
+    }
+    for (const [tableau, duClient] of [
+      [connectorsAMigrer, connectorsDuClient],
+      [syncJobsAMigrer, syncJobsDuClient],
+      [externalReferencesAMigrer, externalReferencesDuClient],
+    ] as const) {
+      for (const entree of duClient) {
+        const index = (tableau as unknown[]).indexOf(entree)
+        if (index !== -1) (tableau as unknown[]).splice(index, 1)
+      }
+    }
+  }
+
   async function charger(clientId: string): Promise<void> {
     enChargement.value = true
     try {
-      connectors.value = await db.connectors.where('client_id').equals(clientId).toArray()
-      syncJobs.value = await db.syncJobs.where('client_id').equals(clientId).toArray()
-      externalReferences.value = await db.externalReferences
-        .where('client_id')
-        .equals(clientId)
-        .toArray()
+      try {
+        await migrerIntegrationLocalVersServeur(clientId)
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
+      }
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.obtenirIntegration(jeton, clientId)
+      if (resultat.ok) {
+        connectors.value = resultat.donnees.connectors.map(connectorWireVersDomaine)
+        syncJobs.value = resultat.donnees.syncJobs.map(syncJobWireVersDomaine)
+        externalReferences.value = resultat.donnees.externalReferences.map(
+          externalReferenceWireVersDomaine,
+        )
+      } else {
+        connectors.value = []
+        syncJobs.value = []
+        externalReferences.value = []
+      }
+    } catch {
+      // Panne réseau réelle ou relais non configuré : jamais une exception
+      // non gérée, même discipline que les autres stores de ce chantier.
+      connectors.value = []
+      syncJobs.value = []
+      externalReferences.value = []
     } finally {
       enChargement.value = false
     }
@@ -51,15 +204,14 @@ export const useIntegrationStore = defineStore('integration', () => {
     input: NouveauConnectorInput,
   ): Promise<Connector> {
     const { nom, ...configConnector } = input
-    const connector = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerConnector(jeton, clientId, {
       nom,
-      actif: true,
-      created_at: new Date().toISOString(),
-      ...configConnector,
-    } as Connector
-    await db.connectors.put(connector)
+      type: configConnector.type,
+      config: configConnector.config,
+    })
+    if (!resultat.ok) throw new Error(`Échec de la création du connecteur : ${resultat.erreur}`)
+    const connector = connectorWireVersDomaine(resultat.donnees.connector)
     connectors.value = [...connectors.value, connector]
     return connector
   }
@@ -68,11 +220,10 @@ export const useIntegrationStore = defineStore('integration', () => {
     clientId: string,
     connectorId: string,
   ): Promise<Connector | null> {
-    const existant = await db.connectors.get(connectorId)
-    if (!existant || existant.client_id !== clientId) return null
-
-    const miseAJour = { ...existant, actif: false } as Connector
-    await db.connectors.put(miseAJour)
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.desactiverConnector(jeton, clientId, connectorId)
+    if (!resultat.ok) return null
+    const miseAJour = connectorWireVersDomaine(resultat.donnees.connector)
     connectors.value = connectors.value.map((c) => (c.id === connectorId ? miseAJour : c))
     return miseAJour
   }
@@ -81,50 +232,36 @@ export const useIntegrationStore = defineStore('integration', () => {
     clientId: string,
     connectorId: string,
   ): Promise<SyncJob | { erreur: 'connector_introuvable' }> {
-    const connector = await db.connectors.get(connectorId)
-    if (!connector || connector.client_id !== clientId) return { erreur: 'connector_introuvable' }
-
-    const job: SyncJob = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      connector_id: connectorId,
-      statut: 'en_attente',
-      tentative: 1,
-      derniere_erreur: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.demarrerSyncJob(jeton, clientId, connectorId)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'connector_introuvable') return { erreur: 'connector_introuvable' }
+      throw new Error(`Échec du démarrage du SyncJob : ${resultat.erreur}`)
     }
-    await db.syncJobs.put(job)
+    const job = syncJobWireVersDomaine(resultat.donnees.syncJob)
     syncJobs.value = [...syncJobs.value, job]
     return job
   }
 
   /**
    * Garde-fou non négociable : un `SyncJob` indisponible/en échec ne bloque
-   * jamais une activité indépendante — aucun code de ce module ne
-   * conditionne `declarerReference` ou toute autre opération métier au
-   * statut d'un `SyncJob` (cohérent avec `QualityEvent`).
+   * jamais une activité métier indépendante — aucun code de ce module ne
+   * conditionne `declarerReference` ou toute autre opération au statut
+   * d'un `SyncJob` (cohérent avec `QualityEvent`).
    */
   async function marquerIndisponible(clientId: string, syncJobId: string): Promise<SyncJob | null> {
-    return changerStatutSyncJob(clientId, syncJobId, 'indisponible', null)
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.marquerSyncJobIndisponible(jeton, clientId, syncJobId)
+    return appliquerMiseAJourSyncJob(resultat)
   }
 
   async function marquerNouvelleTentative(
     clientId: string,
     syncJobId: string,
   ): Promise<SyncJob | null> {
-    const existant = await db.syncJobs.get(syncJobId)
-    if (!existant || existant.client_id !== clientId) return null
-
-    const miseAJour: SyncJob = {
-      ...existant,
-      statut: 'nouvelle_tentative',
-      tentative: existant.tentative + 1,
-      updated_at: new Date().toISOString(),
-    }
-    await db.syncJobs.put(miseAJour)
-    syncJobs.value = syncJobs.value.map((j) => (j.id === syncJobId ? miseAJour : j))
-    return miseAJour
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.marquerSyncJobNouvelleTentative(jeton, clientId, syncJobId)
+    return appliquerMiseAJourSyncJob(resultat)
   }
 
   async function marquerEchec(
@@ -132,30 +269,23 @@ export const useIntegrationStore = defineStore('integration', () => {
     syncJobId: string,
     erreur: string,
   ): Promise<SyncJob | null> {
-    return changerStatutSyncJob(clientId, syncJobId, 'echec', erreur)
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.marquerSyncJobEchec(jeton, clientId, syncJobId, erreur)
+    return appliquerMiseAJourSyncJob(resultat)
   }
 
   async function marquerReussi(clientId: string, syncJobId: string): Promise<SyncJob | null> {
-    return changerStatutSyncJob(clientId, syncJobId, 'reussi', null)
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.marquerSyncJobReussi(jeton, clientId, syncJobId)
+    return appliquerMiseAJourSyncJob(resultat)
   }
 
-  async function changerStatutSyncJob(
-    clientId: string,
-    syncJobId: string,
-    statut: SyncJob['statut'],
-    derniereErreur: string | null,
-  ): Promise<SyncJob | null> {
-    const existant = await db.syncJobs.get(syncJobId)
-    if (!existant || existant.client_id !== clientId) return null
-
-    const miseAJour: SyncJob = {
-      ...existant,
-      statut,
-      derniere_erreur: derniereErreur,
-      updated_at: new Date().toISOString(),
-    }
-    await db.syncJobs.put(miseAJour)
-    syncJobs.value = syncJobs.value.map((j) => (j.id === syncJobId ? miseAJour : j))
+  function appliquerMiseAJourSyncJob(
+    resultat: { ok: true; donnees: { syncJob: SyncJobWire } } | { ok: false; erreur: string },
+  ): SyncJob | null {
+    if (!resultat.ok) return null
+    const miseAJour = syncJobWireVersDomaine(resultat.donnees.syncJob)
+    syncJobs.value = syncJobs.value.map((j) => (j.id === miseAJour.id ? miseAJour : j))
     return miseAJour
   }
 
@@ -165,15 +295,15 @@ export const useIntegrationStore = defineStore('integration', () => {
     connectorId: string,
     input: NouvelleReferenceInput,
   ): Promise<ExternalReference> {
-    const reference: ExternalReference = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      connector_id: connectorId,
-      identifiant_externe: input.identifiantExterne,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.declarerReference(jeton, clientId, connectorId, {
+      identifiantExterne: input.identifiantExterne,
       libelle: input.libelle,
-      created_at: new Date().toISOString(),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la déclaration de la référence : ${resultat.erreur}`)
     }
-    await db.externalReferences.put(reference)
+    const reference = externalReferenceWireVersDomaine(resultat.donnees.externalReference)
     externalReferences.value = [...externalReferences.value, reference]
     return reference
   }
