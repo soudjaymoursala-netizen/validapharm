@@ -101,7 +101,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `executions`, `executionSteps`, `measurements`, `executionEvents` | D1 | ✅ **Phase 6b terminée — voir §16** |
 | `evidences`, `evidenceLocations`, `provenanceLinks` | D1 | ✅ **Phase 6c terminée — voir §17. Phase 6 entièrement close.** |
 | `sources`, `sourceVersions`, `sourceLocations`, `extractions`, `extractionItems`, `knowledgeItems`, `confirmations`, `knowledgeRelations`, `conflicts` | D1 | ✅ **Phase 7a terminée — voir §18** |
-| `contentPlans` | D1 | ⬜ Phase 7 |
+| `contentPlans` | D1 | ✅ **Phase 7b terminée — voir §19** |
 | `connectors`, `syncJobs`, `externalReferences` | D1 | ⬜ Phase 7 |
 | `missions`, `activities`, `dependencies`, `associationsMissionQualityEvent` | D1 | ⬜ Phase 8 |
 | `contextSnapshots`, `contextSnapshotItems` | D1 | ⬜ Phase 8 |
@@ -1865,9 +1865,10 @@ Première brique de la Phase 7 — le domaine « Source Intelligence »/
 native/manuelle via `Extraction`/`ExtractionItem`, interprétation
 structurée candidate via `KnowledgeItem`, validation/rejet humain
 explicite via `Confirmation`, liens/désaccords explicites via
-`KnowledgeRelation`/`Conflict`). Reste dans la Phase 7 : `contentPlans`
-(Deliverable Engine) et `connectors`/`syncJobs`/`externalReferences`
-(connecteurs QMS tiers).
+`KnowledgeRelation`/`Conflict`). Reste dans la Phase 7 (au moment de
+cette section) : `contentPlans` (Deliverable Engine, devenue Phase 7b —
+voir §19, terminée) et `connectors`/`syncJobs`/`externalReferences`
+(connecteurs QMS tiers, Phase 7c).
 
 ### 18.1 Ce qui est fait (code complet, tout vert localement et en CI)
 
@@ -1992,11 +1993,121 @@ explicite via `Confirmation`, liens/désaccords explicites via
 
 Reste, dans la Phase 7 (voir §3) :
 
-- **Phase 7b** : `contentPlans` (Deliverable Engine).
+- **Phase 7b** : `contentPlans` (Deliverable Engine) — voir §19, terminée.
 - **Phase 7c** : `connectors`/`syncJobs`/`externalReferences`
   (connecteurs QMS tiers).
 
 Enchaîner sur la Phase 7b sans s'arrêter pour confirmation, conformément
+à la consigne permanente de l'utilisateur. Le problème des nœuds SAP
+(bug d'import original) reste explicitement reporté, comme depuis le
+début de ce chantier.
+
+## 19. État détaillé — Phase 7b (`ContentPlan`, domaine « Deliverable Engine »), au 18/09/2026
+
+Deuxième brique de la Phase 7. `ContentPlan` (planification d'un
+livrable : `Request → Resolve → Context Snapshot → Content Plan`, ni
+génération, ni rendu, ni approbation finale — hors périmètre, portés par
+le moteur de gabarits existant). Reste dans la Phase 7 :
+`connectors`/`syncJobs`/`externalReferences` (connecteurs QMS tiers,
+Phase 7c).
+
+### 19.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0019_content_plan.sql`
+   crée la table `content_plans` (colonnes camelCase→snake_case standard
+   du chantier) + un index sur `client_id`. `ContentPlan` reste
+   **mutable** via `statut`/`readiness`/`audit_log`/`updated_at`
+   (validation, gel, recalcul de readiness) — `context_snapshot` figé une
+   seule fois à la création, jamais modifié ensuite.
+2. **1 dépôt Worker** : `contentPlanRepo.ts` (interface +
+   `ContentPlanRepoMemoire`) + son implémentation D1
+   (`d1ContentPlanRepo.ts`) : INSERT (`ON CONFLICT(id) DO NOTHING`) pour
+   la création, UPDATE ciblé (readiness/statut/audit_log/updated_at
+   uniquement) pour `remplacerContentPlan`.
+3. **5 nouvelles routes Worker** sous `/clients/:clientId/content-plans`
+   (GET agrégat, POST création — `readiness` toujours calculée côté
+   serveur, jamais fournie par le client —, PATCH
+   `:id/recalculer-readiness`, PATCH `:id/valider`, PATCH `:id/geler`,
+   POST `migration-locale`), toutes via `exigerAccesClient`.
+4. **`calculerReadinessContentPlan`** : logique métier portée côté
+   Worker depuis `logique-metier/deliverable/readinessContentPlan.ts`
+   (adaptée aux champs camelCase des dépôts Worker) — parcourt
+   `Requirement → Couverture → Test → Execution → Evidence` ancré sur
+   `assetNodeId`, plus un `QualityEvent` non clôturé sur ce même nœud qui
+   bloque toujours, en lisant les 4 dépôts D1 déjà migrés
+   (`testDefinitionRepo`, `executionRepo`, `evidenceRepo`,
+   `qualityEventRepo`) via `Promise.all`. Appelée à la création, sur
+   demande explicite (`recalculer-readiness`), et **revérifiée** dans le
+   garde-fou non négociable de `gelerContentPlan` — un `ContentPlan` DOIT
+   être `valide` au préalable ET sa `readiness` recalculée DOIT être
+   `pret`, jamais fait confiance à une valeur stockée ou envoyée par
+   l'appelant.
+5. **`index.ts`** : `D1ContentPlanRepo` câblé dans `routerRequete`.
+6. **18 nouveaux tests Worker** (`routeur.test.ts`) : GET vide, création
+   sans/avec `assetNodeId` (readiness `besoin_information`), chaîne
+   complète jusqu'à la preuve (readiness `pret`), recalcul (succès,
+   404 introuvable, 400 `deja_gele`), validation (succès, 404, 400
+   `deja_gele`), gel (succès, 404, 400 `non_valide`, 400
+   `donnees_non_pretes` avec readiness recalculée ≠ `pret` malgré une
+   valeur stockée différente, 400 `deja_gele`), migration locale
+   idempotente, non-authentifié → 401. **Résultat : 243/243 tests Worker
+   verts** (225 existants + 18 nouveaux).
+7. **`AuthApiClient.ts`** : `ContentPlanWire`/`SaisieCreationContentPlanWire`
+   + 5 méthodes (`obtenirContentPlans`, `creerContentPlan`,
+   `recalculerReadinessContentPlan`, `validerContentPlan`,
+   `gelerContentPlan`, `migrerContentPlansLocal`).
+8. **`useContentPlanStore.ts`** : entièrement réécrit vers l'API (même
+   patron `obtenirApi()`/`resultat.ok`/`resultat.donnees`/
+   `resultat.erreur` que les autres stores de ce chantier). Surface
+   publique préservée à l'identique (`contentPlans`, `enChargement`,
+   `charger`, `creerContentPlan`, `validerContentPlan`,
+   `gelerContentPlan`, `recalculerReadiness`) — le calcul de `readiness`
+   n'est plus fait côté client (l'ancien `calculerReadiness` rechargeant
+   QualityEvent/Requirement/Couverture/Test/Execution/Evidence via 4
+   stores a été entièrement supprimé, le Worker fait ce travail
+   désormais).
+9. **`persistance/db.ts`** : retrait de `contentPlans!:
+   EntityTable<ContentPlan, 'id'>`, ajout de `contentPlansAMigrer:
+   ContentPlan[]` + migration `.version(49)` nullant `contentPlans` et
+   capturant les lignes existantes — même filet de sécurité que les
+   phases précédentes.
+10. **Fichiers de test corrigés** : `useContentPlanStore.test.ts` (retrait
+    de `db.contentPlans.clear()`, plus nécessaire — les dépôts en mémoire
+    de `installerFauxWorkerAuth()` repartent déjà à vide à chaque test) ;
+    `ContentPlan.test.ts` (`db.contentPlans.*` → `ctx.contentPlanRepo.
+    listerContentPlans(clientId)`, même patron de polling que
+    `SourceIntelligence.test.ts`/`AccueilQueVoulezVousFaire.test.ts` en
+    Phase 7a).
+11. **Validation complète** : `npx vue-tsc --noEmit` (aucune erreur),
+    Worker `npx vitest run` (243/243), frontend `npx vitest run`
+    (1370/1370), `npx eslint . --fix` + `npx prettier --write .`.
+
+### 19.2 Phase 7b — terminée (18/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #66 ouverte. CI (« Lint, typecheck, tests » + builds Workers)
+   verte du premier coup, aucun flake rencontré. Mergée sur `main`
+   (squash, commit `246b53d`).
+3. ✅ Migration `0019_content_plan.sql` appliquée en production D1
+   (`validapharm-auth`) en 2 requêtes séparées (1 `CREATE TABLE` + 1
+   `CREATE INDEX`), toutes réussies du premier coup. Vérification
+   `sqlite_master` confirmant la table + son index nommé.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : les routes et
+   `D1ContentPlanRepo` présents dans le bundle (58 occurrences).
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `ContentPlan` n'a jamais été
+   synchronisé vers GitHub, même avant cette migration : pas une
+   régression.
+
+### 19.3 Phase 7b close ; suite du chantier
+
+Reste, dans la Phase 7 (voir §3) :
+
+- **Phase 7c** : `connectors`/`syncJobs`/`externalReferences`
+  (connecteurs QMS tiers) — dernière brique de la Phase 7.
+
+Enchaîner sur la Phase 7c sans s'arrêter pour confirmation, conformément
 à la consigne permanente de l'utilisateur. Le problème des nœuds SAP
 (bug d'import original) reste explicitement reporté, comme depuis le
 début de ce chantier.
