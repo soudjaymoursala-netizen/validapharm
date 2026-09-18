@@ -99,7 +99,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `qualityEvents`, `referencesQualityEvent` | D1 | ✅ **Phase 5b terminée — voir §14. Phase 5 entièrement close.** |
 | `requirements`, `testObjectives`, `testCandidates`, `tests`, `couvertures` | D1 | ✅ **Phase 6a terminée — voir §15** |
 | `executions`, `executionSteps`, `measurements`, `executionEvents` | D1 | ✅ **Phase 6b terminée — voir §16** |
-| `evidences`, `evidenceLocations`, `provenanceLinks` | D1 | ⬜ Phase 6 |
+| `evidences`, `evidenceLocations`, `provenanceLinks` | D1 | ✅ **Phase 6c terminée — voir §17. Phase 6 entièrement close.** |
 | `sources`, `sourceVersions`, `sourceLocations`, `extractions`, `extractionItems`, `knowledgeItems`, `confirmations`, `knowledgeRelations`, `conflicts` | D1 | ⬜ Phase 7 |
 | `contentPlans` | D1 | ⬜ Phase 7 |
 | `connectors`, `syncJobs`, `externalReferences` | D1 | ⬜ Phase 7 |
@@ -1721,5 +1721,138 @@ Reste, dans la Phase 6 (voir §3) :
 
 Enchaîner sur la Phase 6c sans s'arrêter pour confirmation, conformément
 à la consigne permanente de l'utilisateur. Le problème des nœuds SAP (bug
+d'import original) reste explicitement reporté, comme depuis le début de
+ce chantier.
+
+## 17. État détaillé — Phase 6c (`Evidence`/`EvidenceLocation`/`ProvenanceLink`), au 18/09/2026
+
+Troisième et **dernière** brique de la Phase 6 — la preuve documentaire
+(native ou pointeur vers un document existant, jamais un fichier hébergé)
+rattachée à une `Execution`/`ExecutionStep` (Phase 6b), et sa provenance
+tracée vers un `Requirement` (Phase 6a). Une fois cette phase mergée et
+déployée, **la Phase 6 (Test/Execution/Evidence engine) est entièrement
+close**.
+
+### 17.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0017_evidence.sql`
+   crée 3 tables (`evidences`, `evidence_locations`, `provenance_links`) +
+   un index par table sur `client_id`. Les 3 tables sont **entièrement
+   immutables** (aucune mutation démontrée par les sources, ALCOA+ : une
+   `Evidence` fait foi telle quelle) — ni `audit_log`, ni `updated_at`, ni
+   méthode de remplacement, contrairement à `Execution` (Phase 6b) qui
+   reste mutable via sa clôture.
+2. **1 dépôt Worker** : `evidenceRepo.ts` (interface +
+   `EvidenceRepoMemoire`) + son implémentation D1 (`d1EvidenceRepo.ts`),
+   écritures en INSERT uniquement (aucun UPDATE).
+3. **5 nouvelles routes Worker** sous `/clients/:clientId/evidences...` et
+   `/clients/:clientId/provenance-links` (obtenir, enregistrer une preuve,
+   ajouter une localisation, déclarer une provenance, migration locale),
+   toutes via `exigerAccesClient`. Re-vérification serveur systématique,
+   jamais fait confiance au client : `gererEnregistrerPreuve` vérifie que
+   l'`Execution` existe et n'est pas déjà clôturée
+   (`execution_introuvable`/`execution_deja_cloturee`), et que
+   l'`ExecutionStep` référencé (si fourni) appartient bien à cette
+   `Execution` (`etape_inconnue`) ; `gererAjouterLocalisation` vérifie que
+   l'`Evidence` est de type `document` (`type_non_document`) — une preuve
+   `native` ne peut jamais recevoir de localisation, cohérent avec le
+   principe qu'une `EvidenceLocation` est un pointeur, jamais un fichier ;
+   `gererDeclarerProvenance` est idempotente (vérifie l'absence d'un lien
+   identique avant insertion).
+4. **`index.ts`** : `D1EvidenceRepo` câblé dans `routerRequete`.
+5. **11 nouveaux tests Worker** (`routeur.test.ts`) : liste vide,
+   enregistrement de preuve native (champs dérivés côté serveur :
+   id/horodatage/actor), `execution_introuvable`,
+   `execution_deja_cloturee`, `etape_inconnue`, ajout de localisation sur
+   une preuve `document` (+ `type_non_document` sur une preuve `native`,
+   + `evidence_introuvable`), déclaration de provenance idempotente,
+   migration locale idempotente, non-authentifié → 401. Suite Worker au
+   complet : **208/208 tests verts** (`cd workers/auth-worker && npx tsc
+   --noEmit && npx vitest run`).
+6. **`AuthApiClient`** : `EvidenceWire`/`EvidenceLocationWire`/
+   `ProvenanceLinkWire` + saisies + 5 méthodes (`obtenirEvidences`,
+   `enregistrerPreuve`, `ajouterLocalisation`, `declarerProvenance`,
+   `migrerEvidencesLocal`).
+7. **`useEvidenceStore` entièrement réécrit** (API publique inchangée :
+   `evidences`, `evidenceLocations`, `provenanceLinks`, `enChargement`,
+   `charger`, `enregistrerPreuve`, `ajouterLocalisation`,
+   `declarerProvenance`, `preuvesExecution`, `localisationsPreuve`,
+   `preuvesPourRequirement` — toutes pures, inchangées).
+   `enregistrerPreuve` revérifie aussi côté client (via
+   `useExecutionStore().charger(clientId)`) l'existence/l'état de
+   l'`Execution` et de l'`ExecutionStep`, en plus de la revérification
+   serveur.
+8. **Ripple effect côté production** : `useContentPlanStore.ts` (calcul de
+   `readiness`) et `useReasoningEngineStore.ts` (donnée `evidences` pour
+   le moteur de raisonnement) basculés vers
+   `useEvidenceStore().charger(clientId)` plutôt que `db.evidences`
+   directement.
+9. **Filet de sécurité de migration locale** : capture Dexie **v47**
+   (`persistance/db.ts`, 3 tables supprimées, données capturées dans
+   `evidencesAMigrer`/`evidenceLocationsAMigrer`/`provenanceLinksAMigrer`
+   — formes domaine inchangées).
+10. **4 fichiers de test corrigés** (accès Dexie direct remplacé par de
+    vrais appels store/`ctx.evidenceRepo`) : `useEvidenceStore.test.ts`
+    (suppression des `db.evidences/evidenceLocations/
+    provenanceLinks.clear()` devenus inutiles, tables Dexie supprimées),
+    `useContentPlanStore.test.ts`/`ContentPlan.test.ts` (`db.evidences.put`
+    → `ctx.evidenceRepo.creerEvidence`, champs wire camelCase — corrige au
+    passage un fixture pré-existant incorrect dans `ContentPlan.test.ts`
+    qui utilisait la mauvaise forme de champs avec un cast `as never`),
+    `ExecutionTests.test.ts` (les 3 derniers `db.evidences.clear()/
+    where()/toArray()` remplacés par `ctx.evidenceRepo.
+    listerEvidences(CLIENT_ID)`, import `db` devenu inutile retiré).
+11. **Validation complète (18/09/2026)** : `vue-tsc --noEmit`/`tsc
+    --noEmit` (Worker) sans erreur, `eslint --fix`/`prettier --write`
+    (racine + workers) sans erreur ni changement, `npx vitest run` racine
+    (**1334/1334 tests verts**, 165 fichiers), `cd workers/auth-worker &&
+    npx vitest run` (**208/208 tests verts**).
+
+### 17.2 Phase 6c — terminée (18/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #62 ouverte. CI (« Quality gate ») verte du premier coup, aucun
+   flake rencontré. Mergée sur `main` (squash, commit `f8a15f4`).
+3. ✅ Migration `0017_evidence.sql` appliquée en production D1
+   (`validapharm-auth`) en 6 requêtes séparées (3 `CREATE TABLE` + 3
+   `CREATE INDEX`), toutes réussies du premier coup. Vérification
+   `sqlite_master` confirmant les 3 tables + leurs 3 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : les routes et
+   `D1EvidenceRepo` présents dans le bundle (29 occurrences).
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes) — `Evidence`/`EvidenceLocation`/
+   `ProvenanceLink` n'ont jamais été synchronisés vers GitHub, même avant
+   cette migration : pas une régression.
+
+### 17.3 Phase 6c close — Phase 6 entièrement close
+
+Les trois briques du Test/Execution/Evidence engine sont maintenant
+toutes sur D1 :
+
+- **Phase 6a** (§15) : `Requirement`/`TestObjective`/`TestCandidate`/
+  `Test`/`Couverture`.
+- **Phase 6b** (§16) : `Execution`/`ExecutionStep`/`Measurement`/
+  `ExecutionEvent`.
+- **Phase 6c** (§17, ce présent état) : `Evidence`/`EvidenceLocation`/
+  `ProvenanceLink`.
+
+**La Phase 6 est close.** Reste au chantier (voir §3) :
+
+- **Phase 7** : `sources`/`sourceVersions`/`sourceLocations`/
+  `extractions`/`extractionItems`/`knowledgeItems`/`confirmations`/
+  `knowledgeRelations`/`conflicts` (Knowledge Engine) +
+  `contentPlans` (Deliverable Engine) + `connectors`/`syncJobs`/
+  `externalReferences` (connecteurs QMS tiers).
+- **Phase 8** : `missions`/`activities`/`dependencies`/
+  `associationsMissionQualityEvent`, `contextSnapshots`/
+  `contextSnapshotItems`, `aiConfigurations`/`aiRequests`/`aiResponses`/
+  `citationsAIResponse`.
+- **Phase 9** : `procedures`/`procedureSteps`, `gabaritsExportClient`,
+  `aiChatSessionLogs`, `connexionDrive`/`etatMiroirDrive`,
+  `connexionRelaisOCR`, `clientConfigs`.
+
+Enchaîner sur la Phase 7 sans s'arrêter pour confirmation, conformément à
+la consigne permanente de l'utilisateur. Le problème des nœuds SAP (bug
 d'import original) reste explicitement reporté, comme depuis le début de
 ce chantier.
