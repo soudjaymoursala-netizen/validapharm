@@ -456,6 +456,19 @@ export const syncJobsAMigrer: SyncJob[] = []
 export const externalReferencesAMigrer: ExternalReference[] = []
 
 /**
+ * Mission/Activity/Dependency/AssociationMissionQualityEvent : migrés
+ * vers le Worker/D1 (Target Architecture, domaine "Work", Phase 8a du
+ * chantier de migration D1) — même principe que `connectorsAMigrer`
+ * ci-dessus. Consommés et envoyés au serveur par
+ * `migrerMissionsLocalVersServeur` (`useMissionStore`) au premier
+ * `charger()`.
+ */
+export const missionsAMigrer: Mission[] = []
+export const activitiesAMigrer: Activity[] = []
+export const dependenciesAMigrer: Dependency[] = []
+export const associationsMissionQualityEventAMigrer: AssociationMissionQualityEvent[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -472,10 +485,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  missions!: EntityTable<Mission, 'id'>
-  associationsMissionQualityEvent!: EntityTable<AssociationMissionQualityEvent, 'id'>
-  activities!: EntityTable<Activity, 'id'>
-  dependencies!: EntityTable<Dependency, 'id'>
   contextSnapshots!: EntityTable<ContextSnapshot, 'id'>
   contextSnapshotItems!: EntityTable<ContextSnapshotItem, 'id'>
   aiConfigurations!: EntityTable<AIConfiguration, 'id'>
@@ -1126,6 +1135,31 @@ export class ValidaPharmDatabase extends Dexie {
         syncJobsAMigrer.push(...syncJobs)
         const externalReferences = await tx.table<ExternalReference>('externalReferences').toArray()
         externalReferencesAMigrer.push(...externalReferences)
+      })
+
+    // Mission/Activity/Dependency/AssociationMissionQualityEvent : migrés
+    // vers le Worker/D1 (Target Architecture, domaine "Work", Phase 8a du
+    // chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) —
+    // même technique de capture avant suppression physique que la version
+    // 50 ci-dessus.
+    this.version(51)
+      .stores({
+        missions: null,
+        associationsMissionQualityEvent: null,
+        activities: null,
+        dependencies: null,
+      })
+      .upgrade(async (tx) => {
+        const missions = await tx.table<Mission>('missions').toArray()
+        missionsAMigrer.push(...missions)
+        const activities = await tx.table<Activity>('activities').toArray()
+        activitiesAMigrer.push(...activities)
+        const dependencies = await tx.table<Dependency>('dependencies').toArray()
+        dependenciesAMigrer.push(...dependencies)
+        const associationsMissionQualityEvent = await tx
+          .table<AssociationMissionQualityEvent>('associationsMissionQualityEvent')
+          .toArray()
+        associationsMissionQualityEventAMigrer.push(...associationsMissionQualityEvent)
       })
   }
 }

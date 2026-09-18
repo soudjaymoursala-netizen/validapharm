@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -49,9 +49,34 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
   throw new Error('attendreQue : condition jamais satisfaite')
 }
 
+let demonter: () => void
+let ctx: Contexte
+
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.missions.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  demonter = installation.demonter
+  ctx = installation.ctx
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: 'client-1',
+    name: 'client-1',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('ListeMissions', () => {
@@ -70,11 +95,9 @@ describe('ListeMissions', () => {
     await wrapper.find('input[type="text"]').setValue('Qualification granulateur GR-01')
     await wrapper.find('form').trigger('submit.prevent')
 
-    await attendreQue(
-      async () => (await db.missions.where('client_id').equals('client-1').count()) > 0,
-    )
+    await attendreQue(async () => (await ctx.missionRepo.listerMissions('client-1')).length > 0)
 
-    const missions = await db.missions.where('client_id').equals('client-1').toArray()
+    const missions = await ctx.missionRepo.listerMissions('client-1')
     expect(missions).toHaveLength(1)
     expect(missions[0]?.titre).toBe('Qualification granulateur GR-01')
 
@@ -84,18 +107,6 @@ describe('ListeMissions', () => {
 })
 
 describe('ListeMissions — navigation retour vers la fiche client', () => {
-  let demonter: () => void
-
-  beforeEach(async () => {
-    await reinitialiserAuthDeTest()
-    demonter = installerFauxWorkerAuth().demonter
-    await connecterAdminDeTest()
-  })
-
-  afterEach(() => {
-    demonter()
-  })
-
   test('affiche un lien retour vers la fiche client, avec son nom une fois chargé', async () => {
     const clientsStore = useClientsStore()
     const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })
