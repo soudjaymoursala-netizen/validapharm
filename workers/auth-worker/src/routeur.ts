@@ -18,6 +18,12 @@ import type {
   DocumentsNormatifsRepo,
 } from './repos/documentsNormatifsRepo'
 import type {
+  EvidenceEnregistree,
+  EvidenceLocationEnregistree,
+  EvidenceRepo,
+  ProvenanceLinkEnregistre,
+} from './repos/evidenceRepo'
+import type {
   ExecutionEnregistree,
   ExecutionEventEnregistree,
   ExecutionRepo,
@@ -121,6 +127,7 @@ export interface Contexte {
   qualityEventRepo: QualityEventRepo
   testDefinitionRepo: TestDefinitionRepo
   executionRepo: ExecutionRepo
+  evidenceRepo: EvidenceRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -832,6 +839,43 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchExecutionsMigrationLocale[1] as string,
+    )
+  }
+
+  // --- Evidence/EvidenceLocation/ProvenanceLink (Target Architecture,
+  // domaine "Evidence", Phase 6c du chantier de migration D1) ---
+  const matchEvidences = chemin.match(/^\/clients\/([^/]+)\/evidences$/)
+  if (matchEvidences && request.method === 'GET') {
+    return gererObtenirEvidences(request, ctx, entetes, matchEvidences[1] as string)
+  }
+  if (matchEvidences && request.method === 'POST') {
+    return gererEnregistrerPreuve(request, ctx, entetes, matchEvidences[1] as string)
+  }
+  const matchEvidenceLocalisation = chemin.match(
+    /^\/clients\/([^/]+)\/evidences\/([^/]+)\/localisations$/,
+  )
+  if (matchEvidenceLocalisation && request.method === 'POST') {
+    return gererAjouterLocalisation(
+      request,
+      ctx,
+      entetes,
+      matchEvidenceLocalisation[1] as string,
+      matchEvidenceLocalisation[2] as string,
+    )
+  }
+  const matchProvenanceLinks = chemin.match(/^\/clients\/([^/]+)\/provenance-links$/)
+  if (matchProvenanceLinks && request.method === 'POST') {
+    return gererDeclarerProvenance(request, ctx, entetes, matchProvenanceLinks[1] as string)
+  }
+  const matchEvidencesMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/evidences\/migration-locale$/,
+  )
+  if (matchEvidencesMigrationLocale && request.method === 'POST') {
+    return gererMigrerEvidencesLocal(
+      request,
+      ctx,
+      entetes,
+      matchEvidencesMigrationLocale[1] as string,
     )
   }
 
@@ -4071,6 +4115,218 @@ async function gererMigrerExecutionsLocal(
       executionSteps: corps.executionSteps ?? [],
       measurements: corps.measurements ?? [],
       executionEvents: corps.executionEvents ?? [],
+    },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : Evidence/EvidenceLocation/ProvenanceLink (Target
+// Architecture, domaine "Evidence", Phase 6c du chantier de migration
+// D1) ---
+
+async function gererObtenirEvidences(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const [evidences, evidenceLocations, provenanceLinks] = await Promise.all([
+    ctx.evidenceRepo.listerEvidences(clientId),
+    ctx.evidenceRepo.listerEvidenceLocations(clientId),
+    ctx.evidenceRepo.listerProvenanceLinks(clientId),
+  ])
+  return reponseJson({ evidences, evidenceLocations, provenanceLinks }, 200, entetes)
+}
+
+interface SaisieEnregistrementPreuve {
+  executionId?: string
+  executionStepId?: string | null
+  type?: string
+  titre?: string
+  description?: string
+}
+
+/** Une Evidence n'existe que pour une Execution réelle, non clôturée (immutabilité post-clôture, cohérent avec Phase 6b). */
+async function gererEnregistrerPreuve(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<SaisieEnregistrementPreuve>(request)
+  if (
+    !corps?.executionId ||
+    !corps.type ||
+    corps.titre === undefined ||
+    corps.description === undefined
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const execution = await ctx.executionRepo.executionParId(corps.executionId)
+  if (!execution || execution.clientId !== clientId) {
+    return reponseJson({ erreur: 'execution_introuvable' }, 404, entetes)
+  }
+  if (execution.statut === 'terminee') {
+    return reponseJson({ erreur: 'execution_deja_cloturee' }, 400, entetes)
+  }
+  if (corps.executionStepId) {
+    const etape = await ctx.executionRepo.executionStepParId(corps.executionStepId)
+    if (!etape || etape.executionId !== corps.executionId) {
+      return reponseJson({ erreur: 'etape_inconnue' }, 400, entetes)
+    }
+  }
+
+  const evidence: EvidenceEnregistree = {
+    id: genererId(),
+    clientId,
+    executionId: corps.executionId,
+    executionStepId: corps.executionStepId ?? null,
+    type: corps.type,
+    titre: corps.titre,
+    description: corps.description,
+    horodatage: horodatage(),
+    actor: acteur.email,
+  }
+  await ctx.evidenceRepo.creerEvidence(evidence)
+  return reponseJson({ evidence }, 201, entetes)
+}
+
+interface SaisieAjoutLocalisation {
+  systeme?: string
+  reference?: string
+}
+
+/** Ne peut être créée que pour une Evidence de type `document`. */
+async function gererAjouterLocalisation(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  evidenceId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const preuve = await ctx.evidenceRepo.evidenceParId(evidenceId)
+  if (!preuve || preuve.clientId !== clientId) {
+    return reponseJson({ erreur: 'evidence_introuvable' }, 404, entetes)
+  }
+  if (preuve.type !== 'document') {
+    return reponseJson({ erreur: 'type_non_document' }, 400, entetes)
+  }
+
+  const corps = await lireCorpsJson<SaisieAjoutLocalisation>(request)
+  if (!corps?.systeme || !corps.reference) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const location: EvidenceLocationEnregistree = {
+    id: genererId(),
+    clientId,
+    evidenceId,
+    systeme: corps.systeme,
+    reference: corps.reference,
+  }
+  await ctx.evidenceRepo.creerEvidenceLocation(location)
+  return reponseJson({ evidenceLocation: location }, 201, entetes)
+}
+
+interface SaisieDeclarationProvenance {
+  evidenceId?: string
+  requirementId?: string
+}
+
+/** Déclaration explicite, jamais déduite — idempotente, même logique que `declarerCouverture` (Phase 6a). */
+async function gererDeclarerProvenance(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieDeclarationProvenance>(request)
+  if (!corps?.evidenceId || !corps.requirementId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const existants = await ctx.evidenceRepo.listerProvenanceLinks(clientId)
+  const dejaExistant = existants.find(
+    (p) => p.evidenceId === corps.evidenceId && p.requirementId === corps.requirementId,
+  )
+  if (dejaExistant) return reponseJson({ provenanceLink: dejaExistant }, 200, entetes)
+
+  const lien: ProvenanceLinkEnregistre = {
+    id: genererId(),
+    clientId,
+    evidenceId: corps.evidenceId,
+    requirementId: corps.requirementId,
+    createdAt: horodatage(),
+  }
+  await ctx.evidenceRepo.creerProvenanceLink(lien)
+  return reponseJson({ provenanceLink: lien }, 201, entetes)
+}
+
+/**
+ * Filet de sécurité de migration locale
+ * (`evidencesAMigrer`/`evidenceLocationsAMigrer`/`provenanceLinksAMigrer`,
+ * `useEvidenceStore.migrerEvidencesLocalVersServeur`) — idempotente,
+ * l'existant côté serveur gagne toujours (`ON CONFLICT(id) DO NOTHING`
+ * dans `D1EvidenceRepo`), même discipline que les autres migrations
+ * locales de ce chantier.
+ */
+interface SaisieMigrationEvidences {
+  evidences?: EvidenceEnregistree[]
+  evidenceLocations?: EvidenceLocationEnregistree[]
+  provenanceLinks?: ProvenanceLinkEnregistre[]
+}
+
+async function gererMigrerEvidencesLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+
+  const corps = await lireCorpsJson<SaisieMigrationEvidences>(request)
+  if (
+    !corps ||
+    (!Array.isArray(corps.evidences) &&
+      !Array.isArray(corps.evidenceLocations) &&
+      !Array.isArray(corps.provenanceLinks))
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const e of corps.evidences ?? []) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.evidenceRepo.creerEvidence(e)
+  }
+  for (const l of corps.evidenceLocations ?? []) {
+    if (l.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.evidenceRepo.creerEvidenceLocation(l)
+  }
+  for (const p of corps.provenanceLinks ?? []) {
+    if (p.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.evidenceRepo.creerProvenanceLink(p)
+  }
+  return reponseJson(
+    {
+      evidences: corps.evidences ?? [],
+      evidenceLocations: corps.evidenceLocations ?? [],
+      provenanceLinks: corps.provenanceLinks ?? [],
     },
     200,
     entetes,

@@ -1,7 +1,6 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -15,9 +14,6 @@ let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.evidences.clear()
-  await db.evidenceLocations.clear()
-  await db.provenanceLinks.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   demonter = installation.demonter
