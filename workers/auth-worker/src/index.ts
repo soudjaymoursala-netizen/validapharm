@@ -4,6 +4,7 @@ import { D1AcfcRepo } from './repos/d1/d1AcfcRepo'
 import { D1AuditRepo } from './repos/d1/d1AuditRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
 import { D1ContentPlanRepo } from './repos/d1/d1ContentPlanRepo'
+import { D1ContextSnapshotRepo } from './repos/d1/d1ContextSnapshotRepo'
 import { D1CsvAssessmentRepo } from './repos/d1/d1CsvAssessmentRepo'
 import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
 import { D1EvidenceRepo } from './repos/d1/d1EvidenceRepo'
@@ -78,6 +79,7 @@ export default {
       contentPlanRepo: new D1ContentPlanRepo(env.DB),
       integrationRepo: new D1IntegrationRepo(env.DB),
       missionRepo: new D1MissionRepo(env.DB),
+      contextSnapshotRepo: new D1ContextSnapshotRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

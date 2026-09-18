@@ -469,6 +469,17 @@ export const dependenciesAMigrer: Dependency[] = []
 export const associationsMissionQualityEventAMigrer: AssociationMissionQualityEvent[] = []
 
 /**
+ * ContextSnapshot/ContextSnapshotItem : migrés vers le Worker/D1 (Target
+ * Architecture, domaine "Context Engine", Phase 8b du chantier de
+ * migration D1) — même principe que `missionsAMigrer` ci-dessus.
+ * Consommés et envoyés au serveur par
+ * `migrerContextSnapshotsLocalVersServeur` (`useContextEngineStore`) au
+ * premier `charger()`.
+ */
+export const contextSnapshotsAMigrer: ContextSnapshot[] = []
+export const contextSnapshotItemsAMigrer: ContextSnapshotItem[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -485,8 +496,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  contextSnapshots!: EntityTable<ContextSnapshot, 'id'>
-  contextSnapshotItems!: EntityTable<ContextSnapshotItem, 'id'>
   aiConfigurations!: EntityTable<AIConfiguration, 'id'>
   aiRequests!: EntityTable<AIRequest, 'id'>
   aiResponses!: EntityTable<AIResponse, 'id'>
@@ -1160,6 +1169,22 @@ export class ValidaPharmDatabase extends Dexie {
           .table<AssociationMissionQualityEvent>('associationsMissionQualityEvent')
           .toArray()
         associationsMissionQualityEventAMigrer.push(...associationsMissionQualityEvent)
+      })
+
+    // ContextSnapshot/ContextSnapshotItem : migrés vers le Worker/D1
+    // (Target Architecture, domaine "Context Engine", Phase 8b du
+    // chantier de migration D1, docs/CHANTIER-MIGRATION-D1-RECAP.md) —
+    // même technique de capture avant suppression physique que la
+    // version 51 ci-dessus.
+    this.version(52)
+      .stores({ contextSnapshots: null, contextSnapshotItems: null })
+      .upgrade(async (tx) => {
+        const contextSnapshots = await tx.table<ContextSnapshot>('contextSnapshots').toArray()
+        contextSnapshotsAMigrer.push(...contextSnapshots)
+        const contextSnapshotItems = await tx
+          .table<ContextSnapshotItem>('contextSnapshotItems')
+          .toArray()
+        contextSnapshotItemsAMigrer.push(...contextSnapshotItems)
       })
   }
 }

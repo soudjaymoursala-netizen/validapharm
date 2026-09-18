@@ -62,7 +62,6 @@ beforeEach(async () => {
   await db.citationsAIResponse.clear()
   await db.procedures.clear()
   await db.procedureSteps.clear()
-  await db.contextSnapshotItems.clear()
 })
 
 describe('useReasoningEngineStore — assurerConfiguration (versionnée, condition E4)', () => {
@@ -343,12 +342,12 @@ describe('useReasoningEngineStore — narratif de contexte assemblé', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     })
-    await db.contextSnapshotItems.put({
+    await ctx.contextSnapshotRepo.creerItem({
       id: 'item-1',
-      client_id: 'client-1',
-      context_snapshot_id: 'snap-1',
-      type_objet: 'asset_node',
-      objet_id: 'n1',
+      clientId: 'client-1',
+      contextSnapshotId: 'snap-1',
+      typeObjet: 'asset_node',
+      objetId: 'n1',
     })
 
     const store = useReasoningEngineStore()

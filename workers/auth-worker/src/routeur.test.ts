@@ -14,6 +14,7 @@ import { ACFCRepoMemoire } from './repos/acfcRepo'
 import { AuditRepoMemoire } from './repos/auditRepo'
 import { ClientsRepoMemoire } from './repos/clientsRepo'
 import { ContentPlanRepoMemoire } from './repos/contentPlanRepo'
+import { ContextSnapshotRepoMemoire } from './repos/contextSnapshotRepo'
 import { CSVAssessmentRepoMemoire } from './repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from './repos/evidenceRepo'
@@ -70,6 +71,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     contentPlanRepo: new ContentPlanRepoMemoire(),
     integrationRepo: new IntegrationRepoMemoire(),
     missionRepo: new MissionRepoMemoire(),
+    contextSnapshotRepo: new ContextSnapshotRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -249,6 +251,9 @@ interface CorpsReponse {
   dependency: DependencyJson
   associationsQualityEvent: AssociationMissionQualityEventJson[]
   association: AssociationMissionQualityEventJson
+  contextSnapshots: ContextSnapshotJson[]
+  contextSnapshot: ContextSnapshotJson
+  contextSnapshotItems: ContextSnapshotItemJson[]
 }
 
 interface RequirementJson {
@@ -552,6 +557,22 @@ interface AssociationMissionQualityEventJson {
   missionId: string
   qualityEventId: string
   createdAt: string
+}
+
+interface ContextSnapshotJson {
+  id: string
+  clientId: string
+  workspaceId: string | null
+  assetNodeId: string | null
+  createdAt: string
+}
+
+interface ContextSnapshotItemJson {
+  id: string
+  clientId: string
+  contextSnapshotId: string
+  typeObjet: string
+  objetId: string
 }
 
 interface QualityEventJson {
@@ -5633,6 +5654,235 @@ describe('routerRequete — Mission/Activity (Target Architecture, domaine "Work
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/missions`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — ContextSnapshot (Target Architecture, domaine "Context Engine", Phase 8b du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  async function creerNoeudDeTest(
+    ctx: Contexte,
+    clientId: string,
+    id: string,
+    workspaceId: string | null,
+  ): Promise<void> {
+    await ctx.structureSystemeRepo.creerNoeud({
+      id,
+      clientId,
+      workspaceId,
+      levelKey: 'ligne',
+      name: 'Granulateur GR-01',
+      code: 'GR-01',
+      parentId: null,
+      associatedNodes: [],
+      source: 'manuel',
+      qmsConnectorId: null,
+      periodicQualification: { applicable: false, deadline: null },
+      qualificationStatus: 'qualifie',
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/context-snapshots`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.contextSnapshots).toEqual([])
+    expect(obtenir.corps.contextSnapshotItems).toEqual([])
+  })
+
+  test('assembler sans workspaceId ni assetNodeId -> snapshot vide, jamais une erreur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/context-snapshots`, {
+      jeton: admin.jeton,
+      body: {},
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.contextSnapshot.workspaceId).toBeNull()
+    expect(creation.corps.contextSnapshot.assetNodeId).toBeNull()
+    expect(creation.corps.contextSnapshotItems).toEqual([])
+  })
+
+  test('assembler avec assetNodeId : résolution exacte, manufacturing_context et quality_event rattachés inclus', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await creerNoeudDeTest(ctx, clientId, 'noeud-1', null)
+    await ctx.processContextRepo.creerProcess({
+      id: 'process-1',
+      clientId,
+      nom: 'Granulation',
+      description: '',
+      type: 'production',
+      sourceId: null,
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })
+    await ctx.processContextRepo.creerManufacturingContext({
+      id: 'mc-1',
+      clientId,
+      assetNodeId: 'noeud-1',
+      processId: 'process-1',
+      produit: 'Comprimé X',
+      recette: null,
+      format: null,
+      configuration: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })
+    await ctx.qualityEventRepo.creerEvenement({
+      id: 'qe-1',
+      clientId,
+      type: 'deviation',
+      titre: 'Déviation débit',
+      description: '',
+      origine: 'interne',
+      referenceExterne: null,
+      assetNodeId: 'noeud-1',
+      processId: null,
+      manufacturingContextId: null,
+      statut: 'ouvert',
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })
+    // QualityEvent sur un autre nœud, jamais inclus.
+    await creerNoeudDeTest(ctx, clientId, 'noeud-2', null)
+    await ctx.qualityEventRepo.creerEvenement({
+      id: 'qe-2',
+      clientId,
+      type: 'deviation',
+      titre: 'Déviation sans lien',
+      description: '',
+      origine: 'interne',
+      referenceExterne: null,
+      assetNodeId: 'noeud-2',
+      processId: null,
+      manufacturingContextId: null,
+      statut: 'ouvert',
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/context-snapshots`, {
+      jeton: admin.jeton,
+      body: { assetNodeId: 'noeud-1' },
+    })
+    expect(creation.status).toBe(201)
+    const types = creation.corps.contextSnapshotItems.map((i) => `${i.typeObjet}:${i.objetId}`)
+    expect(types).toContain('asset_node:noeud-1')
+    expect(types).toContain('manufacturing_context:mc-1')
+    expect(types).toContain('quality_event:qe-1')
+    expect(types).not.toContain('quality_event:qe-2')
+  })
+
+  test('assembler avec workspaceId : nœuds visibles par héritage (non assignés inclus)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const migration = await requete(ctx, 'POST', `/clients/${clientId}/organisation/migrer`, {
+      jeton: admin.jeton,
+    })
+    const workspaceRacineId = migration.corps.workspaceRacine.id
+    await creerNoeudDeTest(ctx, clientId, 'noeud-non-assigne', null)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/context-snapshots`, {
+      jeton: admin.jeton,
+      body: { workspaceId: workspaceRacineId },
+    })
+    expect(creation.status).toBe(201)
+    expect(
+      creation.corps.contextSnapshotItems.some(
+        (i) => i.typeObjet === 'asset_node' && i.objetId === 'noeud-non-assigne',
+      ),
+    ).toBe(true)
+  })
+
+  test('migration locale : idempotente, id existant ignoré', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const snapshotLocal: ContextSnapshotJson = {
+      id: 'snapshot-local-1',
+      clientId,
+      workspaceId: null,
+      assetNodeId: 'noeud-1',
+      createdAt: '2024-01-01T00:00:00.000Z',
+    }
+    const itemLocal: ContextSnapshotItemJson = {
+      id: 'item-local-1',
+      clientId,
+      contextSnapshotId: 'snapshot-local-1',
+      typeObjet: 'asset_node',
+      objetId: 'noeud-1',
+    }
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/context-snapshots/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { contextSnapshots: [snapshotLocal], contextSnapshotItems: [itemLocal] },
+      },
+    )
+    expect(migration.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/context-snapshots/migration-locale`,
+      {
+        jeton: admin.jeton,
+        body: { contextSnapshots: [snapshotLocal], contextSnapshotItems: [itemLocal] },
+      },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/context-snapshots`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.contextSnapshots).toHaveLength(1)
+    expect(liste.corps.contextSnapshotItems).toHaveLength(1)
+  })
+
+  test('migration locale avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/context-snapshots/migration-locale`,
+      { jeton: admin.jeton, body: { contextSnapshots: [] } },
+    )
+    expect(migration.status).toBe(400)
+    expect(migration.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/context-snapshots`)
     expect(obtenir.status).toBe(401)
   })
 })
