@@ -16,7 +16,6 @@ import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 import { useContextEngineStore } from '../stores/useContextEngineStore'
 import { useMissionStore } from '../stores/useMissionStore'
 import { libelleFournisseurAffiche } from '../stores/usePanneauChatStore'
-import { useOrganizationStore } from '../stores/useOrganizationStore'
 import { useProcessContextStore } from '../stores/useProcessContextStore'
 import { useQualityEventStore } from '../stores/useQualityEventStore'
 import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
@@ -31,7 +30,6 @@ const reasoningStore = useReasoningEngineStore()
 const qualityEventStore = useQualityEventStore()
 const structureStore = useStructureSystemeStore()
 const processContextStore = useProcessContextStore()
-const organizationStore = useOrganizationStore()
 const configStore = useClientConfigStore()
 const relaisStore = useConnexionRelaisIAStore()
 
@@ -96,7 +94,6 @@ onMounted(async () => {
     qualityEventStore.charger(props.clientId),
     structureStore.charger(props.clientId),
     processContextStore.charger(props.clientId),
-    organizationStore.charger(props.clientId),
     configStore.charger(props.clientId),
     relaisStore.charger(),
   ])
@@ -158,19 +155,9 @@ async function associerQualityEvent(): Promise<void> {
 
 async function assemblerContexte(): Promise<void> {
   if (!mission.value) return
-  const arbreWorkspace = new Map(
-    organizationStore.workspaces.map((w) => [
-      w.id,
-      { id: w.id, parent_workspace_id: w.parent_workspace_id },
-    ]),
-  )
   await contextStore.assemblerSnapshot(props.clientId, {
     workspaceId: mission.value.workspace_id,
     assetNodeId: mission.value.asset_node_id,
-    arbreWorkspace,
-    assetNodes: structureStore.noeuds,
-    manufacturingContexts: processContextStore.manufacturingContexts,
-    qualityEvents: qualityEventStore.evenements,
   })
 }
 
