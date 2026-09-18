@@ -104,7 +104,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `contentPlans` | D1 | ✅ **Phase 7b terminée — voir §19** |
 | `connectors`, `syncJobs`, `externalReferences` | D1 | ✅ **Phase 7c terminée — voir §20. Phase 7 entièrement close.** |
 | `missions`, `activities`, `dependencies`, `associationsMissionQualityEvent` | D1 | ✅ **Phase 8a terminée — voir §21** |
-| `contextSnapshots`, `contextSnapshotItems` | D1 | ⬜ Phase 8 |
+| `contextSnapshots`, `contextSnapshotItems` | D1 | ✅ **Phase 8b terminée — voir §22** |
 | `aiConfigurations`, `aiRequests`, `aiResponses`, `citationsAIResponse` | D1 | ⬜ Phase 8 |
 | `relationsTechniques` | D1 (avec Structure Système, Phase 1) | ✅ Phase 1 terminée, même état que la ligne ci-dessus |
 | `procedures`, `procedureSteps` | D1 | ⬜ Phase 9 |
@@ -2350,3 +2350,136 @@ Enchaîner sur la Phase 8b sans s'arrêter pour confirmation, conformément
 à la consigne permanente de l'utilisateur. Le problème des nœuds SAP
 (bug d'import original) reste explicitement reporté, comme depuis le
 début de ce chantier.
+
+## 22. État détaillé — Phase 8b (`ContextSnapshot`/`ContextSnapshotItem`, domaine « Context Engine »), au 18/09/2026
+
+Deuxième brique de la Phase 8. `ContextSnapshot`/`ContextSnapshotItem`
+sont entièrement immuables (invariant #12, aucune fonction de mise à
+jour exposée côté store depuis toujours). Contrairement aux phases
+précédentes, l'assemblage des éléments de contexte
+(`assemblerElementsContextSnapshot`, anciennement fonction pure côté
+client) a été **porté côté serveur**, comme
+`calculerReadinessContentPlan` l'avait été en Phase 7b — les données
+qu'elle lit (Organization/Workspace, Structure Système,
+ManufacturingContext, QualityEvent) sont toutes déjà en D1.
+
+### 22.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. **Migration D1** : `workers/auth-worker/migrations/0022_context_snapshot.sql`
+   crée 2 tables (`context_snapshots`, `context_snapshot_items`) + 3
+   index (`client_id` sur chacune, plus `context_snapshot_id` sur
+   `context_snapshot_items`). Les deux tables sont **INSERT-only**,
+   aucune colonne mise à jour après création.
+2. **1 dépôt Worker** : `contextSnapshotRepo.ts` (interface +
+   `ContextSnapshotRepoMemoire`) + son implémentation D1
+   (`d1ContextSnapshotRepo.ts`).
+3. **Fonctions pures portées côté serveur** dans `routeur.ts` :
+   `ancetresWorkspaceServeur`/`noeudsVisiblesDepuisWorkspaceServeur`
+   (mêmes algorithmes que `logique-metier/organisation/
+   ancetresWorkspace.ts`/`noeudsVisiblesDepuisWorkspace.ts`, champs
+   camelCase des dépôts Worker) et `assemblerElementsContextSnapshot`
+   (même algorithme que `logique-metier/contexte/
+   assemblageContextSnapshot.ts`), lisant
+   `ctx.organisationRepo.listerWorkspaces`/
+   `ctx.structureSystemeRepo.listerNoeuds`/
+   `ctx.processContextRepo.listerManufacturingContexts`/
+   `ctx.qualityEventRepo.listerEvenements`.
+4. **3 nouvelles routes Worker** sous `/clients/:clientId/context-snapshots`
+   (GET agrégat, POST assemblage — `workspaceId`/`assetNodeId` en
+   entrée, résolution des éléments **toujours calculée côté serveur**,
+   jamais fait confiance à une liste fournie par le client —, POST
+   `migration-locale`), toutes via `exigerAccesClient`.
+5. **`index.ts`** : `D1ContextSnapshotRepo` câblé dans `routerRequete`.
+6. **7 nouveaux tests Worker** (`routeur.test.ts`) : GET vide, assemblage
+   sans ancre (snapshot vide, jamais une erreur), résolution exacte par
+   `assetNodeId` (incluant `manufacturing_context`/`quality_event`
+   rattachés, excluant ceux d'un autre nœud), résolution par
+   `workspaceId` avec héritage (nœud non assigné inclus), migration
+   locale idempotente (+400 corps invalide), non-authentifié → 401.
+   **Résultat : 284/284 tests Worker verts** (277 existants + 7
+   nouveaux).
+7. **`AuthApiClient.ts`** : `ContextSnapshotWire`/
+   `ContextSnapshotItemWire`/`SaisieAssemblageContextSnapshotWire` + 3
+   méthodes.
+8. **`useContextEngineStore.ts`** : entièrement réécrit vers l'API.
+   `assemblerSnapshot` ne prend plus que `workspaceId`/`assetNodeId` —
+   la résolution des éléments n'est plus de sa responsabilité, tout le
+   reste de la surface publique (`snapshots`, `items`, `charger`,
+   `elementsDuSnapshot`) inchangé.
+9. **`useReasoningEngineStore.ts`** : seul autre consommateur direct de
+   `db.contextSnapshotItems` (pour construire le narratif de contexte
+   envoyé au fournisseur IA) — corrigé pour appeler
+   `useContextEngineStore().charger(clientId)` puis
+   `elementsDuSnapshot(contextSnapshotId)`.
+10. **`persistance/db.ts`** : retrait de `contextSnapshots!`/
+    `contextSnapshotItems!: EntityTable<...>`, ajout de
+    `contextSnapshotsAMigrer`/`contextSnapshotItemsAMigrer` + migration
+    `.version(52)` nullant les 2 tables et capturant les lignes
+    existantes.
+11. **Fichiers de test corrigés** : `useContextEngineStore.test.ts`
+    (entièrement réécrit — ne passe plus `arbreWorkspace`/`assetNodes`/
+    `manufacturingContexts`/`qualityEvents` à `assemblerSnapshot`,
+    seed les données via `installerFauxWorkerAuth()` + repos Worker),
+    `useReasoningEngineStore.test.ts` (remplace
+    `db.contextSnapshotItems.put(...)` par
+    `ctx.contextSnapshotRepo.creerItem(...)`), `MissionWorkspace.test.ts`
+    (remplace `db.contextSnapshots.count()` par
+    `ctx.contextSnapshotRepo.listerSnapshots(...)`).
+12. **Validation complète** : `npx vue-tsc --noEmit` (aucune erreur),
+    Worker `npx tsc --noEmit` (aucune erreur) + `npx vitest run`
+    (284/284), frontend `npx vitest run` (1412/1412).
+
+### 22.2 Incident CI post-PR et correction
+
+La première CI de la PR #72 a échoué : `MissionWorkspace.vue` (le seul
+composant, hors tests, appelant `assemblerSnapshot`) avait été oublié
+lors de la réécriture — il passait encore `arbreWorkspace`/`assetNodes`/
+`manufacturingContexts`/`qualityEvents` à l'ancienne signature, absents
+du nouveau type `EntreesAssemblage`. **Leçon retenue** : le grep
+systématique sur `db.<table>` avant de considérer une phase terminée
+(discipline déjà en place) ne suffit pas seul pour une migration qui
+change la *signature* d'une fonction de store existante (pas seulement
+l'accès Dexie sous-jacent) — il faut aussi grep chaque appelant de la
+fonction publique modifiée (`assemblerSnapshot` ici) dans tout `src/`,
+composants Vue inclus, pas seulement les fichiers de test. Corrigé en un
+second commit sur la même PR : `MissionWorkspace.vue` simplifié pour
+n'envoyer que `workspaceId`/`assetNodeId`, et `useOrganizationStore`
+retiré du composant (devenu inutile, ne servait qu'à construire
+l'`arbreWorkspace` local). CI repassée verte au commit suivant.
+
+### 22.3 Phase 8b — terminée (18/09/2026)
+
+1. ✅ Commit + push de l'incrément sur `claude/contexte-reprise-session-tin77u`.
+2. ✅ PR #72 ouverte. Premier commit CI rouge (typecheck, voir §22.2
+   ci-dessus) — correctif poussé en second commit sur la même PR, CI
+   repassée verte (« Lint, typecheck, tests » + builds Workers).
+   Mergée sur `main` (squash, commit `cd8fd59`).
+3. ✅ Migration `0022_context_snapshot.sql` appliquée en production D1
+   (`validapharm-auth`) en 5 requêtes séparées (2 `CREATE TABLE` + 3
+   `CREATE INDEX`), toutes réussies du premier coup. Vérification
+   `sqlite_master` confirmant les 2 tables + leurs 3 index nommés.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) : les routes et
+   `D1ContextSnapshotRepo` présents dans le bundle (6 occurrences).
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes).
+
+### 22.4 Suite du chantier
+
+Reste à la Phase 8 (voir §3) :
+
+- **Phase 8c** : `aiConfigurations`/`aiRequests`/`aiResponses`/
+  `citationsAIResponse` (domaine AI) — seule la persistance CRUD migre
+  vers le Worker ; l'orchestration du raisonnement
+  (`executerBoucleRaisonnement`, appels réseau réels au fournisseur LLM
+  via `ProviderAdapter`) reste côté client, hors périmètre de ce
+  chantier. `AIConfiguration`/`AIRequest`/`AIResponse`/
+  `CitationAIResponse` sont toutes **immuables une fois créées** (aucune
+  fonction de mise à jour exposée dans `useReasoningEngineStore.ts`
+  actuel).
+
+Une fois la Phase 8c terminée, la Phase 8 sera entièrement close.
+Enchaîner sans s'arrêter pour confirmation, conformément à la consigne
+permanente de l'utilisateur. Le problème des nœuds SAP (bug d'import
+original) reste explicitement reporté, comme depuis le début de ce
+chantier.
