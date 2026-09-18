@@ -480,6 +480,21 @@ export const contextSnapshotsAMigrer: ContextSnapshot[] = []
 export const contextSnapshotItemsAMigrer: ContextSnapshotItem[] = []
 
 /**
+ * AIConfiguration/AIRequest/AIResponse/CitationAIResponse : migrés vers le
+ * Worker/D1 (Target Architecture, domaine "Reasoning Engine", Phase 8c du
+ * chantier de migration D1) — même principe que `contextSnapshotsAMigrer`
+ * ci-dessus. Seule la persistance CRUD migre ; l'orchestration du
+ * raisonnement (appels réseau réels au fournisseur LLM) reste côté client,
+ * hors périmètre de ce chantier. Consommés et envoyés au serveur par
+ * `migrerReasoningEngineLocalVersServeur` (`useReasoningEngineStore`) au
+ * premier `charger()`.
+ */
+export const aiConfigurationsAMigrer: AIConfiguration[] = []
+export const aiRequestsAMigrer: AIRequest[] = []
+export const aiResponsesAMigrer: AIResponse[] = []
+export const citationsAIResponseAMigrer: CitationAIResponse[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -496,10 +511,6 @@ export class ValidaPharmDatabase extends Dexie {
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
-  aiConfigurations!: EntityTable<AIConfiguration, 'id'>
-  aiRequests!: EntityTable<AIRequest, 'id'>
-  aiResponses!: EntityTable<AIResponse, 'id'>
-  citationsAIResponse!: EntityTable<CitationAIResponse, 'id'>
   procedures!: EntityTable<Procedure, 'id'>
   procedureSteps!: EntityTable<ProcedureStep, 'id'>
   gabaritsExportClient!: EntityTable<GabaritExportClient, 'id'>
@@ -1185,6 +1196,30 @@ export class ValidaPharmDatabase extends Dexie {
           .table<ContextSnapshotItem>('contextSnapshotItems')
           .toArray()
         contextSnapshotItemsAMigrer.push(...contextSnapshotItems)
+      })
+
+    // AIConfiguration/AIRequest/AIResponse/CitationAIResponse : migrés vers
+    // le Worker/D1 (Target Architecture, domaine "Reasoning Engine", Phase
+    // 8c du chantier de migration D1) — même technique de capture avant
+    // suppression physique que la version 52 ci-dessus.
+    this.version(53)
+      .stores({
+        aiConfigurations: null,
+        aiRequests: null,
+        aiResponses: null,
+        citationsAIResponse: null,
+      })
+      .upgrade(async (tx) => {
+        const aiConfigurations = await tx.table<AIConfiguration>('aiConfigurations').toArray()
+        aiConfigurationsAMigrer.push(...aiConfigurations)
+        const aiRequests = await tx.table<AIRequest>('aiRequests').toArray()
+        aiRequestsAMigrer.push(...aiRequests)
+        const aiResponses = await tx.table<AIResponse>('aiResponses').toArray()
+        aiResponsesAMigrer.push(...aiResponses)
+        const citationsAIResponse = await tx
+          .table<CitationAIResponse>('citationsAIResponse')
+          .toArray()
+        citationsAIResponseAMigrer.push(...citationsAIResponse)
       })
   }
 }

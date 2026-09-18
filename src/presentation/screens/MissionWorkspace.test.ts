@@ -114,10 +114,6 @@ let demonter: () => void
 beforeEach(async () => {
   setActivePinia(createPinia())
   fournisseurEnvoyerMessage.mockReset()
-  await db.aiConfigurations.clear()
-  await db.aiRequests.clear()
-  await db.aiResponses.clear()
-  await db.citationsAIResponse.clear()
   await db.clientConfigs.clear()
   // QualityEvent migré vers le Worker/D1 (Phase 5b du chantier de
   // migration D1) — un client réel doit exister pour que
@@ -305,7 +301,9 @@ describe('MissionWorkspace — Raisonnement', () => {
       .setValue("Évaluer l'impact du changement")
     await formulaireRaisonnement.trigger('submit.prevent')
 
-    await attendreQue(async () => (await db.aiResponses.count()) === 1)
+    await attendreQue(
+      async () => (await ctx.reasoningEngineRepo.listerResponses(CLIENT_ID)).length === 1,
+    )
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain('Analyse terminée')
@@ -326,7 +324,9 @@ describe('MissionWorkspace — Raisonnement', () => {
     await formulaireRaisonnement.find('input[type="text"]').setValue('Objectif')
     await formulaireRaisonnement.trigger('submit.prevent')
 
-    await attendreQue(async () => (await db.aiResponses.count()) === 1)
+    await attendreQue(
+      async () => (await ctx.reasoningEngineRepo.listerResponses(CLIENT_ID)).length === 1,
+    )
     await wrapper.vm.$nextTick()
 
     expect(wrapper.find('.badge-confiance--a_verifier').exists()).toBe(true)
@@ -342,7 +342,7 @@ describe('MissionWorkspace — Raisonnement', () => {
 
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
     expect(wrapper.find('[role="alert"]').text()).toContain('Appel au relais IA échoué (404).')
-    expect(await db.aiResponses.count()).toBe(0)
+    expect(await ctx.reasoningEngineRepo.listerResponses(CLIENT_ID)).toHaveLength(0)
   })
 })
 

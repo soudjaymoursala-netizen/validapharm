@@ -1,5 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type {
+  AIConfigurationWire,
+  AIRequestWire,
+  AIResponseWire,
+  CitationAIResponseWire,
+} from '../../connecteurs/auth/AuthApiClient'
 import type { ProviderAdapter } from '../../connecteurs/ia/ProviderAdapter'
 import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
 import { construireNarratifContexte } from '../../logique-metier/contexte/narratifContexteSnapshot'
@@ -9,11 +15,19 @@ import type {
   AIRequest,
   AIResponse,
   CitationAIResponse,
+  EtatConfianceIA,
   TypeObjetCitable,
 } from '../../logique-metier/domaine/types'
 import { executerBoucleRaisonnement } from '../../logique-metier/raisonnement/boucleRaisonnement'
 import { CATALOGUE_OUTILS_RAISONNEMENT } from '../../logique-metier/raisonnement/outilsRaisonnement'
-import { db } from '../../persistance/db'
+import {
+  aiConfigurationsAMigrer,
+  aiRequestsAMigrer,
+  aiResponsesAMigrer,
+  citationsAIResponseAMigrer,
+  db,
+} from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 import { useEvidenceStore } from './useEvidenceStore'
 import { useExecutionStore } from './useExecutionStore'
 import { useProcessContextStore } from './useProcessContextStore'
@@ -23,6 +37,96 @@ import { useStructureSystemeStore } from './useStructureSystemeStore'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
 
 const VERSION_CONFIGURATION_ACTUELLE = 'v1'
+
+function aiConfigurationWireVersDomaine(w: AIConfigurationWire): AIConfiguration {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    version: w.version,
+    outils_disponibles: w.outilsDisponibles,
+    created_at: w.createdAt,
+  }
+}
+
+function aiConfigurationDomaineVersWire(c: AIConfiguration): AIConfigurationWire {
+  return {
+    id: c.id,
+    clientId: c.client_id,
+    version: c.version,
+    outilsDisponibles: c.outils_disponibles,
+    createdAt: c.created_at,
+  }
+}
+
+function aiRequestWireVersDomaine(w: AIRequestWire): AIRequest {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    mission_id: w.missionId,
+    context_snapshot_id: w.contextSnapshotId,
+    ai_configuration_id: w.aiConfigurationId,
+    objectif: w.objectif,
+    created_at: w.createdAt,
+  }
+}
+
+function aiRequestDomaineVersWire(r: AIRequest): AIRequestWire {
+  return {
+    id: r.id,
+    clientId: r.client_id,
+    missionId: r.mission_id,
+    contextSnapshotId: r.context_snapshot_id,
+    aiConfigurationId: r.ai_configuration_id,
+    objectif: r.objectif,
+    createdAt: r.created_at,
+  }
+}
+
+function aiResponseWireVersDomaine(w: AIResponseWire): AIResponse {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    ai_request_id: w.aiRequestId,
+    texte: w.texte,
+    etat_confiance: w.etatConfiance as EtatConfianceIA,
+    trace_appels_outils: w.traceAppelsOutils,
+    version_moteur: w.versionMoteur,
+    created_at: w.createdAt,
+  }
+}
+
+function aiResponseDomaineVersWire(r: AIResponse): AIResponseWire {
+  return {
+    id: r.id,
+    clientId: r.client_id,
+    aiRequestId: r.ai_request_id,
+    texte: r.texte,
+    etatConfiance: r.etat_confiance,
+    traceAppelsOutils: r.trace_appels_outils,
+    versionMoteur: r.version_moteur,
+    createdAt: r.created_at,
+  }
+}
+
+function citationWireVersDomaine(w: CitationAIResponseWire): CitationAIResponse {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    ai_response_id: w.aiResponseId,
+    type_objet_cite: w.typeObjetCite as TypeObjetCitable,
+    objet_id: w.objetId,
+  }
+}
+
+function citationDomaineVersWire(c: CitationAIResponse): CitationAIResponseWire {
+  return {
+    id: c.id,
+    clientId: c.client_id,
+    aiResponseId: c.ai_response_id,
+    typeObjetCite: c.type_objet_cite,
+    objetId: c.objet_id,
+  }
+}
 
 export interface EntreesRaisonnement {
   objectif: string
@@ -57,13 +161,86 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
   const citations = ref<CitationAIResponse[]>([])
   const enChargement = ref(false)
 
+  /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que les autres stores de ce chantier. */
+  async function obtenirApi() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    return { api, jeton: authStore.jeton }
+  }
+
+  /**
+   * Envoie au serveur les enregistrements capturés depuis les anciennes
+   * tables IndexedDB locales juste avant leur suppression — n'a d'effet
+   * réel qu'une seule fois (voir migration Dexie v53, `persistance/db.ts`).
+   */
+  async function migrerReasoningEngineLocalVersServeur(clientId: string): Promise<void> {
+    const configurationsDuClient = aiConfigurationsAMigrer.filter((c) => c.client_id === clientId)
+    const requestsDuClient = aiRequestsAMigrer.filter((r) => r.client_id === clientId)
+    const responsesDuClient = aiResponsesAMigrer.filter((r) => r.client_id === clientId)
+    const citationsDuClient = citationsAIResponseAMigrer.filter((c) => c.client_id === clientId)
+    if (
+      configurationsDuClient.length === 0 &&
+      requestsDuClient.length === 0 &&
+      responsesDuClient.length === 0 &&
+      citationsDuClient.length === 0
+    ) {
+      return
+    }
+
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.migrerReasoningEngineLocal(jeton, clientId, {
+      configurations: configurationsDuClient.map(aiConfigurationDomaineVersWire),
+      requests: requestsDuClient.map(aiRequestDomaineVersWire),
+      responses: responsesDuClient.map(aiResponseDomaineVersWire),
+      citations: citationsDuClient.map(citationDomaineVersWire),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la migration Reasoning Engine : ${resultat.erreur}`)
+    }
+    for (const [tableau, duClient] of [
+      [aiConfigurationsAMigrer, configurationsDuClient],
+      [aiRequestsAMigrer, requestsDuClient],
+      [aiResponsesAMigrer, responsesDuClient],
+      [citationsAIResponseAMigrer, citationsDuClient],
+    ] as const) {
+      for (const entree of duClient) {
+        const index = (tableau as unknown[]).indexOf(entree)
+        if (index !== -1) (tableau as unknown[]).splice(index, 1)
+      }
+    }
+  }
+
   async function charger(clientId: string): Promise<void> {
     enChargement.value = true
     try {
-      configurations.value = await db.aiConfigurations.where('client_id').equals(clientId).toArray()
-      requests.value = await db.aiRequests.where('client_id').equals(clientId).toArray()
-      responses.value = await db.aiResponses.where('client_id').equals(clientId).toArray()
-      citations.value = await db.citationsAIResponse.where('client_id').equals(clientId).toArray()
+      try {
+        await migrerReasoningEngineLocalVersServeur(clientId)
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
+      }
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.obtenirReasoningEngine(jeton, clientId)
+      if (resultat.ok) {
+        configurations.value = resultat.donnees.configurations.map(aiConfigurationWireVersDomaine)
+        requests.value = resultat.donnees.requests.map(aiRequestWireVersDomaine)
+        responses.value = resultat.donnees.responses.map(aiResponseWireVersDomaine)
+        citations.value = resultat.donnees.citations.map(citationWireVersDomaine)
+      } else {
+        configurations.value = []
+        requests.value = []
+        responses.value = []
+        citations.value = []
+      }
+    } catch {
+      // Panne réseau réelle ou relais non configuré : jamais une exception
+      // non gérée, même discipline que les autres stores de ce chantier.
+      configurations.value = []
+      requests.value = []
+      responses.value = []
+      citations.value = []
     } finally {
       enChargement.value = false
     }
@@ -73,21 +250,26 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
    * Garantit l'existence de l'`AIConfiguration` courante pour ce client —
    * versionnée (condition E4 de la revue panel), immuable une fois créée.
    * Une évolution future du catalogue d'outils créerait une nouvelle
-   * version plutôt que de modifier celle-ci en place.
+   * version plutôt que de modifier celle-ci en place. Idempotent côté
+   * serveur (route Worker `gererAssurerConfiguration`) : jamais dupliquée.
    */
   async function assurerConfiguration(clientId: string): Promise<AIConfiguration> {
     const existante = configurations.value.find((c) => c.version === VERSION_CONFIGURATION_ACTUELLE)
     if (existante) return existante
 
-    const configuration: AIConfiguration = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.assurerConfiguration(jeton, clientId, {
       version: VERSION_CONFIGURATION_ACTUELLE,
-      outils_disponibles: CATALOGUE_OUTILS_RAISONNEMENT.map((o) => o.nom),
-      created_at: new Date().toISOString(),
+      outilsDisponibles: CATALOGUE_OUTILS_RAISONNEMENT.map((o) => o.nom),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la création de l'AIConfiguration : ${resultat.erreur}`)
     }
-    await db.aiConfigurations.put(configuration)
-    configurations.value = [...configurations.value, configuration]
+    const configuration = aiConfigurationWireVersDomaine(resultat.donnees.configuration)
+    const dejaPresente = configurations.value.some((c) => c.id === configuration.id)
+    if (!dejaPresente) {
+      configurations.value = [...configurations.value, configuration]
+    }
     return configuration
   }
 
@@ -191,30 +373,31 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       },
     })
 
-    const maintenant = new Date().toISOString()
-    const request: AIRequest = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      mission_id: entrees.missionId,
-      context_snapshot_id: entrees.contextSnapshotId,
-      ai_configuration_id: configuration.id,
+    const { api, jeton } = await obtenirApi()
+
+    const creationRequest = await api.creerAIRequest(jeton, clientId, {
+      missionId: entrees.missionId,
+      contextSnapshotId: entrees.contextSnapshotId,
+      aiConfigurationId: configuration.id,
       objectif: entrees.objectif,
-      created_at: maintenant,
+    })
+    if (!creationRequest.ok) {
+      throw new Error(`Échec de la création de l'AIRequest : ${creationRequest.erreur}`)
     }
-    await db.aiRequests.put(request)
+    const request = aiRequestWireVersDomaine(creationRequest.donnees.request)
     requests.value = [...requests.value, request]
 
-    const response: AIResponse = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      ai_request_id: request.id,
+    const creationResponse = await api.creerAIResponse(jeton, clientId, {
+      aiRequestId: request.id,
       texte: resultat.reponse.texte,
-      etat_confiance: resultat.reponse.etatConfiance,
-      trace_appels_outils: resultat.trace,
-      version_moteur: resultat.versionMoteur,
-      created_at: maintenant,
+      etatConfiance: resultat.reponse.etatConfiance,
+      traceAppelsOutils: resultat.trace,
+      versionMoteur: resultat.versionMoteur,
+    })
+    if (!creationResponse.ok) {
+      throw new Error(`Échec de la création de l'AIResponse : ${creationResponse.erreur}`)
     }
-    await db.aiResponses.put(response)
+    const response = aiResponseWireVersDomaine(creationResponse.donnees.response)
     responses.value = [...responses.value, response]
 
     // Seules les citations résolvant réellement vers un objet connu sont
@@ -230,23 +413,21 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       assetNodes,
       procedureSteps,
     }
-    const nouvellesCitations: CitationAIResponse[] = resultat.reponse.citations.flatMap(
-      (objetId) => {
-        const type = determinerTypeObjetCite(objetId, donneesConnues)
-        if (type === null) return []
-        return [
-          {
-            id: crypto.randomUUID(),
-            client_id: clientId,
-            ai_response_id: response.id,
-            type_objet_cite: type,
-            objet_id: objetId,
-          },
-        ]
-      },
-    )
-    if (nouvellesCitations.length > 0) {
-      await db.citationsAIResponse.bulkPut(nouvellesCitations)
+    const citationsAEnvoyer = resultat.reponse.citations.flatMap((objetId) => {
+      const type = determinerTypeObjetCite(objetId, donneesConnues)
+      if (type === null) return []
+      return [{ aiResponseId: response.id, typeObjetCite: type, objetId }]
+    })
+    if (citationsAEnvoyer.length > 0) {
+      const creationCitations = await api.creerCitationsAIResponse(
+        jeton,
+        clientId,
+        citationsAEnvoyer,
+      )
+      if (!creationCitations.ok) {
+        throw new Error(`Échec de la création des citations : ${creationCitations.erreur}`)
+      }
+      const nouvellesCitations = creationCitations.donnees.citations.map(citationWireVersDomaine)
       citations.value = [...citations.value, ...nouvellesCitations]
     }
 
