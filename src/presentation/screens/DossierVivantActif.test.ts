@@ -6,7 +6,6 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import type { AssetNodeEnregistre } from '../../../workers/auth-worker/src/repos/structureSystemeRepo'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import type { Section } from '../../logique-metier/domaine/types'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -84,7 +83,6 @@ function routeurDeTest() {
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.missions.clear()
   await reinitialiserAuthDeTest()
   const installation = installerFauxWorkerAuth()
   ctx = installation.ctx

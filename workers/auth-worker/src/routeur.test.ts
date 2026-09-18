@@ -21,6 +21,7 @@ import { ExecutionRepoMemoire } from './repos/executionRepo'
 import { ImpactAssessmentRepoMemoire } from './repos/impactAssessmentRepo'
 import { IntegrationRepoMemoire } from './repos/integrationRepo'
 import { KnowledgeEngineRepoMemoire } from './repos/knowledgeEngineRepo'
+import { MissionRepoMemoire } from './repos/missionRepo'
 import { OrganisationRepoMemoire } from './repos/organisationRepo'
 import { ParametersRepoMemoire } from './repos/parametersRepo'
 import { ParametresInstallationRepoMemoire } from './repos/parametresInstallationRepo'
@@ -68,6 +69,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     knowledgeEngineRepo: new KnowledgeEngineRepoMemoire(),
     contentPlanRepo: new ContentPlanRepoMemoire(),
     integrationRepo: new IntegrationRepoMemoire(),
+    missionRepo: new MissionRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -239,6 +241,14 @@ interface CorpsReponse {
   syncJob: SyncJobJson
   externalReferences: ExternalReferenceJson[]
   externalReference: ExternalReferenceJson
+  missions: MissionJson[]
+  mission: MissionJson
+  activities: ActivityJson[]
+  activity: ActivityJson
+  dependencies: DependencyJson[]
+  dependency: DependencyJson
+  associationsQualityEvent: AssociationMissionQualityEventJson[]
+  association: AssociationMissionQualityEventJson
 }
 
 interface RequirementJson {
@@ -500,6 +510,47 @@ interface ExternalReferenceJson {
   connectorId: string
   identifiantExterne: string
   libelle: string
+  createdAt: string
+}
+
+interface MissionJson {
+  id: string
+  clientId: string
+  workspaceId: string | null
+  assetNodeId: string | null
+  titre: string
+  description: string
+  statut: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface ActivityJson {
+  id: string
+  clientId: string
+  missionId: string
+  titre: string
+  description: string
+  statut: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface DependencyJson {
+  id: string
+  clientId: string
+  activitySourceId: string
+  activityCibleId: string
+  createdAt: string
+}
+
+interface AssociationMissionQualityEventJson {
+  id: string
+  clientId: string
+  missionId: string
+  qualityEventId: string
   createdAt: string
 }
 
@@ -5263,6 +5314,325 @@ describe('routerRequete — Integration (Target Architecture, domaine "Integrati
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/integration`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — Mission/Activity (Target Architecture, domaine "Work", Phase 8a du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  async function creerMissionDeTest(
+    ctx: Contexte,
+    jeton: string,
+    clientId: string,
+  ): Promise<string> {
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/missions`, {
+      jeton,
+      body: { titre: 'Qualification ligne 3', description: 'IQ/OQ/PQ ligne de remplissage' },
+    })
+    return creation.corps.mission.id
+  }
+
+  test('GET sans rien configuré -> listes vides, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/missions`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.missions).toEqual([])
+    expect(obtenir.corps.activities).toEqual([])
+    expect(obtenir.corps.dependencies).toEqual([])
+    expect(obtenir.corps.associationsQualityEvent).toEqual([])
+  })
+
+  test('créer une mission : id/statut/auditLog dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/missions`, {
+      jeton: admin.jeton,
+      body: { titre: 'Qualification ligne 3', description: 'IQ/OQ/PQ ligne de remplissage' },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.mission.statut).toBe('ouverte')
+    expect(creation.corps.mission.auditLog).toHaveLength(1)
+    expect(creation.corps.mission.auditLog[0]?.actor).toBe('admin@pharmatech.example')
+    expect(creation.corps.mission.createdAt).toEqual(expect.any(String))
+  })
+
+  test('créer une mission avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/missions`, {
+      jeton: admin.jeton,
+      body: { titre: 'X' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('changer le statut d’une mission introuvable -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const changement = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/missions/inconnue/statut`,
+      { jeton: admin.jeton, body: { statut: 'en_cours' } },
+    )
+    expect(changement.status).toBe(404)
+    expect(changement.corps.erreur).toBe('introuvable')
+  })
+
+  test('changer le statut d’une mission : audit_log cumulé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const missionId = await creerMissionDeTest(ctx, admin.jeton, clientId)
+
+    const changement = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/missions/${missionId}/statut`,
+      { jeton: admin.jeton, body: { statut: 'en_cours' } },
+    )
+    expect(changement.status).toBe(200)
+    expect(changement.corps.mission.statut).toBe('en_cours')
+    expect(changement.corps.mission.auditLog).toHaveLength(2)
+  })
+
+  test('associer un QualityEvent à une mission : idempotent', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const missionId = await creerMissionDeTest(ctx, admin.jeton, clientId)
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/quality-events`,
+      { jeton: admin.jeton, body: { qualityEventId: 'qe-1' } },
+    )
+    expect(premiere.status).toBe(201)
+
+    const seconde = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/quality-events`,
+      { jeton: admin.jeton, body: { qualityEventId: 'qe-1' } },
+    )
+    expect(seconde.status).toBe(200)
+    expect(seconde.corps.association.id).toBe(premiere.corps.association.id)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/missions`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.associationsQualityEvent).toHaveLength(1)
+  })
+
+  test('créer une activité : id/statut/auditLog dérivés côté serveur', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const missionId = await creerMissionDeTest(ctx, admin.jeton, clientId)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/activities`,
+      {
+        jeton: admin.jeton,
+        body: { titre: 'IQ pompe doseuse', description: 'Vérification installation' },
+      },
+    )
+    expect(creation.status).toBe(201)
+    expect(creation.corps.activity.missionId).toBe(missionId)
+    expect(creation.corps.activity.statut).toBe('a_faire')
+    expect(creation.corps.activity.auditLog).toHaveLength(1)
+  })
+
+  test('créer une activité avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const missionId = await creerMissionDeTest(ctx, admin.jeton, clientId)
+
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/activities`,
+      {
+        jeton: admin.jeton,
+        body: { titre: 'X' },
+      },
+    )
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('changer le statut d’une activité introuvable -> 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const changement = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/activities/inconnue/statut`,
+      { jeton: admin.jeton, body: { statut: 'terminee' } },
+    )
+    expect(changement.status).toBe(404)
+    expect(changement.corps.erreur).toBe('introuvable')
+  })
+
+  test('changer le statut d’une activité : audit_log cumulé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const missionId = await creerMissionDeTest(ctx, admin.jeton, clientId)
+    const creation = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/activities`,
+      {
+        jeton: admin.jeton,
+        body: { titre: 'IQ pompe doseuse', description: 'Vérification installation' },
+      },
+    )
+    const activityId = creation.corps.activity.id
+
+    const changement = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/activities/${activityId}/statut`,
+      { jeton: admin.jeton, body: { statut: 'terminee' } },
+    )
+    expect(changement.status).toBe(200)
+    expect(changement.corps.activity.statut).toBe('terminee')
+    expect(changement.corps.activity.auditLog).toHaveLength(2)
+  })
+
+  test('ajouter une dépendance entre deux activités : idempotente', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const missionId = await creerMissionDeTest(ctx, admin.jeton, clientId)
+    const source = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/activities`,
+      {
+        jeton: admin.jeton,
+        body: { titre: 'IQ', description: 'Installation' },
+      },
+    )
+    const cible = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/activities`,
+      {
+        jeton: admin.jeton,
+        body: { titre: 'OQ', description: 'Opérationnel' },
+      },
+    )
+
+    const premiere = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/activities/${source.corps.activity.id}/dependances`,
+      { jeton: admin.jeton, body: { activityCibleId: cible.corps.activity.id } },
+    )
+    expect(premiere.status).toBe(201)
+
+    const seconde = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/activities/${source.corps.activity.id}/dependances`,
+      { jeton: admin.jeton, body: { activityCibleId: cible.corps.activity.id } },
+    )
+    expect(seconde.status).toBe(200)
+    expect(seconde.corps.dependency.id).toBe(premiere.corps.dependency.id)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/missions`, { jeton: admin.jeton })
+    expect(liste.corps.dependencies).toHaveLength(1)
+  })
+
+  test('migration locale : idempotente, id existant ignoré', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const missionLocale: MissionJson = {
+      id: 'mission-locale-1',
+      clientId,
+      workspaceId: null,
+      assetNodeId: null,
+      titre: 'Ancien titre',
+      description: 'Ancienne description',
+      statut: 'ouverte',
+      auditLog: [
+        { timestamp: '2024-01-01T00:00:00.000Z', actor: 'ancien@local', action: 'création' },
+      ],
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    }
+    const migration = await requete(ctx, 'POST', `/clients/${clientId}/missions/migration-locale`, {
+      jeton: admin.jeton,
+      body: {
+        missions: [missionLocale],
+        activities: [],
+        dependencies: [],
+        associationsQualityEvent: [],
+      },
+    })
+    expect(migration.status).toBe(200)
+
+    const rejouee = await requete(ctx, 'POST', `/clients/${clientId}/missions/migration-locale`, {
+      jeton: admin.jeton,
+      body: {
+        missions: [{ ...missionLocale, titre: 'Tentative d’écrasement' }],
+        activities: [],
+        dependencies: [],
+        associationsQualityEvent: [],
+      },
+    })
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/missions`, { jeton: admin.jeton })
+    expect(liste.corps.missions).toHaveLength(1)
+    expect(liste.corps.missions[0]?.titre).toBe('Ancien titre')
+  })
+
+  test('migration locale avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const migration = await requete(ctx, 'POST', `/clients/${clientId}/missions/migration-locale`, {
+      jeton: admin.jeton,
+      body: { missions: [] },
+    })
+    expect(migration.status).toBe(400)
+    expect(migration.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/missions`)
     expect(obtenir.status).toBe(401)
   })
 })

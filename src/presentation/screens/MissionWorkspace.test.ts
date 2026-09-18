@@ -64,17 +64,17 @@ const CLIENT_ID = 'client-1'
 const MISSION_ID = 'mission-1'
 
 async function creerMissionDeTest(): Promise<void> {
-  await db.missions.put({
+  await ctx.missionRepo.creerMission({
     id: MISSION_ID,
-    client_id: CLIENT_ID,
-    workspace_id: null,
-    asset_node_id: null,
+    clientId: CLIENT_ID,
+    workspaceId: null,
+    assetNodeId: null,
     titre: 'Qualification granulateur GR-01',
     description: 'Requalification suite changement de recette',
     statut: 'ouverte',
-    audit_log: [],
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z',
+    auditLog: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
   })
 }
 
@@ -114,10 +114,6 @@ let demonter: () => void
 beforeEach(async () => {
   setActivePinia(createPinia())
   fournisseurEnvoyerMessage.mockReset()
-  await db.missions.clear()
-  await db.activities.clear()
-  await db.dependencies.clear()
-  await db.associationsMissionQualityEvent.clear()
   await db.contextSnapshots.clear()
   await db.contextSnapshotItems.clear()
   await db.aiConfigurations.clear()
@@ -180,19 +176,25 @@ describe('MissionWorkspace — Activités et dépendances', () => {
     await formulaireActivite.find('input[type="text"]').setValue('Préparer protocole')
     await formulaireActivite.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.activities.where('mission_id').equals(MISSION_ID).count()) === 1,
+      async () =>
+        (await ctx.missionRepo.listerActivities(CLIENT_ID)).filter(
+          (a) => a.missionId === MISSION_ID,
+        ).length === 1,
     )
 
     await formulaireActivite.find('input[type="text"]').setValue('Exécuter essais')
     await formulaireActivite.trigger('submit.prevent')
     await attendreQue(
-      async () => (await db.activities.where('mission_id').equals(MISSION_ID).count()) === 2,
+      async () =>
+        (await ctx.missionRepo.listerActivities(CLIENT_ID)).filter(
+          (a) => a.missionId === MISSION_ID,
+        ).length === 2,
     )
 
     expect(wrapper.text()).toContain('Préparer protocole')
     expect(wrapper.text()).toContain('Exécuter essais')
 
-    const activitesPersistees = await db.activities.toArray()
+    const activitesPersistees = await ctx.missionRepo.listerActivities(CLIENT_ID)
     const preparerProtocole = activitesPersistees.find((a) => a.titre === 'Préparer protocole')
     const executerEssais = activitesPersistees.find((a) => a.titre === 'Exécuter essais')
 
@@ -203,8 +205,10 @@ describe('MissionWorkspace — Activités et dépendances', () => {
     await selects[1]?.setValue(preparerProtocole?.id)
     await formulaireDependance.trigger('submit.prevent')
 
-    await attendreQue(async () => (await db.dependencies.count()) === 1)
-    const dependances = await db.dependencies.toArray()
+    await attendreQue(
+      async () => (await ctx.missionRepo.listerDependencies(CLIENT_ID)).length === 1,
+    )
+    const dependances = await ctx.missionRepo.listerDependencies(CLIENT_ID)
     expect(dependances).toHaveLength(1)
   })
 
@@ -213,14 +217,16 @@ describe('MissionWorkspace — Activités et dépendances', () => {
     const formulaireActivite = wrapper.find('section.activites form')
     await formulaireActivite.find('input[type="text"]').setValue('Préparer protocole')
     await formulaireActivite.trigger('submit.prevent')
-    await attendreQue(async () => (await db.activities.count()) === 1)
+    await attendreQue(async () => (await ctx.missionRepo.listerActivities(CLIENT_ID)).length === 1)
 
     await wrapper.vm.$nextTick()
     const selectStatut = wrapper.find('section.activites li select')
     await selectStatut.setValue('terminee')
 
-    await attendreQue(async () => (await db.activities.toArray())[0]?.statut === 'terminee')
-    expect((await db.activities.toArray())[0]?.statut).toBe('terminee')
+    await attendreQue(
+      async () => (await ctx.missionRepo.listerActivities(CLIENT_ID))[0]?.statut === 'terminee',
+    )
+    expect((await ctx.missionRepo.listerActivities(CLIENT_ID))[0]?.statut).toBe('terminee')
   })
 })
 
@@ -240,10 +246,13 @@ describe('MissionWorkspace — Événements qualité associés', () => {
     await formulaire.find('select').setValue('qe-1')
     await formulaire.trigger('submit.prevent')
 
-    await attendreQue(async () => (await db.associationsMissionQualityEvent.count()) === 1)
-    const associations = await db.associationsMissionQualityEvent.toArray()
-    expect(associations[0]?.mission_id).toBe(MISSION_ID)
-    expect(associations[0]?.quality_event_id).toBe('qe-1')
+    await attendreQue(
+      async () =>
+        (await ctx.missionRepo.listerAssociationsMissionQualityEvent(CLIENT_ID)).length === 1,
+    )
+    const associations = await ctx.missionRepo.listerAssociationsMissionQualityEvent(CLIENT_ID)
+    expect(associations[0]?.missionId).toBe(MISSION_ID)
+    expect(associations[0]?.qualityEventId).toBe('qe-1')
   })
 })
 
@@ -339,10 +348,13 @@ describe('MissionWorkspace — Raisonnement', () => {
 
 describe('MissionWorkspace — navigation retour vers la liste des missions', () => {
   let demonter: () => void
+  let ctxLocal: Contexte
 
   beforeEach(async () => {
     await reinitialiserAuthDeTest()
-    demonter = installerFauxWorkerAuth().demonter
+    const installation = installerFauxWorkerAuth()
+    demonter = installation.demonter
+    ctxLocal = installation.ctx
     await connecterAdminDeTest()
   })
 
@@ -355,17 +367,17 @@ describe('MissionWorkspace — navigation retour vers la liste des missions', ()
     const client = await clientsStore.creerClient({ name: 'PharmaTech Solutions' })
     if ('erreur' in client) throw client
 
-    await db.missions.put({
+    await ctxLocal.missionRepo.creerMission({
       id: MISSION_ID,
-      client_id: client.id,
-      workspace_id: null,
-      asset_node_id: null,
+      clientId: client.id,
+      workspaceId: null,
+      assetNodeId: null,
       titre: 'Qualification granulateur GR-01',
       description: '',
       statut: 'ouverte',
-      audit_log: [],
-      created_at: '2026-01-01T00:00:00.000Z',
-      updated_at: '2026-01-01T00:00:00.000Z',
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     })
 
     const router = routeurDeTest()
@@ -402,7 +414,7 @@ describe('MissionWorkspace — changements de statut non vérifiés', () => {
     const formulaireActivite = wrapper.find('section.activites form')
     await formulaireActivite.find('input[type="text"]').setValue('Préparer protocole')
     await formulaireActivite.trigger('submit.prevent')
-    await attendreQue(async () => (await db.activities.count()) === 1)
+    await attendreQue(async () => (await ctx.missionRepo.listerActivities(CLIENT_ID)).length === 1)
     await attendreQue(() => wrapper.find('section.activites li select').exists())
 
     const missionStore = useMissionStore()

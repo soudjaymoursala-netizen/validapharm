@@ -921,6 +921,59 @@ export interface SaisieDeclarationReferenceWire {
   libelle: string
 }
 
+export interface MissionWire {
+  id: string
+  clientId: string
+  workspaceId: string | null
+  assetNodeId: string | null
+  titre: string
+  description: string
+  statut: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ActivityWire {
+  id: string
+  clientId: string
+  missionId: string
+  titre: string
+  description: string
+  statut: string
+  auditLog: { timestamp: string; actor: string; action: string }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DependencyWire {
+  id: string
+  clientId: string
+  activitySourceId: string
+  activityCibleId: string
+  createdAt: string
+}
+
+export interface AssociationMissionQualityEventWire {
+  id: string
+  clientId: string
+  missionId: string
+  qualityEventId: string
+  createdAt: string
+}
+
+export interface SaisieCreationMissionWire {
+  workspaceId?: string | null
+  assetNodeId?: string | null
+  titre: string
+  description: string
+}
+
+export interface SaisieCreationActivityWire {
+  titre: string
+  description: string
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -2376,6 +2429,114 @@ export class AuthApiClient {
     }>
   > {
     return this.requete('POST', `/clients/${clientId}/integration/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
+  }
+
+  // --- Mission/Activity/Dependency/AssociationMissionQualityEvent (Target Architecture, domaine "Work", Phase 8a du chantier de migration D1) ---
+
+  obtenirMissions(
+    jeton: string,
+    clientId: string,
+  ): Promise<
+    ResultatApi<{
+      missions: MissionWire[]
+      activities: ActivityWire[]
+      dependencies: DependencyWire[]
+      associationsQualityEvent: AssociationMissionQualityEventWire[]
+    }>
+  > {
+    return this.requete('GET', `/clients/${clientId}/missions`, { jeton })
+  }
+
+  creerMission(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationMissionWire,
+  ): Promise<ResultatApi<{ mission: MissionWire }>> {
+    return this.requete('POST', `/clients/${clientId}/missions`, { jeton, body: saisie })
+  }
+
+  changerStatutMission(
+    jeton: string,
+    clientId: string,
+    missionId: string,
+    statut: string,
+  ): Promise<ResultatApi<{ mission: MissionWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/missions/${missionId}/statut`, {
+      jeton,
+      body: { statut },
+    })
+  }
+
+  associerQualityEvent(
+    jeton: string,
+    clientId: string,
+    missionId: string,
+    qualityEventId: string,
+  ): Promise<ResultatApi<{ association: AssociationMissionQualityEventWire }>> {
+    return this.requete('POST', `/clients/${clientId}/missions/${missionId}/quality-events`, {
+      jeton,
+      body: { qualityEventId },
+    })
+  }
+
+  creerActivity(
+    jeton: string,
+    clientId: string,
+    missionId: string,
+    saisie: SaisieCreationActivityWire,
+  ): Promise<ResultatApi<{ activity: ActivityWire }>> {
+    return this.requete('POST', `/clients/${clientId}/missions/${missionId}/activities`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  changerStatutActivity(
+    jeton: string,
+    clientId: string,
+    activityId: string,
+    statut: string,
+  ): Promise<ResultatApi<{ activity: ActivityWire }>> {
+    return this.requete('PATCH', `/clients/${clientId}/activities/${activityId}/statut`, {
+      jeton,
+      body: { statut },
+    })
+  }
+
+  ajouterDependance(
+    jeton: string,
+    clientId: string,
+    activitySourceId: string,
+    activityCibleId: string,
+  ): Promise<ResultatApi<{ dependency: DependencyWire }>> {
+    return this.requete('POST', `/clients/${clientId}/activities/${activitySourceId}/dependances`, {
+      jeton,
+      body: { activityCibleId },
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerMissionsLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerMissionsLocal(
+    jeton: string,
+    clientId: string,
+    donnees: {
+      missions: MissionWire[]
+      activities: ActivityWire[]
+      dependencies: DependencyWire[]
+      associationsQualityEvent: AssociationMissionQualityEventWire[]
+    },
+  ): Promise<
+    ResultatApi<{
+      missions: MissionWire[]
+      activities: ActivityWire[]
+      dependencies: DependencyWire[]
+      associationsQualityEvent: AssociationMissionQualityEventWire[]
+    }>
+  > {
+    return this.requete('POST', `/clients/${clientId}/missions/migration-locale`, {
       jeton,
       body: donnees,
     })

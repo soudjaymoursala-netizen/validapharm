@@ -56,6 +56,13 @@ import type {
   SourceVersionEnregistree,
 } from './repos/knowledgeEngineRepo'
 import type {
+  ActivityEnregistree,
+  AssociationMissionQualityEventEnregistree,
+  DependencyEnregistree,
+  MissionEnregistree,
+  MissionRepo,
+} from './repos/missionRepo'
+import type {
   OrganisationRepo,
   OrganizationEnregistree,
   WorkspaceEnregistre,
@@ -150,6 +157,7 @@ export interface Contexte {
   knowledgeEngineRepo: KnowledgeEngineRepo
   contentPlanRepo: ContentPlanRepo
   integrationRepo: IntegrationRepo
+  missionRepo: MissionRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -1185,6 +1193,82 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchIntegrationMigrationLocale[1] as string,
+    )
+  }
+
+  // --- Mission/Activity/Dependency/AssociationMissionQualityEvent
+  // (Target Architecture, domaine "Work", Phase 8a du chantier de
+  // migration D1) ---
+  const matchMissions = chemin.match(/^\/clients\/([^/]+)\/missions$/)
+  if (matchMissions && request.method === 'GET') {
+    return gererObtenirMissions(request, ctx, entetes, matchMissions[1] as string)
+  }
+  if (matchMissions && request.method === 'POST') {
+    return gererCreerMission(request, ctx, entetes, matchMissions[1] as string)
+  }
+  const matchStatutMission = chemin.match(/^\/clients\/([^/]+)\/missions\/([^/]+)\/statut$/)
+  if (matchStatutMission && request.method === 'PATCH') {
+    return gererChangerStatutMission(
+      request,
+      ctx,
+      entetes,
+      matchStatutMission[1] as string,
+      matchStatutMission[2] as string,
+    )
+  }
+  const matchAssocierQualityEvent = chemin.match(
+    /^\/clients\/([^/]+)\/missions\/([^/]+)\/quality-events$/,
+  )
+  if (matchAssocierQualityEvent && request.method === 'POST') {
+    return gererAssocierQualityEvent(
+      request,
+      ctx,
+      entetes,
+      matchAssocierQualityEvent[1] as string,
+      matchAssocierQualityEvent[2] as string,
+    )
+  }
+  const matchCreerActivity = chemin.match(/^\/clients\/([^/]+)\/missions\/([^/]+)\/activities$/)
+  if (matchCreerActivity && request.method === 'POST') {
+    return gererCreerActivity(
+      request,
+      ctx,
+      entetes,
+      matchCreerActivity[1] as string,
+      matchCreerActivity[2] as string,
+    )
+  }
+  const matchStatutActivity = chemin.match(/^\/clients\/([^/]+)\/activities\/([^/]+)\/statut$/)
+  if (matchStatutActivity && request.method === 'PATCH') {
+    return gererChangerStatutActivity(
+      request,
+      ctx,
+      entetes,
+      matchStatutActivity[1] as string,
+      matchStatutActivity[2] as string,
+    )
+  }
+  const matchAjouterDependance = chemin.match(
+    /^\/clients\/([^/]+)\/activities\/([^/]+)\/dependances$/,
+  )
+  if (matchAjouterDependance && request.method === 'POST') {
+    return gererAjouterDependance(
+      request,
+      ctx,
+      entetes,
+      matchAjouterDependance[1] as string,
+      matchAjouterDependance[2] as string,
+    )
+  }
+  const matchMissionsMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/missions\/migration-locale$/,
+  )
+  if (matchMissionsMigrationLocale && request.method === 'POST') {
+    return gererMigrerMissionsLocal(
+      request,
+      ctx,
+      entetes,
+      matchMissionsMigrationLocale[1] as string,
     )
   }
 
@@ -5797,6 +5881,277 @@ async function gererMigrerIntegrationLocal(
       connectors: corps.connectors,
       syncJobs: corps.syncJobs,
       externalReferences: corps.externalReferences,
+    },
+    200,
+    entetes,
+  )
+}
+
+// --- Handlers : Mission/Activity/Dependency/AssociationMissionQualityEvent (Target Architecture, domaine "Work", Phase 8a du chantier de migration D1) ---
+
+async function gererObtenirMissions(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const [missions, activities, dependencies, associationsQualityEvent] = await Promise.all([
+    ctx.missionRepo.listerMissions(clientId),
+    ctx.missionRepo.listerActivities(clientId),
+    ctx.missionRepo.listerDependencies(clientId),
+    ctx.missionRepo.listerAssociationsMissionQualityEvent(clientId),
+  ])
+  return reponseJson({ missions, activities, dependencies, associationsQualityEvent }, 200, entetes)
+}
+
+interface SaisieCreationMission {
+  workspaceId?: string | null
+  assetNodeId?: string | null
+  titre?: string
+  description?: string
+}
+
+async function gererCreerMission(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const corps = await lireCorpsJson<SaisieCreationMission>(request)
+  if (!corps?.titre || corps.description === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const maintenant = horodatage()
+  const mission: MissionEnregistree = {
+    id: genererId(),
+    clientId,
+    workspaceId: corps.workspaceId ?? null,
+    assetNodeId: corps.assetNodeId ?? null,
+    titre: corps.titre,
+    description: corps.description,
+    statut: 'ouverte',
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.missionRepo.creerMission(mission)
+  return reponseJson({ mission }, 201, entetes)
+}
+
+async function gererChangerStatutMission(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  missionId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const existante = await ctx.missionRepo.missionParId(missionId)
+  if (!existante || existante.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const corps = await lireCorpsJson<{ statut?: string }>(request)
+  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const maintenant = horodatage()
+  const miseAJour: MissionEnregistree = {
+    ...existante,
+    statut: corps.statut,
+    updatedAt: maintenant,
+    auditLog: [
+      ...existante.auditLog,
+      {
+        timestamp: maintenant,
+        actor: acteur.email,
+        action: `changement de statut : ${corps.statut}`,
+      },
+    ],
+  }
+  await ctx.missionRepo.remplacerMission(miseAJour)
+  return reponseJson({ mission: miseAJour }, 200, entetes)
+}
+
+/** Association N:M idempotente — jamais une étape obligatoire. */
+async function gererAssocierQualityEvent(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  missionId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<{ qualityEventId?: string }>(request)
+  if (!corps?.qualityEventId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const existante = await ctx.missionRepo.associationMissionQualityEventExistante(
+    missionId,
+    corps.qualityEventId,
+  )
+  if (existante) return reponseJson({ association: existante }, 200, entetes)
+  const association: AssociationMissionQualityEventEnregistree = {
+    id: genererId(),
+    clientId,
+    missionId,
+    qualityEventId: corps.qualityEventId,
+    createdAt: horodatage(),
+  }
+  await ctx.missionRepo.creerAssociationMissionQualityEvent(association)
+  return reponseJson({ association }, 201, entetes)
+}
+
+interface SaisieCreationActivity {
+  titre?: string
+  description?: string
+}
+
+async function gererCreerActivity(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  missionId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const corps = await lireCorpsJson<SaisieCreationActivity>(request)
+  if (!corps?.titre || corps.description === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const maintenant = horodatage()
+  const activity: ActivityEnregistree = {
+    id: genererId(),
+    clientId,
+    missionId,
+    titre: corps.titre,
+    description: corps.description,
+    statut: 'a_faire',
+    auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  }
+  await ctx.missionRepo.creerActivity(activity)
+  return reponseJson({ activity }, 201, entetes)
+}
+
+async function gererChangerStatutActivity(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  activityId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const existante = await ctx.missionRepo.activityParId(activityId)
+  if (!existante || existante.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const corps = await lireCorpsJson<{ statut?: string }>(request)
+  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const maintenant = horodatage()
+  const miseAJour: ActivityEnregistree = {
+    ...existante,
+    statut: corps.statut,
+    updatedAt: maintenant,
+    auditLog: [
+      ...existante.auditLog,
+      {
+        timestamp: maintenant,
+        actor: acteur.email,
+        action: `changement de statut : ${corps.statut}`,
+      },
+    ],
+  }
+  await ctx.missionRepo.remplacerActivity(miseAJour)
+  return reponseJson({ activity: miseAJour }, 200, entetes)
+}
+
+/**
+ * Dépendance Activity -> Activity — jamais un verrou bloquant : aucun
+ * handler de ce domaine ne conditionne un changement de statut d'Activity
+ * à l'état de ses dépendances (même discipline que QualityEvent/Connector).
+ */
+async function gererAjouterDependance(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  activitySourceId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<{ activityCibleId?: string }>(request)
+  if (!corps?.activityCibleId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const existante = await ctx.missionRepo.dependencyExistante(
+    activitySourceId,
+    corps.activityCibleId,
+  )
+  if (existante) return reponseJson({ dependency: existante }, 200, entetes)
+  const dependency: DependencyEnregistree = {
+    id: genererId(),
+    clientId,
+    activitySourceId,
+    activityCibleId: corps.activityCibleId,
+    createdAt: horodatage(),
+  }
+  await ctx.missionRepo.creerDependency(dependency)
+  return reponseJson({ dependency }, 201, entetes)
+}
+
+interface SaisieMigrationMissions {
+  missions?: MissionEnregistree[]
+  activities?: ActivityEnregistree[]
+  dependencies?: DependencyEnregistree[]
+  associationsQualityEvent?: AssociationMissionQualityEventEnregistree[]
+}
+
+async function gererMigrerMissionsLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieMigrationMissions>(request)
+  if (
+    !corps ||
+    !Array.isArray(corps.missions) ||
+    !Array.isArray(corps.activities) ||
+    !Array.isArray(corps.dependencies) ||
+    !Array.isArray(corps.associationsQualityEvent)
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const m of corps.missions) {
+    if (m.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.missionRepo.creerMission(m)
+  }
+  for (const a of corps.activities) {
+    if (a.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.missionRepo.creerActivity(a)
+  }
+  for (const d of corps.dependencies) {
+    if (d.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.missionRepo.creerDependency(d)
+  }
+  for (const assoc of corps.associationsQualityEvent) {
+    if (assoc.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.missionRepo.creerAssociationMissionQualityEvent(assoc)
+  }
+  return reponseJson(
+    {
+      missions: corps.missions,
+      activities: corps.activities,
+      dependencies: corps.dependencies,
+      associationsQualityEvent: corps.associationsQualityEvent,
     },
     200,
     entetes,

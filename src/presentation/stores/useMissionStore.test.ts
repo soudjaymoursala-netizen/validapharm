@@ -1,15 +1,41 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useMissionStore } from './useMissionStore'
+
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.missions.clear()
-  await db.activities.clear()
-  await db.dependencies.clear()
-  await db.associationsMissionQualityEvent.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  for (const id of ['client-1', 'client-A', 'client-B']) {
+    await installation.ctx.clientsRepo.creer({
+      id,
+      name: id,
+      adresse: null,
+      secteur: null,
+      details: null,
+      statut: 'actif',
+      archivedAt: null,
+      archivedBy: null,
+      createdByUserId: 'admin-test',
+      sharedWith: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  }
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useMissionStore — création de base', () => {

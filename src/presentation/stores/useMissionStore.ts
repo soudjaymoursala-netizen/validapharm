@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
+  ActivityWire,
+  AssociationMissionQualityEventWire,
+  DependencyWire,
+  MissionWire,
+} from '../../connecteurs/auth/AuthApiClient'
+import type {
   Activity,
   AssociationMissionQualityEvent,
   Dependency,
@@ -8,8 +14,13 @@ import type {
   StatutActivity,
   StatutMission,
 } from '../../logique-metier/domaine/types'
-import { identifiantActeurCourant } from '../identite/identiteLocale'
-import { db } from '../../persistance/db'
+import {
+  activitiesAMigrer,
+  associationsMissionQualityEventAMigrer,
+  dependenciesAMigrer,
+  missionsAMigrer,
+} from '../../persistance/db'
+import { useAuthStore } from './useAuthStore'
 
 export interface NouvelleMissionInput {
   workspaceId: string | null
@@ -24,6 +35,108 @@ export interface NouvelleActivityInput {
   description: string
 }
 
+function missionWireVersDomaine(w: MissionWire): Mission {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    workspace_id: w.workspaceId,
+    asset_node_id: w.assetNodeId,
+    titre: w.titre,
+    description: w.description,
+    statut: w.statut as StatutMission,
+    audit_log: w.auditLog,
+    created_at: w.createdAt,
+    updated_at: w.updatedAt,
+  }
+}
+
+function missionDomaineVersWire(m: Mission): MissionWire {
+  return {
+    id: m.id,
+    clientId: m.client_id,
+    workspaceId: m.workspace_id,
+    assetNodeId: m.asset_node_id,
+    titre: m.titre,
+    description: m.description,
+    statut: m.statut,
+    auditLog: m.audit_log,
+    createdAt: m.created_at,
+    updatedAt: m.updated_at,
+  }
+}
+
+function activityWireVersDomaine(w: ActivityWire): Activity {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    mission_id: w.missionId,
+    titre: w.titre,
+    description: w.description,
+    statut: w.statut as StatutActivity,
+    audit_log: w.auditLog,
+    created_at: w.createdAt,
+    updated_at: w.updatedAt,
+  }
+}
+
+function activityDomaineVersWire(a: Activity): ActivityWire {
+  return {
+    id: a.id,
+    clientId: a.client_id,
+    missionId: a.mission_id,
+    titre: a.titre,
+    description: a.description,
+    statut: a.statut,
+    auditLog: a.audit_log,
+    createdAt: a.created_at,
+    updatedAt: a.updated_at,
+  }
+}
+
+function dependencyWireVersDomaine(w: DependencyWire): Dependency {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    activity_source_id: w.activitySourceId,
+    activity_cible_id: w.activityCibleId,
+    created_at: w.createdAt,
+  }
+}
+
+function dependencyDomaineVersWire(d: Dependency): DependencyWire {
+  return {
+    id: d.id,
+    clientId: d.client_id,
+    activitySourceId: d.activity_source_id,
+    activityCibleId: d.activity_cible_id,
+    createdAt: d.created_at,
+  }
+}
+
+function associationWireVersDomaine(
+  w: AssociationMissionQualityEventWire,
+): AssociationMissionQualityEvent {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    mission_id: w.missionId,
+    quality_event_id: w.qualityEventId,
+    created_at: w.createdAt,
+  }
+}
+
+function associationDomaineVersWire(
+  a: AssociationMissionQualityEvent,
+): AssociationMissionQualityEventWire {
+  return {
+    id: a.id,
+    clientId: a.client_id,
+    missionId: a.mission_id,
+    qualityEventId: a.quality_event_id,
+    createdAt: a.created_at,
+  }
+}
+
 /**
  * Store `Mission`/`Activity` (convergence architecturale —
  * spec détaillée dans `docs/convergence/PHASE_13_MISSION_ACTIVITY_SPEC.md`).
@@ -32,7 +145,12 @@ export interface NouvelleActivityInput {
  * les relations de base (dépendances entre `Activity`, association à des
  * `QualityEvent`), sans aucune logique de planification ou d'IA.
  *
+ * **Migré vers le Worker/D1 (Phase 8a du chantier de migration D1)** —
+ * même patron que les phases précédentes : `id`/timestamps/`actor`
+ * toujours dérivés côté serveur, jamais fait confiance au client.
+ *
  * @requirement docs/convergence/CONVERGENCE_PLAN.md
+ * @requirement Target Architecture, domaine "Work"
  */
 export const useMissionStore = defineStore('mission', () => {
   const missions = ref<Mission[]>([])
@@ -41,36 +159,105 @@ export const useMissionStore = defineStore('mission', () => {
   const associationsQualityEvent = ref<AssociationMissionQualityEvent[]>([])
   const enChargement = ref(false)
 
+  /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que les autres stores de ce chantier. */
+  async function obtenirApi() {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    return { api, jeton: authStore.jeton }
+  }
+
+  /**
+   * Envoie au serveur les enregistrements capturés depuis les anciennes
+   * tables IndexedDB locales juste avant leur suppression — n'a d'effet
+   * réel qu'une seule fois (voir migration Dexie v51, `persistance/db.ts`).
+   */
+  async function migrerMissionsLocalVersServeur(clientId: string): Promise<void> {
+    const missionsDuClient = missionsAMigrer.filter((m) => m.client_id === clientId)
+    const activitiesDuClient = activitiesAMigrer.filter((a) => a.client_id === clientId)
+    const dependenciesDuClient = dependenciesAMigrer.filter((d) => d.client_id === clientId)
+    const associationsDuClient = associationsMissionQualityEventAMigrer.filter(
+      (a) => a.client_id === clientId,
+    )
+    if (
+      missionsDuClient.length === 0 &&
+      activitiesDuClient.length === 0 &&
+      dependenciesDuClient.length === 0 &&
+      associationsDuClient.length === 0
+    ) {
+      return
+    }
+
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.migrerMissionsLocal(jeton, clientId, {
+      missions: missionsDuClient.map(missionDomaineVersWire),
+      activities: activitiesDuClient.map(activityDomaineVersWire),
+      dependencies: dependenciesDuClient.map(dependencyDomaineVersWire),
+      associationsQualityEvent: associationsDuClient.map(associationDomaineVersWire),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la migration Mission : ${resultat.erreur}`)
+    }
+    for (const [tableau, duClient] of [
+      [missionsAMigrer, missionsDuClient],
+      [activitiesAMigrer, activitiesDuClient],
+      [dependenciesAMigrer, dependenciesDuClient],
+      [associationsMissionQualityEventAMigrer, associationsDuClient],
+    ] as const) {
+      for (const entree of duClient) {
+        const index = (tableau as unknown[]).indexOf(entree)
+        if (index !== -1) (tableau as unknown[]).splice(index, 1)
+      }
+    }
+  }
+
   async function charger(clientId: string): Promise<void> {
     enChargement.value = true
     try {
-      missions.value = await db.missions.where('client_id').equals(clientId).toArray()
-      activities.value = await db.activities.where('client_id').equals(clientId).toArray()
-      dependencies.value = await db.dependencies.where('client_id').equals(clientId).toArray()
-      associationsQualityEvent.value = await db.associationsMissionQualityEvent
-        .where('client_id')
-        .equals(clientId)
-        .toArray()
+      try {
+        await migrerMissionsLocalVersServeur(clientId)
+      } catch {
+        // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
+      }
+      const { api, jeton } = await obtenirApi()
+      const resultat = await api.obtenirMissions(jeton, clientId)
+      if (resultat.ok) {
+        missions.value = resultat.donnees.missions.map(missionWireVersDomaine)
+        activities.value = resultat.donnees.activities.map(activityWireVersDomaine)
+        dependencies.value = resultat.donnees.dependencies.map(dependencyWireVersDomaine)
+        associationsQualityEvent.value = resultat.donnees.associationsQualityEvent.map(
+          associationWireVersDomaine,
+        )
+      } else {
+        missions.value = []
+        activities.value = []
+        dependencies.value = []
+        associationsQualityEvent.value = []
+      }
+    } catch {
+      // Panne réseau réelle ou relais non configuré : jamais une exception
+      // non gérée, même discipline que les autres stores de ce chantier.
+      missions.value = []
+      activities.value = []
+      dependencies.value = []
+      associationsQualityEvent.value = []
     } finally {
       enChargement.value = false
     }
   }
 
   async function creerMission(clientId: string, input: NouvelleMissionInput): Promise<Mission> {
-    const maintenant = new Date().toISOString()
-    const mission: Mission = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      workspace_id: input.workspaceId,
-      asset_node_id: input.assetNodeId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerMission(jeton, clientId, {
+      workspaceId: input.workspaceId,
+      assetNodeId: input.assetNodeId,
       titre: input.titre,
       description: input.description,
-      statut: 'ouverte',
-      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
-      created_at: maintenant,
-      updated_at: maintenant,
-    }
-    await db.missions.put(mission)
+    })
+    if (!resultat.ok) throw new Error(`Échec de la création de la mission : ${resultat.erreur}`)
+    const mission = missionWireVersDomaine(resultat.donnees.mission)
     missions.value = [...missions.value, mission]
     return mission
   }
@@ -80,23 +267,10 @@ export const useMissionStore = defineStore('mission', () => {
     missionId: string,
     statut: StatutMission,
   ): Promise<Mission | null> {
-    const existante = await db.missions.get(missionId)
-    if (!existante || existante.client_id !== clientId) return null
-    const maintenant = new Date().toISOString()
-    const miseAJour: Mission = {
-      ...existante,
-      statut,
-      updated_at: maintenant,
-      audit_log: [
-        ...existante.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: `changement de statut : ${statut}`,
-        },
-      ],
-    }
-    await db.missions.put(miseAJour)
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.changerStatutMission(jeton, clientId, missionId, statut)
+    if (!resultat.ok) return null
+    const miseAJour = missionWireVersDomaine(resultat.donnees.mission)
     missions.value = missions.value.map((m) => (m.id === missionId ? miseAJour : m))
     return miseAJour
   }
@@ -111,20 +285,15 @@ export const useMissionStore = defineStore('mission', () => {
     missionId: string,
     qualityEventId: string,
   ): Promise<AssociationMissionQualityEvent> {
-    const existante = associationsQualityEvent.value.find(
-      (a) => a.mission_id === missionId && a.quality_event_id === qualityEventId,
-    )
-    if (existante) return existante
-
-    const association: AssociationMissionQualityEvent = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      mission_id: missionId,
-      quality_event_id: qualityEventId,
-      created_at: new Date().toISOString(),
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.associerQualityEvent(jeton, clientId, missionId, qualityEventId)
+    if (!resultat.ok) {
+      throw new Error(`Échec de l'association au QualityEvent : ${resultat.erreur}`)
     }
-    await db.associationsMissionQualityEvent.put(association)
-    associationsQualityEvent.value = [...associationsQualityEvent.value, association]
+    const association = associationWireVersDomaine(resultat.donnees.association)
+    if (!associationsQualityEvent.value.some((a) => a.id === association.id)) {
+      associationsQualityEvent.value = [...associationsQualityEvent.value, association]
+    }
     return association
   }
 
@@ -133,19 +302,13 @@ export const useMissionStore = defineStore('mission', () => {
   }
 
   async function creerActivity(clientId: string, input: NouvelleActivityInput): Promise<Activity> {
-    const maintenant = new Date().toISOString()
-    const activite: Activity = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      mission_id: input.missionId,
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerActivity(jeton, clientId, input.missionId, {
       titre: input.titre,
       description: input.description,
-      statut: 'a_faire',
-      audit_log: [{ timestamp: maintenant, actor: identifiantActeurCourant(), action: 'création' }],
-      created_at: maintenant,
-      updated_at: maintenant,
-    }
-    await db.activities.put(activite)
+    })
+    if (!resultat.ok) throw new Error(`Échec de la création de l'activité : ${resultat.erreur}`)
+    const activite = activityWireVersDomaine(resultat.donnees.activity)
     activities.value = [...activities.value, activite]
     return activite
   }
@@ -155,23 +318,10 @@ export const useMissionStore = defineStore('mission', () => {
     activityId: string,
     statut: StatutActivity,
   ): Promise<Activity | null> {
-    const existante = await db.activities.get(activityId)
-    if (!existante || existante.client_id !== clientId) return null
-    const maintenant = new Date().toISOString()
-    const miseAJour: Activity = {
-      ...existante,
-      statut,
-      updated_at: maintenant,
-      audit_log: [
-        ...existante.audit_log,
-        {
-          timestamp: maintenant,
-          actor: identifiantActeurCourant(),
-          action: `changement de statut : ${statut}`,
-        },
-      ],
-    }
-    await db.activities.put(miseAJour)
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.changerStatutActivity(jeton, clientId, activityId, statut)
+    if (!resultat.ok) return null
+    const miseAJour = activityWireVersDomaine(resultat.donnees.activity)
     activities.value = activities.value.map((a) => (a.id === activityId ? miseAJour : a))
     return miseAJour
   }
@@ -187,20 +337,13 @@ export const useMissionStore = defineStore('mission', () => {
     activitySourceId: string,
     activityCibleId: string,
   ): Promise<Dependency> {
-    const existante = dependencies.value.find(
-      (d) => d.activity_source_id === activitySourceId && d.activity_cible_id === activityCibleId,
-    )
-    if (existante) return existante
-
-    const dependance: Dependency = {
-      id: crypto.randomUUID(),
-      client_id: clientId,
-      activity_source_id: activitySourceId,
-      activity_cible_id: activityCibleId,
-      created_at: new Date().toISOString(),
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.ajouterDependance(jeton, clientId, activitySourceId, activityCibleId)
+    if (!resultat.ok) throw new Error(`Échec de l'ajout de la dépendance : ${resultat.erreur}`)
+    const dependance = dependencyWireVersDomaine(resultat.donnees.dependency)
+    if (!dependencies.value.some((d) => d.id === dependance.id)) {
+      dependencies.value = [...dependencies.value, dependance]
     }
-    await db.dependencies.put(dependance)
-    dependencies.value = [...dependencies.value, dependance]
     return dependance
   }
 
