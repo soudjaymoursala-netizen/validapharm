@@ -112,7 +112,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `aiChatSessionLogs` | D1 | ✅ **Phase 9c terminée — voir §26** |
 | `connexionDrive`, `etatMiroirDrive` (miroir Drive par client) | D1 | ✅ **Phase 9d terminée — voir §27** |
 | `connexionRelaisOCR` | D1 (même patron que Relais IA) | ✅ **Phase 9e terminée — voir §28** |
-| `clientConfigs` | D1 | ⬜ Phase 9 |
+| `clientConfigs` | D1 | ✅ **Phase 9f terminée — voir §29. Phase 9 entièrement close. Chantier de migration D1 (Phases 1-9) entièrement clos.** |
 | `profilLocal` | 🟦 reste local — verrou de confirmation propre à **cet appareil** (mot de passe de confirmation d'archivage), pas une donnée métier à partager ; à documenter comme tel, pas un oubli |
 | `schemaVersion`, `etatSynchronisation` | 🟦 reste local — métadonnées techniques de ce navigateur précis (version de schéma Dexie connue, SHA GitHub connu pour la détection de conflit optimiste), sans objet côté serveur |
 
@@ -3105,3 +3105,105 @@ Enchaîner sans s'arrêter pour confirmation, conformément à la consigne
 permanente de l'utilisateur. Le problème des nœuds SAP (bug d'import
 original) reste explicitement reporté, comme depuis le début de ce
 chantier.
+
+---
+
+## 29. État détaillé — Phase 9f (`ClientConfig`, configuration IA par
+client), au 22/09/2026
+
+### 29.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. ✅ **Migration D1** `workers/auth-worker/migrations/0028_client_configs.sql` :
+   table `client_configs` (clé `client_id`, un enregistrement mutable par
+   client — upsert, même discipline que `connexion_drive`/
+   `etat_miroir_drive` en Phase 9d), avec 3 champs structurés stockés en
+   JSON (TEXT) : `ai_provider_conditions_acquittees`,
+   `ai_provider_reliability_qualification` (qualification de fiabilité IA
+   séparée par mode d'usage `chat_normatif`/`audit_simule`),
+   `consent_telemetry`. Le Worker n'interprète jamais le contenu de ces
+   champs JSON — toute la logique métier (remise à zéro de l'accusé/
+   qualification au changement de fournisseur, séparation stricte par
+   mode d'usage) reste côté store frontend, même discipline que
+   `GabaritExportClient.tagsTrouves` en Phase 9b.
+2. ✅ Repo Worker `clientConfigRepo.ts` (interface + `ClientConfigRepoMemoire`)
+   et `d1/d1ClientConfigRepo.ts` (implémentation D1, upsert via
+   `ON CONFLICT(client_id) DO UPDATE`).
+3. ✅ Routes `auth-worker` (`routeur.ts`) : `GET/PUT
+   /clients/:clientId/config`, handlers `gererObtenirClientConfig`/
+   `gererEnregistrerClientConfig` avec validation stricte (`aiProvider` +
+   `aiProviderReliabilityQualification` + `consentTelemetry` requis, sinon
+   `corps_invalide`).
+4. ✅ `workers/auth-worker/src/routeur.test.ts` — nouveau describe block
+   dédié, 5 tests (GET-null, PUT isolé par client, PUT upsert remplace,
+   PUT corps invalide, non-authentifié → 401). **Résultat : 336/336 tests
+   Worker** (331 existants + 5 nouveaux).
+5. ✅ `AuthApiClient.ts` : types `QualificationFiabiliteIAWire`/
+   `ClientConfigWire` (noms de champs racine en camelCase, convention
+   établie), méthodes `obtenirClientConfig`/`enregistrerClientConfig`.
+6. ✅ `useClientConfigStore.ts` entièrement réécrit — surface publique
+   strictement inchangée (`config`/`enChargement`/`charger`/
+   `definirFournisseur`/`acquitterConditions`/`enregistrerQualification`) ;
+   filet de sécurité de migration locale
+   `migrerClientConfigLocaleVersServeur()` (l'existant côté serveur gagne
+   toujours, retry-safe).
+7. ✅ `src/persistance/db.ts` — retrait de `clientConfigs!:
+   EntityTable<...>` ; migration `.version(59)` **avec**
+   capture-avant-suppression (`clientConfigsAMigrer`), contrairement à la
+   Phase 9e : cette table était réellement utilisée en production, donc
+   le filet de sécurité habituel s'applique ici.
+8. ✅ Fichiers consommateurs corrigés : `clientConfig.test.ts` réécrit
+   (clients créés via `ctx.clientsRepo.creer`, plus aucune lecture directe
+   de `db.clientConfigs`), `panneauChat.test.ts` et
+   `MissionWorkspace.test.ts` (retrait des accès directs à
+   `db.clientConfigs`, remplacés par `ctx.clientConfigRepo` ou le store).
+9. ✅ Validation complète : Worker `npx vitest run` (336/336), frontend
+   `npx vitest run` (1467/1467), `npx vue-tsc -b --noEmit` propre,
+   `npx eslint .` et `npx prettier --check .` propres (6 avertissements
+   prettier auto-corrigés via `--fix`).
+
+### 29.2 Phase 9f — terminée (22/09/2026)
+
+1. ✅ Commit sur `claude/contexte-reprise-session-tin77u` (branche
+   redémarrée depuis `main` après le merge de la PR #85 doc-only de la
+   Phase 9e).
+2. ✅ PR #86 ouverte (« Phase 9f migration D1 : ClientConfig
+   (configuration IA par client) »), CI verte
+   (`mergeable_state: "clean"`), mergée sur `main` (squash, commit
+   `576d08d`).
+3. ✅ Migration `0028_client_configs.sql` appliquée en production D1
+   (`d1_database_query`, table `client_configs`) — vérifiée via
+   `SELECT name, type FROM sqlite_master WHERE name = 'client_configs'`.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `D1ClientConfigRepo`, la route `/clients/:clientId/config` et les
+   handlers `gererObtenirClientConfig`/`gererEnregistrerClientConfig`
+   présents dans le bundle.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes).
+
+### 29.3 Suite du chantier — Phase 9 entièrement close, chantier D1 terminé
+
+La ligne `clientConfigs` était la **dernière** ligne ⬜ de l'inventaire
+complet du §3 : toutes les autres tables Dexie y sont désormais ✅, à
+l'exception des deux lignes 🟦 (`profilLocal`, `schemaVersion`/
+`etatSynchronisation`) qui restent **délibérément locales** — métadonnées
+propres à l'appareil/au navigateur, jamais des données métier à
+partager, documentées comme telles dès leur apparition dans ce fichier,
+pas un oubli.
+
+**Le chantier de migration D1 (Phases 1 à 9, toutes sous-phases
+comprises) est donc entièrement clos.** Reste, en dehors de ce chantier :
+
+- La GitHub sync généralisée pour les entités migrées en Phase 9
+  (reportée phase après phase, jamais traitée — à envisager comme un
+  chantier séparé si nécessaire).
+- Le problème des nœuds SAP (bug d'import original) — explicitement
+  reporté depuis le tout début de ce chantier, jamais traité ici.
+- Tâche #32 (connecteurs QMS tiers — écran de configuration + pull réel
+  vers AssetNode), tâches #41/#42 (lectures de référentiels en attente) —
+  sans rapport avec ce chantier D1, restées `pending` en parallèle.
+
+Sans nouvelle instruction de l'utilisateur, il n'y a plus de prochaine
+phase D1 à enchaîner automatiquement sous la consigne « on enchaine sur
+toutes les phases ». Ce chantier a rempli son objet : achever la
+migration D1 est un fait terminé, la doc en fait foi.
