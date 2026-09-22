@@ -8012,7 +8012,7 @@ describe('routerRequete — audit générique (/audit/authorize-action)', () => 
   })
 })
 
-describe('routerRequete — paramètres d’installation (dépôt GitHub, Relais IA, Drive normes)', () => {
+describe('routerRequete — paramètres d’installation (dépôt GitHub, Relais IA, Drive normes, Relais OCR)', () => {
   async function creerUtilisateurEtLogin(
     ctx: Contexte,
     adminJeton: string,
@@ -8117,6 +8117,25 @@ describe('routerRequete — paramètres d’installation (dépôt GitHub, Relais
       jeton: admin.jeton,
     })
     expect(lecture.corps.parametre).toBeNull()
+  })
+
+  test('relais-ocr (Phase 9e du chantier de migration D1) : enregistre et relit, même patron que relais-ia', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+
+    const enregistrement = await requete(ctx, 'PUT', '/parametres-installation/relais-ocr', {
+      jeton: admin.jeton,
+      body: { valeur: { relayUrl: 'https://ocr-relay.workers.dev', jeton: 'jeton-ocr' } },
+    })
+    expect(enregistrement.status).toBe(200)
+
+    const lecture = await requete(ctx, 'GET', '/parametres-installation/relais-ocr', {
+      jeton: admin.jeton,
+    })
+    expect(lecture.corps.parametre?.valeur).toEqual({
+      relayUrl: 'https://ocr-relay.workers.dev',
+      jeton: 'jeton-ocr',
+    })
   })
 
   test('sans authentification -> 401', async () => {
