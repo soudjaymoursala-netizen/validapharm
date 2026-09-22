@@ -5,9 +5,11 @@ import { D1AiChatSessionLogRepo } from './repos/d1/d1AiChatSessionLogRepo'
 import { D1AuditRepo } from './repos/d1/d1AuditRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
 import { D1ContentPlanRepo } from './repos/d1/d1ContentPlanRepo'
+import { D1ConnexionDriveRepo } from './repos/d1/d1ConnexionDriveRepo'
 import { D1ContextSnapshotRepo } from './repos/d1/d1ContextSnapshotRepo'
 import { D1CsvAssessmentRepo } from './repos/d1/d1CsvAssessmentRepo'
 import { D1DocumentsNormatifsRepo } from './repos/d1/d1DocumentsNormatifsRepo'
+import { D1EtatMiroirDriveRepo } from './repos/d1/d1EtatMiroirDriveRepo'
 import { D1EvidenceRepo } from './repos/d1/d1EvidenceRepo'
 import { D1ExecutionRepo } from './repos/d1/d1ExecutionRepo'
 import { D1GabaritExportClientRepo } from './repos/d1/d1GabaritExportClientRepo'
@@ -88,6 +90,8 @@ export default {
       procedureRepo: new D1ProcedureRepo(env.DB),
       gabaritExportClientRepo: new D1GabaritExportClientRepo(env.DB),
       aiChatSessionLogRepo: new D1AiChatSessionLogRepo(env.DB),
+      connexionDriveRepo: new D1ConnexionDriveRepo(env.DB),
+      etatMiroirDriveRepo: new D1EtatMiroirDriveRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

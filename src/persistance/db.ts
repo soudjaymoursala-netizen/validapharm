@@ -523,6 +523,19 @@ export const gabaritsExportClientAMigrer: GabaritExportClient[] = []
 export const aiChatSessionLogsAMigrer: AiChatSessionLog[] = []
 
 /**
+ * Configuration du miroir Drive par client (`EnregistrementConnexionDrive`)
+ * et horodatage du dernier miroir réussi
+ * (`EnregistrementEtatMiroirDrive`) : migrés vers le Worker/D1 (Phase 9d
+ * du chantier de migration D1) — même principe que
+ * `aiChatSessionLogsAMigrer` ci-dessus. Consommés et envoyés au serveur
+ * par `migrerConnexionDriveLocaleVersServeur`/
+ * `migrerEtatMiroirDriveLocalVersServeur` (`useConnexionDriveStore`/
+ * `useMiroirDriveStore`) au premier `charger()`.
+ */
+export const connexionDriveAMigrer: EnregistrementConnexionDrive[] = []
+export const etatMiroirDriveAMigrer: EnregistrementEtatMiroirDrive[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -535,8 +548,6 @@ export class ValidaPharmDatabase extends Dexie {
   clientConfigs!: EntityTable<ClientConfig, 'client_id'>
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
   etatSynchronisation!: EntityTable<EnregistrementEtatSynchronisation, 'id'>
-  connexionDrive!: EntityTable<EnregistrementConnexionDrive, 'client_id'>
-  etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   profilLocal!: EntityTable<EnregistrementProfilLocal, 'id'>
   connexionAuthentification!: EntityTable<EnregistrementConnexionAuthentification, 'id'>
@@ -1280,6 +1291,23 @@ export class ValidaPharmDatabase extends Dexie {
       .upgrade(async (tx) => {
         const aiChatSessionLogs = await tx.table<AiChatSessionLog>('aiChatSessionLogs').toArray()
         aiChatSessionLogsAMigrer.push(...aiChatSessionLogs)
+      })
+
+    // ConnexionDrive/EtatMiroirDrive (miroir Drive par client) : migrés
+    // vers le Worker/D1 (Phase 9d du chantier de migration D1) — même
+    // technique de capture avant suppression physique que la version 56
+    // ci-dessus.
+    this.version(57)
+      .stores({ connexionDrive: null, etatMiroirDrive: null })
+      .upgrade(async (tx) => {
+        const connexionDrive = await tx
+          .table<EnregistrementConnexionDrive>('connexionDrive')
+          .toArray()
+        connexionDriveAMigrer.push(...connexionDrive)
+        const etatMiroirDrive = await tx
+          .table<EnregistrementEtatMiroirDrive>('etatMiroirDrive')
+          .toArray()
+        etatMiroirDriveAMigrer.push(...etatMiroirDrive)
       })
   }
 }

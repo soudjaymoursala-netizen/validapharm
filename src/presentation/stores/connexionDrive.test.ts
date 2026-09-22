@@ -1,12 +1,63 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { db } from '../../persistance/db'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useConnexionDriveStore } from './useConnexionDriveStore'
+
+// `fetchMock` doit être stubbé **avant** `installerFauxWorkerAuth()` : sa
+// capture interne `fetchReel` doit déjà être `fetchMock` au moment de sa
+// construction pour que les appels réels (DriveConnector -> googleapis.com)
+// tombent dans ce mock contrôlable, tandis que les appels au faux Worker de
+// test restent interceptés par `routerRequete` (même leçon que
+// `panneauChat.test.ts`).
+let fetchMock: ReturnType<typeof vi.fn>
+let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.connexionDrive.clear()
+  await reinitialiserAuthDeTest()
+  fetchMock = vi.fn()
+  vi.stubGlobal('fetch', fetchMock)
+  const installation = installerFauxWorkerAuth()
+  demonter = installation.demonter
+  const { ctx } = installation
+  await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: 'client-1',
+    name: 'Client 1',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+  await ctx.clientsRepo.creer({
+    id: 'client-2',
+    name: 'Client 2',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useConnexionDriveStore — enregistrer/charger', () => {
@@ -45,23 +96,15 @@ describe('useConnexionDriveStore — enregistrer/charger', () => {
     await store.enregistrer('client-1', { dossierId: 'd1', jeton: 'j1' })
     await store.enregistrer('client-2', { dossierId: 'd2', jeton: 'j2' })
     await store.effacer('client-1')
-    expect(await db.connexionDrive.get('client-1')).toBeUndefined()
-    expect(await db.connexionDrive.get('client-2')).toBeDefined()
+
+    await store.charger('client-1')
+    expect(store.connexion).toBeNull()
+    await store.charger('client-2')
+    expect(store.connexion).not.toBeNull()
   })
 })
 
 describe('useConnexionDriveStore — testerConnexion', () => {
-  let fetchMock: ReturnType<typeof vi.fn>
-
-  beforeEach(() => {
-    fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
   test('sans configuration chargée : échec explicite sans appel réseau', async () => {
     const store = useConnexionDriveStore()
     const resultat = await store.testerConnexion()
