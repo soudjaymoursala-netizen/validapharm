@@ -20,6 +20,7 @@ import { ContextSnapshotRepoMemoire } from '../../workers/auth-worker/src/repos/
 import { CSVAssessmentRepoMemoire } from '../../workers/auth-worker/src/repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from '../../workers/auth-worker/src/repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from '../../workers/auth-worker/src/repos/evidenceRepo'
+import { AiChatSessionLogRepoMemoire } from '../../workers/auth-worker/src/repos/aiChatSessionLogRepo'
 import { ExecutionRepoMemoire } from '../../workers/auth-worker/src/repos/executionRepo'
 import { GabaritExportClientRepoMemoire } from '../../workers/auth-worker/src/repos/gabaritExportClientRepo'
 import { ImpactAssessmentRepoMemoire } from '../../workers/auth-worker/src/repos/impactAssessmentRepo'
@@ -87,6 +88,7 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     reasoningEngineRepo: new ReasoningEngineRepoMemoire(),
     procedureRepo: new ProcedureRepoMemoire(),
     gabaritExportClientRepo: new GabaritExportClientRepoMemoire(),
+    aiChatSessionLogRepo: new AiChatSessionLogRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,

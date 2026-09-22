@@ -99,6 +99,7 @@ import type {
   GabaritExportClientEnregistre,
   GabaritExportClientRepo,
 } from './repos/gabaritExportClientRepo'
+import type { AiChatSessionLogEnregistre, AiChatSessionLogRepo } from './repos/aiChatSessionLogRepo'
 import type {
   AssociationFonctionAssetNodeEnregistree,
   AssociationFonctionProcessEnregistree,
@@ -183,6 +184,7 @@ export interface Contexte {
   reasoningEngineRepo: ReasoningEngineRepo
   procedureRepo: ProcedureRepo
   gabaritExportClientRepo: GabaritExportClientRepo
+  aiChatSessionLogRepo: AiChatSessionLogRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -1434,6 +1436,27 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       ctx,
       entetes,
       matchGabaritExportClientId[1] as string,
+    )
+  }
+
+  // --- AiChatSessionLog (journal des sessions du panneau Chat, §4.4,
+  // Phase 9c du chantier de migration D1) ---
+  const matchAiChatSessionLogs = chemin.match(/^\/clients\/([^/]+)\/ai-chat-session-logs$/)
+  if (matchAiChatSessionLogs && request.method === 'GET') {
+    return gererListerAiChatSessionLogs(request, ctx, entetes, matchAiChatSessionLogs[1] as string)
+  }
+  if (matchAiChatSessionLogs && request.method === 'POST') {
+    return gererCreerAiChatSessionLog(request, ctx, entetes, matchAiChatSessionLogs[1] as string)
+  }
+  const matchAiChatSessionLogsMigrationLocale = chemin.match(
+    /^\/clients\/([^/]+)\/ai-chat-session-logs\/migration-locale$/,
+  )
+  if (matchAiChatSessionLogsMigrationLocale && request.method === 'POST') {
+    return gererMigrerAiChatSessionLogsLocal(
+      request,
+      ctx,
+      entetes,
+      matchAiChatSessionLogsMigrationLocale[1] as string,
     )
   }
 
@@ -7122,6 +7145,116 @@ async function gererSupprimerGabaritExportClient(
     null,
   )
   return reponseJson({ ok: true }, 200, entetes)
+}
+
+// --- Handlers : AiChatSessionLog (journal des sessions du panneau Chat,
+// §4.4, Phase 9c du chantier de migration D1) — entièrement immuable une
+// fois créé (INSERT-only), jamais de mise à jour ni de suppression.
+
+interface AiChatSessionLogJson {
+  id: string
+  clientId: string
+  startedAt: string
+  endedAt: string | null
+  mode: string
+  aiProvider: string
+  moteurVersion: string | null
+  documentJoint: boolean
+}
+
+function assemblerAiChatSessionLog(e: AiChatSessionLogEnregistre): AiChatSessionLogJson {
+  return {
+    id: e.id,
+    clientId: e.clientId,
+    startedAt: e.startedAt,
+    endedAt: e.endedAt,
+    mode: e.mode,
+    aiProvider: e.aiProvider,
+    moteurVersion: e.moteurVersion,
+    documentJoint: e.documentJoint,
+  }
+}
+
+async function gererListerAiChatSessionLogs(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const entrees = await ctx.aiChatSessionLogRepo.listerParClient(clientId)
+  return reponseJson({ aiChatSessionLogs: entrees.map(assemblerAiChatSessionLog) }, 200, entetes)
+}
+
+interface SaisieCreationAiChatSessionLog {
+  startedAt?: string
+  endedAt?: string | null
+  mode?: string
+  aiProvider?: string
+  moteurVersion?: string | null
+  documentJoint?: boolean
+}
+
+async function gererCreerAiChatSessionLog(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieCreationAiChatSessionLog>(request)
+  if (!corps?.startedAt || !corps.mode || !corps.aiProvider || corps.documentJoint === undefined) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const entree: AiChatSessionLogEnregistre = {
+    id: genererId(),
+    clientId,
+    startedAt: corps.startedAt,
+    endedAt: corps.endedAt ?? null,
+    mode: corps.mode,
+    aiProvider: corps.aiProvider,
+    moteurVersion: corps.moteurVersion ?? null,
+    documentJoint: corps.documentJoint,
+  }
+  await ctx.aiChatSessionLogRepo.creer(entree)
+  return reponseJson({ aiChatSessionLog: assemblerAiChatSessionLog(entree) }, 201, entetes)
+}
+
+interface SaisieMigrationAiChatSessionLogs {
+  aiChatSessionLogs?: AiChatSessionLogJson[]
+}
+
+/** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerProceduresLocal` (même patron d'idempotence : l'existant côté serveur gagne toujours, jamais un écrasement). */
+async function gererMigrerAiChatSessionLogsLocal(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieMigrationAiChatSessionLogs>(request)
+  if (!corps || !Array.isArray(corps.aiChatSessionLogs)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const e of corps.aiChatSessionLogs) {
+    if (e.clientId !== clientId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    await ctx.aiChatSessionLogRepo.creer({
+      id: e.id,
+      clientId: e.clientId,
+      startedAt: e.startedAt,
+      endedAt: e.endedAt,
+      mode: e.mode,
+      aiProvider: e.aiProvider,
+      moteurVersion: e.moteurVersion,
+      documentJoint: e.documentJoint,
+    })
+  }
+  return reponseJson({ aiChatSessionLogs: corps.aiChatSessionLogs }, 200, entetes)
 }
 
 // --- Handlers : Organization/Workspace (Phase 2 du chantier de migration D1) ---

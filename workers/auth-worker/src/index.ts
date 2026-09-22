@@ -1,6 +1,7 @@
 import type { D1Database } from './d1Types'
 import { ResendEnvoyeurEmail } from './notifications/resendEnvoyeurEmail'
 import { D1AcfcRepo } from './repos/d1/d1AcfcRepo'
+import { D1AiChatSessionLogRepo } from './repos/d1/d1AiChatSessionLogRepo'
 import { D1AuditRepo } from './repos/d1/d1AuditRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
 import { D1ContentPlanRepo } from './repos/d1/d1ContentPlanRepo'
@@ -86,6 +87,7 @@ export default {
       reasoningEngineRepo: new D1ReasoningEngineRepo(env.DB),
       procedureRepo: new D1ProcedureRepo(env.DB),
       gabaritExportClientRepo: new D1GabaritExportClientRepo(env.DB),
+      aiChatSessionLogRepo: new D1AiChatSessionLogRepo(env.DB),
       auditRepo: new D1AuditRepo(env.DB),
       secretJwt: env.JWT_SECRET,
       jetonBootstrap: env.BOOTSTRAP_TOKEN,

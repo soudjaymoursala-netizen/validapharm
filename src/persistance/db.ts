@@ -514,6 +514,15 @@ export const procedureStepsAMigrer: ProcedureStep[] = []
 export const gabaritsExportClientAMigrer: GabaritExportClient[] = []
 
 /**
+ * AiChatSessionLog (journal des sessions du panneau Chat, §4.4) : migré
+ * vers le Worker/D1 (Phase 9c du chantier de migration D1) — même
+ * principe que `gabaritsExportClientAMigrer` ci-dessus. Consommé et
+ * envoyé au serveur par `migrerAiChatSessionLogsLocalVersServeur`
+ * (`usePanneauChatStore`) au premier `demarrerSession()`.
+ */
+export const aiChatSessionLogsAMigrer: AiChatSessionLog[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -529,7 +538,6 @@ export class ValidaPharmDatabase extends Dexie {
   connexionDrive!: EntityTable<EnregistrementConnexionDrive, 'client_id'>
   etatMiroirDrive!: EntityTable<EnregistrementEtatMiroirDrive, 'client_id'>
   connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
-  aiChatSessionLogs!: EntityTable<AiChatSessionLog, 'id'>
   profilLocal!: EntityTable<EnregistrementProfilLocal, 'id'>
   connexionAuthentification!: EntityTable<EnregistrementConnexionAuthentification, 'id'>
   sessionAuthentification!: EntityTable<EnregistrementSessionAuthentification, 'id'>
@@ -1261,6 +1269,17 @@ export class ValidaPharmDatabase extends Dexie {
           .table<GabaritExportClient>('gabaritsExportClient')
           .toArray()
         gabaritsExportClientAMigrer.push(...gabaritsExportClient)
+      })
+
+    // AiChatSessionLog (journal des sessions du panneau Chat, §4.4) :
+    // migré vers le Worker/D1 (Phase 9c du chantier de migration D1) —
+    // même technique de capture avant suppression physique que la
+    // version 55 ci-dessus.
+    this.version(56)
+      .stores({ aiChatSessionLogs: null })
+      .upgrade(async (tx) => {
+        const aiChatSessionLogs = await tx.table<AiChatSessionLog>('aiChatSessionLogs').toArray()
+        aiChatSessionLogsAMigrer.push(...aiChatSessionLogs)
       })
   }
 }
