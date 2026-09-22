@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
@@ -25,6 +26,7 @@ function reponseMock(corps: unknown, options: { status?: number } = {}): Respons
 // (`RelayProviderAdapter`), jamais à l'authentification/la configuration
 // (interceptées par `installerFauxWorkerAuth`, qui délègue tout le reste à
 // `fetchMock`).
+let ctx: Contexte
 let fetchMock: ReturnType<typeof vi.fn>
 let demonter: () => void
 
@@ -32,12 +34,27 @@ beforeEach(async () => {
   setActivePinia(createPinia())
   await reinitialiserAuthDeTest()
   await db.clientConfigs.clear()
-  await db.aiChatSessionLogs.clear()
 
   fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
-  demonter = installerFauxWorkerAuth().demonter
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
   await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: 'client-1',
+    name: 'Client de test',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
 
   const resultat = await useConnexionRelaisIAStore().enregistrer({
     relayUrl: 'https://relais.workers.dev',
@@ -156,17 +173,17 @@ describe('usePanneauChatStore — fermerSession', () => {
     )
     await store.fermerSession('chat_normatif')
 
-    const entrees = await db.aiChatSessionLogs.where('client_id').equals('client-1').toArray()
+    const entrees = await ctx.aiChatSessionLogRepo.listerParClient('client-1')
     expect(entrees).toHaveLength(1)
     expect(entrees[0]).toMatchObject({
-      client_id: 'client-1',
+      clientId: 'client-1',
       mode: 'chat_normatif',
-      ai_provider: 'openai',
-      moteur_version: 'claude-v2',
-      document_joint: true,
+      aiProvider: 'openai',
+      moteurVersion: 'claude-v2',
+      documentJoint: true,
     })
-    expect(entrees[0]?.started_at).toBeTruthy()
-    expect(entrees[0]?.ended_at).toBeTruthy()
+    expect(entrees[0]?.startedAt).toBeTruthy()
+    expect(entrees[0]?.endedAt).toBeTruthy()
     expect(JSON.stringify(entrees[0])).not.toContain('Question sensible')
     expect(JSON.stringify(entrees[0])).not.toContain('confidentiel')
   })
@@ -197,15 +214,15 @@ describe('usePanneauChatStore — alerteDerive (séparée par mode)', () => {
       export_template_id: null,
       consent_telemetry: { granted: false, date: null, revocable_at_any_time: true },
     })
-    await db.aiChatSessionLogs.add({
+    await ctx.aiChatSessionLogRepo.creer({
       id: 'session-anterieure',
-      client_id: 'client-1',
-      started_at: '2026-02-01T00:00:00.000Z',
-      ended_at: '2026-02-01T00:05:00.000Z',
+      clientId: 'client-1',
+      startedAt: '2026-02-01T00:00:00.000Z',
+      endedAt: '2026-02-01T00:05:00.000Z',
       mode: 'chat_normatif',
-      ai_provider: 'claude',
-      moteur_version: 'claude-v2',
-      document_joint: false,
+      aiProvider: 'claude',
+      moteurVersion: 'claude-v2',
+      documentJoint: false,
     })
 
     const store = usePanneauChatStore()
@@ -231,15 +248,15 @@ describe('usePanneauChatStore — alerteDerive (séparée par mode)', () => {
       export_template_id: null,
       consent_telemetry: { granted: false, date: null, revocable_at_any_time: true },
     })
-    await db.aiChatSessionLogs.add({
+    await ctx.aiChatSessionLogRepo.creer({
       id: 'session-anterieure',
-      client_id: 'client-1',
-      started_at: '2026-02-01T00:00:00.000Z',
-      ended_at: '2026-02-01T00:05:00.000Z',
+      clientId: 'client-1',
+      startedAt: '2026-02-01T00:00:00.000Z',
+      endedAt: '2026-02-01T00:05:00.000Z',
       mode: 'audit_simule',
-      ai_provider: 'claude',
-      moteur_version: 'claude-v2',
-      document_joint: false,
+      aiProvider: 'claude',
+      moteurVersion: 'claude-v2',
+      documentJoint: false,
     })
 
     const store = usePanneauChatStore()

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import type { AiChatSessionLogWire } from '../../connecteurs/auth/AuthApiClient'
 import type {
   ContexteEnvoi,
   ModeUsageIA,
@@ -9,12 +10,38 @@ import type {
 import type { AiChatSessionLog, Section } from '../../logique-metier/domaine/types'
 import { envoyerAvecBascule } from '../../logique-metier/routeur-ia/envoyerAvecBascule'
 import { deriveVersionDetectee } from '../../logique-metier/routeur-ia/qualificationFiabilite'
-import { db } from '../../persistance/db'
+import { aiChatSessionLogsAMigrer } from '../../persistance/db'
 import { construireAdaptateursIA } from './construireAdaptateursIA'
 import { useAuthStore } from './useAuthStore'
 import { useClientConfigStore } from './useClientConfigStore'
 import { useConnexionRelaisIAStore } from './useConnexionRelaisIAStore'
 import { sectionWireVersDomaine } from './useSectionsStore'
+
+function aiChatSessionLogWireVersDomaine(w: AiChatSessionLogWire): AiChatSessionLog {
+  return {
+    id: w.id,
+    client_id: w.clientId,
+    started_at: w.startedAt,
+    ended_at: w.endedAt,
+    mode: w.mode as ModeUsageIA,
+    ai_provider: w.aiProvider,
+    moteur_version: w.moteurVersion,
+    document_joint: w.documentJoint,
+  }
+}
+
+function aiChatSessionLogDomaineVersWire(e: AiChatSessionLog): AiChatSessionLogWire {
+  return {
+    id: e.id,
+    clientId: e.client_id,
+    startedAt: e.started_at,
+    endedAt: e.ended_at,
+    mode: e.mode,
+    aiProvider: e.ai_provider,
+    moteurVersion: e.moteur_version,
+    documentJoint: e.document_joint,
+  }
+}
 
 export const NOM_FOURNISSEUR_LOCAL = 'Modèle local (Ollama)'
 
@@ -85,6 +112,33 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
     enLigne.value = navigator.onLine
   }
 
+  /**
+   * Envoie au serveur les `AiChatSessionLog` capturés depuis l'ancienne
+   * table IndexedDB locale (`aiChatSessionLogsAMigrer`) juste avant sa
+   * suppression — n'a d'effet réel qu'une seule fois (voir migration
+   * Dexie v56, `persistance/db.ts`). Même patron d'idempotence que
+   * `migrerProceduresLocalVersServeur` : un seul appel groupé, l'existant
+   * côté serveur gagne toujours.
+   */
+  async function migrerAiChatSessionLogsLocalVersServeur(idClient: string): Promise<void> {
+    const entreesDuClient = aiChatSessionLogsAMigrer.filter((e) => e.client_id === idClient)
+    if (entreesDuClient.length === 0) return
+
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return
+    const resultat = await api.migrerAiChatSessionLogsLocal(authStore.jeton, idClient, {
+      aiChatSessionLogs: entreesDuClient.map(aiChatSessionLogDomaineVersWire),
+    })
+    if (!resultat.ok) {
+      throw new Error(`Échec de la migration du journal de chat : ${resultat.erreur}`)
+    }
+    for (const entree of entreesDuClient) {
+      const index = aiChatSessionLogsAMigrer.indexOf(entree)
+      if (index !== -1) aiChatSessionLogsAMigrer.splice(index, 1)
+    }
+  }
+
   async function demarrerSession(idClient: string): Promise<void> {
     clientId.value = idClient
     messages.value = []
@@ -96,11 +150,30 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
     await configStore.charger(idClient)
     await relaisStore.charger()
 
-    const sessionsAnterieures = await db.aiChatSessionLogs
-      .where('client_id')
-      .equals(idClient)
-      .sortBy('started_at')
-    dernierMoteurVersion.value = sessionsAnterieures.at(-1)?.moteur_version ?? null
+    try {
+      await migrerAiChatSessionLogsLocalVersServeur(idClient)
+    } catch {
+      // Nouvel essai à la prochaine session — ne bloque jamais l'ouverture du panneau.
+    }
+
+    try {
+      const authStore = useAuthStore()
+      const api = await authStore.client()
+      if (!api || !authStore.jeton) {
+        dernierMoteurVersion.value = null
+        return
+      }
+      const resultat = await api.obtenirAiChatSessionLogs(authStore.jeton, idClient)
+      const sessionsAnterieures = resultat.ok
+        ? resultat.donnees.aiChatSessionLogs
+            .map(aiChatSessionLogWireVersDomaine)
+            .sort((a, b) => a.started_at.localeCompare(b.started_at))
+        : []
+      dernierMoteurVersion.value = sessionsAnterieures.at(-1)?.moteur_version ?? null
+    } catch {
+      // Panne réseau réelle : jamais un plantage à l'ouverture du panneau.
+      dernierMoteurVersion.value = null
+    }
   }
 
   function construireAdaptateurs(): { principal: ProviderAdapter; local: ProviderAdapter } {
@@ -209,17 +282,23 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
 
   async function fermerSession(mode: ModeUsageIA): Promise<void> {
     if (!clientId.value || !sessionDemarreeA.value) return
-    const entree: AiChatSessionLog = {
-      id: crypto.randomUUID(),
-      client_id: clientId.value,
-      started_at: sessionDemarreeA.value,
-      ended_at: new Date().toISOString(),
-      mode,
-      ai_provider: fournisseurActuel.value,
-      moteur_version: dernierMoteurVersion.value,
-      document_joint: documentJointSession.value,
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (api && authStore.jeton) {
+      try {
+        await api.creerAiChatSessionLog(authStore.jeton, clientId.value, {
+          startedAt: sessionDemarreeA.value,
+          endedAt: new Date().toISOString(),
+          mode,
+          aiProvider: fournisseurActuel.value,
+          moteurVersion: dernierMoteurVersion.value,
+          documentJoint: documentJointSession.value,
+        })
+      } catch {
+        // Panne réseau réelle : la fermeture du panneau ne doit jamais
+        // échouer pour un simple journal — perte assumée de cette entrée.
+      }
     }
-    await db.aiChatSessionLogs.add(entree)
     clientId.value = null
     sessionDemarreeA.value = null
   }

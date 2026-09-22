@@ -18,6 +18,7 @@ import { ContextSnapshotRepoMemoire } from './repos/contextSnapshotRepo'
 import { CSVAssessmentRepoMemoire } from './repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from './repos/evidenceRepo'
+import { AiChatSessionLogRepoMemoire } from './repos/aiChatSessionLogRepo'
 import { ExecutionRepoMemoire } from './repos/executionRepo'
 import { GabaritExportClientRepoMemoire } from './repos/gabaritExportClientRepo'
 import { ImpactAssessmentRepoMemoire } from './repos/impactAssessmentRepo'
@@ -78,6 +79,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     reasoningEngineRepo: new ReasoningEngineRepoMemoire(),
     procedureRepo: new ProcedureRepoMemoire(),
     gabaritExportClientRepo: new GabaritExportClientRepoMemoire(),
+    aiChatSessionLogRepo: new AiChatSessionLogRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -273,6 +275,8 @@ interface CorpsReponse {
   etape: ProcedureStepJson
   gabarits: GabaritExportClientJson[]
   gabarit: GabaritExportClientJson
+  aiChatSessionLogs: AiChatSessionLogJson[]
+  aiChatSessionLog: AiChatSessionLogJson
 }
 
 interface RequirementJson {
@@ -666,6 +670,17 @@ interface GabaritExportClientJson {
   nom: string
   tagsTrouves: string[]
   createdAt: string
+}
+
+interface AiChatSessionLogJson {
+  id: string
+  clientId: string
+  startedAt: string
+  endedAt: string | null
+  mode: string
+  aiProvider: string
+  moteurVersion: string | null
+  documentJoint: boolean
 }
 
 interface QualityEventJson {
@@ -6772,6 +6787,157 @@ describe("routerRequete — GabaritExportClient (gabarits d'export .docx personn
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/gabarits-export`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — AiChatSessionLog (journal des sessions du panneau Chat, §4.4, Phase 9c du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans rien configuré -> liste vide, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/ai-chat-session-logs`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.aiChatSessionLogs).toEqual([])
+  })
+
+  test('création -> entrée journalisée, jamais le contenu échangé (le corps ne le porte pas)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/ai-chat-session-logs`, {
+      jeton: admin.jeton,
+      body: {
+        startedAt: '2026-01-01T00:00:00.000Z',
+        endedAt: '2026-01-01T00:05:00.000Z',
+        mode: 'chat_normatif',
+        aiProvider: 'openai',
+        moteurVersion: 'gpt-x',
+        documentJoint: false,
+      },
+    })
+    expect(creation.status).toBe(201)
+    expect(creation.corps.aiChatSessionLog.clientId).toBe(clientId)
+    expect(creation.corps.aiChatSessionLog.mode).toBe('chat_normatif')
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/ai-chat-session-logs`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.aiChatSessionLogs).toHaveLength(1)
+  })
+
+  test('création avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/ai-chat-session-logs`, {
+      jeton: admin.jeton,
+      body: { startedAt: '2026-01-01T00:00:00.000Z' },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('liste scopée à un client, jamais celle d’un autre', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientA = await creerClientDeTest(ctx, admin.jeton)
+    const clientB = await creerClientDeTest(ctx, admin.jeton)
+    await requete(ctx, 'POST', `/clients/${clientA}/ai-chat-session-logs`, {
+      jeton: admin.jeton,
+      body: {
+        startedAt: '2026-01-01T00:00:00.000Z',
+        mode: 'chat_normatif',
+        aiProvider: 'openai',
+        documentJoint: false,
+      },
+    })
+    await requete(ctx, 'POST', `/clients/${clientB}/ai-chat-session-logs`, {
+      jeton: admin.jeton,
+      body: {
+        startedAt: '2026-01-01T00:00:00.000Z',
+        mode: 'chat_normatif',
+        aiProvider: 'openai',
+        documentJoint: false,
+      },
+    })
+
+    const listeA = await requete(ctx, 'GET', `/clients/${clientA}/ai-chat-session-logs`, {
+      jeton: admin.jeton,
+    })
+    expect(listeA.corps.aiChatSessionLogs).toHaveLength(1)
+    expect(listeA.corps.aiChatSessionLogs[0]?.clientId).toBe(clientA)
+  })
+
+  test('migration locale : idempotente, id existant ignoré', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const entreeLocale: AiChatSessionLogJson = {
+      id: 'session-locale-1',
+      clientId,
+      startedAt: '2024-01-01T00:00:00.000Z',
+      endedAt: '2024-01-01T00:05:00.000Z',
+      mode: 'chat_normatif',
+      aiProvider: 'openai',
+      moteurVersion: 'gpt-x',
+      documentJoint: false,
+    }
+
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/ai-chat-session-logs/migration-locale`,
+      { jeton: admin.jeton, body: { aiChatSessionLogs: [entreeLocale] } },
+    )
+    expect(migration.status).toBe(200)
+
+    const rejouee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/ai-chat-session-logs/migration-locale`,
+      { jeton: admin.jeton, body: { aiChatSessionLogs: [entreeLocale] } },
+    )
+    expect(rejouee.status).toBe(200)
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/ai-chat-session-logs`, {
+      jeton: admin.jeton,
+    })
+    expect(liste.corps.aiChatSessionLogs).toHaveLength(1)
+  })
+
+  test('migration locale avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const migration = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/ai-chat-session-logs/migration-locale`,
+      { jeton: admin.jeton, body: {} },
+    )
+    expect(migration.status).toBe(400)
+    expect(migration.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/ai-chat-session-logs`)
     expect(obtenir.status).toBe(401)
   })
 })

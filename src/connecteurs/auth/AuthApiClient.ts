@@ -1120,6 +1120,26 @@ export interface SaisieCreationGabaritExportClientWire {
   fichier: Blob
 }
 
+export interface AiChatSessionLogWire {
+  id: string
+  clientId: string
+  startedAt: string
+  endedAt: string | null
+  mode: string
+  aiProvider: string
+  moteurVersion: string | null
+  documentJoint: boolean
+}
+
+export interface SaisieCreationAiChatSessionLogWire {
+  startedAt: string
+  endedAt: string | null
+  mode: string
+  aiProvider: string
+  moteurVersion: string | null
+  documentJoint: boolean
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -2944,6 +2964,38 @@ export class AuthApiClient {
       jeton,
       formData,
     )
+  }
+
+  // --- AiChatSessionLog (journal des sessions du panneau Chat, §4.4, Phase 9c du chantier de migration D1) ---
+
+  obtenirAiChatSessionLogs(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ aiChatSessionLogs: AiChatSessionLogWire[] }>> {
+    return this.requete('GET', `/clients/${clientId}/ai-chat-session-logs`, { jeton })
+  }
+
+  creerAiChatSessionLog(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieCreationAiChatSessionLogWire,
+  ): Promise<ResultatApi<{ aiChatSessionLog: AiChatSessionLogWire }>> {
+    return this.requete('POST', `/clients/${clientId}/ai-chat-session-logs`, {
+      jeton,
+      body: saisie,
+    })
+  }
+
+  /** Réservé au filet de sécurité de migration locale — voir la documentation de la route Worker `gererMigrerAiChatSessionLogsLocal` : idempotente, l'existant côté serveur gagne toujours. */
+  migrerAiChatSessionLogsLocal(
+    jeton: string,
+    clientId: string,
+    donnees: { aiChatSessionLogs: AiChatSessionLogWire[] },
+  ): Promise<ResultatApi<{ aiChatSessionLogs: AiChatSessionLogWire[] }>> {
+    return this.requete('POST', `/clients/${clientId}/ai-chat-session-logs/migration-locale`, {
+      jeton,
+      body: donnees,
+    })
   }
 
   // --- Organization/Workspace (Phase 2 du chantier de migration D1) ---
