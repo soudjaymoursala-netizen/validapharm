@@ -21,6 +21,7 @@ import { CSVAssessmentRepoMemoire } from '../../workers/auth-worker/src/repos/cs
 import { DocumentsNormatifsRepoMemoire } from '../../workers/auth-worker/src/repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from '../../workers/auth-worker/src/repos/evidenceRepo'
 import { AiChatSessionLogRepoMemoire } from '../../workers/auth-worker/src/repos/aiChatSessionLogRepo'
+import { ClientConfigRepoMemoire } from '../../workers/auth-worker/src/repos/clientConfigRepo'
 import { ConnexionDriveRepoMemoire } from '../../workers/auth-worker/src/repos/connexionDriveRepo'
 import { EtatMiroirDriveRepoMemoire } from '../../workers/auth-worker/src/repos/etatMiroirDriveRepo'
 import { ExecutionRepoMemoire } from '../../workers/auth-worker/src/repos/executionRepo'
@@ -93,6 +94,7 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     aiChatSessionLogRepo: new AiChatSessionLogRepoMemoire(),
     connexionDriveRepo: new ConnexionDriveRepoMemoire(),
     etatMiroirDriveRepo: new EtatMiroirDriveRepoMemoire(),
+    clientConfigRepo: new ClientConfigRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,

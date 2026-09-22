@@ -1156,6 +1156,26 @@ export interface EtatMiroirDriveWire {
   dernierMiroirReussi: string | null
 }
 
+export interface QualificationFiabiliteIAWire {
+  date: string
+  resultat: string
+  qualificationTestSetId: string
+  qualificationTestSetVersion: string
+  moteurVersionQualifiee: string | null
+}
+
+export interface ClientConfigWire {
+  clientId: string
+  aiProvider: string
+  aiProviderConditionsAcquittees: { fournisseur: string; date: string } | null
+  aiProviderReliabilityQualification: {
+    chat_normatif: QualificationFiabiliteIAWire | null
+    audit_simule: QualificationFiabiliteIAWire | null
+  }
+  exportTemplateId: string | null
+  consentTelemetry: { granted: boolean; date: string | null; revocableAtAnyTime: boolean }
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -3051,6 +3071,23 @@ export class AuthApiClient {
       jeton,
       body: { dernierMiroirReussi },
     })
+  }
+
+  // --- ClientConfig (configuration IA par client, Phase 9f du chantier de migration D1) ---
+
+  obtenirClientConfig(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ clientConfig: ClientConfigWire | null }>> {
+    return this.requete('GET', `/clients/${clientId}/config`, { jeton })
+  }
+
+  enregistrerClientConfig(
+    jeton: string,
+    clientId: string,
+    config: Omit<ClientConfigWire, 'clientId'>,
+  ): Promise<ResultatApi<{ clientConfig: ClientConfigWire }>> {
+    return this.requete('PUT', `/clients/${clientId}/config`, { jeton, body: config })
   }
 
   // --- Organization/Workspace (Phase 2 du chantier de migration D1) ---

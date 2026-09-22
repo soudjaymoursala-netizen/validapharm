@@ -19,6 +19,7 @@ import { CSVAssessmentRepoMemoire } from './repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from './repos/evidenceRepo'
 import { AiChatSessionLogRepoMemoire } from './repos/aiChatSessionLogRepo'
+import { ClientConfigRepoMemoire } from './repos/clientConfigRepo'
 import { ConnexionDriveRepoMemoire } from './repos/connexionDriveRepo'
 import { EtatMiroirDriveRepoMemoire } from './repos/etatMiroirDriveRepo'
 import { ExecutionRepoMemoire } from './repos/executionRepo'
@@ -84,6 +85,7 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     aiChatSessionLogRepo: new AiChatSessionLogRepoMemoire(),
     connexionDriveRepo: new ConnexionDriveRepoMemoire(),
     etatMiroirDriveRepo: new EtatMiroirDriveRepoMemoire(),
+    clientConfigRepo: new ClientConfigRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -283,6 +285,7 @@ interface CorpsReponse {
   aiChatSessionLog: AiChatSessionLogJson
   connexionDrive: ConnexionDriveJson | null
   etatMiroirDrive: EtatMiroirDriveJson | null
+  clientConfig: ClientConfigJson | null
 }
 
 interface RequirementJson {
@@ -698,6 +701,26 @@ interface ConnexionDriveJson {
 interface EtatMiroirDriveJson {
   clientId: string
   dernierMiroirReussi: string | null
+}
+
+interface QualificationFiabiliteIAJson {
+  date: string
+  resultat: string
+  qualificationTestSetId: string
+  qualificationTestSetVersion: string
+  moteurVersionQualifiee: string | null
+}
+
+interface ClientConfigJson {
+  clientId: string
+  aiProvider: string
+  aiProviderConditionsAcquittees: { fournisseur: string; date: string } | null
+  aiProviderReliabilityQualification: {
+    chat_normatif: QualificationFiabiliteIAJson | null
+    audit_simule: QualificationFiabiliteIAJson | null
+  }
+  exportTemplateId: string | null
+  consentTelemetry: { granted: boolean; date: string | null; revocableAtAnyTime: boolean }
 }
 
 interface QualityEventJson {
@@ -7123,6 +7146,130 @@ describe('routerRequete — ConnexionDrive / EtatMiroirDrive (miroir Drive par c
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/connexion-drive`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — ClientConfig (configuration IA par client, Phase 9f du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  function configTestValide(): {
+    aiProvider: string
+    aiProviderConditionsAcquittees: null
+    aiProviderReliabilityQualification: {
+      chat_normatif: null
+      audit_simule: null
+    }
+    exportTemplateId: null
+    consentTelemetry: { granted: boolean; date: null; revocableAtAnyTime: boolean }
+  } {
+    return {
+      aiProvider: 'openai',
+      aiProviderConditionsAcquittees: null,
+      aiProviderReliabilityQualification: { chat_normatif: null, audit_simule: null },
+      exportTemplateId: null,
+      consentTelemetry: { granted: false, date: null, revocableAtAnyTime: true },
+    }
+  }
+
+  test('GET sans rien configuré -> clientConfig null, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/config`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.clientConfig).toBeNull()
+  })
+
+  test('PUT enregistre la configuration, isolée par client', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientA = await creerClientDeTest(ctx, admin.jeton)
+    const clientB = await creerClientDeTest(ctx, admin.jeton)
+
+    const enregistrement = await requete(ctx, 'PUT', `/clients/${clientA}/config`, {
+      jeton: admin.jeton,
+      body: configTestValide(),
+    })
+    expect(enregistrement.status).toBe(200)
+    expect(enregistrement.corps.clientConfig?.aiProvider).toBe('openai')
+
+    const obtenirA = await requete(ctx, 'GET', `/clients/${clientA}/config`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenirA.corps.clientConfig?.aiProvider).toBe('openai')
+
+    const obtenirB = await requete(ctx, 'GET', `/clients/${clientB}/config`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenirB.corps.clientConfig).toBeNull()
+  })
+
+  test('PUT rejoué remplace intégralement la configuration existante (upsert, jamais un doublon)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    await requete(ctx, 'PUT', `/clients/${clientId}/config`, {
+      jeton: admin.jeton,
+      body: configTestValide(),
+    })
+    const misAJour = {
+      ...configTestValide(),
+      aiProvider: 'claude',
+      aiProviderConditionsAcquittees: { fournisseur: 'claude', date: '2026-01-01T00:00:00.000Z' },
+      aiProviderReliabilityQualification: {
+        chat_normatif: {
+          date: '2026-01-01',
+          resultat: 'favorable',
+          qualificationTestSetId: 'set-1',
+          qualificationTestSetVersion: '1.0.0',
+          moteurVersionQualifiee: 'claude-v1',
+        },
+        audit_simule: null,
+      },
+    }
+    await requete(ctx, 'PUT', `/clients/${clientId}/config`, {
+      jeton: admin.jeton,
+      body: misAJour,
+    })
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/config`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.corps.clientConfig?.aiProvider).toBe('claude')
+    expect(obtenir.corps.clientConfig?.aiProviderConditionsAcquittees?.fournisseur).toBe('claude')
+    expect(
+      obtenir.corps.clientConfig?.aiProviderReliabilityQualification.chat_normatif
+        ?.qualificationTestSetId,
+    ).toBe('set-1')
+  })
+
+  test('PUT avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const enregistrement = await requete(ctx, 'PUT', `/clients/${clientId}/config`, {
+      jeton: admin.jeton,
+      body: { aiProvider: 'openai' },
+    })
+    expect(enregistrement.status).toBe(400)
+    expect(enregistrement.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/config`)
     expect(obtenir.status).toBe(401)
   })
 })

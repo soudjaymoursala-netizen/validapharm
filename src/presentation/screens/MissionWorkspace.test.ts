@@ -4,7 +4,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -114,7 +113,6 @@ let demonter: () => void
 beforeEach(async () => {
   setActivePinia(createPinia())
   fournisseurEnvoyerMessage.mockReset()
-  await db.clientConfigs.clear()
   // QualityEvent migré vers le Worker/D1 (Phase 5b du chantier de
   // migration D1) — un client réel doit exister pour que
   // `qualityEventStore.charger` (appelé par `onMounted`) soit autorisé par

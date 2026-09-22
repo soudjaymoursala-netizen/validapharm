@@ -100,6 +100,7 @@ import type {
   GabaritExportClientRepo,
 } from './repos/gabaritExportClientRepo'
 import type { AiChatSessionLogEnregistre, AiChatSessionLogRepo } from './repos/aiChatSessionLogRepo'
+import type { ClientConfigEnregistre, ClientConfigRepo } from './repos/clientConfigRepo'
 import type { ConnexionDriveEnregistree, ConnexionDriveRepo } from './repos/connexionDriveRepo'
 import type { EtatMiroirDriveEnregistre, EtatMiroirDriveRepo } from './repos/etatMiroirDriveRepo'
 import type {
@@ -189,6 +190,7 @@ export interface Contexte {
   aiChatSessionLogRepo: AiChatSessionLogRepo
   connexionDriveRepo: ConnexionDriveRepo
   etatMiroirDriveRepo: EtatMiroirDriveRepo
+  clientConfigRepo: ClientConfigRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -1482,6 +1484,16 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   }
   if (matchEtatMiroirDrive && request.method === 'PUT') {
     return gererEnregistrerEtatMiroirDrive(request, ctx, entetes, matchEtatMiroirDrive[1] as string)
+  }
+
+  // --- ClientConfig (configuration IA par client, Phase 9f du chantier
+  // de migration D1) ---
+  const matchClientConfig = chemin.match(/^\/clients\/([^/]+)\/config$/)
+  if (matchClientConfig && request.method === 'GET') {
+    return gererObtenirClientConfig(request, ctx, entetes, matchClientConfig[1] as string)
+  }
+  if (matchClientConfig && request.method === 'PUT') {
+    return gererEnregistrerClientConfig(request, ctx, entetes, matchClientConfig[1] as string)
   }
 
   // --- Organization/Workspace (Phase 2 du chantier de migration D1) ---
@@ -7402,6 +7414,93 @@ async function gererEnregistrerEtatMiroirDrive(
   }
   await ctx.etatMiroirDriveRepo.enregistrer(etat)
   return reponseJson({ etatMiroirDrive: assemblerEtatMiroirDrive(etat) }, 200, entetes)
+}
+
+// --- Handlers : ClientConfig (configuration IA par client, Phase 9f du
+// chantier de migration D1) — un enregistrement mutable par client
+// (jamais un historique) : `enregistrer` est toujours un upsert complet,
+// même discipline que ConnexionDrive/EtatMiroirDrive (Phase 9d). La
+// logique métier (remise à zéro de l'accusé/qualification au changement
+// de fournisseur, séparation par mode d'usage) reste côté store
+// frontend — ce handler ne fait que persister l'état déjà assemblé.
+
+interface QualificationFiabiliteIAJson {
+  date: string
+  resultat: string
+  qualificationTestSetId: string
+  qualificationTestSetVersion: string
+  moteurVersionQualifiee: string | null
+}
+
+interface ClientConfigJson {
+  clientId: string
+  aiProvider: string
+  aiProviderConditionsAcquittees: { fournisseur: string; date: string } | null
+  aiProviderReliabilityQualification: {
+    chat_normatif: QualificationFiabiliteIAJson | null
+    audit_simule: QualificationFiabiliteIAJson | null
+  }
+  exportTemplateId: string | null
+  consentTelemetry: { granted: boolean; date: string | null; revocableAtAnyTime: boolean }
+}
+
+function assemblerClientConfig(c: ClientConfigEnregistre): ClientConfigJson {
+  return {
+    clientId: c.clientId,
+    aiProvider: c.aiProvider,
+    aiProviderConditionsAcquittees: c.aiProviderConditionsAcquittees,
+    aiProviderReliabilityQualification: c.aiProviderReliabilityQualification,
+    exportTemplateId: c.exportTemplateId,
+    consentTelemetry: c.consentTelemetry,
+  }
+}
+
+async function gererObtenirClientConfig(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const config = await ctx.clientConfigRepo.obtenirParClient(clientId)
+  return reponseJson({ clientConfig: config ? assemblerClientConfig(config) : null }, 200, entetes)
+}
+
+interface SaisieClientConfig {
+  aiProvider?: string
+  aiProviderConditionsAcquittees?: { fournisseur: string; date: string } | null
+  aiProviderReliabilityQualification?: {
+    chat_normatif: QualificationFiabiliteIAJson | null
+    audit_simule: QualificationFiabiliteIAJson | null
+  }
+  exportTemplateId?: string | null
+  consentTelemetry?: { granted: boolean; date: string | null; revocableAtAnyTime: boolean }
+}
+
+async function gererEnregistrerClientConfig(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieClientConfig>(request)
+  if (!corps?.aiProvider || !corps.aiProviderReliabilityQualification || !corps.consentTelemetry) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const config: ClientConfigEnregistre = {
+    clientId,
+    aiProvider: corps.aiProvider,
+    aiProviderConditionsAcquittees: corps.aiProviderConditionsAcquittees ?? null,
+    aiProviderReliabilityQualification: corps.aiProviderReliabilityQualification,
+    exportTemplateId: corps.exportTemplateId ?? null,
+    consentTelemetry: corps.consentTelemetry,
+  }
+  await ctx.clientConfigRepo.enregistrer(config)
+  return reponseJson({ clientConfig: assemblerClientConfig(config) }, 200, entetes)
 }
 
 // --- Handlers : Organization/Workspace (Phase 2 du chantier de migration D1) ---
