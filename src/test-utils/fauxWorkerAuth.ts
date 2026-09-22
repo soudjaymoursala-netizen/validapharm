@@ -21,6 +21,8 @@ import { CSVAssessmentRepoMemoire } from '../../workers/auth-worker/src/repos/cs
 import { DocumentsNormatifsRepoMemoire } from '../../workers/auth-worker/src/repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from '../../workers/auth-worker/src/repos/evidenceRepo'
 import { AiChatSessionLogRepoMemoire } from '../../workers/auth-worker/src/repos/aiChatSessionLogRepo'
+import { ConnexionDriveRepoMemoire } from '../../workers/auth-worker/src/repos/connexionDriveRepo'
+import { EtatMiroirDriveRepoMemoire } from '../../workers/auth-worker/src/repos/etatMiroirDriveRepo'
 import { ExecutionRepoMemoire } from '../../workers/auth-worker/src/repos/executionRepo'
 import { GabaritExportClientRepoMemoire } from '../../workers/auth-worker/src/repos/gabaritExportClientRepo'
 import { ImpactAssessmentRepoMemoire } from '../../workers/auth-worker/src/repos/impactAssessmentRepo'
@@ -89,6 +91,8 @@ export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void
     procedureRepo: new ProcedureRepoMemoire(),
     gabaritExportClientRepo: new GabaritExportClientRepoMemoire(),
     aiChatSessionLogRepo: new AiChatSessionLogRepoMemoire(),
+    connexionDriveRepo: new ConnexionDriveRepoMemoire(),
+    etatMiroirDriveRepo: new EtatMiroirDriveRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT_TEST,
     jetonBootstrap: JETON_BOOTSTRAP_TEST,

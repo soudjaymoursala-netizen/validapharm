@@ -1140,6 +1140,22 @@ export interface SaisieCreationAiChatSessionLogWire {
   documentJoint: boolean
 }
 
+export interface ConnexionDriveWire {
+  clientId: string
+  dossierId: string
+  jeton: string
+}
+
+export interface SaisieConnexionDriveWire {
+  dossierId: string
+  jeton: string
+}
+
+export interface EtatMiroirDriveWire {
+  clientId: string
+  dernierMiroirReussi: string | null
+}
+
 export interface OrganizationWire {
   id: string
   nom: string
@@ -2995,6 +3011,45 @@ export class AuthApiClient {
     return this.requete('POST', `/clients/${clientId}/ai-chat-session-logs/migration-locale`, {
       jeton,
       body: donnees,
+    })
+  }
+
+  // --- ConnexionDrive / EtatMiroirDrive (miroir Drive par client, Phase 9d du chantier de migration D1) ---
+
+  obtenirConnexionDrive(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ connexionDrive: ConnexionDriveWire | null }>> {
+    return this.requete('GET', `/clients/${clientId}/connexion-drive`, { jeton })
+  }
+
+  enregistrerConnexionDrive(
+    jeton: string,
+    clientId: string,
+    saisie: SaisieConnexionDriveWire,
+  ): Promise<ResultatApi<{ connexionDrive: ConnexionDriveWire }>> {
+    return this.requete('PUT', `/clients/${clientId}/connexion-drive`, { jeton, body: saisie })
+  }
+
+  effacerConnexionDrive(jeton: string, clientId: string): Promise<ResultatApi<{ ok: true }>> {
+    return this.requete('DELETE', `/clients/${clientId}/connexion-drive`, { jeton })
+  }
+
+  obtenirEtatMiroirDrive(
+    jeton: string,
+    clientId: string,
+  ): Promise<ResultatApi<{ etatMiroirDrive: EtatMiroirDriveWire | null }>> {
+    return this.requete('GET', `/clients/${clientId}/etat-miroir-drive`, { jeton })
+  }
+
+  enregistrerEtatMiroirDrive(
+    jeton: string,
+    clientId: string,
+    dernierMiroirReussi: string,
+  ): Promise<ResultatApi<{ etatMiroirDrive: EtatMiroirDriveWire }>> {
+    return this.requete('PUT', `/clients/${clientId}/etat-miroir-drive`, {
+      jeton,
+      body: { dernierMiroirReussi },
     })
   }
 

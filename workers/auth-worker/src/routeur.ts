@@ -100,6 +100,8 @@ import type {
   GabaritExportClientRepo,
 } from './repos/gabaritExportClientRepo'
 import type { AiChatSessionLogEnregistre, AiChatSessionLogRepo } from './repos/aiChatSessionLogRepo'
+import type { ConnexionDriveEnregistree, ConnexionDriveRepo } from './repos/connexionDriveRepo'
+import type { EtatMiroirDriveEnregistre, EtatMiroirDriveRepo } from './repos/etatMiroirDriveRepo'
 import type {
   AssociationFonctionAssetNodeEnregistree,
   AssociationFonctionProcessEnregistree,
@@ -185,6 +187,8 @@ export interface Contexte {
   procedureRepo: ProcedureRepo
   gabaritExportClientRepo: GabaritExportClientRepo
   aiChatSessionLogRepo: AiChatSessionLogRepo
+  connexionDriveRepo: ConnexionDriveRepo
+  etatMiroirDriveRepo: EtatMiroirDriveRepo
   auditRepo: AuditRepo
   secretJwt: string
   jetonBootstrap: string
@@ -1458,6 +1462,26 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
       entetes,
       matchAiChatSessionLogsMigrationLocale[1] as string,
     )
+  }
+
+  // --- ConnexionDrive / EtatMiroirDrive (miroir Drive par client, Phase
+  // 9d du chantier de migration D1) ---
+  const matchConnexionDrive = chemin.match(/^\/clients\/([^/]+)\/connexion-drive$/)
+  if (matchConnexionDrive && request.method === 'GET') {
+    return gererObtenirConnexionDrive(request, ctx, entetes, matchConnexionDrive[1] as string)
+  }
+  if (matchConnexionDrive && request.method === 'PUT') {
+    return gererEnregistrerConnexionDrive(request, ctx, entetes, matchConnexionDrive[1] as string)
+  }
+  if (matchConnexionDrive && request.method === 'DELETE') {
+    return gererEffacerConnexionDrive(request, ctx, entetes, matchConnexionDrive[1] as string)
+  }
+  const matchEtatMiroirDrive = chemin.match(/^\/clients\/([^/]+)\/etat-miroir-drive$/)
+  if (matchEtatMiroirDrive && request.method === 'GET') {
+    return gererObtenirEtatMiroirDrive(request, ctx, entetes, matchEtatMiroirDrive[1] as string)
+  }
+  if (matchEtatMiroirDrive && request.method === 'PUT') {
+    return gererEnregistrerEtatMiroirDrive(request, ctx, entetes, matchEtatMiroirDrive[1] as string)
   }
 
   // --- Organization/Workspace (Phase 2 du chantier de migration D1) ---
@@ -7255,6 +7279,129 @@ async function gererMigrerAiChatSessionLogsLocal(
     })
   }
   return reponseJson({ aiChatSessionLogs: corps.aiChatSessionLogs }, 200, entetes)
+}
+
+// --- Handlers : ConnexionDrive / EtatMiroirDrive (miroir Drive par
+// client, Phase 9d du chantier de migration D1) — un enregistrement
+// mutable par client (jamais un historique) : `enregistrer` est toujours
+// un upsert complet, même discipline que
+// `gererEnregistrerParametreInstallation` mais scopée par client plutôt
+// que par une clé globale à l'installation.
+
+interface ConnexionDriveJson {
+  clientId: string
+  dossierId: string
+  jeton: string
+}
+
+function assemblerConnexionDrive(c: ConnexionDriveEnregistree): ConnexionDriveJson {
+  return { clientId: c.clientId, dossierId: c.dossierId, jeton: c.jeton }
+}
+
+async function gererObtenirConnexionDrive(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const connexion = await ctx.connexionDriveRepo.obtenirParClient(clientId)
+  return reponseJson(
+    { connexionDrive: connexion ? assemblerConnexionDrive(connexion) : null },
+    200,
+    entetes,
+  )
+}
+
+interface SaisieConnexionDrive {
+  dossierId?: string
+  jeton?: string
+}
+
+async function gererEnregistrerConnexionDrive(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieConnexionDrive>(request)
+  if (!corps?.dossierId || !corps.jeton) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const connexion: ConnexionDriveEnregistree = {
+    clientId,
+    dossierId: corps.dossierId,
+    jeton: corps.jeton,
+  }
+  await ctx.connexionDriveRepo.enregistrer(connexion)
+  return reponseJson({ connexionDrive: assemblerConnexionDrive(connexion) }, 200, entetes)
+}
+
+async function gererEffacerConnexionDrive(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  await ctx.connexionDriveRepo.supprimer(clientId)
+  return reponseJson({ ok: true }, 200, entetes)
+}
+
+interface EtatMiroirDriveJson {
+  clientId: string
+  dernierMiroirReussi: string | null
+}
+
+function assemblerEtatMiroirDrive(e: EtatMiroirDriveEnregistre): EtatMiroirDriveJson {
+  return { clientId: e.clientId, dernierMiroirReussi: e.dernierMiroirReussi }
+}
+
+async function gererObtenirEtatMiroirDrive(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const etat = await ctx.etatMiroirDriveRepo.obtenirParClient(clientId)
+  return reponseJson(
+    { etatMiroirDrive: etat ? assemblerEtatMiroirDrive(etat) : null },
+    200,
+    entetes,
+  )
+}
+
+interface SaisieEtatMiroirDrive {
+  dernierMiroirReussi?: string
+}
+
+async function gererEnregistrerEtatMiroirDrive(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  void acteur
+  const corps = await lireCorpsJson<SaisieEtatMiroirDrive>(request)
+  if (typeof corps?.dernierMiroirReussi !== 'string') {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const etat: EtatMiroirDriveEnregistre = {
+    clientId,
+    dernierMiroirReussi: corps.dernierMiroirReussi,
+  }
+  await ctx.etatMiroirDriveRepo.enregistrer(etat)
+  return reponseJson({ etatMiroirDrive: assemblerEtatMiroirDrive(etat) }, 200, entetes)
 }
 
 // --- Handlers : Organization/Workspace (Phase 2 du chantier de migration D1) ---

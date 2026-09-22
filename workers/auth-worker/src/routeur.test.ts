@@ -19,6 +19,8 @@ import { CSVAssessmentRepoMemoire } from './repos/csvAssessmentRepo'
 import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from './repos/evidenceRepo'
 import { AiChatSessionLogRepoMemoire } from './repos/aiChatSessionLogRepo'
+import { ConnexionDriveRepoMemoire } from './repos/connexionDriveRepo'
+import { EtatMiroirDriveRepoMemoire } from './repos/etatMiroirDriveRepo'
 import { ExecutionRepoMemoire } from './repos/executionRepo'
 import { GabaritExportClientRepoMemoire } from './repos/gabaritExportClientRepo'
 import { ImpactAssessmentRepoMemoire } from './repos/impactAssessmentRepo'
@@ -80,6 +82,8 @@ function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte 
     procedureRepo: new ProcedureRepoMemoire(),
     gabaritExportClientRepo: new GabaritExportClientRepoMemoire(),
     aiChatSessionLogRepo: new AiChatSessionLogRepoMemoire(),
+    connexionDriveRepo: new ConnexionDriveRepoMemoire(),
+    etatMiroirDriveRepo: new EtatMiroirDriveRepoMemoire(),
     auditRepo: new AuditRepoMemoire(),
     secretJwt: SECRET_JWT,
     jetonBootstrap: JETON_BOOTSTRAP,
@@ -277,6 +281,8 @@ interface CorpsReponse {
   gabarit: GabaritExportClientJson
   aiChatSessionLogs: AiChatSessionLogJson[]
   aiChatSessionLog: AiChatSessionLogJson
+  connexionDrive: ConnexionDriveJson | null
+  etatMiroirDrive: EtatMiroirDriveJson | null
 }
 
 interface RequirementJson {
@@ -681,6 +687,17 @@ interface AiChatSessionLogJson {
   aiProvider: string
   moteurVersion: string | null
   documentJoint: boolean
+}
+
+interface ConnexionDriveJson {
+  clientId: string
+  dossierId: string
+  jeton: string
+}
+
+interface EtatMiroirDriveJson {
+  clientId: string
+  dernierMiroirReussi: string | null
 }
 
 interface QualityEventJson {
@@ -6938,6 +6955,174 @@ describe('routerRequete — AiChatSessionLog (journal des sessions du panneau Ch
     const clientId = await creerClientDeTest(ctx, admin.jeton)
 
     const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/ai-chat-session-logs`)
+    expect(obtenir.status).toBe(401)
+  })
+})
+
+describe('routerRequete — ConnexionDrive / EtatMiroirDrive (miroir Drive par client, Phase 9d du chantier de migration D1)', () => {
+  async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
+    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    return creation.corps.client.id
+  }
+
+  test('GET sans rien configuré -> connexionDrive null, jamais 404', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/connexion-drive`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.connexionDrive).toBeNull()
+  })
+
+  test('PUT enregistre la configuration, isolée par client', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientA = await creerClientDeTest(ctx, admin.jeton)
+    const clientB = await creerClientDeTest(ctx, admin.jeton)
+
+    const enregistrement = await requete(ctx, 'PUT', `/clients/${clientA}/connexion-drive`, {
+      jeton: admin.jeton,
+      body: { dossierId: 'dossier-a', jeton: 'jeton-a' },
+    })
+    expect(enregistrement.status).toBe(200)
+    expect(enregistrement.corps.connexionDrive).toEqual({
+      clientId: clientA,
+      dossierId: 'dossier-a',
+      jeton: 'jeton-a',
+    })
+
+    const obtenirA = await requete(ctx, 'GET', `/clients/${clientA}/connexion-drive`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenirA.corps.connexionDrive?.dossierId).toBe('dossier-a')
+
+    const obtenirB = await requete(ctx, 'GET', `/clients/${clientB}/connexion-drive`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenirB.corps.connexionDrive).toBeNull()
+  })
+
+  test('PUT rejoué remplace intégralement la configuration existante (upsert, jamais un doublon)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    await requete(ctx, 'PUT', `/clients/${clientId}/connexion-drive`, {
+      jeton: admin.jeton,
+      body: { dossierId: 'dossier-1', jeton: 'jeton-1' },
+    })
+    await requete(ctx, 'PUT', `/clients/${clientId}/connexion-drive`, {
+      jeton: admin.jeton,
+      body: { dossierId: 'dossier-2', jeton: 'jeton-2' },
+    })
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/connexion-drive`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.corps.connexionDrive).toEqual({
+      clientId,
+      dossierId: 'dossier-2',
+      jeton: 'jeton-2',
+    })
+  })
+
+  test('PUT avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const enregistrement = await requete(ctx, 'PUT', `/clients/${clientId}/connexion-drive`, {
+      jeton: admin.jeton,
+      body: { dossierId: 'dossier-1' },
+    })
+    expect(enregistrement.status).toBe(400)
+    expect(enregistrement.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('DELETE efface uniquement la configuration du client visé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientA = await creerClientDeTest(ctx, admin.jeton)
+    const clientB = await creerClientDeTest(ctx, admin.jeton)
+    await requete(ctx, 'PUT', `/clients/${clientA}/connexion-drive`, {
+      jeton: admin.jeton,
+      body: { dossierId: 'dossier-a', jeton: 'jeton-a' },
+    })
+    await requete(ctx, 'PUT', `/clients/${clientB}/connexion-drive`, {
+      jeton: admin.jeton,
+      body: { dossierId: 'dossier-b', jeton: 'jeton-b' },
+    })
+
+    const suppression = await requete(ctx, 'DELETE', `/clients/${clientA}/connexion-drive`, {
+      jeton: admin.jeton,
+    })
+    expect(suppression.status).toBe(200)
+
+    const obtenirA = await requete(ctx, 'GET', `/clients/${clientA}/connexion-drive`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenirA.corps.connexionDrive).toBeNull()
+    const obtenirB = await requete(ctx, 'GET', `/clients/${clientB}/connexion-drive`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenirB.corps.connexionDrive).not.toBeNull()
+  })
+
+  test('GET etat-miroir-drive sans miroir réussi -> etatMiroirDrive null', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/etat-miroir-drive`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.status).toBe(200)
+    expect(obtenir.corps.etatMiroirDrive).toBeNull()
+  })
+
+  test('PUT etat-miroir-drive enregistre l’horodatage, isolé par client', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const enregistrement = await requete(ctx, 'PUT', `/clients/${clientId}/etat-miroir-drive`, {
+      jeton: admin.jeton,
+      body: { dernierMiroirReussi: '2026-01-01T00:00:00.000Z' },
+    })
+    expect(enregistrement.status).toBe(200)
+    expect(enregistrement.corps.etatMiroirDrive).toEqual({
+      clientId,
+      dernierMiroirReussi: '2026-01-01T00:00:00.000Z',
+    })
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/etat-miroir-drive`, {
+      jeton: admin.jeton,
+    })
+    expect(obtenir.corps.etatMiroirDrive?.dernierMiroirReussi).toBe('2026-01-01T00:00:00.000Z')
+  })
+
+  test('PUT etat-miroir-drive avec corps invalide -> corps_invalide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const enregistrement = await requete(ctx, 'PUT', `/clients/${clientId}/etat-miroir-drive`, {
+      jeton: admin.jeton,
+      body: {},
+    })
+    expect(enregistrement.status).toBe(400)
+    expect(enregistrement.corps.erreur).toBe('corps_invalide')
+  })
+
+  test('non authentifié -> 401', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+    const obtenir = await requete(ctx, 'GET', `/clients/${clientId}/connexion-drive`)
     expect(obtenir.status).toBe(401)
   })
 })

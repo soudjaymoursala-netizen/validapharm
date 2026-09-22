@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -31,18 +31,33 @@ function encoderBase64Utf8(texte: string): string {
 // Le dépôt GitHub est désormais un paramètre d'installation stocké côté
 // Worker/D1 (`useConnexionGitHubStore`) — `fetchMock` ci-dessous ne sert
 // donc plus qu'aux appels réels à l'API GitHub/Drive.
+let ctx: Contexte
 let fetchMock: ReturnType<typeof vi.fn>
 let demonter: () => void
 
 beforeEach(async () => {
   setActivePinia(createPinia())
   await reinitialiserAuthDeTest()
-  await db.connexionDrive.clear()
-  await db.etatMiroirDrive.clear()
   fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
-  demonter = installerFauxWorkerAuth().demonter
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
   await connecterAdminDeTest()
+  await ctx.clientsRepo.creer({
+    id: 'client-1',
+    name: 'Client 1',
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
 })
 
 afterEach(() => {
@@ -84,7 +99,11 @@ describe('useMiroirDriveStore — miroirVersDrive', () => {
 
   test('lit l’arborescence GitHub complète et la mirroir vers Drive, enregistre l’horodatage', async () => {
     await configurerConnexionGitHub()
-    await db.connexionDrive.put({ client_id: 'client-1', dossierId: 'dossier-1', jeton: 'y' })
+    await ctx.connexionDriveRepo.enregistrer({
+      clientId: 'client-1',
+      dossierId: 'dossier-1',
+      jeton: 'y',
+    })
 
     const contenuProjet = JSON.stringify({ id: 'p1', name: 'Projet' })
     fetchMock
