@@ -111,7 +111,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `gabaritsExportClient` | D1 + R2 (fichier `.docx` binaire) | ✅ **Phase 9b terminée — voir §25** |
 | `aiChatSessionLogs` | D1 | ✅ **Phase 9c terminée — voir §26** |
 | `connexionDrive`, `etatMiroirDrive` (miroir Drive par client) | D1 | ✅ **Phase 9d terminée — voir §27** |
-| `connexionRelaisOCR` | D1 (même patron que Relais IA) | ⬜ Phase 9 |
+| `connexionRelaisOCR` | D1 (même patron que Relais IA) | ✅ **Phase 9e terminée — voir §28** |
 | `clientConfigs` | D1 | ⬜ Phase 9 |
 | `profilLocal` | 🟦 reste local — verrou de confirmation propre à **cet appareil** (mot de passe de confirmation d'archivage), pas une donnée métier à partager ; à documenter comme tel, pas un oubli |
 | `schemaVersion`, `etatSynchronisation` | 🟦 reste local — métadonnées techniques de ce navigateur précis (version de schéma Dexie connue, SHA GitHub connu pour la détection de conflit optimiste), sans objet côté serveur |
@@ -3010,12 +3010,96 @@ miroir Drive par client), au 22/09/2026
 5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
    depuis les phases précédentes).
 
-### 27.3 Suite du chantier
+Voir §28 pour la Phase 9e (`ConnexionRelaisOCR`), puis §28.3 pour la
+suite (Phase 9f).
+
+## 28. État détaillé — Phase 9e (`ConnexionRelaisOCR`, même patron que
+Relais IA), au 22/09/2026
+
+### 28.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. ✅ **Aucune nouvelle table D1** : contrairement à toutes les phases
+   précédentes, `connexionRelaisOCR` est un paramètre global à
+   l'installation (un seul relais serverless `workers/ocr-relay/` pour
+   toute l'organisation), exactement comme le dépôt GitHub/Relais IA —
+   déjà migrés vers la table `parametres_installation` (migration 0002,
+   Phase 2 historique du chantier, bien avant l'actuel chantier Phase
+   1-9). La migration consiste donc simplement à ajouter `'relais-ocr'`
+   à `CLES_PARAMETRES_INSTALLATION` dans
+   `workers/auth-worker/src/routeur.ts` — l'infrastructure
+   (`ParametresInstallationRepo`, routes `GET/PUT/DELETE
+   /parametres-installation/:cle`) était déjà en place et générique.
+2. ✅ **Découverte notable en investiguant cette phase** : la table
+   Dexie `connexionRelaisOCR` existait depuis la version 11 du schéma
+   (bien avant ce chantier), mais n'avait **jamais été câblée à un
+   store ni à un écran** — `OcrRelayAdapter`
+   (`src/connecteurs/ocr/OcrRelayAdapter.ts`) n'était instancié nulle
+   part en dehors de ses propres tests. Contrairement au dépôt
+   GitHub/Relais IA/Drive normes (migrés en version 32, avant ce
+   chantier), cette table avait été oubliée. Conséquence directe :
+   **aucune capture-avant-suppression nécessaire** en supprimant la
+   table (aucune donnée n'a jamais pu y être écrite, dans tout
+   l'historique du dépôt) — seule phase du chantier D1 où ce filet de
+   sécurité habituel est légitimement absent.
+3. ✅ `src/presentation/stores/useConnexionRelaisOCRStore.ts` créé —
+   mirroré exactement sur `useConnexionRelaisIAStore.ts`
+   (`connexion`/`enChargement`/`charger`/`enregistrer`/`effacer`, clé
+   `'relais-ocr'`). **Pas de `testerConnexion`** : contrairement au
+   Relais IA (qui expose un point d'entrée `GET` léger de test) et à
+   GitHub (lecture du SHA de branche), le relais OCR
+   (`workers/ocr-relay/src/ocrHandler.ts`) n'accepte que `POST` avec un
+   corps image réel — tester la connexion consommerait réellement le
+   quota du fournisseur Azure Vision sous-jacent pour une simple
+   vérification, sans bénéfice pour un écran qui n'existe pas encore.
+   Reste donc volontairement absent tant qu'aucun écran ne l'exige
+   (même discipline que "ne jamais construire une capacité non
+   consommée").
+4. ✅ `workers/auth-worker/src/routeur.test.ts` — describe block
+   `'paramètres d'installation (dépôt GitHub, Relais IA, Drive normes,
+   Relais OCR)'` renommé, 1 nouveau test dédié (`relais-ocr` :
+   enregistre et relit). **Résultat : 331/331 tests Worker** (330
+   existants + 1 nouveau).
+5. ✅ `src/persistance/db.ts` — retrait de `connexionRelaisOCR!:
+   EntityTable<...>` et de l'interface
+   `EnregistrementConnexionRelaisOCR` ; migration `.version(58)` :
+   `.stores({ connexionRelaisOCR: null })` **sans `.upgrade()`**, même
+   patron que la version 32 historique (GitHub/Relais IA/Drive normes,
+   elles aussi sans capture puisque leur migration avait précédé la
+   discipline de capture-avant-suppression introduite plus tard dans ce
+   chantier).
+6. ✅ `src/presentation/stores/connexionRelaisOCR.test.ts` créé —
+   mirroré sur `connexionRelaisIA.test.ts` (3 tests : enregistre/relit,
+   effacer, charger sans configuration — sans les tests
+   `testerConnexion`, absent du store).
+7. ✅ Validation complète : Worker `npx vitest run` (331/331), frontend
+   `npx vitest run` (1462/1462), `npx vue-tsc -b --noEmit` propre,
+   `npx eslint .` et `npx prettier --check .` propres (1 avertissement
+   prettier auto-corrigé via `--fix`).
+
+### 28.2 Phase 9e — terminée (22/09/2026)
+
+1. ✅ Commit sur `claude/contexte-reprise-session-tin77u` (branche
+   redémarrée depuis `main` après le merge de la PR #83 doc-only de la
+   Phase 9d).
+2. ✅ PR #84 ouverte (« Phase 9e migration D1 : ConnexionRelaisOCR
+   (même patron que Relais IA) »), CI verte, mergée sur `main` (squash,
+   commit `2e8f85f`).
+3. ✅ **Aucune migration production à appliquer** — pas de nouvelle
+   table D1, la clé `'relais-ocr'` vit dans la table
+   `parametres_installation` déjà provisionnée en production depuis la
+   Phase 2 historique.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `CLES_PARAMETRES_INSTALLATION` contient bien `'relais-ocr'` dans le
+   bundle.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes).
+
+### 28.3 Suite du chantier
 
 Reste à la Phase 9 (voir §3) :
 
-- `connexionRelaisOCR` (même patron que Relais IA) — Phase 9e
-- `clientConfigs` — Phase 9f
+- `clientConfigs` — Phase 9f (dernière phase du chantier)
 
 Enchaîner sans s'arrêter pour confirmation, conformément à la consigne
 permanente de l'utilisateur. Le problème des nœuds SAP (bug d'import
