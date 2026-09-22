@@ -109,7 +109,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `relationsTechniques` | D1 (avec Structure Système, Phase 1) | ✅ Phase 1 terminée, même état que la ligne ci-dessus |
 | `procedures`, `procedureSteps` | D1 | ✅ **Phase 9a terminée — voir §24** |
 | `gabaritsExportClient` | D1 + R2 (fichier `.docx` binaire) | ✅ **Phase 9b terminée — voir §25** |
-| `aiChatSessionLogs` | D1 | ⬜ Phase 9 |
+| `aiChatSessionLogs` | D1 | ✅ **Phase 9c terminée — voir §26** |
 | `connexionDrive`, `etatMiroirDrive` (miroir Drive par client) | D1 | ⬜ Phase 9 |
 | `connexionRelaisOCR` | D1 (même patron que Relais IA) | ⬜ Phase 9 |
 | `clientConfigs` | D1 | ⬜ Phase 9 |
@@ -2794,9 +2794,119 @@ suite (Phase 9c à 9f).
 
 ### 25.3 Suite du chantier
 
+Voir §26 pour la Phase 9c (`aiChatSessionLogs`), puis §26.3 pour la
+suite (Phase 9d à 9f).
+
+## 26. État détaillé — Phase 9c (`AiChatSessionLog`, journal des sessions
+du panneau Chat, §4.4), au 22/09/2026
+
+### 26.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. ✅ Migration `0026_ai_chat_session_logs.sql` — table
+   `ai_chat_session_logs` (id, client_id, started_at, ended_at,
+   mode, ai_provider, moteur_version, document_joint INTEGER) + index
+   `idx_ai_chat_session_logs_client`. **Entité immuable** : aucune méthode
+   de mise à jour côté repo/store, même discipline que
+   `Procedure`/`ProcedureStep` (Phase 9a) et `GabaritExportClient`
+   (Phase 9b) — une session de chat close est journalisée une fois pour
+   toutes, jamais modifiée. `document_joint` stocké en `INTEGER` 0/1
+   (patron booléen habituel : écriture `champ ? 1 : 0`, lecture
+   `Boolean(ligne.champ)`).
+2. ✅ `workers/auth-worker/src/repos/aiChatSessionLogRepo.ts` —
+   `AiChatSessionLogEnregistre`, interface `AiChatSessionLogRepo`
+   (`listerParClient`/`creer` seulement — pas de `parId`, pas de
+   `supprimer`, pas de mise à jour), implémentation mémoire
+   `AiChatSessionLogRepoMemoire`.
+3. ✅ `workers/auth-worker/src/repos/d1/d1AiChatSessionLogRepo.ts` —
+   implémentation D1.
+4. ✅ `workers/auth-worker/src/index.ts` — câblage
+   `aiChatSessionLogRepo: new D1AiChatSessionLogRepo(env.DB)`.
+5. ✅ `workers/auth-worker/src/routeur.ts` — `Contexte.aiChatSessionLogRepo`,
+   3 routes : `GET /clients/:clientId/ai-chat-session-logs` (liste,
+   scopée `exigerAccesClient`), `POST
+   /clients/:clientId/ai-chat-session-logs` (création), `POST
+   /clients/:clientId/ai-chat-session-logs/migration-locale`
+   (idempotente, même patron que les migrations locales précédentes).
+   **Champs de réponse renommés `aiChatSessionLogs`/`aiChatSessionLog`**
+   (au lieu de `entrees`/`entree` initialement) pour éviter une collision
+   de nom avec les champs déjà utilisés par `EntreeAuditJson[]` (journal
+   d'audit) dans la même interface `CorpsReponse` de test — collision
+   détectée uniquement par `vue-tsc -b --noEmit`
+   (`TS2300`/`TS2717`/`TS2339`), jamais par les tests seuls : **leçon à
+   retenir pour toute future phase ajoutant un champ à `CorpsReponse`**,
+   toujours vérifier l'absence de collision de nom avec les domaines déjà
+   présents dans cette interface partagée de test.
+6. ✅ `workers/auth-worker/src/routeur.test.ts` — describe block
+   `'routerRequete — AiChatSessionLog (journal des sessions du panneau
+   Chat, §4.4, Phase 9c du chantier de migration D1)'` avec 7 tests : GET
+   vide, création + relecture, corps invalide (`corps_invalide`),
+   isolation stricte par client, migration-locale idempotente,
+   migration-locale corps invalide, non-authentifié → 401. **Résultat :
+   321/321 tests Worker** (314 existants + 7 nouveaux).
+7. ✅ `src/test-utils/fauxWorkerAuth.ts` — `aiChatSessionLogRepo: new
+   AiChatSessionLogRepoMemoire()` ajouté au `Contexte` de test.
+8. ✅ `src/connecteurs/auth/AuthApiClient.ts` — `AiChatSessionLogWire`,
+   `SaisieCreationAiChatSessionLogWire`, 3 méthodes :
+   `obtenirAiChatSessionLogs`, `creerAiChatSessionLog`,
+   `migrerAiChatSessionLogsLocal`.
+9. ✅ `src/presentation/stores/usePanneauChatStore.ts` —
+   `aiChatSessionLogWireVersDomaine`/`aiChatSessionLogDomaineVersWire` +
+   `migrerAiChatSessionLogsLocalVersServeur(idClient)` (même patron
+   d'idempotence qu'ailleurs — appelée en tout début de
+   `demarrerSession()`, erreurs avalées, jamais bloquant pour l'ouverture
+   du panneau). `demarrerSession()` lit désormais l'historique via
+   `api.obtenirAiChatSessionLogs` (dans un `try/catch` qui replie sur
+   `dernierMoteurVersion = null` en cas de panne réseau réelle — jamais un
+   plantage à l'ouverture). `fermerSession()` appelle
+   `api.creerAiChatSessionLog` dans un `try/catch` qui avale
+   silencieusement l'échec réseau : **la fermeture du panneau ne doit
+   jamais échouer pour un simple journal** — perte assumée de cette
+   entrée le cas échéant.
+10. ✅ `src/persistance/db.ts` — retrait de
+    `aiChatSessionLogs!: EntityTable<...>`, ajout de
+    `aiChatSessionLogsAMigrer: AiChatSessionLog[]` + migration
+    `.version(56)` capturant les enregistrements existants avant
+    suppression physique de la table.
+11. ✅ `src/presentation/stores/panneauChat.test.ts` — capture de `ctx`
+    depuis `installerFauxWorkerAuth()`, client de test créé via
+    `ctx.clientsRepo.creer(...)` (obligatoire, `exigerAccesClient` exige
+    un enregistrement `clientsRepo` réel), 3 usages directs
+    `db.aiChatSessionLogs.*` convertis en `ctx.aiChatSessionLogRepo.*`
+    (champs camelCase). **Ordre critique préservé** : `fetchMock`
+    stubbé globalement **avant** `installerFauxWorkerAuth()` — sinon la
+    capture interne `fetchReel` de `installerFauxWorkerAuth` ne pointe
+    plus vers `fetchMock` et toute la chaîne de mock du Relais IA casse
+    (déjà documenté au fil des phases précédentes, reconfirmé ici après
+    une erreur auto-corrigée avant exécution).
+12. ✅ Validation complète : Worker `npx vitest run` (321/321), frontend
+    `npx vitest run` (1449/1449), `npx vue-tsc -b --noEmit` propre,
+    `npx eslint .` et `npx prettier --check .` propres (3 avertissements
+    prettier auto-corrigés via `--fix`).
+
+### 26.2 Phase 9c — terminée (22/09/2026)
+
+1. ✅ Commit sur `claude/contexte-reprise-session-tin77u` (branche
+   redémarrée depuis `main` après le merge de la PR #79 doc-only de la
+   Phase 9b).
+2. ✅ PR #80 ouverte (« Phase 9c migration D1 : AiChatSessionLog (journal
+   des sessions du panneau Chat) »), CI verte, mergée sur `main` (squash,
+   commit `57cfde4`).
+3. ✅ Migration `0026_ai_chat_session_logs.sql` appliquée en production
+   D1 (`validapharm-auth`) en 2 requêtes séparées (`CREATE TABLE` +
+   `CREATE INDEX`), toutes deux réussies du premier coup. Vérification
+   `sqlite_master` confirmant la table et son index.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `D1AiChatSessionLogRepo`, les 3 routes `/ai-chat-session-logs`, et les
+   handlers `gererListerAiChatSessionLogs`/`gererCreerAiChatSessionLog`/
+   `gererMigrerAiChatSessionLogsLocal` présents dans le bundle.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes).
+
+### 26.3 Suite du chantier
+
 Reste à la Phase 9 (voir §3) :
 
-- `aiChatSessionLogs` — Phase 9c
 - `connexionDrive`/`etatMiroirDrive` (miroir Drive par client) — Phase 9d
 - `connexionRelaisOCR` (même patron que Relais IA) — Phase 9e
 - `clientConfigs` — Phase 9f
