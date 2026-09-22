@@ -150,7 +150,7 @@ import type { ClientEnregistre, EntreeAudit, Role, UtilisateurEnregistre } from 
 import { versUtilisateurPublic } from './types'
 
 /** Seules clés de paramètre d'installation reconnues — jamais une clé arbitraire fournie par l'appelant. */
-const CLES_PARAMETRES_INSTALLATION = ['github', 'relais-ia', 'drive-normes'] as const
+const CLES_PARAMETRES_INSTALLATION = ['github', 'relais-ia', 'drive-normes', 'relais-ocr'] as const
 type CleParametreInstallation = (typeof CLES_PARAMETRES_INSTALLATION)[number]
 
 function estCleParametreInstallationValide(cle: string): cle is CleParametreInstallation {

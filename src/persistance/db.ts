@@ -126,17 +126,6 @@ export interface EnregistrementEtatMiroirDrive {
   dernierMiroirReussi: string | null
 }
 
-/**
- * Configuration de connexion au relais OCR — même principe que le relais
- * IA : enregistrement unique, pas par client, un seul Worker serverless
- * pour toute l'installation.
- */
-export interface EnregistrementConnexionRelaisOCR {
-  id: 'unique'
-  relayUrl: string
-  jeton: string
-}
-
 // Le dépôt GitHub dédié (`EnregistrementConnexionGitHub`), le relais IA
 // (`EnregistrementConnexionRelaisIA`) et la connexion Drive en lecture pour
 // la bibliothèque de normes (`EnregistrementConnexionDriveLectureNormes`)
@@ -147,6 +136,15 @@ export interface EnregistrementConnexionRelaisOCR {
 // (`parametres_installation`, voir `useConnexionGitHubStore`/
 // `useConnexionRelaisIAStore`/`useNormativeDocumentsStore`), tables retirées
 // ci-dessous (version 32).
+//
+// `EnregistrementConnexionRelaisOCR` (relais OCR, `workers/ocr-relay/`)
+// vivait ici aussi, avec le même raisonnement — mais n'avait jamais été
+// câblée à un store ni un écran (contrairement aux trois ci-dessus,
+// déclarée puis oubliée). Migrée à son tour vers `parametres_installation`
+// (clé `relais-ocr`, voir `useConnexionRelaisOCRStore`, Phase 9e du
+// chantier de migration D1) : table retirée ci-dessous (version 58),
+// sans capture-avant-suppression puisqu'aucune donnée n'a jamais pu y être
+// écrite (aucun appelant dans tout l'historique du dépôt).
 
 /**
  * Configuration de connexion au Worker d'authentification — même principe
@@ -548,7 +546,6 @@ export class ValidaPharmDatabase extends Dexie {
   clientConfigs!: EntityTable<ClientConfig, 'client_id'>
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
   etatSynchronisation!: EntityTable<EnregistrementEtatSynchronisation, 'id'>
-  connexionRelaisOCR!: EntityTable<EnregistrementConnexionRelaisOCR, 'id'>
   profilLocal!: EntityTable<EnregistrementProfilLocal, 'id'>
   connexionAuthentification!: EntityTable<EnregistrementConnexionAuthentification, 'id'>
   sessionAuthentification!: EntityTable<EnregistrementSessionAuthentification, 'id'>
@@ -1309,6 +1306,14 @@ export class ValidaPharmDatabase extends Dexie {
           .toArray()
         etatMiroirDriveAMigrer.push(...etatMiroirDrive)
       })
+
+    // ConnexionRelaisOCR : migrée vers le Worker/D1
+    // (`parametres_installation`, clé `relais-ocr`, Phase 9e du chantier de
+    // migration D1) — même patron que la version 32 (GitHub/Relais IA/Drive
+    // normes) : pas de capture-avant-suppression, cette table n'ayant
+    // jamais été câblée à un store ni un écran (aucune donnée n'a jamais pu
+    // y être écrite).
+    this.version(58).stores({ connexionRelaisOCR: null })
   }
 }
 
