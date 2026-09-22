@@ -2,7 +2,6 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
-import { db } from '../../persistance/db'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -33,7 +32,6 @@ let demonter: () => void
 beforeEach(async () => {
   setActivePinia(createPinia())
   await reinitialiserAuthDeTest()
-  await db.clientConfigs.clear()
 
   fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
@@ -197,22 +195,22 @@ describe('usePanneauChatStore — alerteDerive (séparée par mode)', () => {
   })
 
   test('version antérieure journalisée diffère de la qualification du mode chat_normatif -> alerte', async () => {
-    await db.clientConfigs.put({
-      client_id: 'client-1',
-      ai_provider: 'claude',
-      ai_provider_conditions_acquittees: null,
-      ai_provider_reliability_qualification: {
+    await ctx.clientConfigRepo.enregistrer({
+      clientId: 'client-1',
+      aiProvider: 'claude',
+      aiProviderConditionsAcquittees: null,
+      aiProviderReliabilityQualification: {
         chat_normatif: {
           date: '2026-01-01',
           resultat: 'favorable',
-          qualification_test_set_id: 'set-1',
-          qualification_test_set_version: '1.0.0',
-          moteur_version_qualifiee: 'claude-v1',
+          qualificationTestSetId: 'set-1',
+          qualificationTestSetVersion: '1.0.0',
+          moteurVersionQualifiee: 'claude-v1',
         },
         audit_simule: null,
       },
-      export_template_id: null,
-      consent_telemetry: { granted: false, date: null, revocable_at_any_time: true },
+      exportTemplateId: null,
+      consentTelemetry: { granted: false, date: null, revocableAtAnyTime: true },
     })
     await ctx.aiChatSessionLogRepo.creer({
       id: 'session-anterieure',
@@ -231,22 +229,22 @@ describe('usePanneauChatStore — alerteDerive (séparée par mode)', () => {
   })
 
   test('qualification chat_normatif renseignée mais mode audit_simule non qualifié -> aucune alerte de dérive côté audit_simule (rien à comparer)', async () => {
-    await db.clientConfigs.put({
-      client_id: 'client-1',
-      ai_provider: 'claude',
-      ai_provider_conditions_acquittees: null,
-      ai_provider_reliability_qualification: {
+    await ctx.clientConfigRepo.enregistrer({
+      clientId: 'client-1',
+      aiProvider: 'claude',
+      aiProviderConditionsAcquittees: null,
+      aiProviderReliabilityQualification: {
         chat_normatif: {
           date: '2026-01-01',
           resultat: 'favorable',
-          qualification_test_set_id: 'set-1',
-          qualification_test_set_version: '1.0.0',
-          moteur_version_qualifiee: 'claude-v1',
+          qualificationTestSetId: 'set-1',
+          qualificationTestSetVersion: '1.0.0',
+          moteurVersionQualifiee: 'claude-v1',
         },
         audit_simule: null,
       },
-      export_template_id: null,
-      consent_telemetry: { granted: false, date: null, revocable_at_any_time: true },
+      exportTemplateId: null,
+      consentTelemetry: { granted: false, date: null, revocableAtAnyTime: true },
     })
     await ctx.aiChatSessionLogRepo.creer({
       id: 'session-anterieure',

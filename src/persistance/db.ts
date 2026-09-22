@@ -534,6 +534,16 @@ export const connexionDriveAMigrer: EnregistrementConnexionDrive[] = []
 export const etatMiroirDriveAMigrer: EnregistrementEtatMiroirDrive[] = []
 
 /**
+ * Configuration IA par client (`ClientConfig`) : migrée vers le Worker/D1
+ * (Phase 9f du chantier de migration D1, dernière phase du chantier) —
+ * même principe que `connexionDriveAMigrer`/`etatMiroirDriveAMigrer`
+ * ci-dessus. Consommée et envoyée au serveur par
+ * `migrerClientConfigLocaleVersServeur` (`useClientConfigStore`) au
+ * premier `obtenirOuCreer()`.
+ */
+export const clientConfigsAMigrer: ClientConfig[] = []
+
+/**
  * Cache local IndexedDB — miroir de performance/hors-ligne,
  * jamais la source de vérité (le dépôt GitHub dédié l'est). Une table par
  * type d'enregistrement, alignée sur l'arborescence `/data` documentée dans
@@ -543,7 +553,6 @@ export const etatMiroirDriveAMigrer: EnregistrementEtatMiroirDrive[] = []
  */
 export class ValidaPharmDatabase extends Dexie {
   clients!: EntityTable<Client, 'id'>
-  clientConfigs!: EntityTable<ClientConfig, 'client_id'>
   schemaVersion!: EntityTable<EnregistrementVersionSchema, 'id'>
   etatSynchronisation!: EntityTable<EnregistrementEtatSynchronisation, 'id'>
   profilLocal!: EntityTable<EnregistrementProfilLocal, 'id'>
@@ -1314,6 +1323,17 @@ export class ValidaPharmDatabase extends Dexie {
     // jamais été câblée à un store ni un écran (aucune donnée n'a jamais pu
     // y être écrite).
     this.version(58).stores({ connexionRelaisOCR: null })
+
+    // ClientConfig (configuration IA par client) : migrée vers le
+    // Worker/D1 (Phase 9f du chantier de migration D1, dernière phase du
+    // chantier) — même technique de capture avant suppression physique
+    // que la version 57 (ConnexionDrive/EtatMiroirDrive).
+    this.version(59)
+      .stores({ clientConfigs: null })
+      .upgrade(async (tx) => {
+        const clientConfigs = await tx.table<ClientConfig>('clientConfigs').toArray()
+        clientConfigsAMigrer.push(...clientConfigs)
+      })
   }
 }
 

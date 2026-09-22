@@ -3,6 +3,7 @@ import { ResendEnvoyeurEmail } from './notifications/resendEnvoyeurEmail'
 import { D1AcfcRepo } from './repos/d1/d1AcfcRepo'
 import { D1AiChatSessionLogRepo } from './repos/d1/d1AiChatSessionLogRepo'
 import { D1AuditRepo } from './repos/d1/d1AuditRepo'
+import { D1ClientConfigRepo } from './repos/d1/d1ClientConfigRepo'
 import { D1ClientsRepo } from './repos/d1/d1ClientsRepo'
 import { D1ContentPlanRepo } from './repos/d1/d1ContentPlanRepo'
 import { D1ConnexionDriveRepo } from './repos/d1/d1ConnexionDriveRepo'
@@ -63,6 +64,7 @@ export default {
     return routerRequete(request, {
       utilisateursRepo: new D1UtilisateursRepo(env.DB),
       clientsRepo: new D1ClientsRepo(env.DB),
+      clientConfigRepo: new D1ClientConfigRepo(env.DB),
       parametresInstallationRepo: new D1ParametresInstallationRepo(env.DB),
       documentsNormatifsRepo: new D1DocumentsNormatifsRepo(env.DB),
       stockageBinaireRepo: new R2StockageBinaireRepo(env.BUCKET),

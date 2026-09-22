@@ -1,12 +1,49 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, test } from 'vitest'
-import { db } from '../../persistance/db'
+import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import {
+  connecterAdminDeTest,
+  installerFauxWorkerAuth,
+  reinitialiserAuthDeTest,
+} from '../../test-utils/fauxWorkerAuth'
 import { useClientConfigStore } from './useClientConfigStore'
+
+let demonter: () => void
+
+async function creerClient(
+  installation: ReturnType<typeof installerFauxWorkerAuth>,
+  id: string,
+): Promise<void> {
+  await installation.ctx.clientsRepo.creer({
+    id,
+    name: `Client ${id}`,
+    adresse: null,
+    secteur: null,
+    details: null,
+    statut: 'actif',
+    archivedAt: null,
+    archivedBy: null,
+    createdByUserId: 'admin-test',
+    sharedWith: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+}
 
 beforeEach(async () => {
   setActivePinia(createPinia())
-  await db.clientConfigs.clear()
+  await reinitialiserAuthDeTest()
+  const installation = installerFauxWorkerAuth()
+  demonter = installation.demonter
+  await connecterAdminDeTest()
+  await creerClient(installation, 'client-1')
+  await creerClient(installation, 'client-2')
+  await creerClient(installation, 'client-A')
+  await creerClient(installation, 'client-B')
+})
+
+afterEach(() => {
+  demonter()
 })
 
 describe('useClientConfigStore — charger', () => {
@@ -72,15 +109,16 @@ describe('useClientConfigStore — enregistrerQualification (séparée par mode)
       qualification_test_set_version: '1.0.0',
       moteur_version_qualifiee: 'claude-v1',
     })
-    const enBase = await db.clientConfigs.get('client-1')
-    expect(enBase?.ai_provider_reliability_qualification.chat_normatif).toEqual({
+
+    await store.charger('client-1')
+    expect(store.config?.ai_provider_reliability_qualification.chat_normatif).toEqual({
       date: '2026-01-01',
       resultat: 'favorable',
       qualification_test_set_id: 'set-1',
       qualification_test_set_version: '1.0.0',
       moteur_version_qualifiee: 'claude-v1',
     })
-    expect(enBase?.ai_provider_reliability_qualification.audit_simule).toBeNull()
+    expect(store.config?.ai_provider_reliability_qualification.audit_simule).toBeNull()
   })
 
   test('qualifier le mode audit_simule ne modifie jamais la qualification déjà enregistrée pour chat_normatif', async () => {
