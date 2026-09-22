@@ -110,7 +110,7 @@ Légende : ✅ déjà sur D1 (avant ce chantier) · 🔧 en cours · ⬜ pas com
 | `procedures`, `procedureSteps` | D1 | ✅ **Phase 9a terminée — voir §24** |
 | `gabaritsExportClient` | D1 + R2 (fichier `.docx` binaire) | ✅ **Phase 9b terminée — voir §25** |
 | `aiChatSessionLogs` | D1 | ✅ **Phase 9c terminée — voir §26** |
-| `connexionDrive`, `etatMiroirDrive` (miroir Drive par client) | D1 | ⬜ Phase 9 |
+| `connexionDrive`, `etatMiroirDrive` (miroir Drive par client) | D1 | ✅ **Phase 9d terminée — voir §27** |
 | `connexionRelaisOCR` | D1 (même patron que Relais IA) | ⬜ Phase 9 |
 | `clientConfigs` | D1 | ⬜ Phase 9 |
 | `profilLocal` | 🟦 reste local — verrou de confirmation propre à **cet appareil** (mot de passe de confirmation d'archivage), pas une donnée métier à partager ; à documenter comme tel, pas un oubli |
@@ -2903,11 +2903,117 @@ du panneau Chat, §4.4), au 22/09/2026
 5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
    depuis les phases précédentes).
 
-### 26.3 Suite du chantier
+Voir §27 pour la Phase 9d (`ConnexionDrive`/`EtatMiroirDrive`), puis §27.3
+pour la suite (Phase 9e à 9f).
+
+## 27. État détaillé — Phase 9d (`ConnexionDrive`/`EtatMiroirDrive`,
+miroir Drive par client), au 22/09/2026
+
+### 27.1 Ce qui est fait (code complet, tout vert localement et en CI)
+
+1. ✅ Migration `0027_connexion_drive.sql` — tables `connexion_drive`
+   (client_id PK, dossier_id, jeton) et `etat_miroir_drive` (client_id
+   PK, dernier_miroir_reussi). **Enregistrement mutable par client**
+   (jamais un historique, contrairement à Procedure/GabaritExportClient/
+   AiChatSessionLog des phases précédentes) : `enregistrer` est toujours
+   un upsert complet côté D1
+   (`INSERT ... ON CONFLICT(client_id) DO UPDATE SET ...`), même
+   discipline que `ParametresInstallationRepo` (migration 0002) mais
+   scopée par `client_id` plutôt que par une clé globale à
+   l'installation — Drive est explicitement "le dossier dédié du
+   client", contrairement au dépôt GitHub/Relais IA (globaux,
+   `parametres_installation`).
+2. ✅ `workers/auth-worker/src/repos/connexionDriveRepo.ts` /
+   `etatMiroirDriveRepo.ts` — `ConnexionDriveEnregistree`/
+   `EtatMiroirDriveEnregistre`, interfaces `ConnexionDriveRepo`
+   (`obtenirParClient`/`enregistrer`/`supprimer`) et
+   `EtatMiroirDriveRepo` (`obtenirParClient`/`enregistrer`),
+   implémentations mémoire.
+3. ✅ `workers/auth-worker/src/repos/d1/d1ConnexionDriveRepo.ts` /
+   `d1EtatMiroirDriveRepo.ts` — implémentations D1, même patron upsert
+   que `d1ParametresInstallationRepo.ts`.
+4. ✅ `workers/auth-worker/src/index.ts` — câblage
+   `connexionDriveRepo: new D1ConnexionDriveRepo(env.DB)`,
+   `etatMiroirDriveRepo: new D1EtatMiroirDriveRepo(env.DB)`.
+5. ✅ `workers/auth-worker/src/routeur.ts` —
+   `Contexte.connexionDriveRepo`/`etatMiroirDriveRepo` ; 5 routes :
+   `GET/PUT/DELETE /clients/:clientId/connexion-drive`,
+   `GET/PUT /clients/:clientId/etat-miroir-drive`. Réponses
+   `{ connexionDrive: ... | null }`/`{ etatMiroirDrive: ... | null }`
+   (jamais 404 sur une configuration absente — même discipline que
+   `gererObtenirParametreInstallation`).
+6. ✅ `workers/auth-worker/src/routeur.test.ts` — describe block
+   `'routerRequete — ConnexionDrive / EtatMiroirDrive (miroir Drive par
+   client, Phase 9d du chantier de migration D1)'` avec 9 tests : GET
+   vide (null, jamais 404), PUT isolé par client, PUT rejoué = upsert
+   (jamais de doublon), PUT corps invalide, DELETE scopé par client,
+   GET/PUT etat-miroir-drive (isolé par client, corps invalide),
+   non-authentifié → 401. **Résultat : 330/330 tests Worker** (321
+   existants + 9 nouveaux — 13 tests au total dans ce describe block, la
+   différence vient de sous-cas combinés par test).
+7. ✅ `src/test-utils/fauxWorkerAuth.ts` —
+   `connexionDriveRepo`/`etatMiroirDriveRepo` ajoutés au `Contexte` de
+   test.
+8. ✅ `src/connecteurs/auth/AuthApiClient.ts` — `ConnexionDriveWire`,
+   `SaisieConnexionDriveWire`, `EtatMiroirDriveWire`, 5 méthodes :
+   `obtenirConnexionDrive`, `enregistrerConnexionDrive`,
+   `effacerConnexionDrive`, `obtenirEtatMiroirDrive`,
+   `enregistrerEtatMiroirDrive`.
+9. ✅ `src/presentation/stores/useConnexionDriveStore.ts` — entièrement
+   réécrit, **surface publique strictement inchangée**
+   (`connexion`/`enChargement`/`charger`/`enregistrer`/`effacer`/
+   `testerConnexion`). Filet de sécurité de migration locale
+   (`migrerConnexionDriveLocaleVersServeur`) : n'écrase jamais une
+   configuration déjà présente côté serveur (vérifie `null` avant
+   d'envoyer la capture locale — l'existant côté serveur gagne
+   toujours, même principe que les migrations-locale des phases
+   précédentes malgré l'absence de route dédiée ici, inutile pour un
+   simple upsert idempotent par `client_id`).
+10. ✅ `src/presentation/stores/useMiroirDriveStore.ts` — entièrement
+    réécrit, surface publique inchangée
+    (`miroirEnCours`/`miroirVersDrive`/`obtenirDernierMiroirReussi`).
+    Même filet de sécurité de migration locale pour l'horodatage.
+11. ✅ `src/persistance/db.ts` — retrait de
+    `connexionDrive!`/`etatMiroirDrive!: EntityTable<...>`, ajout de
+    `connexionDriveAMigrer`/`etatMiroirDriveAMigrer` + migration
+    `.version(57)` capturant les enregistrements existants avant
+    suppression physique des tables.
+12. ✅ `src/presentation/stores/connexionDrive.test.ts` et
+    `miroirDrive.test.ts` — réécrits avec `installerFauxWorkerAuth`/
+    `ctx.clientsRepo.creer`/`ctx.connexionDriveRepo`. **Ordre critique
+    préservé** dans les deux fichiers : `fetchMock` stubbé globalement
+    avant `installerFauxWorkerAuth()` (leçon déjà documentée aux phases
+    précédentes — la capture interne `fetchReel` doit déjà être
+    `fetchMock` au moment de sa construction).
+13. ✅ Validation complète : Worker `npx vitest run` (330/330), frontend
+    `npx vitest run` (1458/1458), `npx vue-tsc -b --noEmit` propre,
+    `npx eslint .` et `npx prettier --check .` propres (2 avertissements
+    prettier auto-corrigés via `--fix`).
+
+### 27.2 Phase 9d — terminée (22/09/2026)
+
+1. ✅ Commit sur `claude/contexte-reprise-session-tin77u` (branche
+   redémarrée depuis `main` après le merge de la PR #81 doc-only de la
+   Phase 9c).
+2. ✅ PR #82 ouverte (« Phase 9d migration D1 : ConnexionDrive/
+   EtatMiroirDrive (miroir Drive par client) »), CI verte, mergée sur
+   `main` (squash, commit `762b099`).
+3. ✅ Migration `0027_connexion_drive.sql` appliquée en production D1
+   (`validapharm-auth`) en 2 requêtes séparées (`CREATE TABLE` ×2),
+   toutes deux réussies du premier coup. Vérification `sqlite_master`
+   confirmant les deux tables.
+4. ✅ Code déployé vérifié sur le Worker en production
+   (`workers_get_worker_code`, `validapharm-auth-worker`) :
+   `D1ConnexionDriveRepo`/`D1EtatMiroirDriveRepo`, les 5 routes
+   `/connexion-drive`/`/etat-miroir-drive`, et les 5 handlers présents
+   dans le bundle.
+5. ⬜ GitHub sync généralisée : toujours reportée (même manque assumé
+   depuis les phases précédentes).
+
+### 27.3 Suite du chantier
 
 Reste à la Phase 9 (voir §3) :
 
-- `connexionDrive`/`etatMiroirDrive` (miroir Drive par client) — Phase 9d
 - `connexionRelaisOCR` (même patron que Relais IA) — Phase 9e
 - `clientConfigs` — Phase 9f
 
