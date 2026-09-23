@@ -150,11 +150,11 @@ Toujours aucune authentification/RBAC — confirmé par les 3 audits du 03/09 co
 
 ### Technical Debt (mise à jour)
 
-Les 2 premiers points de la liste sont clos (`ACFC codé en dur` → `MethodProfileACFC`; `AMDEC non autonome` → module autonome). Nouvelles dettes identifiées par les audits du 03/09:
-5. **Test Design Engine inexistant** — `useTestDefinitionStore.ts` est un CRUD manuel pur; aucune génération de candidat de test depuis Context+Risk+Requirement, aucune critique IA de couverture (pilier central de la cible, §28-30 du master prompt).
-6. **`DataFlow` non modélisé comme entité** — seule une relation typée (`RelationTechnique`) approxime les flux de données entre systèmes digitaux.
+Les 2 premiers points de la liste sont clos (`ACFC codé en dur` → `MethodProfileACFC`; `AMDEC non autonome` → module autonome). Nouvelles dettes identifiées par les audits du 03/09, statut revérifié le 23/09/2026 :
+5. **Test Design Engine — clos pour la génération/couverture par risque** (vérifié le 23/09/2026, voir `TECHNICAL_DECISIONS.md`) : `genererCandidatsDepuisRisques`/`evaluerCouvertureRisques`, déterministes, câblés dans `DefinitionTests.vue`. Reste ouvert : critique par catégorie de test différenciée par phase (DQ/FAT/SAT/IQ/OQ/PQ) — bloquée par l'absence d'un champ de phase sur `TestObjective`/`Test`, nécessite une décision de modélisation.
+6. **`DataFlow` non modélisé comme entité** — seule une relation typée (`RelationTechnique`) approxime les flux de données entre systèmes digitaux. Différé délibérément (« règle de trois », voir `TECHNICAL_DECISIONS.md`), pas un oubli.
 7. **Deliverable Engine non unifié** — 3 mécanismes réels (readiness `ContentPlan`, machine à états `Section`, garde d'export) glués par convention plutôt qu'un objet `DeliverableVersion` unique.
-8. **Memory/Learning non gouverné au niveau règle** — le journal `Confirmation` gouverne chaque fait individuellement, rien ne généralise une confirmation répétée en règle client réutilisable versionnée.
+8. **Memory/Learning non gouverné au niveau règle** — le journal `Confirmation` gouverne chaque fait individuellement, rien ne généralise une confirmation répétée en règle client réutilisable versionnée. Différé délibérément (« règle de trois »), pas un oubli.
 
 ---
 
