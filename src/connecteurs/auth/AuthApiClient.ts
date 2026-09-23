@@ -1477,6 +1477,18 @@ export class AuthApiClient {
     })
   }
 
+  creerNoeudsPullQms(
+    jeton: string,
+    clientId: string,
+    connectorId: string,
+    noeuds: SaisieCreationNoeudWire[],
+  ): Promise<ResultatApi<{ noeuds: AssetNodeWire[] }>> {
+    return this.requete('POST', `/clients/${clientId}/structure-systeme/noeuds/pull-qms`, {
+      jeton,
+      body: { connectorId, noeuds },
+    })
+  }
+
   modifierNoeud(
     jeton: string,
     clientId: string,

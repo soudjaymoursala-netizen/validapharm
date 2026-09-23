@@ -1,11 +1,23 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { instancierConnecteurDocumentaire } from '../../connecteurs/integration/instancierConnecteurDocumentaire'
 import type { Connector, ConfigConnector } from '../../logique-metier/domaine/types'
+import { codeDejaUtilise } from '../../logique-metier/structure-systeme/validerCodeUnique'
 import { connectorsAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
-import { connectorDomaineVersWire, connectorWireVersDomaine } from './useIntegrationStore'
+import {
+  connectorDomaineVersWire,
+  connectorWireVersDomaine,
+  useIntegrationStore,
+} from './useIntegrationStore'
+import { useStructureSystemeStore } from './useStructureSystemeStore'
 
 export type NouveauConnecteurInput = { nom: string; actif: boolean } & ConfigConnector
+
+export type ResultatPullQms =
+  | { ok: true; documentsCrees: number; documentsIgnores: number }
+  | { ok: false; raison: 'connecteur_introuvable' }
+  | { ok: false; raison: 'echec_connexion'; message: string }
 
 /**
  * Configuration des connecteurs QMS/documentaires tiers — le type de
@@ -124,5 +136,86 @@ export const useConnecteursQMSStore = defineStore('connecteursQMS', () => {
     connecteurs.value = connecteurs.value.filter((c) => c.id !== connecteurId)
   }
 
-  return { connecteurs, enChargement, charger, creerConnecteur, basculerActif, supprimerConnecteur }
+  /**
+   * Pull réel d'un connecteur QMS vers la Structure Système — seuls
+   * `github` (réel) et `veeva_vault` (squelette non testé en conditions
+   * réelles, cf. `VeevaVaultConnectorAdapter`) peuvent effectivement lister
+   * des documents ; `google_drive` est écriture seule
+   * (`DriveDocumentConnectorAdapter.listerDocuments` lève toujours), et
+   * `sharepoint`/`dossier_reseau`/`edms_generique` restent non implémentés
+   * — dans tous ces cas le `SyncJob` est marqué en échec avec un message
+   * explicite, jamais une exception non gérée qui remonterait à l'écran.
+   *
+   * Idempotent : une référence déjà déclarée pour ce connecteur (pull
+   * précédent) n'est jamais re-déclarée ni re-créée en nœud — vérifié à la
+   * fois côté `ExternalReference` et côté code de nœud (double filet, au
+   * cas où une panne réseau aurait interrompu un pull juste après la
+   * déclaration de la référence mais avant la création du nœud).
+   */
+  async function tirerDocuments(
+    clientId: string,
+    connecteurId: string,
+    cible: { parentId: string; levelKey: string },
+  ): Promise<ResultatPullQms> {
+    const connecteur = connecteurs.value.find((c) => c.id === connecteurId)
+    if (!connecteur) return { ok: false, raison: 'connecteur_introuvable' }
+
+    const integrationStore = useIntegrationStore()
+    const structureStore = useStructureSystemeStore()
+    await integrationStore.charger(clientId)
+
+    const job = await integrationStore.demarrerSyncJob(clientId, connecteurId)
+    if ('erreur' in job) return { ok: false, raison: 'connecteur_introuvable' }
+
+    let documents: Array<{ identifiant: string; libelle: string }>
+    try {
+      const adaptateur = instancierConnecteurDocumentaire(connecteur)
+      await adaptateur.tester()
+      documents = await adaptateur.listerDocuments()
+    } catch (erreur) {
+      const message = erreur instanceof Error ? erreur.message : 'Erreur inconnue'
+      await integrationStore.marquerEchec(clientId, job.id, message)
+      return { ok: false, raison: 'echec_connexion', message }
+    }
+
+    const dejaReferences = new Set(
+      integrationStore.referencesConnector(connecteurId).map((r) => r.identifiant_externe),
+    )
+    const nouveaux = documents.filter((d) => !dejaReferences.has(d.identifiant))
+
+    for (const doc of nouveaux) {
+      await integrationStore.declarerReference(clientId, connecteurId, {
+        identifiantExterne: doc.identifiant,
+        libelle: doc.libelle,
+      })
+    }
+
+    const aCreer = nouveaux
+      .map((doc) => ({
+        level_key: cible.levelKey,
+        name: doc.libelle,
+        code: `qms:${connecteurId}:${doc.identifiant}`,
+        parent_id: cible.parentId as string | null,
+      }))
+      .filter((n) => !codeDejaUtilise(structureStore.noeuds, n.code, null))
+
+    const noeudsCrees = await structureStore.creerNoeudsPullQms(clientId, connecteurId, aCreer)
+    await integrationStore.marquerReussi(clientId, job.id)
+
+    return {
+      ok: true,
+      documentsCrees: noeudsCrees.length,
+      documentsIgnores: documents.length - noeudsCrees.length,
+    }
+  }
+
+  return {
+    connecteurs,
+    enChargement,
+    charger,
+    creerConnecteur,
+    basculerActif,
+    supprimerConnecteur,
+    tirerDocuments,
+  }
 })
