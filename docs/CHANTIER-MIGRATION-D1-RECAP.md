@@ -3256,3 +3256,100 @@ mention répétée dans ce document de §4 à §29 était une note de suivi
 devenue obsolète, jamais un signal d'un bug encore ouvert. Cette section
 sert de correction définitive : toute relecture future de ce document
 doit considérer le sujet clos, sans se fier aux mentions antérieures.
+
+### 29.5 Clôture — « GitHub sync généralisée » (23/09/2026), même discipline
+que §29.4 : ré-examiner avant de construire
+
+Sur autorisation explicite de l'utilisateur (« règle moi tout les
+chantiers qui reste, je te donne l'autorisation de tout faire »),
+investigation menée avant tout code — même exigence que pour le §29.4 :
+un manque répété dans un document de suivi mérite d'être revérifié contre
+la réalité actuelle, pas construit à l'aveugle sur la seule foi de sa
+répétition.
+
+**Origine du principe** : `docs/00-cadrage-projet.md` §2, principe non
+négociable n°3, écrit le **23/08/2026** — avant toute authentification
+réelle, avant le Worker, avant D1 (introduits en Phase 39, bien plus
+tard) : *« Zéro perte de données au changement de machine. Git dédié =
+source de vérité ; miroir Google Drive = filet de secours. »* À cette
+date, l'architecture était volontairement **locale-first sans serveur
+obligatoire** (`00-cadrage-projet.md` §4 : « aucune dépendance serveur
+obligatoire pour la logique applicative ») — IndexedDB par navigateur
+pour la performance/le hors-ligne, GitHub comme unique source de vérité
+partagée entre appareils, faute d'alternative serveur.
+
+**Ce contexte n'existe plus.** Le Worker/D1 introduit en Phase 39 est
+désormais la source de vérité explicite pour la quasi-totalité du modèle
+de données (confirmé des dizaines de fois dans ce document même, ex.
+« D1 = source de vérité ») ; ce chantier de migration D1 tout entier a
+eu pour objet de faire disparaître IndexedDB comme dépôt primaire,
+précisément parce qu'« un stockage local ne survivait jamais à un
+changement d'appareil » (formule répétée à chaque phase). **Le Worker/D1
+remplit donc déjà, structurellement, l'objet exact du principe n°3** pour
+toute entité migrée : plus aucune perte de données au changement de
+machine, sans le moindre rôle de GitHub — un compte authentifié retrouve
+ses données sur n'importe quel appareil dès la connexion.
+
+**`projects`/`sections`/`projectDocuments` gardent leur synchronisation
+GitHub** (`useSynchronisationStore.ts`) — décision déjà actée
+explicitement dans l'inventaire du §3 (« D1 + GitHub déjà en place, à
+conserver ») et non remise en cause ici : ce sont les seuls livrables
+métier que l'utilisateur rédige et fait activement évoluer, avec un
+historique de versions et un mécanisme de résolution de conflit
+champ-par-champ déjà construits et testés — une valeur réelle,
+indépendante du seul objectif « zéro perte au changement de machine ».
+
+**Aucune décision équivalente n'a jamais été prise pour les ~50 autres
+tables** migrées en Phases 1-2 et 4-9 (Structure Système, ACFC,
+Parameters, Risk Assessment, Quality Events, Test/Execution/Evidence
+Engine, Knowledge Engine, Missions, Context Snapshots, Reasoning Engine,
+Procedures, journaux de session IA, etc.) — la mention « GitHub sync
+généralisée » a été ajoutée à la liste "reste à faire" de chaque phase
+par précaution (la même formule copiée telle quelle §14 à §29), jamais
+sur demande explicite de l'utilisateur portant sur une entité précise ni
+sur un besoin fonctionnel identifié (ex. traçabilité réglementaire hors
+Cloudflare). Construire une synchronisation GitHub pour des dizaines de
+tables majoritairement techniques/à fort volume et jamais éditées
+manuellement (`executionEvents`, `measurements`, `aiRequests`,
+`contextSnapshots`, `syncJobs`...) n'apporterait aucune valeur au regard
+du principe qui a motivé leur inscription sur cette liste — ce principe
+étant déjà satisfait par D1 seul.
+
+**Conclusion : ce chantier est clos sans code nouveau.** Le manque décrit
+dans ce document ne correspond plus à un besoin réel depuis l'introduction
+du Worker/D1 (Phase 39) pour les entités concernées par ce chantier de
+migration. Si l'utilisateur souhaite un jour une sauvegarde versionnée
+externe à Cloudflare (piste d'audit git, résilience hors plateforme) pour
+des enregistrements réglementaires précis (ex. `qualityEvents`,
+`risksAssessment`, `assetNodes`), ce serait un **nouveau besoin produit à
+cadrer explicitement** (quelles entités, quel format, quelle fréquence,
+quel usage réel de cette copie) — pas un oubli de ce chantier de
+migration D1, et pas quelque chose à deviner ou construire par défaut.
+
+### 29.6 État transverse (23/09/2026) — pour reprise par une session future
+
+Sous la même autorisation large (« règle moi tout les chantiers qui
+reste, je te donne l'autorisation de tout faire »), un seul point reste
+délibérément non traité, par contrainte réelle et non par manque
+d'autorisation :
+
+- **Import de documents dans la Bibliothèque de normes** (`ISO_10004_1697921937.pdf`,
+  `Vocabulaire Qualité .pdf`, `Annexe 15 PIC-S_Modification CQV.pdf` —
+  Drive de l'utilisateur, dossier `1L3qoo7YNVvJkUTUKzJGD6a4Db8kIiLyJ` pour
+  les deux premiers, `1U3O5fTtgLSqcLDqafbVIIG4hOaAgmtUh` pour le
+  troisième). **Lus intégralement par Claude** (session du 23/09/2026,
+  voir la conversation) — le contenu est compris et disponible pour
+  répondre à toute question métier dessus. **Jamais importés dans
+  `useNormativeDocumentsStore`** : `gererCreerDocumentNormatif` (Worker)
+  dérive systématiquement `uploaded_by` d'un jeton de session
+  authentifié réel — une écriture D1 directe depuis cette session
+  fabriquerait cette attribution (violation ALCOA+, discipline appliquée
+  partout ailleurs dans ce code). Aucune autorisation générale
+  (« fais tout ») ne lève cette contrainte technique : il manque un vrai
+  jeton de session (connexion via l'écran, ou identifiants transmis
+  explicitement). Reste bloqué jusqu'à l'un des deux : l'utilisateur
+  importe lui-même ces 3 fichiers via l'écran Bibliothèque de normes
+  (catégories `iso`/`pics` déjà prévues), ou transmet un moyen légitime
+  de s'authentifier pour qu'une session future le fasse à sa place —
+  jamais une réinitialisation du mot de passe d'un compte admin réel
+  sans consigne explicite et précise sur ce point.
