@@ -3197,8 +3197,6 @@ comprises) est donc entièrement clos.** Reste, en dehors de ce chantier :
 - La GitHub sync généralisée pour les entités migrées en Phase 9
   (reportée phase après phase, jamais traitée — à envisager comme un
   chantier séparé si nécessaire).
-- Le problème des nœuds SAP (bug d'import original) — explicitement
-  reporté depuis le tout début de ce chantier, jamais traité ici.
 - Tâche #32 (connecteurs QMS tiers — écran de configuration + pull réel
   vers AssetNode), tâches #41/#42 (lectures de référentiels en attente) —
   sans rapport avec ce chantier D1, restées `pending` en parallèle.
@@ -3207,3 +3205,54 @@ Sans nouvelle instruction de l'utilisateur, il n'y a plus de prochaine
 phase D1 à enchaîner automatiquement sous la consigne « on enchaine sur
 toutes les phases ». Ce chantier a rempli son objet : achever la
 migration D1 est un fait terminé, la doc en fait foi.
+
+### 29.4 Correctif — le « problème des nœuds SAP » cité en §5/§28.3/§29.3
+était déjà résolu avant le début de ce chantier (23/09/2026)
+
+Investigation menée sur demande explicite de l'utilisateur (« traite le
+problème de SAP ») : la phrase « le problème des nœuds SAP (bug d'import
+original) reste explicitement reporté » a été copiée sans changement dans
+la section « suite du chantier » de **chaque** phase de ce document
+(§4.2, §6.3, §7.3, ... jusqu'à §29.3), sans jamais être revérifiée contre
+l'état réel du code. Vérification faite :
+
+1. ✅ **Le bug réel était déjà corrigé le 11/09/2026** — PR #30 (« Fix
+   import SAP : profondeur relative par colonne + detection auto du
+   format », squash `48a4c4909a686f282ef1e6119d148a45a486b68e`), soit
+   **3 jours avant** la première mention « reste reporté » de ce document
+   (Phase 1, datée du 14/09/2026, §4.2). Le bug corrigé : une première
+   version de `preparerImportHierarchieSap`
+   (`src/logique-metier/structure-systeme/importerHierarchieSapXlsx.ts`)
+   associait chaque colonne absolue distincte à un rang fixe — une même
+   profondeur logique (ex. « Système ») peut pourtant se décaler de
+   quelques colonnes selon la branche sur un export SAP réel (icône SAP
+   de largeur différente), ce qui gonflait à tort `profondeurRequise` et
+   rejetait l'import entier, même sur une hiérarchie correctement
+   configurée (échec silencieux du point de vue utilisateur). Corrigé par
+   un calcul de rang **relatif** à la colonne des lignes précédentes
+   (pile d'ancêtres), jamais une table globale colonne→rang.
+2. ✅ **Régression vérifiée absente** : suite de tests
+   `importerHierarchieSapXlsx.test.ts` relue intégralement (16 tests) —
+   reproduit fidèlement le cas réel signalé à l'époque (hiérarchie à 7
+   niveaux, décalage de colonne volontaire entre deux nœuds de même rang
+   logique), plus les cas d'échec en cascade, de ré-import idempotent, et
+   de code dupliqué. `npx vitest run` sur ce fichier et
+   `HtmlSapAdapter.test.ts` (import `.htm`, même pile d'ancêtres en aval)
+   : **16/16 tests verts**.
+3. ✅ **Câblage écran vérifié** : `StructureSysteme.vue` n'expose plus
+   qu'un seul champ de sélection de fichier pour l'import SAP (fusion
+   `.xlsx`/`.htm` du même PR #30), le format étant détecté au contenu
+   réel (signature ZIP `PK\x03\x04` pour un `.xlsx`, sinon
+   `HtmlSapAdapter`) — jamais à l'extension du fichier, jamais un second
+   sélecteur source de confusion.
+4. ✅ **En production depuis longtemps** : PR #30 mergée sur `main` le
+   11/09/2026, largement antérieure aux dizaines de merges/déploiements
+   suivants (dont tout ce chantier D1) — le correctif est en production
+   depuis bien avant le début de cette investigation.
+
+**Conclusion : aucune action corrective n'était nécessaire.** Le
+« problème des nœuds SAP » n'existe plus depuis le 11/09/2026 ; sa
+mention répétée dans ce document de §4 à §29 était une note de suivi
+devenue obsolète, jamais un signal d'un bug encore ouvert. Cette section
+sert de correction définitive : toute relecture future de ce document
+doit considérer le sujet clos, sans se fier aux mentions antérieures.
