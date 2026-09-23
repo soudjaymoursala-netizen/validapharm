@@ -1043,6 +1043,7 @@ interface AssetNodeJson {
   parentId: string | null
   associatedNodes: string[]
   source: string
+  qmsConnectorId: string | null
   qualificationStatus: string
   periodicQualification: { applicable: boolean; deadline: string | null }
   auditLog: { timestamp: string; actor: string; action: string }[]
@@ -1768,6 +1769,150 @@ describe('routerRequete — Structure Système (référentiel d’actifs, D1 = s
     )
     expect(relation.status).toBe(201)
     expect(relation.corps.relation.noeudSourceId).toBe(a.corps.noeud.id)
+  })
+
+  describe('création de nœuds via pull QMS (Integration Gateway, AssetNode.qms_connector_id câblé)', () => {
+    async function creerConnectorDeTest(ctx: Contexte, jeton: string, clientId: string) {
+      const creation = await requete(ctx, 'POST', `/clients/${clientId}/connectors`, {
+        jeton,
+        body: {
+          nom: 'GitHub dépôt normes',
+          type: 'github',
+          config: { owner: 'client', repo: 'depot', branche: null, jeton: 'x' },
+        },
+      })
+      return creation.corps.connector.id as string
+    }
+
+    test('crée les nœuds sous le parent choisi, source qms_pull et qmsConnectorId renseignés', async () => {
+      const ctx = nouveauContexte()
+      const admin = await bootstrapAdmin(ctx)
+      const clientId = await creerClientDeTest(ctx, admin.jeton)
+      const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+      const parent = await requete(ctx, 'POST', `/clients/${clientId}/structure-systeme/noeuds`, {
+        jeton: admin.jeton,
+        body: { levelKey: 'dossier', name: 'Documents importés', code: 'DOC', parentId: null },
+      })
+
+      const pull = await requete(
+        ctx,
+        'POST',
+        `/clients/${clientId}/structure-systeme/noeuds/pull-qms`,
+        {
+          jeton: admin.jeton,
+          body: {
+            connectorId,
+            noeuds: [
+              {
+                levelKey: 'document',
+                name: 'docs/urs.md',
+                code: 'qms:sha-1',
+                parentId: parent.corps.noeud.id,
+              },
+              {
+                levelKey: 'document',
+                name: 'docs/fds.md',
+                code: 'qms:sha-2',
+                parentId: parent.corps.noeud.id,
+              },
+            ],
+          },
+        },
+      )
+      expect(pull.status).toBe(201)
+      expect(pull.corps.noeuds).toHaveLength(2)
+      expect(
+        pull.corps.noeuds.every(
+          (n) =>
+            n.source === 'qms_pull' &&
+            n.qmsConnectorId === connectorId &&
+            n.parentId === parent.corps.noeud.id,
+        ),
+      ).toBe(true)
+      expect(pull.corps.noeuds[0]?.auditLog[0]?.action).toBe('création (pull QMS)')
+
+      const liste = await requete(ctx, 'GET', `/clients/${clientId}/structure-systeme`, {
+        jeton: admin.jeton,
+      })
+      expect(liste.corps.noeuds.map((n) => n.id)).toEqual(
+        expect.arrayContaining(pull.corps.noeuds.map((n) => n.id)),
+      )
+    })
+
+    test('connecteur introuvable -> connecteur_introuvable, aucun nœud créé', async () => {
+      const ctx = nouveauContexte()
+      const admin = await bootstrapAdmin(ctx)
+      const clientId = await creerClientDeTest(ctx, admin.jeton)
+
+      const pull = await requete(
+        ctx,
+        'POST',
+        `/clients/${clientId}/structure-systeme/noeuds/pull-qms`,
+        {
+          jeton: admin.jeton,
+          body: {
+            connectorId: 'inconnu',
+            noeuds: [{ levelKey: 'document', name: 'x', code: 'x', parentId: null }],
+          },
+        },
+      )
+      expect(pull.status).toBe(404)
+      expect(pull.corps.erreur).toBe('connecteur_introuvable')
+    })
+
+    test("connecteur appartenant à un autre client -> connecteur_introuvable (jamais distingué d'un connecteur inexistant)", async () => {
+      const ctx = nouveauContexte()
+      const admin = await bootstrapAdmin(ctx)
+      const clientA = await creerClientDeTest(ctx, admin.jeton)
+      const clientB = await creerClientDeTest(ctx, admin.jeton)
+      const connectorDeA = await creerConnectorDeTest(ctx, admin.jeton, clientA)
+
+      const pull = await requete(
+        ctx,
+        'POST',
+        `/clients/${clientB}/structure-systeme/noeuds/pull-qms`,
+        {
+          jeton: admin.jeton,
+          body: {
+            connectorId: connectorDeA,
+            noeuds: [{ levelKey: 'document', name: 'x', code: 'x', parentId: null }],
+          },
+        },
+      )
+      expect(pull.status).toBe(404)
+      expect(pull.corps.erreur).toBe('connecteur_introuvable')
+    })
+
+    test('nœud sans champ obligatoire dans le lot -> corps_invalide', async () => {
+      const ctx = nouveauContexte()
+      const admin = await bootstrapAdmin(ctx)
+      const clientId = await creerClientDeTest(ctx, admin.jeton)
+      const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+
+      const pull = await requete(
+        ctx,
+        'POST',
+        `/clients/${clientId}/structure-systeme/noeuds/pull-qms`,
+        { jeton: admin.jeton, body: { connectorId, noeuds: [{ levelKey: 'document' }] } },
+      )
+      expect(pull.status).toBe(400)
+      expect(pull.corps.erreur).toBe('corps_invalide')
+    })
+
+    test('non authentifié -> 401', async () => {
+      const ctx = nouveauContexte()
+      const admin = await bootstrapAdmin(ctx)
+      const clientId = await creerClientDeTest(ctx, admin.jeton)
+      const connectorId = await creerConnectorDeTest(ctx, admin.jeton, clientId)
+
+      const pull = await requete(
+        ctx,
+        'POST',
+        `/clients/${clientId}/structure-systeme/noeuds/pull-qms`,
+        { body: { connectorId, noeuds: [] } },
+      )
+      expect(pull.status).toBe(401)
+    })
   })
 
   test('un utilisateur non lié au client se voit refuser tout accès (404 générique)', async () => {

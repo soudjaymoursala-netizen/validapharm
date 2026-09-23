@@ -6,13 +6,15 @@
 // cf. `useConnecteursQMSStore.ts` pour le détail du périmètre.
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useClientsStore } from '../stores/useClientsStore'
-import { useConnecteursQMSStore } from '../stores/useConnecteursQMSStore'
+import { useConnecteursQMSStore, type ResultatPullQms } from '../stores/useConnecteursQMSStore'
+import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import type { TypeConnector } from '../../logique-metier/domaine/types'
 
 const props = defineProps<{ clientId: string }>()
 
 const clientsStore = useClientsStore()
 const connecteursStore = useConnecteursQMSStore()
+const structureStore = useStructureSystemeStore()
 
 const nomClient = ref<string | null>(null)
 
@@ -20,7 +22,46 @@ onMounted(async () => {
   const client = await clientsStore.obtenirClient(props.clientId)
   nomClient.value = client?.name ?? null
   await connecteursStore.charger(props.clientId)
+  await structureStore.charger(props.clientId)
 })
+
+/**
+ * Pull réel vers la Structure Système — un nœud parent existant doit être
+ * choisi à l'écran (décision de conception explicite : jamais un niveau
+ * technique fabriqué automatiquement). État de brouillon par connecteur,
+ * indépendant les uns des autres.
+ */
+const brouillonsPull = reactive<
+  Record<string, { parentId: string; levelKey: string; enCours: boolean }>
+>({})
+const resultatsPull = reactive<Record<string, ResultatPullQms>>({})
+
+function brouillonPull(connecteurId: string) {
+  return (brouillonsPull[connecteurId] ??= { parentId: '', levelKey: '', enCours: false })
+}
+
+async function lancerPull(connecteurId: string): Promise<void> {
+  const brouillon = brouillonPull(connecteurId)
+  if (!brouillon.parentId || !brouillon.levelKey.trim()) return
+  brouillon.enCours = true
+  try {
+    resultatsPull[connecteurId] = await connecteursStore.tirerDocuments(
+      props.clientId,
+      connecteurId,
+      { parentId: brouillon.parentId, levelKey: brouillon.levelKey.trim() },
+    )
+  } finally {
+    brouillon.enCours = false
+  }
+}
+
+function libelleResultatPull(resultat: ResultatPullQms): string {
+  if (resultat.ok) {
+    return `${resultat.documentsCrees} document(s) importé(s), ${resultat.documentsIgnores} déjà présent(s)`
+  }
+  if (resultat.raison === 'echec_connexion') return `Échec : ${resultat.message}`
+  return 'Connecteur introuvable.'
+}
 
 const LIBELLES_TYPE: Record<TypeConnector, string> = {
   github: 'GitHub (dépôt de stockage ValidaPharm)',
@@ -239,6 +280,36 @@ async function creerConnecteur(): Promise<void> {
             Supprimer
           </button>
         </div>
+
+        <div v-if="c.actif" class="pull-qms">
+          <label>
+            Nœud parent
+            <select v-model="brouillonPull(c.id).parentId">
+              <option value="" disabled>— choisir —</option>
+              <option v-for="n in structureStore.noeuds" :key="n.id" :value="n.id">
+                {{ n.name }} ({{ n.code }})
+              </option>
+            </select>
+          </label>
+          <label>
+            Niveau des documents importés
+            <input v-model="brouillonPull(c.id).levelKey" type="text" placeholder="ex. document" />
+          </label>
+          <button
+            type="button"
+            :disabled="
+              !brouillonPull(c.id).parentId ||
+              !brouillonPull(c.id).levelKey.trim() ||
+              brouillonPull(c.id).enCours
+            "
+            @click="lancerPull(c.id)"
+          >
+            {{ brouillonPull(c.id).enCours ? 'Pull en cours…' : 'Lancer le pull' }}
+          </button>
+          <p v-if="resultatsPull[c.id]" class="resultat-pull">
+            {{ libelleResultatPull(resultatsPull[c.id] as ResultatPullQms) }}
+          </p>
+        </div>
       </li>
     </ul>
     <p v-if="connecteursStore.connecteurs.length === 0" class="etat-vide">
@@ -354,6 +425,26 @@ button:disabled {
 .actions-connecteur {
   display: flex;
   gap: 0.5rem;
+}
+
+.pull-qms {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-top: 1px solid var(--vp-bordure);
+  padding-top: 0.5rem;
+}
+
+.pull-qms label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.9em;
+}
+
+.resultat-pull {
+  font-size: 0.85em;
+  color: var(--vp-texte-secondaire);
 }
 
 .etat-vide {

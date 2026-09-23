@@ -556,6 +556,35 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
   }
 
   /**
+   * Écrit les nœuds résultant d'un pull QMS réel (Integration Gateway,
+   * `useConnecteursQMSStore.tirerDocuments`) — `source: 'qms_pull'` et
+   * `qms_connector_id` toujours dérivés côté serveur à partir du
+   * `connectorId` vérifié, jamais fournis ici. Tous les nœuds partagent le
+   * même parent déjà existant choisi à l'écran, contrairement à
+   * `ecrireNoeudsPlanifies` (import) qui chaîne des parents au sein du même
+   * lot — aucun `id` imposé ici, toujours généré côté serveur.
+   */
+  async function creerNoeudsPullQms(
+    clientId: string,
+    connectorId: string,
+    aCreer: readonly Pick<AssetNode, 'level_key' | 'name' | 'code' | 'parent_id'>[],
+  ): Promise<AssetNode[]> {
+    if (aCreer.length === 0) return []
+    const saisies: SaisieCreationNoeudWire[] = aCreer.map((n) => ({
+      levelKey: n.level_key,
+      name: n.name,
+      code: n.code,
+      parentId: n.parent_id,
+    }))
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.creerNoeudsPullQms(jeton, clientId, connectorId, saisies)
+    if (!resultat.ok) throw new Error(`Échec du pull QMS : ${resultat.erreur}`)
+    const nouveauxNoeuds = resultat.donnees.noeuds.map(noeudWireVersDomaine)
+    noeuds.value = [...noeuds.value, ...nouveauxNoeuds]
+    return nouveauxNoeuds
+  }
+
+  /**
    * Reparentage : revalide l'absence de cycle "avec la
    * même rigueur qu'à la création", jamais silencieux (journalisé).
    */
@@ -673,6 +702,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     modifierNiveau,
     supprimerNiveau,
     creerNoeud,
+    creerNoeudsPullQms,
     importerHierarchieDepuisXlsx,
     importerHierarchieSapDepuisXlsx,
     importerHierarchieSapDepuisHtml,

@@ -410,6 +410,12 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   if (matchNoeudsBulk && request.method === 'POST') {
     return gererCreerNoeudsEnLot(request, ctx, entetes, matchNoeudsBulk[1] as string)
   }
+  const matchNoeudsPullQms = chemin.match(
+    /^\/clients\/([^/]+)\/structure-systeme\/noeuds\/pull-qms$/,
+  )
+  if (matchNoeudsPullQms && request.method === 'POST') {
+    return gererCreerNoeudsPullQms(request, ctx, entetes, matchNoeudsPullQms[1] as string)
+  }
   const matchMigrationLocale = chemin.match(
     /^\/clients\/([^/]+)\/structure-systeme\/noeuds\/migration-locale$/,
   )
@@ -2335,6 +2341,7 @@ function noeudDepuisSaisie(
   acteur: UtilisateurEnregistre,
   action: string,
   idImpose?: string,
+  qmsConnectorId: string | null = null,
 ): AssetNodeEnregistre | null {
   if (!saisie.levelKey || !saisie.name || !saisie.code) return null
   const maintenant = horodatage()
@@ -2348,7 +2355,7 @@ function noeudDepuisSaisie(
     parentId: saisie.parentId ?? null,
     associatedNodes: [],
     source,
-    qmsConnectorId: null,
+    qmsConnectorId,
     periodicQualification: { applicable: false, deadline: null },
     qualificationStatus: 'non_qualifie',
     auditLog: [{ timestamp: maintenant, actor: acteur.email, action }],
@@ -2392,6 +2399,59 @@ async function gererCreerNoeudsEnLot(
   for (const saisie of corps.noeuds) {
     if (!saisie.id) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
     const noeud = noeudDepuisSaisie(clientId, saisie, 'import_fichier', acteur, action, saisie.id)
+    if (!noeud) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    noeuds.push(noeud)
+  }
+
+  await ctx.structureSystemeRepo.creerNoeuds(noeuds)
+  return reponseJson({ noeuds }, 201, entetes)
+}
+
+/**
+ * Création de nœuds depuis un pull QMS réel (Phase "Integration Gateway",
+ * `PHASE_10_INTEGRATION_GATEWAY_SPEC.md` — `AssetNode.qms_connector_id`
+ * anticipé dès le modèle de données, câblé ici). Contrairement à
+ * `gererCreerNoeudsEnLot` (import fichier, `id` imposé par le client pour
+ * chaîner un parent au sein du même lot), tous les nœuds pointent ici vers
+ * un même parent déjà existant choisi à l'écran — aucun chaînage entre eux,
+ * `id` toujours généré côté serveur comme `gererCreerNoeud`. Le
+ * `connectorId` est vérifié appartenir à ce client avant toute écriture
+ * (même discipline que `gererBasculerActifConnector` :
+ * `connector_introuvable` que le connecteur n'existe pas ou appartienne à
+ * un autre client, jamais distingué).
+ */
+async function gererCreerNoeudsPullQms(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const corps = await lireCorpsJson<{ connectorId?: string; noeuds?: SaisieCreationNoeud[] }>(
+    request,
+  )
+  if (!corps || !corps.connectorId || !Array.isArray(corps.noeuds)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const connector = await ctx.integrationRepo.connectorParId(corps.connectorId)
+  if (!connector || connector.clientId !== clientId) {
+    return reponseJson({ erreur: 'connecteur_introuvable' }, 404, entetes)
+  }
+
+  const noeuds: AssetNodeEnregistre[] = []
+  for (const saisie of corps.noeuds) {
+    const noeud = noeudDepuisSaisie(
+      clientId,
+      saisie,
+      'qms_pull',
+      acteur,
+      'création (pull QMS)',
+      undefined,
+      connector.id,
+    )
     if (!noeud) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
     noeuds.push(noeud)
   }
