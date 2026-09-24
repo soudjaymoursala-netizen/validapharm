@@ -27,6 +27,7 @@
 import { computed, onMounted, ref } from 'vue'
 import type { Section } from '../../logique-metier/domaine/types'
 import { useClientsStore } from '../stores/useClientsStore'
+import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import { useMethodProfileACFCStore } from '../stores/useMethodProfileACFCStore'
 import { useImpactAssessmentStore } from '../stores/useImpactAssessmentStore'
@@ -239,7 +240,7 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
                 params: { projectId: s.project_id, sectionId: s.id },
               }"
             >
-              {{ s.meta.titre }} ({{ s.template_type }})
+              {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
             </RouterLink>
           </li>
         </ul>

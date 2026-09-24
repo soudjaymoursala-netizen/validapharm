@@ -7,6 +7,7 @@ import {
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import { useAuthStore } from '../stores/useAuthStore'
+import { useClientActifStore } from '../stores/useClientActifStore'
 import { router } from './index'
 
 let demonter: () => void
@@ -66,5 +67,18 @@ describe('garde de routeur globale', () => {
     await connecterAdminDeTest()
     await router.push('/admin/utilisateurs')
     expect(router.currentRoute.value.name).toBe('admin-utilisateurs')
+  })
+})
+
+describe('mémoire du client actif', () => {
+  test('un clientId en paramètre ou en requête met à jour le client actif', async () => {
+    await connecterAdminDeTest()
+    const clientActif = useClientActifStore()
+
+    await router.push('/clients/client-param/structure-systeme')
+    expect(clientActif.clientActifId).toBe('client-param')
+
+    await router.push({ name: 'tableau-de-bord', query: { clientId: 'client-requete' } })
+    expect(clientActif.clientActifId).toBe('client-requete')
   })
 })

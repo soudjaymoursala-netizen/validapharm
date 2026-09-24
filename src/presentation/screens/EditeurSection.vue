@@ -33,12 +33,14 @@ import RenduGabarit from '../composants/RenduGabarit.vue'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { libelleStatut, messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
 import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
+import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
 import { useClientConfigStore } from '../stores/useClientConfigStore'
 import { useConnexionRelaisIAStore } from '../stores/useConnexionRelaisIAStore'
 import { useGabaritExportStore } from '../stores/useGabaritExportStore'
 import { useNormativeDocumentsStore } from '../stores/useNormativeDocumentsStore'
 import { libelleFournisseurAffiche } from '../stores/usePanneauChatStore'
 import { useProcedureStore } from '../stores/useProcedureStore'
+import { useClientActifStore } from '../stores/useClientActifStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
 import { useSectionsStore, type ResultatActionSection } from '../stores/useSectionsStore'
@@ -58,6 +60,14 @@ const procedureStore = useProcedureStore()
 const structureStore = useStructureSystemeStore()
 const section = ref<Section | undefined>(undefined)
 const projet = ref<Project | undefined>(undefined)
+// Un projet appartient à un client : la barre latérale doit proposer les
+// outils de CE client, jamais ceux du client visité précédemment.
+watch(
+  () => projet.value?.client_id,
+  (clientId) => {
+    if (clientId) useClientActifStore().definirClientActif(clientId)
+  },
+)
 const gabaritSelectionneId = ref<string>('')
 const nomNouveauGabarit = ref('')
 const erreurGabaritExport = ref<string | null>(null)
@@ -715,7 +725,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
     </RouterLink>
     <h1>{{ section.meta.titre }}</h1>
     <p class="meta">
-      {{ section.template_type }} — statut :
+      {{ LIBELLES_GABARIT[section.template_type] }} — statut :
       <strong>{{ libelleStatut(section.status, section.language) }}</strong>
     </p>
 
@@ -900,7 +910,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
       <p v-if="erreurLienSection" class="bandeau-erreur" role="alert">{{ erreurLienSection }}</p>
       <ul v-if="sectionsLiees.length > 0" class="liste-liens">
         <li v-for="s in sectionsLiees" :key="s.id">
-          {{ s.meta.titre }} ({{ s.template_type }})
+          {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
           <button
             v-if="section.status !== 'valide_en_interne'"
             type="button"
@@ -917,7 +927,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
           <select v-model="sectionCibleLienId" :disabled="sectionsLiablesRestantes.length === 0">
             <option value="">— choisir une section —</option>
             <option v-for="s in sectionsLiablesRestantes" :key="s.id" :value="s.id">
-              {{ s.meta.titre }} ({{ s.template_type }})
+              {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
             </option>
           </select>
         </label>
@@ -945,8 +955,16 @@ async function ajouterAvisRelecteur(): Promise<void> {
           <template v-if="procedureLiee">
             <span
               >Procédure :
-              <strong>{{ procedureLiee.reference }} — {{ procedureLiee.titre }}</strong></span
+              <strong
+                >{{ procedureLiee.reference }} v{{ procedureLiee.numero_version }} —
+                {{ procedureLiee.titre }}</strong
+              ></span
             >
+            <span v-if="procedureStore.remplaceePar(procedureLiee)" class="alerte-obsolete">
+              ⚠ Révision obsolète — remplacée par la v{{
+                procedureStore.remplaceePar(procedureLiee)
+              }}
+            </span>
             <button
               v-if="section.status !== 'valide_en_interne'"
               type="button"
@@ -961,7 +979,8 @@ async function ajouterAvisRelecteur(): Promise<void> {
               <select v-model="procedureLienId">
                 <option value="">— choisir —</option>
                 <option v-for="p in procedureStore.procedures" :key="p.id" :value="p.id">
-                  {{ p.reference }} — {{ p.titre }}
+                  {{ p.reference }} v{{ p.numero_version }} — {{ p.titre
+                  }}{{ procedureStore.remplaceePar(p) ? ' (obsolète)' : '' }}
                 </option>
               </select>
             </label>
@@ -1325,6 +1344,11 @@ button {
   align-items: flex-end;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.alerte-obsolete {
+  color: var(--vp-danger);
+  font-weight: var(--vp-poids-semibold);
 }
 
 .lien-structurel {

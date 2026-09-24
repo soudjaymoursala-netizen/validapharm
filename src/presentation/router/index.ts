@@ -245,8 +245,8 @@ export const router = createRouter({
  * de "client actif" ne soit fabriqué côté domaine.
  */
 router.afterEach((to) => {
-  const clientId = to.params.clientId
-  if (typeof clientId === 'string') {
+  const clientId = to.params.clientId ?? to.query.clientId
+  if (typeof clientId === 'string' && clientId.length > 0) {
     useClientActifStore().definirClientActif(clientId)
   }
 })

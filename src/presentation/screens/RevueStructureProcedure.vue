@@ -65,13 +65,6 @@ const versionExistante = computed(() => {
   return reference ? procedureStore.derniereVersion(reference) : null
 })
 
-function estObsolete(procedure: { reference: string; numero_version: number }): number | null {
-  const derniere = procedureStore.derniereVersion(procedure.reference)
-  return derniere && derniere.numero_version > procedure.numero_version
-    ? derniere.numero_version
-    : null
-}
-
 const nomFournisseurActuel = computed(() =>
   libelleFournisseurAffiche(configStore.config?.ai_provider ?? 'openai'),
 )
@@ -405,8 +398,8 @@ async function confirmer(): Promise<void> {
             <header>
               <strong>{{ procedure.titre }}</strong>
               <span>{{ procedure.reference }} — v{{ procedure.numero_version }}</span>
-              <span v-if="estObsolete(procedure)" class="badge-obsolete">
-                Obsolète — remplacée par la v{{ estObsolete(procedure) }}
+              <span v-if="procedureStore.remplaceePar(procedure)" class="badge-obsolete">
+                Obsolète — remplacée par la v{{ procedureStore.remplaceePar(procedure) }}
               </span>
               <span v-else class="badge-applicable">Version applicable</span>
             </header>

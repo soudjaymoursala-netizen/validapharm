@@ -260,6 +260,9 @@ describe('useProcedureStore — derniereVersion', () => {
       const derniere = store.derniereVersion('SOP-QA-012')
       expect(derniere?.titre).toBe('v2')
       expect(derniere?.numero_version).toBe(2)
+
+      expect(store.remplaceePar({ reference: 'SOP-QA-012', numero_version: 1 })).toBe(2)
+      expect(store.remplaceePar({ reference: 'SOP-QA-012', numero_version: 2 })).toBeNull()
     } finally {
       demonter()
     }
