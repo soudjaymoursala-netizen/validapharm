@@ -1739,6 +1739,14 @@ describe('routerRequete — Structure Système (référentiel d’actifs, D1 = s
     expect(modification.status).toBe(200)
     expect(modification.corps.noeud.parentId).toBe(parent.corps.noeud.id)
     expect(modification.corps.noeud.auditLog).toHaveLength(2)
+
+    const statutInvente = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/structure-systeme/noeuds/${enfant.corps.noeud.id}`,
+      { jeton: admin.jeton, body: { qualificationStatus: 'presque_qualifie', action: 'statut' } },
+    )
+    expect(statutInvente.status).toBe(400)
   })
 
   test('créer une relation technique entre deux nœuds du même client', async () => {
@@ -5878,12 +5886,34 @@ describe('routerRequete — Mission/Activity (Target Architecture, domaine "Work
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
     const missionId = await creerMissionDeTest(ctx, admin.jeton, clientId)
+    const evenement = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
+      jeton: admin.jeton,
+      body: {
+        type: 'change_control',
+        titre: 'CC-1',
+        description: '',
+        origine: 'interne',
+        referenceExterne: null,
+        assetNodeId: null,
+        processId: null,
+        manufacturingContextId: null,
+      },
+    })
+    const qualityEventId = evenement.corps.evenement.id
+
+    const inexistant = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/quality-events`,
+      { jeton: admin.jeton, body: { qualityEventId: 'qe-inexistant' } },
+    )
+    expect(inexistant.status).toBe(404)
 
     const premiere = await requete(
       ctx,
       'POST',
       `/clients/${clientId}/missions/${missionId}/quality-events`,
-      { jeton: admin.jeton, body: { qualityEventId: 'qe-1' } },
+      { jeton: admin.jeton, body: { qualityEventId } },
     )
     expect(premiere.status).toBe(201)
 
@@ -5891,7 +5921,7 @@ describe('routerRequete — Mission/Activity (Target Architecture, domaine "Work
       ctx,
       'POST',
       `/clients/${clientId}/missions/${missionId}/quality-events`,
-      { jeton: admin.jeton, body: { qualityEventId: 'qe-1' } },
+      { jeton: admin.jeton, body: { qualityEventId } },
     )
     expect(seconde.status).toBe(200)
     expect(seconde.corps.association.id).toBe(premiere.corps.association.id)
@@ -6027,6 +6057,62 @@ describe('routerRequete — Mission/Activity (Target Architecture, domaine "Work
 
     const liste = await requete(ctx, 'GET', `/clients/${clientId}/missions`, { jeton: admin.jeton })
     expect(liste.corps.dependencies).toHaveLength(1)
+
+    const autoDependance = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/activities/${source.corps.activity.id}/dependances`,
+      { jeton: admin.jeton, body: { activityCibleId: source.corps.activity.id } },
+    )
+    expect(autoDependance.status).toBe(400)
+
+    const cibleInexistante = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/activities/${source.corps.activity.id}/dependances`,
+      { jeton: admin.jeton, body: { activityCibleId: 'activite-inexistante' } },
+    )
+    expect(cibleInexistante.status).toBe(404)
+  })
+
+  test('activité sur mission inexistante, statuts hors domaine -> refusés', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const missionId = await creerMissionDeTest(ctx, admin.jeton, clientId)
+
+    const orpheline = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/mission-inexistante/activities`,
+      { jeton: admin.jeton, body: { titre: 'x', description: '' } },
+    )
+    expect(orpheline.status).toBe(404)
+
+    const statutMission = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/missions/${missionId}/statut`,
+      { jeton: admin.jeton, body: { statut: 'archivee' } },
+    )
+    expect(statutMission.status).toBe(400)
+
+    const activite = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/activities`,
+      {
+        jeton: admin.jeton,
+        body: { titre: 'Revue', description: '' },
+      },
+    )
+    const statutActivite = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/activities/${activite.corps.activity.id}/statut`,
+      { jeton: admin.jeton, body: { statut: 'annulee' } },
+    )
+    expect(statutActivite.status).toBe(400)
   })
 
   test('migration locale : idempotente, id existant ignoré', async () => {

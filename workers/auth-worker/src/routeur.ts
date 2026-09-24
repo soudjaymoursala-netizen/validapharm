@@ -323,6 +323,18 @@ const TYPES_OBJET_CITABLE = [
 ] as const
 const CATEGORIES_PROCEDURE = ['cqv', 'csv', 'production'] as const
 const MODES_USAGE_IA = ['chat_normatif', 'audit_simule'] as const
+const STATUTS_QUALIFICATION = [
+  'non_qualifie',
+  'en_cours_qualification_initiale',
+  'qualifie',
+  'qualifie_ecart_ouvert',
+  'requalification_requise',
+  'requalification_en_retard',
+  'suspendu',
+  'declasse',
+] as const
+const STATUTS_MISSION = ['ouverte', 'en_cours', 'cloturee'] as const
+const STATUTS_ACTIVITY = ['a_faire', 'en_cours', 'terminee', 'bloquee'] as const
 const VERDICTS_ACFC = ['critique', 'non_critique'] as const
 const VERDICTS_IMPACT_ASSESSMENT = ['impact_direct', 'non_impact_direct'] as const
 const VERDICTS_RISK_ASSESSMENT = ['acceptable', 'action_requise'] as const
@@ -2577,7 +2589,9 @@ async function gererModifierNoeud(
     periodicQualification?: { applicable: boolean; deadline: string | null }
     action?: string
   }>(request)
-  if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps || horsDomaine(corps.qualificationStatus, STATUTS_QUALIFICATION)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const misAJour: AssetNodeEnregistre = {
@@ -6385,7 +6399,9 @@ async function gererChangerStatutMission(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<{ statut?: string }>(request)
-  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.statut || !(STATUTS_MISSION as readonly string[]).includes(corps.statut)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
   const maintenant = horodatage()
   const miseAJour: MissionEnregistree = {
     ...existante,
@@ -6417,6 +6433,13 @@ async function gererAssocierQualityEvent(
   void acteur
   const corps = await lireCorpsJson<{ qualityEventId?: string }>(request)
   if (!corps?.qualityEventId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const [mission, evenement] = await Promise.all([
+    ctx.missionRepo.missionParId(missionId),
+    ctx.qualityEventRepo.evenementParId(corps.qualityEventId),
+  ])
+  if (mission?.clientId !== clientId || evenement?.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
   const existante = await ctx.missionRepo.associationMissionQualityEventExistante(
     missionId,
     corps.qualityEventId,
@@ -6451,6 +6474,10 @@ async function gererCreerActivity(
   if (!corps?.titre || corps.description === undefined) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const mission = await ctx.missionRepo.missionParId(missionId)
+  if (mission?.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
   const maintenant = horodatage()
   const activity: ActivityEnregistree = {
     id: genererId(),
@@ -6481,7 +6508,9 @@ async function gererChangerStatutActivity(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<{ statut?: string }>(request)
-  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.statut || !(STATUTS_ACTIVITY as readonly string[]).includes(corps.statut)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
   const maintenant = horodatage()
   const miseAJour: ActivityEnregistree = {
     ...existante,
@@ -6516,7 +6545,16 @@ async function gererAjouterDependance(
   if (acteur instanceof Response) return acteur
   void acteur
   const corps = await lireCorpsJson<{ activityCibleId?: string }>(request)
-  if (!corps?.activityCibleId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.activityCibleId || corps.activityCibleId === activitySourceId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const [activiteSource, activiteCible] = await Promise.all([
+    ctx.missionRepo.activityParId(activitySourceId),
+    ctx.missionRepo.activityParId(corps.activityCibleId),
+  ])
+  if (activiteSource?.clientId !== clientId || activiteCible?.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
   const existante = await ctx.missionRepo.dependencyExistante(
     activitySourceId,
     corps.activityCibleId,

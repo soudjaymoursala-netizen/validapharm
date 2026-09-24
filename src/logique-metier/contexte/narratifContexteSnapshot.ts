@@ -4,6 +4,7 @@ import type {
   ManufacturingContext,
   QualityEvent,
 } from '../domaine/types'
+import { LIBELLES_STATUT_QUALIFICATION } from '../i18n/libellesStatutQualification'
 
 /**
  * Narratif enrichi d'un `ContextSnapshot` — organise les éléments déjà
@@ -69,7 +70,7 @@ export function construireNarratifContexte(
 }
 
 function texteNoeud(noeud: AssetNode): string {
-  return `${noeud.name} (${noeud.code}) — statut de qualification : ${noeud.qualification_status}`
+  return `${noeud.name} (${noeud.code}) — statut de qualification : ${LIBELLES_STATUT_QUALIFICATION[noeud.qualification_status]}`
 }
 
 function texteManufacturingContext(contexte: ManufacturingContext): string {

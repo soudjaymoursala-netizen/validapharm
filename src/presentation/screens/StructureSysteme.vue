@@ -20,6 +20,7 @@ import type {
   QualificationStatus,
   TypeRelationTechnique,
 } from '../../logique-metier/domaine/types'
+import { LIBELLES_STATUT_QUALIFICATION } from '../../logique-metier/i18n/libellesStatutQualification'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -142,16 +143,6 @@ const chaineAffichee = computed(() =>
 // (toujours figé à `non_qualifie`, trouvé identique en simulant une
 // requalification périodique réelle, 31/08/2026). Édition manuelle
 // uniquement : jamais de transition automatique fabriquée par l'outil.
-const LIBELLES_STATUT_QUALIFICATION: Record<QualificationStatus, string> = {
-  non_qualifie: 'Non qualifié',
-  en_cours_qualification_initiale: 'En cours de qualification initiale',
-  qualifie: 'Qualifié',
-  qualifie_ecart_ouvert: 'Qualifié — écart ouvert',
-  requalification_requise: 'Requalification requise',
-  requalification_en_retard: 'Requalification en retard',
-  suspendu: 'Suspendu',
-  declasse: 'Déclassé',
-}
 const statutChoisi = reactive<Record<string, QualificationStatus | ''>>({})
 const periodiciteApplicable = reactive<Record<string, boolean>>({})
 const periodiciteEcheance = reactive<Record<string, string>>({})

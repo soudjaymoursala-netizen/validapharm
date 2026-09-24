@@ -15,12 +15,19 @@ import type {
   StatutMission,
 } from '../../logique-metier/domaine/types'
 import {
+  dependanceInvalide,
+  type RaisonDependanceInvalide,
+} from '../../logique-metier/graphe/dependancesActivites'
+import {
   activitiesAMigrer,
   associationsMissionQualityEventAMigrer,
   dependenciesAMigrer,
   missionsAMigrer,
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+
+export type ResultatAjoutDependance =
+  { ok: true; dependance: Dependency } | { ok: false; raison: RaisonDependanceInvalide }
 
 export interface NouvelleMissionInput {
   workspaceId: string | null
@@ -336,7 +343,14 @@ export const useMissionStore = defineStore('mission', () => {
     clientId: string,
     activitySourceId: string,
     activityCibleId: string,
-  ): Promise<Dependency> {
+  ): Promise<ResultatAjoutDependance> {
+    const raison = dependanceInvalide(
+      activities.value,
+      dependencies.value,
+      activitySourceId,
+      activityCibleId,
+    )
+    if (raison) return { ok: false, raison }
     const { api, jeton } = await obtenirApi()
     const resultat = await api.ajouterDependance(jeton, clientId, activitySourceId, activityCibleId)
     if (!resultat.ok) throw new Error(`Échec de l'ajout de la dépendance : ${resultat.erreur}`)
@@ -344,7 +358,7 @@ export const useMissionStore = defineStore('mission', () => {
     if (!dependencies.value.some((d) => d.id === dependance.id)) {
       dependencies.value = [...dependencies.value, dependance]
     }
-    return dependance
+    return { ok: true, dependance }
   }
 
   function dependancesDe(activityId: string): Dependency[] {

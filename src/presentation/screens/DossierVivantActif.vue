@@ -36,6 +36,7 @@ import { useMissionStore } from '../stores/useMissionStore'
 import { useQualityEventStore } from '../stores/useQualityEventStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import { sectionWireVersDomaine } from '../stores/useSectionsStore'
+import { LIBELLES_STATUT_QUALIFICATION } from '../../logique-metier/i18n/libellesStatutQualification'
 
 const props = defineProps<{ clientId: string; noeudId: string }>()
 
@@ -82,17 +83,6 @@ onMounted(async () => {
 })
 
 const noeud = computed(() => structureStore.noeuds.find((n) => n.id === props.noeudId) ?? null)
-
-const LIBELLES_STATUT_QUALIFICATION: Record<string, string> = {
-  non_qualifie: 'Non qualifié',
-  en_cours_qualification_initiale: 'En cours de qualification initiale',
-  qualifie: 'Qualifié',
-  qualifie_ecart_ouvert: 'Qualifié — écart ouvert',
-  requalification_requise: 'Requalification requise',
-  requalification_en_retard: 'Requalification en retard',
-  suspendu: 'Suspendu',
-  declasse: 'Déclassé',
-}
 
 const evaluationsACFC = computed(() =>
   acfcStore.evaluations.filter((e) => e.asset_node_id === props.noeudId),
