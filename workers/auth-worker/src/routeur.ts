@@ -273,6 +273,56 @@ function horsDomaine(valeur: string | null | undefined, valides: readonly string
   return valeur !== null && valeur !== undefined && !valides.includes(valeur)
 }
 
+const ORIGINES_METHOD_PROFILE = [
+  'procedure_client',
+  'defini_utilisateur',
+  'baseline_validapharm',
+] as const
+const NIVEAUX_CRITICITE_PARAMETRE = ['important', 'critique'] as const
+const TYPES_PROCESS = [
+  'manufacturing',
+  'packaging',
+  'facility',
+  'digital',
+  'csv',
+  'document_workflow',
+  'business',
+  'ehs',
+  'logistics',
+  'support',
+  'other',
+] as const
+const STATUTS_TEST_CANDIDATE = [
+  'propose',
+  'besoin_information',
+  'besoin_revue',
+  'accepte',
+  'rejete',
+  'doublon',
+  'remplace',
+] as const
+const SYSTEMES_LOCALISATION = ['github', 'drive', 'externe'] as const
+const TYPES_SOURCE = ['document', 'image'] as const
+const TYPES_METHOD_PROFILE_REFERENCE = ['acfc', 'impact_assessment'] as const
+const TYPES_CONNECTOR = [
+  'github',
+  'google_drive',
+  'veeva_vault',
+  'sharepoint',
+  'dossier_reseau',
+  'edms_generique',
+] as const
+const ETATS_CONFIANCE_IA = ['connu', 'infere', 'inconnu', 'conflit', 'a_verifier'] as const
+const TYPES_OBJET_CITABLE = [
+  'requirement',
+  'test',
+  'evidence',
+  'knowledge_item',
+  'asset_node',
+  'procedure_step',
+] as const
+const CATEGORIES_PROCEDURE = ['cqv', 'csv', 'production'] as const
+const MODES_USAGE_IA = ['chat_normatif', 'audit_simule'] as const
 const VERDICTS_ACFC = ['critique', 'non_critique'] as const
 const VERDICTS_IMPACT_ASSESSMENT = ['impact_direct', 'non_impact_direct'] as const
 const VERDICTS_RISK_ASSESSMENT = ['acceptable', 'action_requise'] as const
@@ -2611,8 +2661,9 @@ function profilAcfcDepuisSaisie(
     !saisie.version ||
     !saisie.source ||
     !saisie.origin ||
+    !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(saisie.origin) ||
     !Array.isArray(saisie.questions) ||
-    !saisie.decisionRule
+    saisie.decisionRule !== 'au_moins_un_oui_critique'
   ) {
     return null
   }
@@ -2837,7 +2888,12 @@ async function gererCreerClassification(
   if (acteur instanceof Response) return acteur
 
   const corps = await lireCorpsJson<SaisieCreationClassification>(request)
-  if (!corps?.parameterId || !corps.niveau || !corps.justification) {
+  if (
+    !corps?.parameterId ||
+    !corps.niveau ||
+    !(NIVEAUX_CRITICITE_PARAMETRE as readonly string[]).includes(corps.niveau) ||
+    !corps.justification
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const maintenant = horodatage()
@@ -3082,8 +3138,9 @@ function profilImpactAssessmentDepuisSaisie(
     !saisie.version ||
     !saisie.source ||
     !saisie.origin ||
+    !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(saisie.origin) ||
     !Array.isArray(saisie.questions) ||
-    !saisie.decisionRule
+    saisie.decisionRule !== 'au_moins_un_oui_impact_direct'
   ) {
     return null
   }
@@ -3381,6 +3438,7 @@ async function gererCreerProfilRiskAssessment(
     !corps?.version ||
     !corps.source ||
     !corps.origin ||
+    !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(corps.origin) ||
     corps.echelleMin === undefined ||
     corps.echelleMax === undefined ||
     corps.seuilAction === undefined
@@ -3650,7 +3708,12 @@ async function gererCreerProcess(
   const corps = await lireCorpsJson<SaisieCreationProcess>(request)
   // `description` peut être vide sans être invalide, même discipline que
   // `gererCreerParametre`.
-  if (!corps?.nom || corps.description === undefined || !corps.type) {
+  if (
+    !corps?.nom ||
+    corps.description === undefined ||
+    !corps.type ||
+    !(TYPES_PROCESS as readonly string[]).includes(corps.type)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const maintenant = horodatage()
@@ -3907,6 +3970,17 @@ interface SaisieCreationQualityEvent {
   manufacturingContextId?: string | null
 }
 
+const TYPES_QUALITY_EVENT = [
+  'change_control',
+  'deviation',
+  'capa',
+  'investigation',
+  'audit_finding',
+  'periodic_review',
+] as const
+const ORIGINES_QUALITY_EVENT = ['interne', 'externe', 'mixte'] as const
+const STATUTS_QUALITY_EVENT = ['ouvert', 'en_cours', 'cloture'] as const
+
 async function gererCreerEvenementQualityEvent(
   request: Request,
   ctx: Contexte,
@@ -3919,7 +3993,14 @@ async function gererCreerEvenementQualityEvent(
   const corps = await lireCorpsJson<SaisieCreationQualityEvent>(request)
   // `description` peut être vide sans être invalide, même discipline que
   // `gererCreerParametre`/`gererCreerProcess`.
-  if (!corps?.type || !corps.titre || corps.description === undefined || !corps.origine) {
+  if (
+    !corps?.type ||
+    !(TYPES_QUALITY_EVENT as readonly string[]).includes(corps.type) ||
+    !corps.titre ||
+    corps.description === undefined ||
+    !corps.origine ||
+    !(ORIGINES_QUALITY_EVENT as readonly string[]).includes(corps.origine)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -3963,7 +4044,9 @@ async function gererChangerStatutQualityEvent(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<SaisieChangementStatutQualityEvent>(request)
-  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.statut || !(STATUTS_QUALITY_EVENT as readonly string[]).includes(corps.statut)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const evenement: QualityEventEnregistre = {
@@ -4294,7 +4377,9 @@ async function gererChangerStatutTestCandidate(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<SaisieChangementStatutTestCandidate>(request)
-  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.statut || !(STATUTS_TEST_CANDIDATE as readonly string[]).includes(corps.statut)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const motifRejet = corps.motifRejet ?? null
@@ -4945,7 +5030,11 @@ async function gererAjouterLocalisation(
   }
 
   const corps = await lireCorpsJson<SaisieAjoutLocalisation>(request)
-  if (!corps?.systeme || !corps.reference) {
+  if (
+    !corps?.systeme ||
+    !(SYSTEMES_LOCALISATION as readonly string[]).includes(corps.systeme) ||
+    !corps.reference
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -5121,7 +5210,7 @@ async function gererCreerSource(
   void acteur
 
   const corps = await lireCorpsJson<SaisieCreationSource>(request)
-  if (!corps?.type || !corps.titre) {
+  if (!corps?.type || !(TYPES_SOURCE as readonly string[]).includes(corps.type) || !corps.titre) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -5159,7 +5248,11 @@ async function gererAjouterLocalisationSource(
   }
 
   const corps = await lireCorpsJson<SaisieAjoutLocalisationSource>(request)
-  if (!corps?.systeme || !corps.reference) {
+  if (
+    !corps?.systeme ||
+    !(SYSTEMES_LOCALISATION as readonly string[]).includes(corps.systeme) ||
+    !corps.reference
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -5712,7 +5805,11 @@ async function gererCreerContentPlan(
   if (acteur instanceof Response) return acteur
 
   const corps = await lireCorpsJson<SaisieCreationContentPlan>(request)
-  if (!corps?.templateId || corps.contextSnapshot === undefined) {
+  if (
+    !corps?.templateId ||
+    corps.contextSnapshot === undefined ||
+    horsDomaine(corps.methodProfileType, TYPES_METHOD_PROFILE_REFERENCE)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -5923,7 +6020,12 @@ async function gererCreerConnector(
   void acteur
 
   const corps = await lireCorpsJson<SaisieCreationConnector>(request)
-  if (!corps?.nom || !corps.type || corps.config === undefined) {
+  if (
+    !corps?.nom ||
+    !corps.type ||
+    !(TYPES_CONNECTOR as readonly string[]).includes(corps.type) ||
+    corps.config === undefined
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -6808,6 +6910,7 @@ async function gererCreerAIResponse(
     !corps?.aiRequestId ||
     corps.texte === undefined ||
     !corps.etatConfiance ||
+    !(ETATS_CONFIANCE_IA as readonly string[]).includes(corps.etatConfiance) ||
     !Array.isArray(corps.traceAppelsOutils)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
@@ -6851,14 +6954,22 @@ async function gererCreerCitations(
   if (acteur instanceof Response) return acteur
   void acteur
   const corps = await lireCorpsJson<SaisieCreationCitations>(request)
-  if (!corps || !Array.isArray(corps.citations)) {
+  if (
+    !corps ||
+    !Array.isArray(corps.citations) ||
+    corps.citations.some(
+      (c) =>
+        !c.aiResponseId ||
+        !c.typeObjetCite ||
+        !(TYPES_OBJET_CITABLE as readonly string[]).includes(c.typeObjetCite) ||
+        !c.objetId,
+    )
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const citations: CitationAIResponseEnregistree[] = []
   for (const c of corps.citations) {
-    if (!c.aiResponseId || !c.typeObjetCite || !c.objetId) {
-      return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
-    }
+    if (!c.aiResponseId || !c.typeObjetCite || !c.objetId) continue
     const citation: CitationAIResponseEnregistree = {
       id: genererId(),
       clientId,
@@ -6965,7 +7076,13 @@ async function gererCreerProcedure(
   if (acteur instanceof Response) return acteur
   void acteur
   const corps = await lireCorpsJson<SaisieCreationProcedure>(request)
-  if (!corps?.reference || !corps.titre || !corps.effectiveDate || !corps.categorie) {
+  if (
+    !corps?.reference ||
+    !corps.titre ||
+    !corps.effectiveDate ||
+    !corps.categorie ||
+    !(CATEGORIES_PROCEDURE as readonly string[]).includes(corps.categorie)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const versionsExistantes = (await ctx.procedureRepo.listerProcedures(clientId)).filter(
@@ -7345,7 +7462,13 @@ async function gererCreerAiChatSessionLog(
   if (acteur instanceof Response) return acteur
   void acteur
   const corps = await lireCorpsJson<SaisieCreationAiChatSessionLog>(request)
-  if (!corps?.startedAt || !corps.mode || !corps.aiProvider || corps.documentJoint === undefined) {
+  if (
+    !corps?.startedAt ||
+    !corps.mode ||
+    !(MODES_USAGE_IA as readonly string[]).includes(corps.mode) ||
+    !corps.aiProvider ||
+    corps.documentJoint === undefined
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const entree: AiChatSessionLogEnregistre = {

@@ -178,7 +178,11 @@ describe('DossierVivantActif', () => {
     // fichier) — un « PLC autoclave » pas encore arrivé a fait échouer ce
     // test en CI (jamais reproduit en local) tant que la condition
     // n'attendait que le nom du nœud.
-    await attendreQue(() => wrapper.text().includes('PLC autoclave'))
+    await attendreQue(
+      () =>
+        wrapper.text().includes('PLC autoclave') &&
+        wrapper.text().includes('Traçabilité incomplète de la requalification'),
+    )
 
     expect(wrapper.text()).toContain('Qualifié')
     expect(wrapper.text()).toContain('2027-01-01')

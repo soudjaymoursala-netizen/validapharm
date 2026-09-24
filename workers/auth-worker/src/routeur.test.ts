@@ -3154,7 +3154,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
         type: 'deviation',
         titre: 'Écart température',
         description: 'x',
-        origine: 'production',
+        origine: 'interne',
         referenceExterne: null,
         assetNodeId: null,
         processId: null,
@@ -3188,6 +3188,51 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
     expect(creation.corps.erreur).toBe('corps_invalide')
   })
 
+  test('type, origine ou statut hors domaine -> corps_invalide (jamais un libellé affiché vide)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const base = {
+      titre: 'Écart',
+      description: '',
+      referenceExterne: null,
+      assetNodeId: null,
+      processId: null,
+      manufacturingContextId: null,
+    }
+
+    const typeInvente = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/quality-events/evenements`,
+      {
+        jeton: admin.jeton,
+        body: { ...base, type: 'incident_majeur', origine: 'interne' },
+      },
+    )
+    expect(typeInvente.status).toBe(400)
+
+    const origineInventee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/quality-events/evenements`,
+      { jeton: admin.jeton, body: { ...base, type: 'deviation', origine: 'production' } },
+    )
+    expect(origineInventee.status).toBe(400)
+
+    const valide = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
+      jeton: admin.jeton,
+      body: { ...base, type: 'deviation', origine: 'interne' },
+    })
+    const statutInvente = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/quality-events/evenements/${valide.corps.evenement.id}/statut`,
+      { jeton: admin.jeton, body: { statut: 'archive' } },
+    )
+    expect(statutInvente.status).toBe(400)
+  })
+
   test('changer le statut d’un événement : audit_log accumulé, jamais réécrit', async () => {
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
@@ -3198,7 +3243,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
         type: 'capa',
         titre: 'CAPA X',
         description: 'x',
-        origine: 'audit',
+        origine: 'externe',
         referenceExterne: null,
         assetNodeId: null,
         processId: null,
@@ -3241,7 +3286,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
         type: 'deviation',
         titre: 'Écart',
         description: 'x',
-        origine: 'production',
+        origine: 'interne',
         referenceExterne: { systeme: 'SAP-QM', identifiant: 'CC-2026-042' },
         assetNodeId: null,
         processId: null,
@@ -3254,7 +3299,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
         type: 'capa',
         titre: 'CAPA',
         description: 'x',
-        origine: 'audit',
+        origine: 'externe',
         referenceExterne: null,
         assetNodeId: null,
         processId: null,
@@ -3303,7 +3348,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
       type: 'deviation',
       titre: 'Ancien titre',
       description: 'x',
-      origine: 'production',
+      origine: 'interne',
       referenceExterne: null,
       assetNodeId: null,
       processId: null,
@@ -3556,6 +3601,14 @@ describe('routerRequete — Requirement/TestObjective/TestCandidate/Test/Couvert
     expect(changement.status).toBe(200)
     expect(changement.corps.testCandidate.statut).toBe('accepte')
     expect(changement.corps.testCandidate.auditLog).toHaveLength(2)
+
+    const statutInvente = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${candidat.id}/statut`,
+      { jeton: admin.jeton, body: { statut: 'valide_par_ia' } },
+    )
+    expect(statutInvente.status).toBe(400)
   })
 
   test('changer le statut d’un test candidate inexistant -> 404', async () => {
@@ -4495,7 +4548,7 @@ describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/Extra
   }> {
     const source = await requete(ctx, 'POST', `/clients/${clientId}/sources`, {
       jeton,
-      body: { type: 'document_procedural', titre: 'SOP-001' },
+      body: { type: 'document', titre: 'SOP-001' },
     })
     const version = await requete(
       ctx,
@@ -4550,7 +4603,7 @@ describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/Extra
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/sources`, {
       jeton: admin.jeton,
-      body: { type: 'document_procedural', titre: 'SOP-001' },
+      body: { type: 'document', titre: 'SOP-001' },
     })
     expect(creation.status).toBe(201)
     expect(creation.corps.source.titre).toBe('SOP-001')
@@ -4586,7 +4639,7 @@ describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/Extra
     const clientId = await creerClientDeTest(ctx, admin.jeton)
     const source = await requete(ctx, 'POST', `/clients/${clientId}/sources`, {
       jeton: admin.jeton,
-      body: { type: 'document_procedural', titre: 'SOP-001' },
+      body: { type: 'document', titre: 'SOP-001' },
     })
 
     const v1 = await requete(
@@ -4810,7 +4863,7 @@ describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/Extra
     const sourceLocale = {
       id: 'source-locale-1',
       clientId,
-      type: 'document_procedural',
+      type: 'document',
       titre: 'Ancien titre',
       createdAt: '2026-01-01T00:00:00.000Z',
     }
@@ -6430,7 +6483,7 @@ describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reas
       body: {
         aiRequestId: aiRequest.corps.request.id,
         texte: 'Voici la réponse.',
-        etatConfiance: 'eleve',
+        etatConfiance: 'connu',
         traceAppelsOutils: [
           {
             outil: 'recherche_documents',
@@ -6491,7 +6544,7 @@ describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reas
         body: {
           aiRequestId: aiRequest.corps.request.id,
           texte: 'Réponse',
-          etatConfiance: 'eleve',
+          etatConfiance: 'connu',
           traceAppelsOutils: [],
         },
       },
@@ -6508,7 +6561,7 @@ describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reas
           },
           {
             aiResponseId: aiResponse.corps.response.id,
-            typeObjetCite: 'quality_event',
+            typeObjetCite: 'requirement',
             objetId: 'qe-1',
           },
         ],
@@ -6562,7 +6615,7 @@ describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reas
       clientId,
       aiRequestId: 'request-locale-1',
       texte: 'Réponse locale',
-      etatConfiance: 'moyen',
+      etatConfiance: 'infere',
       traceAppelsOutils: [],
       versionMoteur: null,
       createdAt: '2024-01-01T00:00:00.000Z',
