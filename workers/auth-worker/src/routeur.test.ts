@@ -251,6 +251,7 @@ interface CorpsReponse {
   conflicts: ConflictJson[]
   contentPlan: ContentPlanJson
   contentPlans: ContentPlanJson[]
+  raisons: string[]
   connectors: ConnectorJson[]
   connector: ConnectorJson
   syncJobs: SyncJobJson[]
@@ -7182,6 +7183,47 @@ describe("routerRequete — GabaritExportClient (gabarits d'export .docx personn
     )
     expect(reponseContenu.status).toBe(200)
     expect(new Uint8Array(await reponseContenu.arrayBuffer())).toEqual(octets)
+  })
+
+  test('un utilisateur sans accès au client ne peut ni lire ni supprimer son gabarit', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const creation = await creerGabaritExportClient(ctx, admin.jeton, clientId)
+    const gabaritId = creation.corps.gabarit.id
+
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'externe@autre-labo.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'N',
+        prenom: 'P',
+        role: 'utilisateur',
+      },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email: 'externe@autre-labo.example', motDePasse: 'MotDePasse!1' },
+    })
+    const jetonExterne = login.corps.jeton
+
+    const lecture = await routerRequete(
+      new Request(`https://relais.workers.dev/gabarits-export/${gabaritId}/contenu`, {
+        headers: { Authorization: `Bearer ${jetonExterne}` },
+      }),
+      ctx,
+    )
+    expect(lecture.status).toBe(404)
+
+    const suppression = await requete(ctx, 'DELETE', `/gabarits-export/${gabaritId}`, {
+      jeton: jetonExterne,
+    })
+    expect(suppression.status).toBe(404)
+
+    const toujoursLa = await requete(ctx, 'GET', `/clients/${clientId}/gabarits-export`, {
+      jeton: admin.jeton,
+    })
+    expect(toujoursLa.corps.gabarits).toHaveLength(1)
   })
 
   test('création sans nom -> nom_obligatoire', async () => {

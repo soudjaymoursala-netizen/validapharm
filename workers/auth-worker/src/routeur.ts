@@ -7464,6 +7464,8 @@ async function gererObtenirContenuGabaritExportClient(
 
   const gabarit = await ctx.gabaritExportClientRepo.parId(id)
   if (!gabarit) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  const acces = await exigerAccesClient(request, ctx, entetes, gabarit.clientId)
+  if (acces instanceof Response) return acces
   const contenu = await ctx.stockageBinaireRepo.lire(cleContenuGabaritExportClient(id))
   if (!contenu) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
 
@@ -7485,6 +7487,11 @@ async function gererSupprimerGabaritExportClient(
 ): Promise<Response> {
   const utilisateur = await authentifier(request, ctx)
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const gabarit = await ctx.gabaritExportClientRepo.parId(id)
+  if (!gabarit) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  const acces = await exigerAccesClient(request, ctx, entetes, gabarit.clientId)
+  if (acces instanceof Response) return acces
 
   await ctx.stockageBinaireRepo.supprimer(cleContenuGabaritExportClient(id))
   await ctx.gabaritExportClientRepo.supprimer(id)
