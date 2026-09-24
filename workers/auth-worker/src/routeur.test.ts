@@ -2539,6 +2539,23 @@ describe('routerRequete — Computer System Assessment (F3 du catalogue §10, Ph
       jeton: admin.jeton,
     })
     expect(liste.corps.evaluationsCsv.map((e) => e.id)).toContain(creation.corps.evaluationCsv.id)
+
+    for (const invalide of [{ categorieGamp5: 7 }, { pertinenceGxp: 'oui' }]) {
+      const refus = await requete(ctx, 'POST', `/clients/${clientId}/csv-assessment/evaluations`, {
+        jeton: admin.jeton,
+        body: {
+          assetNodeId: null,
+          nomSysteme: 'MES ligne B',
+          categorieGamp5: 4,
+          justificationCategorie: 'x',
+          pertinenceGxp: true,
+          pertinenceEresPart11: true,
+          justificationPertinence: 'x',
+          ...invalide,
+        },
+      })
+      expect(refus.status).toBe(400)
+    }
   })
 
   test('créer une évaluation sans champ obligatoire -> corps_invalide', async () => {
@@ -2716,6 +2733,50 @@ describe('routerRequete — Risk Assessment / AMDEC (Target Architecture §10, P
     expect(evaluation.corps.evaluationRisque.verdictInitial).toBe('acceptable')
     expect(evaluation.corps.evaluationRisque.iprResiduel).toBeNull()
     expect(evaluation.corps.evaluationRisque.verdictResiduel).toBeNull()
+
+    const severiteTexte = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/evaluations`,
+      {
+        jeton: admin.jeton,
+        body: {
+          methodProfileId: profil.corps.profilRisque.id,
+          methodProfileVersion: profil.corps.profilRisque.version,
+          assetNodeId: null,
+          parameterId: null,
+          etapeProcessus: 'Remplissage',
+          modeDefaillance: 'Sur-dosage',
+          effetDefaillance: '',
+          causePotentielle: '',
+          controleActuel: '',
+          severiteInitiale: '4',
+          occurrenceInitiale: 3,
+          detectabiliteInitiale: 2,
+          iprInitial: 24,
+          verdictInitial: 'acceptable',
+        },
+      },
+    )
+    expect(severiteTexte.status).toBe(400)
+
+    const profilInverse = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/profils`,
+      {
+        jeton: admin.jeton,
+        body: {
+          version: 'v2',
+          source: 'Profil inversé',
+          origin: 'defini_utilisateur',
+          echelleMin: 5,
+          echelleMax: 1,
+          seuilAction: 50,
+        },
+      },
+    )
+    expect(profilInverse.status).toBe(400)
 
     const residuelInvente = await requete(
       ctx,

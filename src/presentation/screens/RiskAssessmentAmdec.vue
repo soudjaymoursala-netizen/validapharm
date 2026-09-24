@@ -48,8 +48,16 @@ const seuilAction = ref(50)
 const source = ref('')
 const origin = ref<OrigineMethodeRiskAssessment>('defini_utilisateur')
 
+const erreurConfig = ref<string | null>(null)
+
 async function enregistrerNouvelleVersion(): Promise<void> {
+  erreurConfig.value = null
   if (source.value.trim().length === 0) return
+  if (echelleMin.value >= echelleMax.value) {
+    erreurConfig.value =
+      "L'échelle minimale doit être strictement inférieure à l'échelle maximale — sinon aucune note ne serait jamais dans l'échelle et aucun IPR ne pourrait être calculé."
+    return
+  }
   await riskStore.creerNouvelleVersion(props.clientId, {
     echelleMin: echelleMin.value,
     echelleMax: echelleMax.value,
@@ -113,8 +121,29 @@ const occurrenceResiduelleBrouillon = ref<Record<string, number | null>>({})
 const detectabiliteResiduelleBrouillon = ref<Record<string, number | null>>({})
 const erreurAction = ref<string | null>(null)
 
-async function enregistrerAction(riskAssessmentId: string): Promise<void> {
+function profilDeLigne(methodProfileId: string) {
+  return riskStore.profils.find((p) => p.id === methodProfileId) ?? null
+}
+
+async function enregistrerAction(riskAssessmentId: string, methodProfileId: string): Promise<void> {
   erreurAction.value = null
+  const profil = profilDeLigne(methodProfileId)
+  const notes = [
+    severiteResiduelleBrouillon.value[riskAssessmentId],
+    occurrenceResiduelleBrouillon.value[riskAssessmentId],
+    detectabiliteResiduelleBrouillon.value[riskAssessmentId],
+  ]
+  if (
+    profil &&
+    notes.some(
+      (n) =>
+        typeof n === 'number' &&
+        (n < profil.echelle_min || n > profil.echelle_max || !Number.isInteger(n)),
+    )
+  ) {
+    erreurAction.value = `Chaque note résiduelle doit être un entier entre ${profil.echelle_min} et ${profil.echelle_max} (échelle de la version du profil de cette ligne).`
+    return
+  }
   const resultat = await riskStore.enregistrerActionResiduelle(props.clientId, riskAssessmentId, {
     recommandation: recommandationBrouillon.value[riskAssessmentId]?.trim() || null,
     responsable: responsableBrouillon.value[riskAssessmentId]?.trim() || null,
@@ -183,6 +212,7 @@ const evaluationsTriees = computed(() =>
             Seuil d'action (IPR)
             <input v-model.number="seuilAction" type="number" required />
           </label>
+          <p v-if="erreurConfig" class="bandeau-erreur" role="alert">{{ erreurConfig }}</p>
           <div class="actions">
             <button
               v-if="riskStore.profilActif"
@@ -247,15 +277,33 @@ const evaluationsTriees = computed(() =>
             </label>
             <label>
               Sévérité initiale
-              <input v-model.number="severiteInitiale" type="number" />
+              <input
+                v-model.number="severiteInitiale"
+                type="number"
+                step="1"
+                :min="riskStore.profilActif.echelle_min"
+                :max="riskStore.profilActif.echelle_max"
+              />
             </label>
             <label>
               Occurrence initiale
-              <input v-model.number="occurrenceInitiale" type="number" />
+              <input
+                v-model.number="occurrenceInitiale"
+                type="number"
+                step="1"
+                :min="riskStore.profilActif.echelle_min"
+                :max="riskStore.profilActif.echelle_max"
+              />
             </label>
             <label>
               Détectabilité initiale
-              <input v-model.number="detectabiliteInitiale" type="number" />
+              <input
+                v-model.number="detectabiliteInitiale"
+                type="number"
+                step="1"
+                :min="riskStore.profilActif.echelle_min"
+                :max="riskStore.profilActif.echelle_max"
+              />
             </label>
             <p v-if="erreurCreation" class="bandeau-erreur" role="alert">{{ erreurCreation }}</p>
             <button type="submit">Créer la ligne</button>
@@ -274,7 +322,16 @@ const evaluationsTriees = computed(() =>
               </template>
             </p>
             <p class="meta">
-              IPR initial : <strong>{{ e.ipr_initial ?? '—' }}</strong> — Verdict :
+              IPR initial :
+              <strong>{{
+                e.ipr_initial ??
+                (e.severite_initiale !== null &&
+                e.occurrence_initiale !== null &&
+                e.detectabilite_initiale !== null
+                  ? '— (note hors échelle, IPR non calculable)'
+                  : '—')
+              }}</strong>
+              — Verdict :
               <strong>{{ e.verdict_initial ? LIBELLES_VERDICT[e.verdict_initial] : '—' }}</strong>
             </p>
             <template v-if="e.ipr_residuel === null">
@@ -300,7 +357,7 @@ const evaluationsTriees = computed(() =>
                   type="number"
                   placeholder="D résiduelle"
                 />
-                <button type="button" @click="enregistrerAction(e.id)">
+                <button type="button" @click="enregistrerAction(e.id, e.method_profile_id)">
                   Enregistrer l'action résiduelle
                 </button>
                 <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>

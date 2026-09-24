@@ -268,6 +268,14 @@ async function lireCorpsJson<T>(request: Request): Promise<T | null> {
   }
 }
 
+function estNombre(valeur: unknown): valeur is number {
+  return typeof valeur === 'number' && Number.isFinite(valeur)
+}
+
+function nombreOptionnelInvalide(valeur: unknown): boolean {
+  return valeur !== null && valeur !== undefined && !estNombre(valeur)
+}
+
 /** Valeur optionnelle (`null`/absente acceptée) mais hors de son énumération de domaine. */
 function horsDomaine(valeur: string | null | undefined, valides: readonly string[]): boolean {
   return valeur !== null && valeur !== undefined && !valides.includes(valeur)
@@ -3342,9 +3350,10 @@ async function gererCreerEvaluationCsvAssessment(
   if (
     !corps?.nomSysteme ||
     !corps.categorieGamp5 ||
+    ![1, 2, 3, 4, 5].includes(corps.categorieGamp5) ||
     !corps.justificationCategorie ||
-    corps.pertinenceGxp === undefined ||
-    corps.pertinenceEresPart11 === undefined ||
+    typeof corps.pertinenceGxp !== 'boolean' ||
+    typeof corps.pertinenceEresPart11 !== 'boolean' ||
     !corps.justificationPertinence
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
@@ -3453,9 +3462,10 @@ async function gererCreerProfilRiskAssessment(
     !corps.source ||
     !corps.origin ||
     !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(corps.origin) ||
-    corps.echelleMin === undefined ||
-    corps.echelleMax === undefined ||
-    corps.seuilAction === undefined
+    !estNombre(corps.echelleMin) ||
+    !estNombre(corps.echelleMax) ||
+    corps.echelleMin >= corps.echelleMax ||
+    !estNombre(corps.seuilAction)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
@@ -3516,6 +3526,10 @@ async function gererCreerEvaluationRiskAssessment(
     corps.effetDefaillance === undefined ||
     corps.causePotentielle === undefined ||
     corps.controleActuel === undefined ||
+    nombreOptionnelInvalide(corps.severiteInitiale) ||
+    nombreOptionnelInvalide(corps.occurrenceInitiale) ||
+    nombreOptionnelInvalide(corps.detectabiliteInitiale) ||
+    nombreOptionnelInvalide(corps.iprInitial) ||
     horsDomaine(corps.verdictInitial, VERDICTS_RISK_ASSESSMENT)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
@@ -3591,7 +3605,14 @@ async function gererEnregistrerActionResiduelleRiskAssessment(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<SaisieActionResiduelleRiskAssessment>(request)
-  if (!corps || horsDomaine(corps.verdictResiduel, VERDICTS_RISK_ASSESSMENT)) {
+  if (
+    !corps ||
+    nombreOptionnelInvalide(corps.severiteResiduelle) ||
+    nombreOptionnelInvalide(corps.occurrenceResiduelle) ||
+    nombreOptionnelInvalide(corps.detectabiliteResiduelle) ||
+    nombreOptionnelInvalide(corps.iprResiduel) ||
+    horsDomaine(corps.verdictResiduel, VERDICTS_RISK_ASSESSMENT)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -5373,7 +5394,11 @@ async function gererAjouterExtractionItem(
   }
 
   const corps = await lireCorpsJson<SaisieAjoutExtractionItem>(request)
-  if (corps?.contenu === undefined || corps.position === undefined) {
+  if (
+    corps?.contenu === undefined ||
+    !estNombre(corps.position) ||
+    !Number.isInteger(corps.position)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -6038,7 +6063,8 @@ async function gererCreerConnector(
     !corps?.nom ||
     !corps.type ||
     !(TYPES_CONNECTOR as readonly string[]).includes(corps.type) ||
-    corps.config === undefined
+    corps.config === undefined ||
+    (corps.actif !== undefined && typeof corps.actif !== 'boolean')
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
@@ -7164,7 +7190,7 @@ async function gererAjouterEtapeProcedure(
     return reponseJson({ erreur: 'procedure_introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<SaisieCreationEtapeProcedure>(request)
-  if (!corps || corps.description === undefined || corps.obligatoire === undefined) {
+  if (!corps || corps.description === undefined || typeof corps.obligatoire !== 'boolean') {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const etapesExistantes = (await ctx.procedureRepo.listerEtapes(clientId)).filter(
@@ -7505,7 +7531,7 @@ async function gererCreerAiChatSessionLog(
     !corps.mode ||
     !(MODES_USAGE_IA as readonly string[]).includes(corps.mode) ||
     !corps.aiProvider ||
-    corps.documentJoint === undefined
+    typeof corps.documentJoint !== 'boolean'
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
