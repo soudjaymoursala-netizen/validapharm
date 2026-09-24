@@ -164,6 +164,17 @@ describe('useParameterStore — scénario obligatoire "CQA/CPP context change" (
     expect(r02Relu?.contexte).toBe('Enrobage / Produit A / Recette R02')
     expect(r02Relu?.actif).toBe(true)
     expect(cppR05.contexte).toBe('Enrobage / Produit B / Recette R05')
+
+    expect(store.cppActifExistant(parametre.id, '  enrobage / produit a / recette r02 ')?.id).toBe(
+      cppR02.id,
+    )
+    expect(
+      store.cppActifExistant(parametre.id, 'Enrobage / Produit C / Recette R09'),
+    ).toBeUndefined()
+    await store.desactiverCPP('client-1', cppR02.id, 'Recette R02 retirée')
+    expect(
+      store.cppActifExistant(parametre.id, 'Enrobage / Produit A / Recette R02'),
+    ).toBeUndefined()
   })
 
   test('désactiver un CPP conserve son historique (pas de suppression, pas de mutation du contexte)', async () => {
