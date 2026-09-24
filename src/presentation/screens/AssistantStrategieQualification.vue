@@ -98,6 +98,8 @@ async function enregistrerNouvelleVersion(): Promise<void> {
   brouillonQuestions.splice(0, brouillonQuestions.length, '', '')
   brouillonSource.value = ''
   formulaireConfigOuvert.value = false
+  // Les réponses visaient les questions de la version précédente.
+  for (const cle of Object.keys(reponses)) Reflect.deleteProperty(reponses, cle)
 }
 
 // --- Évaluation ACFC contre la méthode active ---

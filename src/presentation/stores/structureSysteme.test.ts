@@ -93,6 +93,25 @@ describe('useStructureSystemeStore — ajouterNiveau', () => {
     const relu = await ctx.structureSystemeRepo.obtenirSchema('client-1')
     expect(relu?.levels.map((l) => l.key)).toEqual(['site', 'zone'])
   })
+
+  test('refuse une clé déjà utilisée par un niveau existant — deux niveaux identiques seraient indiscernables dans le menu « Niveau »', async () => {
+    const store = useStructureSystemeStore()
+    await store.charger('client-1')
+    await store.ajouterNiveau('client-1', {
+      key: 'equipement',
+      label: { fr: 'Équipement', en: 'Equipment', de: 'Ausrüstung' },
+      numbering_pattern: '',
+    })
+
+    const resultat = await store.ajouterNiveau('client-1', {
+      key: 'equipement',
+      label: { fr: 'Équipement (bis)', en: 'Equipment', de: 'Ausrüstung' },
+      numbering_pattern: '',
+    })
+
+    expect(resultat).toEqual({ ok: false, raison: 'cle_deja_utilisee' })
+    expect(store.schema?.levels).toHaveLength(1)
+  })
 })
 
 describe('useStructureSystemeStore — modifierNiveau (correction d’erreur de saisie)', () => {

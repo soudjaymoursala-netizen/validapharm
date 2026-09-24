@@ -153,3 +153,32 @@ describe('RevueStructureProcedure — livrables liés (tâche #118)', () => {
     expect(wrapper.text()).not.toContain('Livrables liés')
   })
 })
+
+describe('RevueStructureProcedure — révisions (R-21)', () => {
+  test('une révision antérieure est marquée obsolète, la dernière applicable', async () => {
+    const procedureStore = useProcedureStore()
+    for (const titre of ['Nettoyage P-101', 'Nettoyage P-101 (révisé)']) {
+      await procedureStore.creerProcedure('client-1', {
+        reference: 'SOP-QA-012',
+        titre,
+        effectiveDate: '2026-01-01',
+        categorie: 'production',
+      })
+    }
+
+    const router = routeurDeTest()
+    await router.push({ name: 'revue-structure-procedure', params: { clientId: 'client-1' } })
+    const wrapper = mount(RevueStructureProcedure, {
+      props: { clientId: 'client-1' },
+      global: { plugins: [router] },
+    })
+    await attendreQue(() => wrapper.text().includes('SOP-QA-012 — v2'))
+
+    const articles = wrapper.findAll('article.procedure')
+    const v1 = articles.find((a) => a.text().includes('SOP-QA-012 — v1'))
+    const v2 = articles.find((a) => a.text().includes('SOP-QA-012 — v2'))
+    expect(v1?.text()).toContain('Obsolète — remplacée par la v2')
+    expect(v2?.text()).toContain('Version applicable')
+    expect(v2?.text()).not.toContain('Obsolète')
+  })
+})

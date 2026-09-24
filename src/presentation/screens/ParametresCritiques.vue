@@ -80,14 +80,25 @@ const parametreCPP = ref('')
 const contexteCPP = ref('')
 const justificationCPP = ref('')
 const motifsDesactivationCPP = ref<Record<string, string>>({})
+const erreurCPP = ref<string | null>(null)
+const erreurDesactivation = ref<Record<string, string>>({})
+
+const MOTIF_OBLIGATOIRE =
+  'Saisissez un motif de désactivation : il est tracé dans le journal d’audit.'
 
 async function declarerCPP(): Promise<void> {
+  erreurCPP.value = null
   if (
     !parametreCPP.value ||
     contexteCPP.value.trim().length === 0 ||
     justificationCPP.value.trim().length === 0
   )
     return
+  if (parameterStore.cppActifExistant(parametreCPP.value, contexteCPP.value)) {
+    erreurCPP.value =
+      'Ce paramètre est déjà déclaré CPP actif dans ce contexte. Pour le modifier, désactivez le CPP existant (avec motif) puis redéclarez-le.'
+    return
+  }
   await parameterStore.declarerCPP(props.clientId, {
     parameterId: parametreCPP.value,
     contexte: contexteCPP.value.trim(),
@@ -100,7 +111,11 @@ async function declarerCPP(): Promise<void> {
 
 async function desactiverCPP(cppId: string): Promise<void> {
   const motif = motifsDesactivationCPP.value[cppId]?.trim()
-  if (!motif) return
+  if (!motif) {
+    erreurDesactivation.value[cppId] = MOTIF_OBLIGATOIRE
+    return
+  }
+  erreurDesactivation.value[cppId] = ''
   await parameterStore.desactiverCPP(props.clientId, cppId, motif)
   motifsDesactivationCPP.value[cppId] = ''
 }
@@ -111,14 +126,21 @@ const descriptionCQA = ref('')
 const contexteCQA = ref('')
 const justificationCQA = ref('')
 const motifsDesactivationCQA = ref<Record<string, string>>({})
+const erreurCQA = ref<string | null>(null)
 
 async function declarerCQA(): Promise<void> {
+  erreurCQA.value = null
   if (
     nomCQA.value.trim().length === 0 ||
     contexteCQA.value.trim().length === 0 ||
     justificationCQA.value.trim().length === 0
   )
     return
+  if (parameterStore.cqaActifExistant(nomCQA.value, contexteCQA.value)) {
+    erreurCQA.value =
+      'Ce CQA est déjà déclaré actif dans ce contexte. Pour le modifier, désactivez le CQA existant (avec motif) puis redéclarez-le.'
+    return
+  }
   await parameterStore.declarerCQA(props.clientId, {
     nom: nomCQA.value.trim(),
     description: descriptionCQA.value.trim(),
@@ -133,7 +155,11 @@ async function declarerCQA(): Promise<void> {
 
 async function desactiverCQA(cqaId: string): Promise<void> {
   const motif = motifsDesactivationCQA.value[cqaId]?.trim()
-  if (!motif) return
+  if (!motif) {
+    erreurDesactivation.value[cqaId] = MOTIF_OBLIGATOIRE
+    return
+  }
+  erreurDesactivation.value[cqaId] = ''
   await parameterStore.desactiverCQA(props.clientId, cqaId, motif)
   motifsDesactivationCQA.value[cqaId] = ''
 }
@@ -247,6 +273,7 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
           Justification
           <textarea v-model="justificationCPP" rows="2" required />
         </label>
+        <p v-if="erreurCPP" class="bandeau-erreur" role="alert">{{ erreurCPP }}</p>
         <button type="submit">Déclarer le CPP</button>
       </form>
       <ul v-if="parameterStore.cppsActifs.length > 0" class="liste-cpp">
@@ -260,6 +287,9 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
             placeholder="Motif de désactivation"
           />
           <button type="button" @click="desactiverCPP(cpp.id)">Désactiver</button>
+          <p v-if="erreurDesactivation[cpp.id]" class="bandeau-erreur" role="alert">
+            {{ erreurDesactivation[cpp.id] }}
+          </p>
         </li>
       </ul>
       <p v-else>Aucun CPP actif pour l'instant.</p>
@@ -284,6 +314,7 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
           Justification
           <textarea v-model="justificationCQA" rows="2" required />
         </label>
+        <p v-if="erreurCQA" class="bandeau-erreur" role="alert">{{ erreurCQA }}</p>
         <button type="submit">Déclarer le CQA</button>
       </form>
       <ul v-if="parameterStore.cqasActifs.length > 0" class="liste-cqa">
@@ -297,6 +328,9 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
             placeholder="Motif de désactivation"
           />
           <button type="button" @click="desactiverCQA(cqa.id)">Désactiver</button>
+          <p v-if="erreurDesactivation[cqa.id]" class="bandeau-erreur" role="alert">
+            {{ erreurDesactivation[cqa.id] }}
+          </p>
         </li>
       </ul>
       <p v-else>Aucun CQA actif pour l'instant.</p>
@@ -305,6 +339,10 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
 </template>
 
 <style scoped>
+.bandeau-erreur {
+  color: var(--vp-danger);
+}
+
 .parametres-critiques {
   padding: 2rem;
   font-family: var(--vp-police);

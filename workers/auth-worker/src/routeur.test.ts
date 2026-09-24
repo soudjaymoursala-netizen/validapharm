@@ -251,6 +251,7 @@ interface CorpsReponse {
   conflicts: ConflictJson[]
   contentPlan: ContentPlanJson
   contentPlans: ContentPlanJson[]
+  raisons: string[]
   connectors: ConnectorJson[]
   connector: ConnectorJson
   syncJobs: SyncJobJson[]
@@ -1739,6 +1740,14 @@ describe('routerRequete — Structure Système (référentiel d’actifs, D1 = s
     expect(modification.status).toBe(200)
     expect(modification.corps.noeud.parentId).toBe(parent.corps.noeud.id)
     expect(modification.corps.noeud.auditLog).toHaveLength(2)
+
+    const statutInvente = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/structure-systeme/noeuds/${enfant.corps.noeud.id}`,
+      { jeton: admin.jeton, body: { qualificationStatus: 'presque_qualifie', action: 'statut' } },
+    )
+    expect(statutInvente.status).toBe(400)
   })
 
   test('créer une relation technique entre deux nœuds du même client', async () => {
@@ -2038,6 +2047,19 @@ describe('routerRequete — ACFC (méthode configurable par client, Phase 4a du 
     expect(evaluation.corps.evaluation.auditLog).toEqual([
       { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
     ])
+
+    const verdictInvente = await requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, {
+      jeton: admin.jeton,
+      body: {
+        methodProfileId: profil.corps.profil.id,
+        methodProfileVersion: profil.corps.profil.version,
+        assetNodeId: null,
+        nomElement: 'Vanne V-102',
+        reponses: { 'q-1': 'oui' },
+        verdict: 'tres_critique',
+      },
+    })
+    expect(verdictInvente.status).toBe(400)
 
     const liste = await requete(ctx, 'GET', `/clients/${clientId}/acfc`, { jeton: admin.jeton })
     expect(liste.corps.evaluations.map((e) => e.id)).toContain(evaluation.corps.evaluation.id)
@@ -2390,6 +2412,24 @@ describe('routerRequete — Impact Assessment / System Classification (F1 du cat
       { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
     ])
 
+    const verdictInvente = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/impact-assessment/evaluations`,
+      {
+        jeton: admin.jeton,
+        body: {
+          methodProfileId: profil.corps.profilImpact.id,
+          methodProfileVersion: profil.corps.profilImpact.version,
+          assetNodeId: null,
+          nomElement: 'Ligne L-202',
+          reponses: { 'q-1': 'oui' },
+          verdict: 'impact_indirect',
+        },
+      },
+    )
+    expect(verdictInvente.status).toBe(400)
+
     const liste = await requete(ctx, 'GET', `/clients/${clientId}/impact-assessment`, {
       jeton: admin.jeton,
     })
@@ -2500,6 +2540,23 @@ describe('routerRequete — Computer System Assessment (F3 du catalogue §10, Ph
       jeton: admin.jeton,
     })
     expect(liste.corps.evaluationsCsv.map((e) => e.id)).toContain(creation.corps.evaluationCsv.id)
+
+    for (const invalide of [{ categorieGamp5: 7 }, { pertinenceGxp: 'oui' }]) {
+      const refus = await requete(ctx, 'POST', `/clients/${clientId}/csv-assessment/evaluations`, {
+        jeton: admin.jeton,
+        body: {
+          assetNodeId: null,
+          nomSysteme: 'MES ligne B',
+          categorieGamp5: 4,
+          justificationCategorie: 'x',
+          pertinenceGxp: true,
+          pertinenceEresPart11: true,
+          justificationPertinence: 'x',
+          ...invalide,
+        },
+      })
+      expect(refus.status).toBe(400)
+    }
   })
 
   test('créer une évaluation sans champ obligatoire -> corps_invalide', async () => {
@@ -2677,6 +2734,58 @@ describe('routerRequete — Risk Assessment / AMDEC (Target Architecture §10, P
     expect(evaluation.corps.evaluationRisque.verdictInitial).toBe('acceptable')
     expect(evaluation.corps.evaluationRisque.iprResiduel).toBeNull()
     expect(evaluation.corps.evaluationRisque.verdictResiduel).toBeNull()
+
+    const severiteTexte = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/evaluations`,
+      {
+        jeton: admin.jeton,
+        body: {
+          methodProfileId: profil.corps.profilRisque.id,
+          methodProfileVersion: profil.corps.profilRisque.version,
+          assetNodeId: null,
+          parameterId: null,
+          etapeProcessus: 'Remplissage',
+          modeDefaillance: 'Sur-dosage',
+          effetDefaillance: '',
+          causePotentielle: '',
+          controleActuel: '',
+          severiteInitiale: '4',
+          occurrenceInitiale: 3,
+          detectabiliteInitiale: 2,
+          iprInitial: 24,
+          verdictInitial: 'acceptable',
+        },
+      },
+    )
+    expect(severiteTexte.status).toBe(400)
+
+    const profilInverse = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/profils`,
+      {
+        jeton: admin.jeton,
+        body: {
+          version: 'v2',
+          source: 'Profil inversé',
+          origin: 'defini_utilisateur',
+          echelleMin: 5,
+          echelleMax: 1,
+          seuilAction: 50,
+        },
+      },
+    )
+    expect(profilInverse.status).toBe(400)
+
+    const residuelInvente = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/risk-assessment/evaluations/${evaluation.corps.evaluationRisque.id}/action-residuelle`,
+      { jeton: admin.jeton, body: { verdictResiduel: 'a_surveiller' } },
+    )
+    expect(residuelInvente.status).toBe(400)
     expect(evaluation.corps.evaluationRisque.auditLog).toEqual([
       { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
     ])
@@ -3115,7 +3224,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
         type: 'deviation',
         titre: 'Écart température',
         description: 'x',
-        origine: 'production',
+        origine: 'interne',
         referenceExterne: null,
         assetNodeId: null,
         processId: null,
@@ -3149,6 +3258,51 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
     expect(creation.corps.erreur).toBe('corps_invalide')
   })
 
+  test('type, origine ou statut hors domaine -> corps_invalide (jamais un libellé affiché vide)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const base = {
+      titre: 'Écart',
+      description: '',
+      referenceExterne: null,
+      assetNodeId: null,
+      processId: null,
+      manufacturingContextId: null,
+    }
+
+    const typeInvente = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/quality-events/evenements`,
+      {
+        jeton: admin.jeton,
+        body: { ...base, type: 'incident_majeur', origine: 'interne' },
+      },
+    )
+    expect(typeInvente.status).toBe(400)
+
+    const origineInventee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/quality-events/evenements`,
+      { jeton: admin.jeton, body: { ...base, type: 'deviation', origine: 'production' } },
+    )
+    expect(origineInventee.status).toBe(400)
+
+    const valide = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
+      jeton: admin.jeton,
+      body: { ...base, type: 'deviation', origine: 'interne' },
+    })
+    const statutInvente = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/quality-events/evenements/${valide.corps.evenement.id}/statut`,
+      { jeton: admin.jeton, body: { statut: 'archive' } },
+    )
+    expect(statutInvente.status).toBe(400)
+  })
+
   test('changer le statut d’un événement : audit_log accumulé, jamais réécrit', async () => {
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
@@ -3159,7 +3313,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
         type: 'capa',
         titre: 'CAPA X',
         description: 'x',
-        origine: 'audit',
+        origine: 'externe',
         referenceExterne: null,
         assetNodeId: null,
         processId: null,
@@ -3202,7 +3356,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
         type: 'deviation',
         titre: 'Écart',
         description: 'x',
-        origine: 'production',
+        origine: 'interne',
         referenceExterne: { systeme: 'SAP-QM', identifiant: 'CC-2026-042' },
         assetNodeId: null,
         processId: null,
@@ -3215,7 +3369,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
         type: 'capa',
         titre: 'CAPA',
         description: 'x',
-        origine: 'audit',
+        origine: 'externe',
         referenceExterne: null,
         assetNodeId: null,
         processId: null,
@@ -3264,7 +3418,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
       type: 'deviation',
       titre: 'Ancien titre',
       description: 'x',
-      origine: 'production',
+      origine: 'interne',
       referenceExterne: null,
       assetNodeId: null,
       processId: null,
@@ -3517,6 +3671,14 @@ describe('routerRequete — Requirement/TestObjective/TestCandidate/Test/Couvert
     expect(changement.status).toBe(200)
     expect(changement.corps.testCandidate.statut).toBe('accepte')
     expect(changement.corps.testCandidate.auditLog).toHaveLength(2)
+
+    const statutInvente = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${candidat.id}/statut`,
+      { jeton: admin.jeton, body: { statut: 'valide_par_ia' } },
+    )
+    expect(statutInvente.status).toBe(400)
   })
 
   test('changer le statut d’un test candidate inexistant -> 404', async () => {
@@ -4023,6 +4185,61 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
     expect(recloture.corps.erreur).toBe('execution_deja_cloturee')
   })
 
+  test('valeurs hors domaine refusées : un enregistrement d’exécution immuable ne doit jamais porter un verdict/résultat/type inventé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const test = await creerTestApprouveDeTest(ctx, admin.jeton, clientId)
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId: test.id, assetNodeId: null },
+    })
+    const executionId = demarrage.corps.execution.id
+
+    const etape = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${executionId}/etapes`,
+      {
+        jeton: admin.jeton,
+        body: { testStepId: test.etapes[0]?.id, resultat: 'peut-etre', observation: '' },
+      },
+    )
+    expect(etape.status).toBe(400)
+    expect(etape.corps.erreur).toBe('corps_invalide')
+
+    const evenement = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${executionId}/evenements`,
+      { jeton: admin.jeton, body: { type: 'inconnu', description: 'x', qualityEventId: null } },
+    )
+    expect(evenement.status).toBe(400)
+
+    const preuve = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+      body: { executionId, executionStepId: null, type: 'video', titre: 'x', description: '' },
+    })
+    expect(preuve.status).toBe(400)
+
+    const cloture = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/executions/${executionId}/cloturer`,
+      { jeton: admin.jeton, body: { verdict: 'banane' } },
+    )
+    expect(cloture.status).toBe(400)
+    expect(cloture.corps.erreur).toBe('corps_invalide')
+
+    const encoreOuverte = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/executions/${executionId}/cloturer`,
+      { jeton: admin.jeton, body: { verdict: 'conforme_avec_ecart' } },
+    )
+    expect(encoreOuverte.status).toBe(200)
+  })
+
   test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
@@ -4401,7 +4618,7 @@ describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/Extra
   }> {
     const source = await requete(ctx, 'POST', `/clients/${clientId}/sources`, {
       jeton,
-      body: { type: 'document_procedural', titre: 'SOP-001' },
+      body: { type: 'document', titre: 'SOP-001' },
     })
     const version = await requete(
       ctx,
@@ -4456,7 +4673,7 @@ describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/Extra
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/sources`, {
       jeton: admin.jeton,
-      body: { type: 'document_procedural', titre: 'SOP-001' },
+      body: { type: 'document', titre: 'SOP-001' },
     })
     expect(creation.status).toBe(201)
     expect(creation.corps.source.titre).toBe('SOP-001')
@@ -4492,7 +4709,7 @@ describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/Extra
     const clientId = await creerClientDeTest(ctx, admin.jeton)
     const source = await requete(ctx, 'POST', `/clients/${clientId}/sources`, {
       jeton: admin.jeton,
-      body: { type: 'document_procedural', titre: 'SOP-001' },
+      body: { type: 'document', titre: 'SOP-001' },
     })
 
     const v1 = await requete(
@@ -4716,7 +4933,7 @@ describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/Extra
     const sourceLocale = {
       id: 'source-locale-1',
       clientId,
-      type: 'document_procedural',
+      type: 'document',
       titre: 'Ancien titre',
       createdAt: '2026-01-01T00:00:00.000Z',
     }
@@ -4944,6 +5161,14 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     })
     expect(creation.corps.contentPlan.readiness).toBe('besoin_information')
 
+    const avantChaine = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/content-plans/${creation.corps.contentPlan.id}/recalculer-readiness`,
+      { jeton: admin.jeton },
+    )
+    expect(avantChaine.corps.raisons).toEqual(['Aucune exigence rattachée à cet actif.'])
+
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const recalcul = await requete(
@@ -4954,7 +5179,8 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     )
     expect(recalcul.status).toBe(200)
     expect(recalcul.corps.contentPlan.readiness).toBe('pret')
-    expect(recalcul.corps.contentPlan.auditLog).toHaveLength(2)
+    expect(recalcul.corps.raisons).toEqual([])
+    expect(recalcul.corps.contentPlan.auditLog).toHaveLength(3)
   })
 
   test('recalculer readiness sur un plan gelé -> deja_gele', async () => {
@@ -5731,12 +5957,34 @@ describe('routerRequete — Mission/Activity (Target Architecture, domaine "Work
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
     const missionId = await creerMissionDeTest(ctx, admin.jeton, clientId)
+    const evenement = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
+      jeton: admin.jeton,
+      body: {
+        type: 'change_control',
+        titre: 'CC-1',
+        description: '',
+        origine: 'interne',
+        referenceExterne: null,
+        assetNodeId: null,
+        processId: null,
+        manufacturingContextId: null,
+      },
+    })
+    const qualityEventId = evenement.corps.evenement.id
+
+    const inexistant = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/quality-events`,
+      { jeton: admin.jeton, body: { qualityEventId: 'qe-inexistant' } },
+    )
+    expect(inexistant.status).toBe(404)
 
     const premiere = await requete(
       ctx,
       'POST',
       `/clients/${clientId}/missions/${missionId}/quality-events`,
-      { jeton: admin.jeton, body: { qualityEventId: 'qe-1' } },
+      { jeton: admin.jeton, body: { qualityEventId } },
     )
     expect(premiere.status).toBe(201)
 
@@ -5744,7 +5992,7 @@ describe('routerRequete — Mission/Activity (Target Architecture, domaine "Work
       ctx,
       'POST',
       `/clients/${clientId}/missions/${missionId}/quality-events`,
-      { jeton: admin.jeton, body: { qualityEventId: 'qe-1' } },
+      { jeton: admin.jeton, body: { qualityEventId } },
     )
     expect(seconde.status).toBe(200)
     expect(seconde.corps.association.id).toBe(premiere.corps.association.id)
@@ -5880,6 +6128,62 @@ describe('routerRequete — Mission/Activity (Target Architecture, domaine "Work
 
     const liste = await requete(ctx, 'GET', `/clients/${clientId}/missions`, { jeton: admin.jeton })
     expect(liste.corps.dependencies).toHaveLength(1)
+
+    const autoDependance = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/activities/${source.corps.activity.id}/dependances`,
+      { jeton: admin.jeton, body: { activityCibleId: source.corps.activity.id } },
+    )
+    expect(autoDependance.status).toBe(400)
+
+    const cibleInexistante = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/activities/${source.corps.activity.id}/dependances`,
+      { jeton: admin.jeton, body: { activityCibleId: 'activite-inexistante' } },
+    )
+    expect(cibleInexistante.status).toBe(404)
+  })
+
+  test('activité sur mission inexistante, statuts hors domaine -> refusés', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const missionId = await creerMissionDeTest(ctx, admin.jeton, clientId)
+
+    const orpheline = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/mission-inexistante/activities`,
+      { jeton: admin.jeton, body: { titre: 'x', description: '' } },
+    )
+    expect(orpheline.status).toBe(404)
+
+    const statutMission = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/missions/${missionId}/statut`,
+      { jeton: admin.jeton, body: { statut: 'archivee' } },
+    )
+    expect(statutMission.status).toBe(400)
+
+    const activite = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/activities`,
+      {
+        jeton: admin.jeton,
+        body: { titre: 'Revue', description: '' },
+      },
+    )
+    const statutActivite = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/activities/${activite.corps.activity.id}/statut`,
+      { jeton: admin.jeton, body: { statut: 'annulee' } },
+    )
+    expect(statutActivite.status).toBe(400)
   })
 
   test('migration locale : idempotente, id existant ignoré', async () => {
@@ -6336,7 +6640,7 @@ describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reas
       body: {
         aiRequestId: aiRequest.corps.request.id,
         texte: 'Voici la réponse.',
-        etatConfiance: 'eleve',
+        etatConfiance: 'connu',
         traceAppelsOutils: [
           {
             outil: 'recherche_documents',
@@ -6397,7 +6701,7 @@ describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reas
         body: {
           aiRequestId: aiRequest.corps.request.id,
           texte: 'Réponse',
-          etatConfiance: 'eleve',
+          etatConfiance: 'connu',
           traceAppelsOutils: [],
         },
       },
@@ -6414,7 +6718,7 @@ describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reas
           },
           {
             aiResponseId: aiResponse.corps.response.id,
-            typeObjetCite: 'quality_event',
+            typeObjetCite: 'requirement',
             objetId: 'qe-1',
           },
         ],
@@ -6468,7 +6772,7 @@ describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reas
       clientId,
       aiRequestId: 'request-locale-1',
       texte: 'Réponse locale',
-      etatConfiance: 'moyen',
+      etatConfiance: 'infere',
       traceAppelsOutils: [],
       versionMoteur: null,
       createdAt: '2024-01-01T00:00:00.000Z',
@@ -6879,6 +7183,47 @@ describe("routerRequete — GabaritExportClient (gabarits d'export .docx personn
     )
     expect(reponseContenu.status).toBe(200)
     expect(new Uint8Array(await reponseContenu.arrayBuffer())).toEqual(octets)
+  })
+
+  test('un utilisateur sans accès au client ne peut ni lire ni supprimer son gabarit', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const creation = await creerGabaritExportClient(ctx, admin.jeton, clientId)
+    const gabaritId = creation.corps.gabarit.id
+
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'externe@autre-labo.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'N',
+        prenom: 'P',
+        role: 'utilisateur',
+      },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email: 'externe@autre-labo.example', motDePasse: 'MotDePasse!1' },
+    })
+    const jetonExterne = login.corps.jeton
+
+    const lecture = await routerRequete(
+      new Request(`https://relais.workers.dev/gabarits-export/${gabaritId}/contenu`, {
+        headers: { Authorization: `Bearer ${jetonExterne}` },
+      }),
+      ctx,
+    )
+    expect(lecture.status).toBe(404)
+
+    const suppression = await requete(ctx, 'DELETE', `/gabarits-export/${gabaritId}`, {
+      jeton: jetonExterne,
+    })
+    expect(suppression.status).toBe(404)
+
+    const toujoursLa = await requete(ctx, 'GET', `/clients/${clientId}/gabarits-export`, {
+      jeton: admin.jeton,
+    })
+    expect(toujoursLa.corps.gabarits).toHaveLength(1)
   })
 
   test('création sans nom -> nom_obligatoire', async () => {

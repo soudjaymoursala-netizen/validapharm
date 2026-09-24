@@ -3353,3 +3353,226 @@ d'autorisation :
   de s'authentifier pour qu'une session future le fasse à sa place —
   jamais une réinitialisation du mot de passe d'un compte admin réel
   sans consigne explicite et précise sur ce point.
+
+## 30. Validation fonctionnelle réelle en navigateur (23/09/2026)
+
+Suite à la demande « lire tous les dossiers, améliorer le projet, sortir
+un projet fini », et après avoir confirmé (§29.3-§29.6, `docs/convergence/`)
+qu'aucun manque réel non traité ne subsistait dans les documents de suivi,
+l'angle de validation qui restait à couvrir était le seul qui n'avait
+jamais été fait cette session : **faire tourner l'application réelle et
+cliquer dedans comme un utilisateur**, pas seulement relire des tests
+automatisés déjà verts.
+
+### 30.1 Environnement local jetable (jamais la production)
+
+- `workers/auth-worker` lancé en local via `wrangler dev --local`
+  (port 8787), avec les 28 migrations D1 appliquées à une base **locale**
+  (`npm run migrate:local`) — jamais la base de production
+  (`database_id 5fb762ef-fe99-4e68-9086-e57126c5c2aa`).
+- Secrets `.dev.vars` générés localement, jetables, jamais commités
+  (`.gitignore` couvre déjà `.dev.vars` et `.wrangler/`) — supprimés en
+  fin de session.
+- Un compte admin de test jetable créé via `/auth/bootstrap-admin`
+  (`test-local@validapharm.local`), qui n'existe que dans cette base D1
+  locale, jamais en production.
+- Frontend lancé via `npm run dev` (Vite, port 5173).
+- Navigation pilotée par Playwright (Chromium pré-installé de
+  l'environnement), captures d'écran à chaque étape.
+
+### 30.2 Parcours réellement testé
+
+Configuration client (URL du Worker d'authentification) → connexion
+réelle (JWT émis par le Worker local) → tableau de bord → création d'un
+client (« Client Test E2E ») → création d'un projet (« Projet Test
+E2E ») → ouverture de l'espace de travail projet (contexte, phase de
+cycle de vie, partage, stepper de progression du dossier de
+qualification Contexte procédé/URS/DQ/FAT/SAT/IQ/OQ/PQ/Validation,
+sections, documents) → écran Structure Système / Architecture (import
+Excel, import SAP, nœuds du référentiel, relations techniques) → écran
+Bibliothèque de normes (ajout de documents, import GitHub, import
+Google Drive).
+
+### 30.3 Résultat : aucun bug applicatif trouvé
+
+Zéro erreur console, zéro requête HTTP en échec (`>= 400`) sur
+l'ensemble du parcours. Quelques échecs de sélecteur dans mes propres
+scripts Playwright (ex. cibler la barre de recherche au lieu du champ
+« Nom de l'entreprise ») ont été corrigés en cours de route — ce sont
+des erreurs de script de test, pas des bugs de l'application.
+
+Points positifs concrets confirmés en conditions réelles (pas seulement
+en lecture de code) :
+- L'attribution ALCOA+ fonctionne réellement de bout en bout : le projet
+  créé affiche « Créé par : test-local@validapharm.local », dérivé de la
+  vraie session JWT, jamais d'un champ fabriqué.
+- L'écran Structure Système affiche exactement l'algorithme
+  correctif documenté en §29.4 (détection du rang depuis la position
+  réelle du fichier, jamais depuis le rendu visuel).
+- L'écran Bibliothèque de normes confirme que le blocage documenté en
+  §29.6 est bien un blocage d'identifiants réels, pas de mécanique
+  manquante — l'écran d'import est complet et fonctionnel.
+
+### 30.4 Conclusion
+
+Cette validation live s'ajoute (elle ne remplace pas) aux suites de
+tests automatisés déjà vertes. Elle ne remplace pas non plus un audit
+UX/ergonomie exhaustif de tous les écrans de l'application (il en reste
+plusieurs dizaines, hors du périmètre raisonnable d'une session) — mais
+sur le parcours central testé (client → projet → structure système →
+normes), l'application se comporte exactement comme le code et la
+documentation le décrivent, sans écart trouvé entre l'un et l'autre.
+L'environnement local jetable a été entièrement démonté en fin de
+session (serveurs arrêtés, `.dev.vars` supprimé) ; le dépôt reste
+inchangé (`.wrangler/` et `.dev.vars` déjà couverts par
+`.gitignore`).
+
+## 31. Deuxième passe de test en direct (23/09/2026) — 2 bugs réels trouvés et corrigés
+
+Suite à la demande explicite de pousser le test plus loin (« tester le
+logiciel, et corriger les bugs »), le même environnement local jetable
+(§30) a été relancé pour un balayage systématique des 28 routes de
+l'application, puis pour dérouler en direct, dans le navigateur, la
+chaîne complète Structure Système → Risk Assessment (AMDEC) → Test
+Design Engine → Exécution — la même chaîne fonctionnelle déjà vérifiée
+en lecture de code (§29 et sessions précédentes), mais jamais encore
+réellement exécutée de bout en bout par un utilisateur.
+
+### 31.1 Balayage des 28 routes
+
+Chaque route de `src/presentation/router/index.ts` chargée dans un
+navigateur réel avec session authentifiée : zéro erreur console, zéro
+requête HTTP en échec, aucune redirection inattendue sur les 28 routes.
+
+### 31.2 Bug réel n°1 — clé de niveau dupliquée non détectée
+
+**Trouvé** en manipulant réellement l'écran Structure Système : deux
+niveaux affichés comme « Équipement (equipement) » identiques dans la
+liste, indiscernables l'un de l'autre.
+
+**Cause racine** (`src/presentation/stores/useStructureSystemeStore.ts`,
+fonction `ajouterNiveau`) : contrairement à `modifierNiveau` juste
+en-dessous, qui refuse explicitement une clé déjà utilisée (raison
+`cle_deja_utilisee`), `ajouterNiveau` empilait le nouveau niveau sans
+aucune vérification d'unicité de `key`. Aggravant : le `v-for` de
+`StructureSysteme.vue` utilise `niveau.key` comme `:key` Vue — deux
+niveaux de même clé produisent une collision de clé de rendu Vue, un
+comportement non garanti.
+
+**Correctif** : `ajouterNiveau` retourne désormais
+`ResultatAjoutNiveau` (`{ ok: true } | { ok: false; raison:
+'cle_deja_utilisee' }`), même discipline que `modifierNiveau` ; le
+composant affiche le message d'erreur déjà existant
+(`messageErreurNiveau`) au lieu de vider silencieusement le
+formulaire. Un test de régression a été ajouté
+(`structureSysteme.test.ts`). Vérifié en direct dans le navigateur
+après correctif : le message « Cette clé est déjà utilisée par un
+autre niveau. » s'affiche bien et aucun doublon n'est créé.
+
+### 31.3 Bug réel n°2 — `.wrangler/**` absent des exclusions ESLint
+
+**Trouvé** en relançant `npm run lint` après une session de test local
+avec `wrangler dev` : ~380 erreurs de style remontées, toutes situées
+dans `workers/auth-worker/.wrangler/tmp/**` — du code de bundling
+généré par Wrangler lui-même (jamais commité, déjà exclu par
+`.gitignore`), jamais du code du projet.
+
+**Cause racine** (`eslint.config.js`) : la liste `ignores` excluait
+`dist/**`, `node_modules/**` et `prototype-initial/**`, mais pas
+`.wrangler/**` — un gouffre qui ne se manifeste que pour tout
+contributeur ayant déjà lancé `wrangler dev` localement au moins une
+fois, jamais en CI (qui ne lance jamais le Worker avant de linter).
+
+**Correctif** : ajout de `'**/.wrangler/**'` à `ignores`. Revérifié :
+`npm run lint` (`--max-warnings 0`) revient propre après un cycle
+complet `wrangler dev` + suppression du dossier.
+
+### 31.4 Chaîne fonctionnelle vérifiée en direct, de bout en bout
+
+Sur un client/projet de test jetable : création d'un niveau et d'un
+nœud Structure Système (« Pompe P-101 ») → configuration du profil
+AMDEC → création d'une ligne AMDEC (S=5, O=5, D=3 → IPR 75, verdict
+« Action requise », calcul confirmé conforme à
+`evaluerVerdictRiskAssessment`) → création d'une exigence liée au
+nœud (indicateur « ⚠ non couvert » confirmé) → création d'un objectif
+de test → clic réel sur « Proposer des candidats depuis les risques »
+→ un candidat réellement généré, badge « proposé depuis l'analyse de
+risque », indicateur de couverture passé à « ✓ couvert » → acceptation
+du candidat → création et approbation du test → déclaration de la
+couverture (« URS-001 … couvert par « Test de maîtrise de la pression
+de refoulement » ») → le test approuvé apparaît correctement dans
+l'écran Exécution de tests. Zéro erreur console/réseau sur l'ensemble
+de la chaîne.
+
+**Conclusion : le Test Design Engine (§29, `genererCandidatsDepuisRisques`/
+`evaluerCouvertureRisques`) fonctionne réellement de bout en bout**, pas
+seulement en tests automatisés — première confirmation par clic réel
+depuis sa construction. Validation : `vue-tsc -b --noEmit` propre,
+`eslint . --max-warnings 0` propre, 1483/1483 tests unitaires verts
+(167 fichiers). Environnement local à nouveau entièrement démonté en
+fin de section (`.dev.vars` et `.wrangler/` supprimés).
+
+## 32. Troisième passe de test en direct (24/09/2026) — tous les écrans métier
+
+Poursuite de §30-§31 sur tous les écrans restants, même environnement
+local jetable (Worker + D1 locaux, jamais la production), en suivant pour
+chaque constat la même discipline : reproduire en navigateur réel,
+remonter à la cause dans le code, vérifier la documentation du projet
+avant de trancher (règle écrite → corrigée ; décision de méthode non
+écrite → signalée, jamais tranchée seul), corriger, test de régression,
+revérifier en navigateur.
+
+### 32.1 Bugs trouvés et corrigés
+
+| # | Écran / couche | Constat reproduit | Correctif |
+|---|---|---|---|
+| 1 | Worker — Exécution | Exécution **clôturée (donc immuable)** avec le verdict « banane », résultat d'étape « peut-etre » : aucune valeur n'était confrontée à son énumération | Validation au Worker (verdict, résultat, type d'événement, type de preuve) |
+| 2 | Worker — tout le routeur | Balayage systématique : **plus de 40 champs** d'énumération, numériques ou booléens jamais validés (types/origines/statuts d'événements qualité, statuts de candidats de test, de missions, d'activités, de qualification d'actif, verdicts ACFC/Impact/AMDEC, catégorie GAMP hors 1–5, notes S/O/D en texte…) | Listes reprises à l'identique des types du domaine ; fixtures de test qui utilisaient des valeurs hors domaine corrigées (invisibles tant que le Worker acceptait tout) |
+| 3 | Worker — Modèles d'export | **Faille d'autorisation (IDOR)** : tout utilisateur connecté pouvait **télécharger et supprimer** le modèle `.docx` d'un client auquel il n'a pas accès. Prouvé par test : 200 sans correctif, 404 avec | `exigerAccesClient` sur le client propriétaire du modèle ; confirmation avant suppression à l'écran |
+| 4 | Exécution de tests | Une exécution clôturée n'affichait plus que son verdict : résultats, mesures, déviations et preuves devenaient invisibles | Vue dépliable en lecture seule ; libellés et dates lisibles ; référence de preuve affichée ; avertissement non bloquant s'il reste des étapes sans résultat |
+| 5 | Missions | Dépendance circulaire et auto-dépendance acceptées ; dépendances jamais affichées ; événement associé affiché en UUID ; activité orpheline possible (mission inexistante) | Détection de cycle via `parcourirGraphe` (`logique-metier/graphe/dependancesActivites.ts`), affichage, vérification d'existence au Worker |
+| 6 | Impact Assessment | Verdict **affiché** ≠ verdict **enregistré** (règle dupliquée à l'écran + réponses de la version précédente jamais effacées) | L'écran appelle le moteur `evaluerVerdictImpactAssessment` ; réponses effacées à chaque nouvelle version (Impact et ACFC) |
+| 7 | AMDEC | Sévérité 9 sur échelle 1–5 : ligne créée silencieusement sans IPR ni verdict ; profil min ≥ max accepté (tout IPR futur incalculable) | Notes bornées à l'échelle (initiales : profil actif ; résiduelles : profil figé de la ligne), profil incohérent refusé écran + Worker, ligne hors échelle expliquée |
+| 8 | Paramètres critiques | Même CPP (paramètre + contexte) déclarable deux fois ; « Désactiver » sans motif ne faisait rien, sans retour | Doublon actif refusé (CPP et CQA), message de motif obligatoire |
+| 9 | Procédures | **R-21 violée** : v1 et v2 d'une SOP affichées comme toutes deux en vigueur ; **catégorie par défaut silencieuse** (« Production ») contraire à la règle écrite du domaine ; référence non nettoyée (espace final = nouvelle SOP) | Badges « Version applicable » / « Obsolète — remplacée par la vN », catégorie obligatoire, rappel de révision, `useProcedureStore.remplaceePar` |
+| 10 | Sélecteurs de procédure (assistant, éditeur) | Toutes les révisions sous un libellé identique : liaison possible à une SOP obsolète sans le savoir | Version + « (obsolète) » ; l'éditeur signale une procédure liée remplacée depuis |
+| 11 | Barre latérale | Ouvrir un projet du client B après le client A laissait « Site actif : A » avec les outils de A | Les écrans projet suivent `projet.client_id` ; `?clientId=` pris en compte |
+| 12 | Plans de livrable | « Besoin de revue » sans aucune explication | Le Worker renvoie une raison par maillon manquant de la chaîne, listée sous le plan |
+| 13 | Libellés | Codes bruts affichés (`contexte_procede`, `non_qualifie`, `ouverte`, `brouillon`, `[cqv]`…) | Libellés partagés : `logique-metier/i18n/libellesStatutQualification.ts`, `presentation/i18n/libellesGabarit.ts` (règle de trois atteinte) |
+| 14 | Test instable | `DossierVivantActif.test.ts` n'attendait qu'une des deux sources chargées en concurrence | Attente de toutes les données vérifiées |
+
+Écrans testés sans défaut trouvé : Journal d'anomalies (références
+dédupliquées, audit complet), Process (rattachements dédupliqués), Suivi
+de périodicité (calcul de retard exact), CSV Assessment, structuration de
+procédure déterministe sans relais IA (conditions d'étape détectées),
+« Raisonner » sans relais IA (message clair).
+
+### 32.2 Questions de méthode signalées à l'utilisateur, **non tranchées**
+
+1. **Réponses « Inconnu » (ACFC / Impact Assessment)** : un questionnaire
+   entièrement répondu « Inconnu » est complet et aboutit au verdict le
+   moins prudent (« Non critique » / « Not Direct Impact »). Aucune règle
+   écrite ; le projet pose ailleurs le principe inverse (« jamais un
+   verdict deviné », AMDEC).
+2. **Catégorie GAMP 2 (Firmware)** : proposée à l'écran nommé « GAMP5 »,
+   alors que GAMP 5 (2008 et 2ᵉ éd. 2022) l'a abandonnée. Source retenue
+   par le projet : PIC/S PI 011-3 (2007, reprise de GAMP 4).
+3. **Readiness et retest** : une exécution historique « non conforme »
+   bloque le plan définitivement, même après un retest conforme — alors
+   que le domaine modélise explicitement le retest. De même, les
+   exécutions d'un test sur un *autre* actif comptent pour ce plan.
+4. **Partage projets/sections en « convention UX »** (décision explicite
+   de l'utilisateur, TECHNICAL_DECISIONS.md) : prise quand tout reposait
+   sur un dépôt Git partagé. Depuis le Worker/D1 et l'authentification
+   réelle, cette prémisse ne tient plus — le Worker pourrait appliquer le
+   partage réellement. À reconfirmer ou rouvrir.
+
+### 32.3 Validation
+
+Chaque correctif : test de régression (Worker ou front), `vue-tsc -b`,
+`eslint --max-warnings 0`, `prettier --check`, suite complète, puis
+revérification en navigateur réel. Une erreur de type introduite dans un
+test déjà poussé (`CorpsReponse.raisons`, que Vitest ne vérifie pas) a
+été trouvée par la validation complète et corrigée dans le commit suivant.
+La CI du dépôt ne tourne que sur pull request : les commits de cette
+section sont regroupés dans une PR pour passer la barrière qualité.

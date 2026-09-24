@@ -14,18 +14,20 @@
 // dédié et continuent de n'être journalisés qu'en texte. Vision
 // utilisateur : "Context First" — les sections ne sont jamais des silos
 // indépendants.
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import type { Project, TemplateType } from '../../logique-metier/domaine/types'
+import type { CategorieProcedure, Project, TemplateType } from '../../logique-metier/domaine/types'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useMethodProfileACFCStore } from '../stores/useMethodProfileACFCStore'
 import { useProcedureStore } from '../stores/useProcedureStore'
 import { useProcessContextStore } from '../stores/useProcessContextStore'
+import { useClientActifStore } from '../stores/useClientActifStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useRiskAssessmentStore } from '../stores/useRiskAssessmentStore'
 import { sectionWireVersDomaine, useSectionsStore } from '../stores/useSectionsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
+import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
 
 defineOptions({ name: 'EcranAssistantCreationLivrable' })
 const props = defineProps<{ projectId: string }>()
@@ -41,6 +43,14 @@ const methodStore = useMethodProfileACFCStore()
 const sectionsStore = useSectionsStore()
 
 const projet = ref<Project | undefined>(undefined)
+// Un projet appartient à un client : la barre latérale doit proposer les
+// outils de CE client, jamais ceux du client visité précédemment.
+watch(
+  () => projet.value?.client_id,
+  (clientId) => {
+    if (clientId) useClientActifStore().definirClientActif(clientId)
+  },
+)
 const nomClient = ref<string | null>(null)
 const chargementTermine = ref(false)
 
@@ -116,6 +126,11 @@ function precedent(): void {
 }
 
 const procedurePertinentes = computed(() => procedureStore.procedures)
+const LIBELLES_CATEGORIE_PROCEDURE: Record<CategorieProcedure, string> = {
+  cqv: 'CQV',
+  csv: 'CSV',
+  production: 'Production',
+}
 const evaluationsRisque = computed(() => riskStore.evaluations)
 const verdictsAVerifier = computed(
   () => evaluationsRisque.value.filter((e) => e.verdict_initial === 'action_requise').length,
@@ -242,7 +257,9 @@ async function genererLivrable(depuisDocument: boolean): Promise<void> {
         Gabarit
         <select v-model="templateChoisi">
           <option :value="null">— choisir —</option>
-          <option v-for="type in CATALOGUE_DISPONIBLE" :key="type" :value="type">{{ type }}</option>
+          <option v-for="type in CATALOGUE_DISPONIBLE" :key="type" :value="type">
+            {{ LIBELLES_GABARIT[type] }}
+          </option>
         </select>
       </label>
       <div class="actions">
@@ -316,7 +333,10 @@ async function genererLivrable(depuisDocument: boolean): Promise<void> {
         <select v-model="procedureSelectionneeId">
           <option value="">— aucune —</option>
           <option v-for="p in procedurePertinentes" :key="p.id" :value="p.id">
-            [{{ p.categorie }}] {{ p.reference }} — {{ p.titre }}
+            [{{ LIBELLES_CATEGORIE_PROCEDURE[p.categorie] }}] {{ p.reference }} v{{
+              p.numero_version
+            }}
+            — {{ p.titre }}{{ procedureStore.remplaceePar(p) ? ' (obsolète)' : '' }}
           </option>
         </select>
       </label>

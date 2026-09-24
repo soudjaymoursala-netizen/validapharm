@@ -268,6 +268,85 @@ async function lireCorpsJson<T>(request: Request): Promise<T | null> {
   }
 }
 
+function estNombre(valeur: unknown): valeur is number {
+  return typeof valeur === 'number' && Number.isFinite(valeur)
+}
+
+function nombreOptionnelInvalide(valeur: unknown): boolean {
+  return valeur !== null && valeur !== undefined && !estNombre(valeur)
+}
+
+/** Valeur optionnelle (`null`/absente acceptée) mais hors de son énumération de domaine. */
+function horsDomaine(valeur: string | null | undefined, valides: readonly string[]): boolean {
+  return valeur !== null && valeur !== undefined && !valides.includes(valeur)
+}
+
+const ORIGINES_METHOD_PROFILE = [
+  'procedure_client',
+  'defini_utilisateur',
+  'baseline_validapharm',
+] as const
+const NIVEAUX_CRITICITE_PARAMETRE = ['important', 'critique'] as const
+const TYPES_PROCESS = [
+  'manufacturing',
+  'packaging',
+  'facility',
+  'digital',
+  'csv',
+  'document_workflow',
+  'business',
+  'ehs',
+  'logistics',
+  'support',
+  'other',
+] as const
+const STATUTS_TEST_CANDIDATE = [
+  'propose',
+  'besoin_information',
+  'besoin_revue',
+  'accepte',
+  'rejete',
+  'doublon',
+  'remplace',
+] as const
+const SYSTEMES_LOCALISATION = ['github', 'drive', 'externe'] as const
+const TYPES_SOURCE = ['document', 'image'] as const
+const TYPES_METHOD_PROFILE_REFERENCE = ['acfc', 'impact_assessment'] as const
+const TYPES_CONNECTOR = [
+  'github',
+  'google_drive',
+  'veeva_vault',
+  'sharepoint',
+  'dossier_reseau',
+  'edms_generique',
+] as const
+const ETATS_CONFIANCE_IA = ['connu', 'infere', 'inconnu', 'conflit', 'a_verifier'] as const
+const TYPES_OBJET_CITABLE = [
+  'requirement',
+  'test',
+  'evidence',
+  'knowledge_item',
+  'asset_node',
+  'procedure_step',
+] as const
+const CATEGORIES_PROCEDURE = ['cqv', 'csv', 'production'] as const
+const MODES_USAGE_IA = ['chat_normatif', 'audit_simule'] as const
+const STATUTS_QUALIFICATION = [
+  'non_qualifie',
+  'en_cours_qualification_initiale',
+  'qualifie',
+  'qualifie_ecart_ouvert',
+  'requalification_requise',
+  'requalification_en_retard',
+  'suspendu',
+  'declasse',
+] as const
+const STATUTS_MISSION = ['ouverte', 'en_cours', 'cloturee'] as const
+const STATUTS_ACTIVITY = ['a_faire', 'en_cours', 'terminee', 'bloquee'] as const
+const VERDICTS_ACFC = ['critique', 'non_critique'] as const
+const VERDICTS_IMPACT_ASSESSMENT = ['impact_direct', 'non_impact_direct'] as const
+const VERDICTS_RISK_ASSESSMENT = ['acceptable', 'action_requise'] as const
+
 async function authentifier(
   request: Request,
   ctx: Contexte,
@@ -2518,7 +2597,9 @@ async function gererModifierNoeud(
     periodicQualification?: { applicable: boolean; deadline: string | null }
     action?: string
   }>(request)
-  if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps || horsDomaine(corps.qualificationStatus, STATUTS_QUALIFICATION)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const misAJour: AssetNodeEnregistre = {
@@ -2602,8 +2683,9 @@ function profilAcfcDepuisSaisie(
     !saisie.version ||
     !saisie.source ||
     !saisie.origin ||
+    !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(saisie.origin) ||
     !Array.isArray(saisie.questions) ||
-    !saisie.decisionRule
+    saisie.decisionRule !== 'au_moins_un_oui_critique'
   ) {
     return null
   }
@@ -2678,7 +2760,8 @@ async function gererCreerEvaluationAcfc(
     !corps?.methodProfileId ||
     !corps.methodProfileVersion ||
     !corps.nomElement ||
-    !corps.reponses
+    !corps.reponses ||
+    horsDomaine(corps.verdict, VERDICTS_ACFC)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
@@ -2827,7 +2910,12 @@ async function gererCreerClassification(
   if (acteur instanceof Response) return acteur
 
   const corps = await lireCorpsJson<SaisieCreationClassification>(request)
-  if (!corps?.parameterId || !corps.niveau || !corps.justification) {
+  if (
+    !corps?.parameterId ||
+    !corps.niveau ||
+    !(NIVEAUX_CRITICITE_PARAMETRE as readonly string[]).includes(corps.niveau) ||
+    !corps.justification
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const maintenant = horodatage()
@@ -3072,8 +3160,9 @@ function profilImpactAssessmentDepuisSaisie(
     !saisie.version ||
     !saisie.source ||
     !saisie.origin ||
+    !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(saisie.origin) ||
     !Array.isArray(saisie.questions) ||
-    !saisie.decisionRule
+    saisie.decisionRule !== 'au_moins_un_oui_impact_direct'
   ) {
     return null
   }
@@ -3152,7 +3241,8 @@ async function gererCreerEvaluationImpactAssessment(
     !corps?.methodProfileId ||
     !corps.methodProfileVersion ||
     !corps.nomElement ||
-    !corps.reponses
+    !corps.reponses ||
+    horsDomaine(corps.verdict, VERDICTS_IMPACT_ASSESSMENT)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
@@ -3260,9 +3350,10 @@ async function gererCreerEvaluationCsvAssessment(
   if (
     !corps?.nomSysteme ||
     !corps.categorieGamp5 ||
+    ![1, 2, 3, 4, 5].includes(corps.categorieGamp5) ||
     !corps.justificationCategorie ||
-    corps.pertinenceGxp === undefined ||
-    corps.pertinenceEresPart11 === undefined ||
+    typeof corps.pertinenceGxp !== 'boolean' ||
+    typeof corps.pertinenceEresPart11 !== 'boolean' ||
     !corps.justificationPertinence
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
@@ -3370,9 +3461,11 @@ async function gererCreerProfilRiskAssessment(
     !corps?.version ||
     !corps.source ||
     !corps.origin ||
-    corps.echelleMin === undefined ||
-    corps.echelleMax === undefined ||
-    corps.seuilAction === undefined
+    !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(corps.origin) ||
+    !estNombre(corps.echelleMin) ||
+    !estNombre(corps.echelleMax) ||
+    corps.echelleMin >= corps.echelleMax ||
+    !estNombre(corps.seuilAction)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
@@ -3432,7 +3525,12 @@ async function gererCreerEvaluationRiskAssessment(
     !corps.modeDefaillance ||
     corps.effetDefaillance === undefined ||
     corps.causePotentielle === undefined ||
-    corps.controleActuel === undefined
+    corps.controleActuel === undefined ||
+    nombreOptionnelInvalide(corps.severiteInitiale) ||
+    nombreOptionnelInvalide(corps.occurrenceInitiale) ||
+    nombreOptionnelInvalide(corps.detectabiliteInitiale) ||
+    nombreOptionnelInvalide(corps.iprInitial) ||
+    horsDomaine(corps.verdictInitial, VERDICTS_RISK_ASSESSMENT)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
@@ -3507,7 +3605,16 @@ async function gererEnregistrerActionResiduelleRiskAssessment(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<SaisieActionResiduelleRiskAssessment>(request)
-  if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (
+    !corps ||
+    nombreOptionnelInvalide(corps.severiteResiduelle) ||
+    nombreOptionnelInvalide(corps.occurrenceResiduelle) ||
+    nombreOptionnelInvalide(corps.detectabiliteResiduelle) ||
+    nombreOptionnelInvalide(corps.iprResiduel) ||
+    horsDomaine(corps.verdictResiduel, VERDICTS_RISK_ASSESSMENT)
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const evaluationRisque: RiskAssessmentEnregistre = {
@@ -3636,7 +3743,12 @@ async function gererCreerProcess(
   const corps = await lireCorpsJson<SaisieCreationProcess>(request)
   // `description` peut être vide sans être invalide, même discipline que
   // `gererCreerParametre`.
-  if (!corps?.nom || corps.description === undefined || !corps.type) {
+  if (
+    !corps?.nom ||
+    corps.description === undefined ||
+    !corps.type ||
+    !(TYPES_PROCESS as readonly string[]).includes(corps.type)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const maintenant = horodatage()
@@ -3893,6 +4005,17 @@ interface SaisieCreationQualityEvent {
   manufacturingContextId?: string | null
 }
 
+const TYPES_QUALITY_EVENT = [
+  'change_control',
+  'deviation',
+  'capa',
+  'investigation',
+  'audit_finding',
+  'periodic_review',
+] as const
+const ORIGINES_QUALITY_EVENT = ['interne', 'externe', 'mixte'] as const
+const STATUTS_QUALITY_EVENT = ['ouvert', 'en_cours', 'cloture'] as const
+
 async function gererCreerEvenementQualityEvent(
   request: Request,
   ctx: Contexte,
@@ -3905,7 +4028,14 @@ async function gererCreerEvenementQualityEvent(
   const corps = await lireCorpsJson<SaisieCreationQualityEvent>(request)
   // `description` peut être vide sans être invalide, même discipline que
   // `gererCreerParametre`/`gererCreerProcess`.
-  if (!corps?.type || !corps.titre || corps.description === undefined || !corps.origine) {
+  if (
+    !corps?.type ||
+    !(TYPES_QUALITY_EVENT as readonly string[]).includes(corps.type) ||
+    !corps.titre ||
+    corps.description === undefined ||
+    !corps.origine ||
+    !(ORIGINES_QUALITY_EVENT as readonly string[]).includes(corps.origine)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -3949,7 +4079,9 @@ async function gererChangerStatutQualityEvent(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<SaisieChangementStatutQualityEvent>(request)
-  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.statut || !(STATUTS_QUALITY_EVENT as readonly string[]).includes(corps.statut)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const evenement: QualityEventEnregistre = {
@@ -4280,7 +4412,9 @@ async function gererChangerStatutTestCandidate(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<SaisieChangementStatutTestCandidate>(request)
-  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.statut || !(STATUTS_TEST_CANDIDATE as readonly string[]).includes(corps.statut)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const motifRejet = corps.motifRejet ?? null
@@ -4568,6 +4702,8 @@ interface SaisieResultatEtape {
   observation?: string
 }
 
+const RESULTATS_ETAPE_EXECUTION = ['conforme', 'non_conforme', 'non_applicable'] as const
+
 /** Immutable une fois créé — une correction passe par un `ExecutionEvent`, jamais une réécriture. */
 async function gererEnregistrerResultatEtape(
   request: Request,
@@ -4589,7 +4725,12 @@ async function gererEnregistrerResultatEtape(
   }
 
   const corps = await lireCorpsJson<SaisieResultatEtape>(request)
-  if (!corps?.testStepId || !corps.resultat || corps.observation === undefined) {
+  if (
+    !corps?.testStepId ||
+    !corps.resultat ||
+    !(RESULTATS_ETAPE_EXECUTION as readonly string[]).includes(corps.resultat) ||
+    corps.observation === undefined
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const test = await ctx.testDefinitionRepo.testParId(execution.testId)
@@ -4655,6 +4796,17 @@ interface SaisieEvenementExecution {
   qualityEventId?: string | null
 }
 
+const TYPES_EVENEMENT_EXECUTION = [
+  'continuer',
+  'action',
+  'retest',
+  'deviation',
+  'changement',
+  'arret',
+  'externe',
+  'commentaire',
+] as const
+
 /** `qualityEventId` référence optionnellement un `QualityEvent` déjà existant — jamais créé automatiquement ici. */
 async function gererConsignerEvenement(
   request: Request,
@@ -4675,7 +4827,11 @@ async function gererConsignerEvenement(
   }
 
   const corps = await lireCorpsJson<SaisieEvenementExecution>(request)
-  if (!corps?.type || corps.description === undefined) {
+  if (
+    !corps?.type ||
+    !(TYPES_EVENEMENT_EXECUTION as readonly string[]).includes(corps.type) ||
+    corps.description === undefined
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -4697,6 +4853,8 @@ interface SaisieClotureExecution {
   verdict?: string
 }
 
+const VERDICTS_EXECUTION = ['conforme', 'non_conforme', 'conforme_avec_ecart'] as const
+
 /** Le verdict est toujours fourni explicitement par l'appelant — jamais déduit des ExecutionStep. */
 async function gererCloturerExecution(
   request: Request,
@@ -4717,7 +4875,9 @@ async function gererCloturerExecution(
   }
 
   const corps = await lireCorpsJson<SaisieClotureExecution>(request)
-  if (!corps?.verdict) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.verdict || !(VERDICTS_EXECUTION as readonly string[]).includes(corps.verdict)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const execution: ExecutionEnregistree = {
@@ -4827,6 +4987,8 @@ interface SaisieEnregistrementPreuve {
   description?: string
 }
 
+const TYPES_EVIDENCE = ['native', 'document'] as const
+
 /** Une Evidence n'existe que pour une Execution réelle, non clôturée (immutabilité post-clôture, cohérent avec Phase 6b). */
 async function gererEnregistrerPreuve(
   request: Request,
@@ -4841,6 +5003,7 @@ async function gererEnregistrerPreuve(
   if (
     !corps?.executionId ||
     !corps.type ||
+    !(TYPES_EVIDENCE as readonly string[]).includes(corps.type) ||
     corps.titre === undefined ||
     corps.description === undefined
   ) {
@@ -4902,7 +5065,11 @@ async function gererAjouterLocalisation(
   }
 
   const corps = await lireCorpsJson<SaisieAjoutLocalisation>(request)
-  if (!corps?.systeme || !corps.reference) {
+  if (
+    !corps?.systeme ||
+    !(SYSTEMES_LOCALISATION as readonly string[]).includes(corps.systeme) ||
+    !corps.reference
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -5078,7 +5245,7 @@ async function gererCreerSource(
   void acteur
 
   const corps = await lireCorpsJson<SaisieCreationSource>(request)
-  if (!corps?.type || !corps.titre) {
+  if (!corps?.type || !(TYPES_SOURCE as readonly string[]).includes(corps.type) || !corps.titre) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -5116,7 +5283,11 @@ async function gererAjouterLocalisationSource(
   }
 
   const corps = await lireCorpsJson<SaisieAjoutLocalisationSource>(request)
-  if (!corps?.systeme || !corps.reference) {
+  if (
+    !corps?.systeme ||
+    !(SYSTEMES_LOCALISATION as readonly string[]).includes(corps.systeme) ||
+    !corps.reference
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -5223,7 +5394,11 @@ async function gererAjouterExtractionItem(
   }
 
   const corps = await lireCorpsJson<SaisieAjoutExtractionItem>(request)
-  if (corps?.contenu === undefined || corps.position === undefined) {
+  if (
+    corps?.contenu === undefined ||
+    !estNombre(corps.position) ||
+    !Number.isInteger(corps.position)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -5577,8 +5752,15 @@ async function calculerReadinessContentPlan(
   ctx: Contexte,
   clientId: string,
   assetNodeId: string | null,
-): Promise<string> {
-  if (assetNodeId === null) return 'besoin_information'
+): Promise<{ readiness: string; raisons: string[] }> {
+  if (assetNodeId === null) {
+    return {
+      readiness: 'besoin_information',
+      raisons: [
+        'Aucun nœud Structure Système associé au plan : la traçabilité ne peut être résolue.',
+      ],
+    }
+  }
 
   const [requirements, couvertures, tests, executions, evidences, qualityEvents] =
     await Promise.all([
@@ -5590,50 +5772,71 @@ async function calculerReadinessContentPlan(
       ctx.qualityEventRepo.listerEvenements(clientId),
     ])
 
-  const evenementBloquant = qualityEvents.some(
+  const evenementsBloquants = qualityEvents.filter(
     (e) => e.assetNodeId === assetNodeId && e.statut !== 'cloture',
   )
-  if (evenementBloquant) return 'bloque'
+  if (evenementsBloquants.length > 0) {
+    return {
+      readiness: 'bloque',
+      raisons: evenementsBloquants.map(
+        (e) => `Événement qualité non clôturé sur cet actif : « ${e.titre} ».`,
+      ),
+    }
+  }
 
   const requirementsPertinents = requirements.filter((r) => r.assetNodeId === assetNodeId)
-  if (requirementsPertinents.length === 0) return 'besoin_information'
+  if (requirementsPertinents.length === 0) {
+    return { readiness: 'besoin_information', raisons: ['Aucune exigence rattachée à cet actif.'] }
+  }
 
   let resultat = 'pret'
+  const raisons: string[] = []
+  const signaler = (niveau: string, raison: string) => {
+    resultat = pireReadiness(resultat, niveau)
+    if (niveau !== 'pret') raisons.push(raison)
+  }
   for (const requirement of requirementsPertinents) {
     const testIdsCouvrants = couvertures
       .filter((c) => c.requirementId === requirement.id)
       .map((c) => c.testId)
     if (testIdsCouvrants.length === 0) {
-      resultat = pireReadiness(resultat, 'besoin_revue')
+      signaler(
+        'besoin_revue',
+        `${requirement.reference} : aucun test déclaré comme couvrant cette exigence.`,
+      )
       continue
     }
 
     const testsCouvrants = tests.filter((t) => testIdsCouvrants.includes(t.id))
     for (const test of testsCouvrants) {
+      const prefixe = `${requirement.reference} → « ${test.titre} »`
       if (test.statut === 'brouillon') {
-        resultat = pireReadiness(resultat, 'besoin_revue')
+        signaler('besoin_revue', `${prefixe} : test encore en brouillon (non approuvé).`)
         continue
       }
       const executionsDuTest = executions.filter((e) => e.testId === test.id)
       if (executionsDuTest.length === 0) {
-        resultat = pireReadiness(resultat, 'besoin_information')
+        signaler('besoin_information', `${prefixe} : jamais exécuté.`)
         continue
       }
       for (const execution of executionsDuTest) {
         if (execution.statut !== 'terminee') {
-          resultat = pireReadiness(resultat, 'besoin_information')
+          signaler('besoin_information', `${prefixe} : une exécution est en cours, non clôturée.`)
           continue
         }
         if (execution.verdict === 'non_conforme') {
-          resultat = pireReadiness(resultat, 'bloque')
+          signaler('bloque', `${prefixe} : une exécution a été clôturée « non conforme ».`)
           continue
         }
         const aDeLaPreuve = evidences.some((ev) => ev.executionId === execution.id)
-        resultat = pireReadiness(resultat, aDeLaPreuve ? 'pret' : 'besoin_revue')
+        signaler(
+          aDeLaPreuve ? 'pret' : 'besoin_revue',
+          `${prefixe} : une exécution clôturée n'a aucune preuve associée.`,
+        )
       }
     }
   }
-  return resultat
+  return { readiness: resultat, raisons }
 }
 
 async function gererObtenirContentPlans(
@@ -5669,12 +5872,16 @@ async function gererCreerContentPlan(
   if (acteur instanceof Response) return acteur
 
   const corps = await lireCorpsJson<SaisieCreationContentPlan>(request)
-  if (!corps?.templateId || corps.contextSnapshot === undefined) {
+  if (
+    !corps?.templateId ||
+    corps.contextSnapshot === undefined ||
+    horsDomaine(corps.methodProfileType, TYPES_METHOD_PROFILE_REFERENCE)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
   const assetNodeId = corps.assetNodeId ?? null
-  const readiness = await calculerReadinessContentPlan(ctx, clientId, assetNodeId)
+  const { readiness } = await calculerReadinessContentPlan(ctx, clientId, assetNodeId)
   const maintenant = horodatage()
   const plan: ContentPlanEnregistre = {
     id: genererId(),
@@ -5714,7 +5921,11 @@ async function gererRecalculerReadiness(
     return reponseJson({ erreur: 'deja_gele' }, 400, entetes)
   }
 
-  const readiness = await calculerReadinessContentPlan(ctx, clientId, existant.assetNodeId)
+  const { readiness, raisons } = await calculerReadinessContentPlan(
+    ctx,
+    clientId,
+    existant.assetNodeId,
+  )
   const maintenant = horodatage()
   const miseAJour: ContentPlanEnregistre = {
     ...existant,
@@ -5730,7 +5941,7 @@ async function gererRecalculerReadiness(
     ],
   }
   await ctx.contentPlanRepo.remplacerContentPlan(miseAJour)
-  return reponseJson({ contentPlan: miseAJour }, 200, entetes)
+  return reponseJson({ contentPlan: miseAJour, raisons }, 200, entetes)
 }
 
 async function gererValiderContentPlan(
@@ -5783,7 +5994,7 @@ async function gererGelerContentPlan(
     return reponseJson({ erreur: 'non_valide' }, 400, entetes)
   }
 
-  const readiness = await calculerReadinessContentPlan(ctx, clientId, existant.assetNodeId)
+  const { readiness } = await calculerReadinessContentPlan(ctx, clientId, existant.assetNodeId)
   if (readiness !== 'pret') {
     return reponseJson({ erreur: 'donnees_non_pretes' }, 400, entetes)
   }
@@ -5880,7 +6091,13 @@ async function gererCreerConnector(
   void acteur
 
   const corps = await lireCorpsJson<SaisieCreationConnector>(request)
-  if (!corps?.nom || !corps.type || corps.config === undefined) {
+  if (
+    !corps?.nom ||
+    !corps.type ||
+    !(TYPES_CONNECTOR as readonly string[]).includes(corps.type) ||
+    corps.config === undefined ||
+    (corps.actif !== undefined && typeof corps.actif !== 'boolean')
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -6240,7 +6457,9 @@ async function gererChangerStatutMission(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<{ statut?: string }>(request)
-  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.statut || !(STATUTS_MISSION as readonly string[]).includes(corps.statut)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
   const maintenant = horodatage()
   const miseAJour: MissionEnregistree = {
     ...existante,
@@ -6272,6 +6491,13 @@ async function gererAssocierQualityEvent(
   void acteur
   const corps = await lireCorpsJson<{ qualityEventId?: string }>(request)
   if (!corps?.qualityEventId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const [mission, evenement] = await Promise.all([
+    ctx.missionRepo.missionParId(missionId),
+    ctx.qualityEventRepo.evenementParId(corps.qualityEventId),
+  ])
+  if (mission?.clientId !== clientId || evenement?.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
   const existante = await ctx.missionRepo.associationMissionQualityEventExistante(
     missionId,
     corps.qualityEventId,
@@ -6306,6 +6532,10 @@ async function gererCreerActivity(
   if (!corps?.titre || corps.description === undefined) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const mission = await ctx.missionRepo.missionParId(missionId)
+  if (mission?.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
   const maintenant = horodatage()
   const activity: ActivityEnregistree = {
     id: genererId(),
@@ -6336,7 +6566,9 @@ async function gererChangerStatutActivity(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<{ statut?: string }>(request)
-  if (!corps?.statut) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.statut || !(STATUTS_ACTIVITY as readonly string[]).includes(corps.statut)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
   const maintenant = horodatage()
   const miseAJour: ActivityEnregistree = {
     ...existante,
@@ -6371,7 +6603,16 @@ async function gererAjouterDependance(
   if (acteur instanceof Response) return acteur
   void acteur
   const corps = await lireCorpsJson<{ activityCibleId?: string }>(request)
-  if (!corps?.activityCibleId) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.activityCibleId || corps.activityCibleId === activitySourceId) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const [activiteSource, activiteCible] = await Promise.all([
+    ctx.missionRepo.activityParId(activitySourceId),
+    ctx.missionRepo.activityParId(corps.activityCibleId),
+  ])
+  if (activiteSource?.clientId !== clientId || activiteCible?.clientId !== clientId) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
   const existante = await ctx.missionRepo.dependencyExistante(
     activitySourceId,
     corps.activityCibleId,
@@ -6765,6 +7006,7 @@ async function gererCreerAIResponse(
     !corps?.aiRequestId ||
     corps.texte === undefined ||
     !corps.etatConfiance ||
+    !(ETATS_CONFIANCE_IA as readonly string[]).includes(corps.etatConfiance) ||
     !Array.isArray(corps.traceAppelsOutils)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
@@ -6808,14 +7050,22 @@ async function gererCreerCitations(
   if (acteur instanceof Response) return acteur
   void acteur
   const corps = await lireCorpsJson<SaisieCreationCitations>(request)
-  if (!corps || !Array.isArray(corps.citations)) {
+  if (
+    !corps ||
+    !Array.isArray(corps.citations) ||
+    corps.citations.some(
+      (c) =>
+        !c.aiResponseId ||
+        !c.typeObjetCite ||
+        !(TYPES_OBJET_CITABLE as readonly string[]).includes(c.typeObjetCite) ||
+        !c.objetId,
+    )
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const citations: CitationAIResponseEnregistree[] = []
   for (const c of corps.citations) {
-    if (!c.aiResponseId || !c.typeObjetCite || !c.objetId) {
-      return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
-    }
+    if (!c.aiResponseId || !c.typeObjetCite || !c.objetId) continue
     const citation: CitationAIResponseEnregistree = {
       id: genererId(),
       clientId,
@@ -6922,7 +7172,13 @@ async function gererCreerProcedure(
   if (acteur instanceof Response) return acteur
   void acteur
   const corps = await lireCorpsJson<SaisieCreationProcedure>(request)
-  if (!corps?.reference || !corps.titre || !corps.effectiveDate || !corps.categorie) {
+  if (
+    !corps?.reference ||
+    !corps.titre ||
+    !corps.effectiveDate ||
+    !corps.categorie ||
+    !(CATEGORIES_PROCEDURE as readonly string[]).includes(corps.categorie)
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const versionsExistantes = (await ctx.procedureRepo.listerProcedures(clientId)).filter(
@@ -6966,7 +7222,7 @@ async function gererAjouterEtapeProcedure(
     return reponseJson({ erreur: 'procedure_introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<SaisieCreationEtapeProcedure>(request)
-  if (!corps || corps.description === undefined || corps.obligatoire === undefined) {
+  if (!corps || corps.description === undefined || typeof corps.obligatoire !== 'boolean') {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const etapesExistantes = (await ctx.procedureRepo.listerEtapes(clientId)).filter(
@@ -7208,6 +7464,8 @@ async function gererObtenirContenuGabaritExportClient(
 
   const gabarit = await ctx.gabaritExportClientRepo.parId(id)
   if (!gabarit) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  const acces = await exigerAccesClient(request, ctx, entetes, gabarit.clientId)
+  if (acces instanceof Response) return acces
   const contenu = await ctx.stockageBinaireRepo.lire(cleContenuGabaritExportClient(id))
   if (!contenu) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
 
@@ -7229,6 +7487,11 @@ async function gererSupprimerGabaritExportClient(
 ): Promise<Response> {
   const utilisateur = await authentifier(request, ctx)
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const gabarit = await ctx.gabaritExportClientRepo.parId(id)
+  if (!gabarit) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  const acces = await exigerAccesClient(request, ctx, entetes, gabarit.clientId)
+  if (acces instanceof Response) return acces
 
   await ctx.stockageBinaireRepo.supprimer(cleContenuGabaritExportClient(id))
   await ctx.gabaritExportClientRepo.supprimer(id)
@@ -7302,7 +7565,13 @@ async function gererCreerAiChatSessionLog(
   if (acteur instanceof Response) return acteur
   void acteur
   const corps = await lireCorpsJson<SaisieCreationAiChatSessionLog>(request)
-  if (!corps?.startedAt || !corps.mode || !corps.aiProvider || corps.documentJoint === undefined) {
+  if (
+    !corps?.startedAt ||
+    !corps.mode ||
+    !(MODES_USAGE_IA as readonly string[]).includes(corps.mode) ||
+    !corps.aiProvider ||
+    typeof corps.documentJoint !== 'boolean'
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const entree: AiChatSessionLogEnregistre = {

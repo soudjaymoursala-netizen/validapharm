@@ -52,6 +52,11 @@ async function importer(evenement: Event): Promise<void> {
     ;(evenement.target as HTMLInputElement).value = ''
   }
 }
+
+async function supprimer(id: string, nom: string): Promise<void> {
+  if (!window.confirm(`Supprimer définitivement le template « ${nom} » ?`)) return
+  await gabaritStore.supprimerGabarit(id)
+}
 </script>
 
 <template>
@@ -91,7 +96,7 @@ async function importer(evenement: Event): Promise<void> {
       <ul v-if="gabaritStore.gabarits.length > 0" class="liste-gabarits">
         <li v-for="g in gabaritStore.gabarits" :key="g.id">
           <span class="nom">{{ g.nom }}</span>
-          <button type="button" class="bouton-danger" @click="gabaritStore.supprimerGabarit(g.id)">
+          <button type="button" class="bouton-danger" @click="supprimer(g.id, g.nom)">
             Supprimer
           </button>
         </li>

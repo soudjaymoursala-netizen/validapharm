@@ -56,8 +56,14 @@ const procedureInput = reactive<{
   reference: string
   titre: string
   effectiveDate: string
-  categorie: CategorieProcedure
-}>({ reference: '', titre: '', effectiveDate: '', categorie: 'production' })
+  categorie: CategorieProcedure | ''
+}>({ reference: '', titre: '', effectiveDate: '', categorie: '' })
+
+/** Révision d'une référence existante : rappelé avant création (R-21). */
+const versionExistante = computed(() => {
+  const reference = procedureInput.reference.trim()
+  return reference ? procedureStore.derniereVersion(reference) : null
+})
 
 const nomFournisseurActuel = computed(() =>
   libelleFournisseurAffiche(configStore.config?.ai_provider ?? 'openai'),
@@ -113,8 +119,12 @@ onMounted(async () => {
   if (idsProcedures.size > 0) {
     const authStore = useAuthStore()
     const api = await authStore.client()
+    // Les livrables liés sont un complément de navigation : Worker injoignable
+    // = même repli qu'une réponse en échec, jamais une erreur non gérée.
     const resultatSections =
-      api && authStore.jeton ? await api.listerToutesLesSections(authStore.jeton) : null
+      api && authStore.jeton
+        ? await api.listerToutesLesSections(authStore.jeton).catch(() => null)
+        : null
     const sections = (
       resultatSections?.ok ? resultatSections.donnees.sections.map(sectionWireVersDomaine) : []
     ).filter((s) => s.procedure_id !== null && idsProcedures.has(s.procedure_id))
@@ -206,7 +216,7 @@ function reinitialiser(): void {
   procedureInput.reference = ''
   procedureInput.titre = ''
   procedureInput.effectiveDate = ''
-  procedureInput.categorie = 'production'
+  procedureInput.categorie = ''
 }
 
 function annuler(): void {
@@ -215,7 +225,12 @@ function annuler(): void {
 }
 
 async function confirmer(): Promise<void> {
-  if (procedureInput.reference.trim().length === 0 || procedureInput.titre.trim().length === 0) {
+  const categorie = procedureInput.categorie
+  if (
+    procedureInput.reference.trim().length === 0 ||
+    procedureInput.titre.trim().length === 0 ||
+    categorie === ''
+  ) {
     return
   }
   const etapesRetenues = etapesEditables.value
@@ -226,7 +241,16 @@ async function confirmer(): Promise<void> {
       condition: etape.condition.trim().length > 0 ? etape.condition : null,
       responsable: etape.responsable.trim().length > 0 ? etape.responsable : null,
     }))
-  await procedureStore.confirmerProposition(props.clientId, { ...procedureInput }, etapesRetenues)
+  await procedureStore.confirmerProposition(
+    props.clientId,
+    {
+      ...procedureInput,
+      reference: procedureInput.reference.trim(),
+      titre: procedureInput.titre.trim(),
+      categorie,
+    },
+    etapesRetenues,
+  )
   reinitialiser()
 }
 </script>
@@ -328,6 +352,15 @@ async function confirmer(): Promise<void> {
           Référence
           <input v-model="procedureInput.reference" type="text" required />
         </label>
+        <p v-if="versionExistante" class="rappel-revision" role="status">
+          Nouvelle révision : {{ versionExistante.reference }} existe déjà en v{{
+            versionExistante.numero_version
+          }}
+          (« {{ versionExistante.titre }} »). Cette création produira la v{{
+            versionExistante.numero_version + 1
+          }}
+          et rendra la précédente obsolète.
+        </p>
         <label>
           Titre
           <input v-model="procedureInput.titre" type="text" required />
@@ -338,7 +371,8 @@ async function confirmer(): Promise<void> {
         </label>
         <label>
           Catégorie
-          <select v-model="procedureInput.categorie">
+          <select v-model="procedureInput.categorie" required>
+            <option value="" disabled>— choisir —</option>
             <option v-for="categorie in CATEGORIES_PROCEDURE" :key="categorie" :value="categorie">
               {{ LIBELLES_CATEGORIE[categorie] }}
             </option>
@@ -368,6 +402,10 @@ async function confirmer(): Promise<void> {
             <header>
               <strong>{{ procedure.titre }}</strong>
               <span>{{ procedure.reference }} — v{{ procedure.numero_version }}</span>
+              <span v-if="procedureStore.remplaceePar(procedure)" class="badge-obsolete">
+                Obsolète — remplacée par la v{{ procedureStore.remplaceePar(procedure) }}
+              </span>
+              <span v-else class="badge-applicable">Version applicable</span>
             </header>
             <ol>
               <li v-for="etape in procedureStore.etapesDeProcedure(procedure.id)" :key="etape.id">
@@ -395,6 +433,20 @@ async function confirmer(): Promise<void> {
 </template>
 
 <style scoped>
+.badge-obsolete {
+  color: var(--vp-danger);
+  font-weight: var(--vp-poids-semibold);
+}
+
+.badge-applicable {
+  color: var(--vp-succes);
+  font-weight: var(--vp-poids-semibold);
+}
+
+.rappel-revision {
+  color: var(--vp-attention);
+}
+
 .revue-structure-procedure {
   padding: 2rem;
   display: flex;

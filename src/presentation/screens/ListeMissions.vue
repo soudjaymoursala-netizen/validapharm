@@ -6,6 +6,13 @@ import { useClientsStore } from '../stores/useClientsStore'
 import { useMissionStore, type NouvelleMissionInput } from '../stores/useMissionStore'
 import { useOrganizationStore } from '../stores/useOrganizationStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
+import type { StatutMission } from '../../logique-metier/domaine/types'
+
+const LIBELLES_STATUT_MISSION: Record<StatutMission, string> = {
+  ouverte: 'Ouverte',
+  en_cours: 'En cours',
+  cloturee: 'Clôturée',
+}
 
 const props = defineProps<{ clientId: string }>()
 
@@ -103,7 +110,7 @@ async function creerMission(): Promise<void> {
         >
           {{ mission.titre }}
         </RouterLink>
-        <span class="statut">{{ mission.statut }}</span>
+        <span class="statut">{{ LIBELLES_STATUT_MISSION[mission.statut] }}</span>
       </li>
     </ul>
     <p v-else>Aucune mission pour l'instant — créez la première avec le bouton ci-dessus.</p>

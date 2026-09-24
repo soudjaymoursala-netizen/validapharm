@@ -6,7 +6,7 @@
 // ajoutée v20 — comblait un écart Must documenté (le seul chargement de
 // fichier existant était le besoin ponctuel §4.1bis de génération de
 // brouillon, pas un écran générique de bibliothèque de documents).
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { detecterEcartsStructurels } from '../../logique-metier/analyse-projet/detecterEcartsStructurels'
 import type { PhaseProjet, Project, TemplateType } from '../../logique-metier/domaine/types'
@@ -16,9 +16,11 @@ import ModaleConfirmationArchivage from '../composants/ModaleConfirmationArchiva
 import PastilleStatutSection from '../composants/PastilleStatutSection.vue'
 import PipelineQualification from '../composants/PipelineQualification.vue'
 import IconeSvg from '../composants/IconeSvg.vue'
+import { useClientActifStore } from '../stores/useClientActifStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useSectionsStore } from '../stores/useSectionsStore'
 import { useProjectDocumentsStore } from '../stores/useProjectDocumentsStore'
+import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
 
 const props = defineProps<{ projectId: string }>()
 
@@ -27,6 +29,14 @@ const projetsStore = useProjectsStore()
 const sectionsStore = useSectionsStore()
 const documentsStore = useProjectDocumentsStore()
 const projet = ref<Project | undefined>(undefined)
+// Un projet appartient à un client : la barre latérale doit proposer les
+// outils de CE client, jamais ceux du client visité précédemment.
+watch(
+  () => projet.value?.client_id,
+  (clientId) => {
+    if (clientId) useClientActifStore().definirClientActif(clientId)
+  },
+)
 const formulaireOuvert = ref(false)
 const nouveauTitre = ref('')
 const nouveauTemplateType = ref<TemplateType>('contexte_procede')
@@ -503,7 +513,7 @@ async function importerFichier(evenement: Event): Promise<void> {
           Gabarit
           <select v-model="nouveauTemplateType">
             <option v-for="type in CATALOGUE_DISPONIBLE" :key="type" :value="type">
-              {{ type }}
+              {{ LIBELLES_GABARIT[type] }}
             </option>
           </select>
         </label>
@@ -553,7 +563,9 @@ async function importerFichier(evenement: Event): Promise<void> {
             }"
           >
             <span class="liste-sections__titre">{{ section.meta.titre }}</span>
-            <span class="liste-sections__gabarit">{{ section.template_type }}</span>
+            <span class="liste-sections__gabarit">{{
+              LIBELLES_GABARIT[section.template_type]
+            }}</span>
           </RouterLink>
           <PastilleStatutSection :statut="section.status" :langue="section.language" />
         </li>

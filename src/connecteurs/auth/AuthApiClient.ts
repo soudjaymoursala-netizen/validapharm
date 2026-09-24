@@ -2473,7 +2473,7 @@ export class AuthApiClient {
     jeton: string,
     clientId: string,
     contentPlanId: string,
-  ): Promise<ResultatApi<{ contentPlan: ContentPlanWire }>> {
+  ): Promise<ResultatApi<{ contentPlan: ContentPlanWire; raisons: string[] }>> {
     return this.requete(
       'PATCH',
       `/clients/${clientId}/content-plans/${contentPlanId}/recalculer-readiness`,

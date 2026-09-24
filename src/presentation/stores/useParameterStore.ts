@@ -192,6 +192,22 @@ export const useParameterStore = defineStore('parameter', () => {
   const cppsActifs = computed(() => cpps.value.filter((c) => c.actif))
   const cqasActifs = computed(() => cqas.value.filter((c) => c.actif))
 
+  const normaliser = (texte: string) => texte.trim().toLocaleLowerCase('fr')
+
+  /** Un CPP est défini par le couple (paramètre, contexte) : jamais deux actifs pour le même couple. */
+  function cppActifExistant(parameterId: string, contexte: string): CPP | undefined {
+    return cppsActifs.value.find(
+      (c) => c.parameter_id === parameterId && normaliser(c.contexte) === normaliser(contexte),
+    )
+  }
+
+  function cqaActifExistant(nom: string, contexte: string): CQA | undefined {
+    return cqasActifs.value.find(
+      (c) =>
+        normaliser(c.nom) === normaliser(nom) && normaliser(c.contexte) === normaliser(contexte),
+    )
+  }
+
   /** Lève si le relais n'est pas configuré — mutations sur ces 4 types exigent désormais systématiquement le Worker/D1, même discipline que `useMethodProfileACFCStore`. */
   async function obtenirApi() {
     const authStore = useAuthStore()
@@ -392,6 +408,8 @@ export const useParameterStore = defineStore('parameter', () => {
     enChargement,
     cppsActifs,
     cqasActifs,
+    cppActifExistant,
+    cqaActifExistant,
     charger,
     creerParametre,
     classifierParametre,

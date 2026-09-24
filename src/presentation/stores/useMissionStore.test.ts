@@ -32,6 +32,22 @@ beforeEach(async () => {
       updatedAt: new Date().toISOString(),
     })
   }
+  await installation.ctx.qualityEventRepo.creerEvenement({
+    id: 'qe-123',
+    clientId: 'client-1',
+    type: 'change_control',
+    titre: 'CC-123',
+    description: '',
+    origine: 'interne',
+    referenceExterne: null,
+    assetNodeId: null,
+    processId: null,
+    manufacturingContextId: null,
+    statut: 'ouvert',
+    auditLog: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
 })
 
 afterEach(() => {

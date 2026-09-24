@@ -132,15 +132,33 @@ async function changerStatutActivite(activityId: string, statut: string): Promis
   }
 }
 
+const erreurDependance = ref<string | null>(null)
+
 async function ajouterDependance(): Promise<void> {
   if (!dependanceSourceId.value || !dependanceCibleId.value) return
-  await missionStore.ajouterDependance(
+  erreurDependance.value = null
+  const resultat = await missionStore.ajouterDependance(
     props.clientId,
     dependanceSourceId.value,
     dependanceCibleId.value,
   )
+  if (!resultat.ok) {
+    erreurDependance.value =
+      resultat.raison === 'auto_dependance'
+        ? 'Une activité ne peut pas dépendre d’elle-même.'
+        : 'Refusé : l’activité requise dépend déjà (directement ou non) de l’activité dépendante — l’ordre serait contradictoire.'
+    return
+  }
   dependanceSourceId.value = ''
   dependanceCibleId.value = ''
+}
+
+function titreActivite(id: string): string {
+  return missionStore.activities.find((a) => a.id === id)?.titre ?? id
+}
+
+function titreQualityEvent(id: string): string {
+  return qualityEventStore.evenements.find((e) => e.id === id)?.titre ?? id
 }
 
 async function associerQualityEvent(): Promise<void> {
@@ -239,7 +257,18 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
       </form>
       <ul>
         <li v-for="activite in activites" :key="activite.id">
-          <span>{{ activite.titre }}</span>
+          <span>
+            {{ activite.titre }}
+            <span v-if="missionStore.dependancesDe(activite.id).length > 0" class="meta">
+              — dépend de :
+              {{
+                missionStore
+                  .dependancesDe(activite.id)
+                  .map((d) => titreActivite(d.activity_cible_id))
+                  .join(', ')
+              }}
+            </span>
+          </span>
           <select
             :value="activite.statut"
             @change="changerStatutActivite(activite.id, ($event.target as HTMLSelectElement).value)"
@@ -267,13 +296,14 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
         </select>
         <button type="submit">Lier</button>
       </form>
+      <p v-if="erreurDependance" class="bandeau-erreur" role="alert">{{ erreurDependance }}</p>
     </section>
 
     <section class="quality-events">
       <h2>Événements qualité associés</h2>
       <ul>
         <li v-for="association in associationsMission" :key="association.id">
-          {{ association.quality_event_id }}
+          {{ titreQualityEvent(association.quality_event_id) }}
         </li>
       </ul>
       <form class="formulaire-inline" @submit.prevent="associerQualityEvent">
@@ -374,6 +404,11 @@ header {
 
 .bandeau-erreur {
   color: var(--vp-danger);
+}
+
+.meta {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.85em;
 }
 
 .formulaire-inline {

@@ -240,6 +240,14 @@ export const useProcedureStore = defineStore('procedure', () => {
     )
   }
 
+  /** Numéro de la version applicable si `procedure` est une révision obsolète, sinon `null` (R-21). */
+  function remplaceePar(procedure: Pick<Procedure, 'reference' | 'numero_version'>): number | null {
+    const derniere = derniereVersion(procedure.reference)
+    return derniere && derniere.numero_version > procedure.numero_version
+      ? derniere.numero_version
+      : null
+  }
+
   /**
    * Génère une proposition de structure — parseur
    * déterministe d'abord, repli IA seulement si
@@ -293,6 +301,7 @@ export const useProcedureStore = defineStore('procedure', () => {
     etapesDeProcedure,
     proceduresParCategorie,
     derniereVersion,
+    remplaceePar,
     genererProposition,
     annulerProposition,
     confirmerProposition,

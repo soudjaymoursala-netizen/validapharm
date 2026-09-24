@@ -27,6 +27,7 @@
 import { computed, onMounted, ref } from 'vue'
 import type { Section } from '../../logique-metier/domaine/types'
 import { useClientsStore } from '../stores/useClientsStore'
+import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import { useMethodProfileACFCStore } from '../stores/useMethodProfileACFCStore'
 import { useImpactAssessmentStore } from '../stores/useImpactAssessmentStore'
@@ -36,6 +37,7 @@ import { useMissionStore } from '../stores/useMissionStore'
 import { useQualityEventStore } from '../stores/useQualityEventStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import { sectionWireVersDomaine } from '../stores/useSectionsStore'
+import { LIBELLES_STATUT_QUALIFICATION } from '../../logique-metier/i18n/libellesStatutQualification'
 
 const props = defineProps<{ clientId: string; noeudId: string }>()
 
@@ -82,17 +84,6 @@ onMounted(async () => {
 })
 
 const noeud = computed(() => structureStore.noeuds.find((n) => n.id === props.noeudId) ?? null)
-
-const LIBELLES_STATUT_QUALIFICATION: Record<string, string> = {
-  non_qualifie: 'Non qualifié',
-  en_cours_qualification_initiale: 'En cours de qualification initiale',
-  qualifie: 'Qualifié',
-  qualifie_ecart_ouvert: 'Qualifié — écart ouvert',
-  requalification_requise: 'Requalification requise',
-  requalification_en_retard: 'Requalification en retard',
-  suspendu: 'Suspendu',
-  declasse: 'Déclassé',
-}
 
 const evaluationsACFC = computed(() =>
   acfcStore.evaluations.filter((e) => e.asset_node_id === props.noeudId),
@@ -249,7 +240,7 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
                 params: { projectId: s.project_id, sectionId: s.id },
               }"
             >
-              {{ s.meta.titre }} ({{ s.template_type }})
+              {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
             </RouterLink>
           </li>
         </ul>

@@ -46,6 +46,38 @@ function libelleErreurExecution(code: string): string {
   return LIBELLES_ERREUR_EXECUTION[code] ?? "Une erreur inattendue s'est produite."
 }
 
+const LIBELLES_VERDICT: Record<VerdictExecution, string> = {
+  conforme: 'Conforme',
+  non_conforme: 'Non conforme',
+  conforme_avec_ecart: 'Conforme avec écart',
+}
+
+const LIBELLES_RESULTAT_ETAPE: Record<ResultatEtapeExecution, string> = {
+  conforme: 'Conforme',
+  non_conforme: 'Non conforme',
+  non_applicable: 'Non applicable',
+}
+
+const LIBELLES_TYPE_EVENEMENT: Record<TypeExecutionEvent, string> = {
+  commentaire: 'Commentaire',
+  action: 'Action',
+  retest: 'Retest',
+  deviation: 'Déviation',
+  changement: 'Changement',
+  arret: 'Arrêt',
+  externe: 'Externe',
+  continuer: 'Continuer',
+}
+
+const LIBELLES_TYPE_PREUVE: Record<TypeEvidence, string> = {
+  native: 'Native (observation directe)',
+  document: 'Document',
+}
+
+function formaterHorodatage(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString() : '—'
+}
+
 onMounted(async () => {
   const client = await clientsStore.obtenirClient(props.clientId)
   nomClient.value = client?.name ?? null
@@ -83,6 +115,15 @@ async function demarrer(): Promise<void> {
 function testDe(executionId: string) {
   const execution = executionStore.executions.find((e) => e.id === executionId)
   return execution ? testStore.tests.find((t) => t.id === execution.test_id) : undefined
+}
+
+// Signal purement informatif, jamais un blocage : clôturer après un « Arrêt »
+// avec des étapes non jouées reste légitime.
+function nombreEtapesSansResultat(executionId: string): number {
+  const renseignees = new Set(
+    executionStore.etapesExecution(executionId).map((e) => e.test_step_id),
+  )
+  return (testDe(executionId)?.etapes ?? []).filter((e) => !renseignees.has(e.id)).length
 }
 
 const executionsEnCours = computed(() =>
@@ -267,7 +308,8 @@ async function cloturer(executionId: string): Promise<void> {
       <article v-for="execution in executionsEnCours" :key="execution.id" class="carte-execution">
         <h3>{{ testDe(execution.id)?.titre ?? execution.test_id }}</h3>
         <p class="meta">
-          Démarrée le {{ execution.date_debut }}, exécutant {{ execution.executant }}
+          Démarrée le {{ formaterHorodatage(execution.date_debut) }}, exécutant
+          {{ execution.executant }}
         </p>
         <p v-if="erreurParExecution[execution.id]" class="bandeau-erreur" role="alert">
           {{ erreurParExecution[execution.id] }}
@@ -288,9 +330,13 @@ async function cloturer(executionId: string): Promise<void> {
             >
               <select v-model="resultatsBrouillon[cleEtape(execution.id, etape.id)]">
                 <option value="">— choisir —</option>
-                <option value="conforme">Conforme</option>
-                <option value="non_conforme">Non conforme</option>
-                <option value="non_applicable">Non applicable</option>
+                <option
+                  v-for="(libelle, code) in LIBELLES_RESULTAT_ETAPE"
+                  :key="code"
+                  :value="code"
+                >
+                  {{ libelle }}
+                </option>
               </select>
               <input
                 v-model="observationsBrouillon[cleEtape(execution.id, etape.id)]"
@@ -309,7 +355,7 @@ async function cloturer(executionId: string): Promise<void> {
                 :key="es.id"
                 class="resultat-enregistre"
               >
-                Résultat : <strong>{{ es.resultat }}</strong>
+                Résultat : <strong>{{ LIBELLES_RESULTAT_ETAPE[es.resultat] }}</strong>
                 <span v-if="es.observation"> — {{ es.observation }}</span>
                 <span v-if="executionStore.mesuresEtape(es.id).length > 0" class="mesures">
                   Mesures :
@@ -337,14 +383,9 @@ async function cloturer(executionId: string): Promise<void> {
         <h4>Événement</h4>
         <div class="ligne-formulaire">
           <select v-model="typeEvenementBrouillon[execution.id]">
-            <option value="commentaire">Commentaire</option>
-            <option value="action">Action</option>
-            <option value="retest">Retest</option>
-            <option value="deviation">Déviation</option>
-            <option value="changement">Changement</option>
-            <option value="arret">Arrêt</option>
-            <option value="externe">Externe</option>
-            <option value="continuer">Continuer</option>
+            <option v-for="(libelle, code) in LIBELLES_TYPE_EVENEMENT" :key="code" :value="code">
+              {{ libelle }}
+            </option>
           </select>
           <input
             v-model="descriptionEvenementBrouillon[execution.id]"
@@ -355,15 +396,16 @@ async function cloturer(executionId: string): Promise<void> {
         </div>
         <ul v-if="executionStore.evenementsExecution(execution.id).length > 0">
           <li v-for="ev in executionStore.evenementsExecution(execution.id)" :key="ev.id">
-            {{ ev.type }} — {{ ev.description }}
+            {{ LIBELLES_TYPE_EVENEMENT[ev.type] }} — {{ ev.description }}
           </li>
         </ul>
 
         <h4>Preuves</h4>
         <div class="ligne-formulaire">
           <select v-model="typePreuveBrouillon[execution.id]">
-            <option value="native">Native (observation directe)</option>
-            <option value="document">Document</option>
+            <option v-for="(libelle, code) in LIBELLES_TYPE_PREUVE" :key="code" :value="code">
+              {{ libelle }}
+            </option>
           </select>
           <input v-model="titrePreuveBrouillon[execution.id]" type="text" placeholder="Titre" />
           <input
@@ -383,17 +425,25 @@ async function cloturer(executionId: string): Promise<void> {
         </div>
         <ul v-if="evidenceStore.preuvesExecution(execution.id).length > 0">
           <li v-for="preuve in evidenceStore.preuvesExecution(execution.id)" :key="preuve.id">
-            {{ preuve.titre }} ({{ preuve.type }})
+            {{ preuve.titre }} ({{ LIBELLES_TYPE_PREUVE[preuve.type] }})
+            <span v-for="loc in evidenceStore.localisationsPreuve(preuve.id)" :key="loc.id">
+              — {{ loc.reference }}
+            </span>
           </li>
         </ul>
 
         <h4>Clôture</h4>
+        <p v-if="nombreEtapesSansResultat(execution.id) > 0" class="avertissement" role="status">
+          ⚠ {{ nombreEtapesSansResultat(execution.id) }} étape(s) sans résultat enregistré — la
+          clôture reste possible (ex. après un arrêt), mais ces étapes resteront vides dans
+          l'enregistrement immuable.
+        </p>
         <div class="ligne-formulaire">
           <select v-model="verdictBrouillon[execution.id]">
             <option value="">— choisir —</option>
-            <option value="conforme">Conforme</option>
-            <option value="non_conforme">Non conforme</option>
-            <option value="conforme_avec_ecart">Conforme avec écart</option>
+            <option v-for="(libelle, code) in LIBELLES_VERDICT" :key="code" :value="code">
+              {{ libelle }}
+            </option>
           </select>
           <button type="button" @click="cloturer(execution.id)">Clôturer l'exécution</button>
         </div>
@@ -402,12 +452,77 @@ async function cloturer(executionId: string): Promise<void> {
 
     <section v-if="executionsTerminees.length > 0" class="bloc-terminees">
       <h2>Exécutions terminées</h2>
-      <ul>
-        <li v-for="execution in executionsTerminees" :key="execution.id">
+      <details
+        v-for="execution in executionsTerminees"
+        :key="execution.id"
+        class="carte-execution execution-terminee"
+      >
+        <summary>
           {{ testDe(execution.id)?.titre ?? execution.test_id }} — verdict :
-          <strong>{{ execution.verdict }}</strong> (clôturée le {{ execution.date_fin }})
-        </li>
-      </ul>
+          <strong>{{ execution.verdict ? LIBELLES_VERDICT[execution.verdict] : '—' }}</strong>
+          (clôturée le {{ formaterHorodatage(execution.date_fin) }})
+        </summary>
+        <p class="meta">
+          Démarrée le {{ formaterHorodatage(execution.date_debut) }}, exécutant
+          {{ execution.executant }} — enregistrement immuable, lecture seule.
+        </p>
+
+        <h4>Étapes</h4>
+        <ul class="liste-etapes">
+          <li v-for="etape in testDe(execution.id)?.etapes ?? []" :key="etape.id">
+            <p>
+              {{ etape.action }} — <em>attendu : {{ etape.resultat_attendu }}</em>
+            </p>
+            <p
+              v-for="es in executionStore
+                .etapesExecution(execution.id)
+                .filter((e) => e.test_step_id === etape.id)"
+              :key="es.id"
+            >
+              Résultat : <strong>{{ LIBELLES_RESULTAT_ETAPE[es.resultat] }}</strong>
+              <span v-if="es.observation"> — {{ es.observation }}</span>
+              <span v-if="executionStore.mesuresEtape(es.id).length > 0" class="mesures">
+                — Mesures :
+                <span v-for="m in executionStore.mesuresEtape(es.id)" :key="m.id">
+                  {{ m.libelle }} = {{ m.valeur }}{{ m.unite ? ` ${m.unite}` : '' }};
+                </span>
+              </span>
+            </p>
+            <p
+              v-if="
+                !executionStore
+                  .etapesExecution(execution.id)
+                  .some((e) => e.test_step_id === etape.id)
+              "
+              class="meta"
+            >
+              Aucun résultat enregistré pour cette étape.
+            </p>
+          </li>
+        </ul>
+
+        <template v-if="executionStore.evenementsExecution(execution.id).length > 0">
+          <h4>Événements</h4>
+          <ul>
+            <li v-for="ev in executionStore.evenementsExecution(execution.id)" :key="ev.id">
+              {{ LIBELLES_TYPE_EVENEMENT[ev.type] }} — {{ ev.description }}
+            </li>
+          </ul>
+        </template>
+
+        <template v-if="evidenceStore.preuvesExecution(execution.id).length > 0">
+          <h4>Preuves</h4>
+          <ul>
+            <li v-for="preuve in evidenceStore.preuvesExecution(execution.id)" :key="preuve.id">
+              {{ preuve.titre }} ({{ LIBELLES_TYPE_PREUVE[preuve.type] }})
+              <span v-if="preuve.description"> — {{ preuve.description }}</span>
+              <span v-for="loc in evidenceStore.localisationsPreuve(preuve.id)" :key="loc.id">
+                — {{ loc.reference }}
+              </span>
+            </li>
+          </ul>
+        </template>
+      </details>
     </section>
   </main>
 </template>
@@ -465,6 +580,10 @@ select {
   margin-bottom: 0.75rem;
 }
 
+.execution-terminee summary {
+  cursor: pointer;
+}
+
 .ligne-formulaire {
   display: flex;
   gap: 0.5rem;
@@ -486,6 +605,10 @@ select {
 
 .bandeau-erreur {
   color: var(--vp-danger);
+}
+
+.avertissement {
+  color: var(--vp-attention);
 }
 
 button {

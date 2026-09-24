@@ -15,7 +15,10 @@ import { useImpactAssessmentStore } from '../stores/useImpactAssessmentStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import type { OrigineMethodeImpactAssessment } from '../../logique-metier/domaine/types'
 import type { ReponseQuestionOuiNon } from '../../logique-metier/assessment/moteurQuestionsOuiNon'
-import { methodeCompletementRepondue } from '../../logique-metier/assessment/evaluerVerdictImpactAssessment'
+import {
+  evaluerVerdictImpactAssessment,
+  methodeCompletementRepondue,
+} from '../../logique-metier/assessment/evaluerVerdictImpactAssessment'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -66,6 +69,8 @@ async function enregistrerNouvelleVersion(): Promise<void> {
   brouillonQuestions.splice(0, brouillonQuestions.length, '', '')
   brouillonSource.value = ''
   formulaireConfigOuvert.value = false
+  // Les réponses visaient les questions de la version précédente.
+  for (const cle of Object.keys(reponses)) Reflect.deleteProperty(reponses, cle)
 }
 
 // --- Évaluation contre la méthode active ---
@@ -93,10 +98,11 @@ const complet = computed(() =>
 
 const verdict = computed(() => {
   if (!methodeStore.profilActif || !complet.value) return null
-  // Recalcul local pour affichage immédiat — `creerEvaluation` recalcule
-  // lui-même via le moteur déterministe, jamais une confiance sur ce
-  // seul affichage (même discipline que l'ACFC).
-  return Object.values(reponses).includes('oui') ? 'impact_direct' : 'non_impact_direct'
+  return evaluerVerdictImpactAssessment(
+    methodeStore.profilActif.questions,
+    reponses,
+    methodeStore.profilActif.decision_rule,
+  )
 })
 
 async function enregistrerEvaluation(): Promise<void> {

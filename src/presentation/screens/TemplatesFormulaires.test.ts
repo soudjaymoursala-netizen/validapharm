@@ -159,9 +159,17 @@ describe('TemplatesFormulaires — bibliothèque de gabarits (§8 du prompt maî
     await deposerFichier(wrapper, buffer)
     await attendreQue(() => wrapper.text().includes('QD-0007 Protocole OQ'))
 
+    const confirmation = vi.spyOn(window, 'confirm').mockReturnValueOnce(false)
+    await wrapper.find('.bouton-danger').trigger('click')
+    await flushPromises()
+    expect(confirmation).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('QD-0007 Protocole OQ')
+
+    confirmation.mockReturnValueOnce(true)
     await wrapper.find('.bouton-danger').trigger('click')
     await attendreQue(() => !wrapper.text().includes('QD-0007 Protocole OQ'))
     expect(wrapper.text()).not.toContain('QD-0007 Protocole OQ')
+    confirmation.mockRestore()
   })
 
   /**

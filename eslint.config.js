@@ -61,6 +61,11 @@ export default tseslint.config(
     ignores: [
       'dist/**',
       'node_modules/**',
+      // Sortie de bundling générée par `wrangler dev`/`wrangler deploy`
+      // (jamais commitée, cf. .gitignore) — sans cette exclusion,
+      // `npm run lint` remonte des centaines d'erreurs de style sur du code
+      // généré dès qu'un contributeur a lancé le Worker en local une fois.
+      '**/.wrangler/**',
       // Prototype antérieur à la cascade de specs actuelle, conservé pour
       // archive (voir prototype-initial/STATUT.md) — hors périmètre du
       // portail de qualité de la conception en cours.
