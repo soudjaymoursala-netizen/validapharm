@@ -119,8 +119,12 @@ onMounted(async () => {
   if (idsProcedures.size > 0) {
     const authStore = useAuthStore()
     const api = await authStore.client()
+    // Les livrables liés sont un complément de navigation : Worker injoignable
+    // = même repli qu'une réponse en échec, jamais une erreur non gérée.
     const resultatSections =
-      api && authStore.jeton ? await api.listerToutesLesSections(authStore.jeton) : null
+      api && authStore.jeton
+        ? await api.listerToutesLesSections(authStore.jeton).catch(() => null)
+        : null
     const sections = (
       resultatSections?.ok ? resultatSections.donnees.sections.map(sectionWireVersDomaine) : []
     ).filter((s) => s.procedure_id !== null && idsProcedures.has(s.procedure_id))

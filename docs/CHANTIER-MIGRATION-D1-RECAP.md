@@ -3511,3 +3511,68 @@ depuis sa construction. Validation : `vue-tsc -b --noEmit` propre,
 `eslint . --max-warnings 0` propre, 1483/1483 tests unitaires verts
 (167 fichiers). Environnement local à nouveau entièrement démonté en
 fin de section (`.dev.vars` et `.wrangler/` supprimés).
+
+## 32. Troisième passe de test en direct (24/09/2026) — tous les écrans métier
+
+Poursuite de §30-§31 sur tous les écrans restants, même environnement
+local jetable (Worker + D1 locaux, jamais la production), en suivant pour
+chaque constat la même discipline : reproduire en navigateur réel,
+remonter à la cause dans le code, vérifier la documentation du projet
+avant de trancher (règle écrite → corrigée ; décision de méthode non
+écrite → signalée, jamais tranchée seul), corriger, test de régression,
+revérifier en navigateur.
+
+### 32.1 Bugs trouvés et corrigés
+
+| # | Écran / couche | Constat reproduit | Correctif |
+|---|---|---|---|
+| 1 | Worker — Exécution | Exécution **clôturée (donc immuable)** avec le verdict « banane », résultat d'étape « peut-etre » : aucune valeur n'était confrontée à son énumération | Validation au Worker (verdict, résultat, type d'événement, type de preuve) |
+| 2 | Worker — tout le routeur | Balayage systématique : **plus de 40 champs** d'énumération, numériques ou booléens jamais validés (types/origines/statuts d'événements qualité, statuts de candidats de test, de missions, d'activités, de qualification d'actif, verdicts ACFC/Impact/AMDEC, catégorie GAMP hors 1–5, notes S/O/D en texte…) | Listes reprises à l'identique des types du domaine ; fixtures de test qui utilisaient des valeurs hors domaine corrigées (invisibles tant que le Worker acceptait tout) |
+| 3 | Worker — Modèles d'export | **Faille d'autorisation (IDOR)** : tout utilisateur connecté pouvait **télécharger et supprimer** le modèle `.docx` d'un client auquel il n'a pas accès. Prouvé par test : 200 sans correctif, 404 avec | `exigerAccesClient` sur le client propriétaire du modèle ; confirmation avant suppression à l'écran |
+| 4 | Exécution de tests | Une exécution clôturée n'affichait plus que son verdict : résultats, mesures, déviations et preuves devenaient invisibles | Vue dépliable en lecture seule ; libellés et dates lisibles ; référence de preuve affichée ; avertissement non bloquant s'il reste des étapes sans résultat |
+| 5 | Missions | Dépendance circulaire et auto-dépendance acceptées ; dépendances jamais affichées ; événement associé affiché en UUID ; activité orpheline possible (mission inexistante) | Détection de cycle via `parcourirGraphe` (`logique-metier/graphe/dependancesActivites.ts`), affichage, vérification d'existence au Worker |
+| 6 | Impact Assessment | Verdict **affiché** ≠ verdict **enregistré** (règle dupliquée à l'écran + réponses de la version précédente jamais effacées) | L'écran appelle le moteur `evaluerVerdictImpactAssessment` ; réponses effacées à chaque nouvelle version (Impact et ACFC) |
+| 7 | AMDEC | Sévérité 9 sur échelle 1–5 : ligne créée silencieusement sans IPR ni verdict ; profil min ≥ max accepté (tout IPR futur incalculable) | Notes bornées à l'échelle (initiales : profil actif ; résiduelles : profil figé de la ligne), profil incohérent refusé écran + Worker, ligne hors échelle expliquée |
+| 8 | Paramètres critiques | Même CPP (paramètre + contexte) déclarable deux fois ; « Désactiver » sans motif ne faisait rien, sans retour | Doublon actif refusé (CPP et CQA), message de motif obligatoire |
+| 9 | Procédures | **R-21 violée** : v1 et v2 d'une SOP affichées comme toutes deux en vigueur ; **catégorie par défaut silencieuse** (« Production ») contraire à la règle écrite du domaine ; référence non nettoyée (espace final = nouvelle SOP) | Badges « Version applicable » / « Obsolète — remplacée par la vN », catégorie obligatoire, rappel de révision, `useProcedureStore.remplaceePar` |
+| 10 | Sélecteurs de procédure (assistant, éditeur) | Toutes les révisions sous un libellé identique : liaison possible à une SOP obsolète sans le savoir | Version + « (obsolète) » ; l'éditeur signale une procédure liée remplacée depuis |
+| 11 | Barre latérale | Ouvrir un projet du client B après le client A laissait « Site actif : A » avec les outils de A | Les écrans projet suivent `projet.client_id` ; `?clientId=` pris en compte |
+| 12 | Plans de livrable | « Besoin de revue » sans aucune explication | Le Worker renvoie une raison par maillon manquant de la chaîne, listée sous le plan |
+| 13 | Libellés | Codes bruts affichés (`contexte_procede`, `non_qualifie`, `ouverte`, `brouillon`, `[cqv]`…) | Libellés partagés : `logique-metier/i18n/libellesStatutQualification.ts`, `presentation/i18n/libellesGabarit.ts` (règle de trois atteinte) |
+| 14 | Test instable | `DossierVivantActif.test.ts` n'attendait qu'une des deux sources chargées en concurrence | Attente de toutes les données vérifiées |
+
+Écrans testés sans défaut trouvé : Journal d'anomalies (références
+dédupliquées, audit complet), Process (rattachements dédupliqués), Suivi
+de périodicité (calcul de retard exact), CSV Assessment, structuration de
+procédure déterministe sans relais IA (conditions d'étape détectées),
+« Raisonner » sans relais IA (message clair).
+
+### 32.2 Questions de méthode signalées à l'utilisateur, **non tranchées**
+
+1. **Réponses « Inconnu » (ACFC / Impact Assessment)** : un questionnaire
+   entièrement répondu « Inconnu » est complet et aboutit au verdict le
+   moins prudent (« Non critique » / « Not Direct Impact »). Aucune règle
+   écrite ; le projet pose ailleurs le principe inverse (« jamais un
+   verdict deviné », AMDEC).
+2. **Catégorie GAMP 2 (Firmware)** : proposée à l'écran nommé « GAMP5 »,
+   alors que GAMP 5 (2008 et 2ᵉ éd. 2022) l'a abandonnée. Source retenue
+   par le projet : PIC/S PI 011-3 (2007, reprise de GAMP 4).
+3. **Readiness et retest** : une exécution historique « non conforme »
+   bloque le plan définitivement, même après un retest conforme — alors
+   que le domaine modélise explicitement le retest. De même, les
+   exécutions d'un test sur un *autre* actif comptent pour ce plan.
+4. **Partage projets/sections en « convention UX »** (décision explicite
+   de l'utilisateur, TECHNICAL_DECISIONS.md) : prise quand tout reposait
+   sur un dépôt Git partagé. Depuis le Worker/D1 et l'authentification
+   réelle, cette prémisse ne tient plus — le Worker pourrait appliquer le
+   partage réellement. À reconfirmer ou rouvrir.
+
+### 32.3 Validation
+
+Chaque correctif : test de régression (Worker ou front), `vue-tsc -b`,
+`eslint --max-warnings 0`, `prettier --check`, suite complète, puis
+revérification en navigateur réel. Une erreur de type introduite dans un
+test déjà poussé (`CorpsReponse.raisons`, que Vitest ne vérifie pas) a
+été trouvée par la validation complète et corrigée dans le commit suivant.
+La CI du dépôt ne tourne que sur pull request : les commits de cette
+section sont regroupés dans une PR pour passer la barrière qualité.
