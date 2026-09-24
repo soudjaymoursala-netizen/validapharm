@@ -3353,3 +3353,76 @@ d'autorisation :
   de s'authentifier pour qu'une session future le fasse à sa place —
   jamais une réinitialisation du mot de passe d'un compte admin réel
   sans consigne explicite et précise sur ce point.
+
+## 30. Validation fonctionnelle réelle en navigateur (23/09/2026)
+
+Suite à la demande « lire tous les dossiers, améliorer le projet, sortir
+un projet fini », et après avoir confirmé (§29.3-§29.6, `docs/convergence/`)
+qu'aucun manque réel non traité ne subsistait dans les documents de suivi,
+l'angle de validation qui restait à couvrir était le seul qui n'avait
+jamais été fait cette session : **faire tourner l'application réelle et
+cliquer dedans comme un utilisateur**, pas seulement relire des tests
+automatisés déjà verts.
+
+### 30.1 Environnement local jetable (jamais la production)
+
+- `workers/auth-worker` lancé en local via `wrangler dev --local`
+  (port 8787), avec les 28 migrations D1 appliquées à une base **locale**
+  (`npm run migrate:local`) — jamais la base de production
+  (`database_id 5fb762ef-fe99-4e68-9086-e57126c5c2aa`).
+- Secrets `.dev.vars` générés localement, jetables, jamais commités
+  (`.gitignore` couvre déjà `.dev.vars` et `.wrangler/`) — supprimés en
+  fin de session.
+- Un compte admin de test jetable créé via `/auth/bootstrap-admin`
+  (`test-local@validapharm.local`), qui n'existe que dans cette base D1
+  locale, jamais en production.
+- Frontend lancé via `npm run dev` (Vite, port 5173).
+- Navigation pilotée par Playwright (Chromium pré-installé de
+  l'environnement), captures d'écran à chaque étape.
+
+### 30.2 Parcours réellement testé
+
+Configuration client (URL du Worker d'authentification) → connexion
+réelle (JWT émis par le Worker local) → tableau de bord → création d'un
+client (« Client Test E2E ») → création d'un projet (« Projet Test
+E2E ») → ouverture de l'espace de travail projet (contexte, phase de
+cycle de vie, partage, stepper de progression du dossier de
+qualification Contexte procédé/URS/DQ/FAT/SAT/IQ/OQ/PQ/Validation,
+sections, documents) → écran Structure Système / Architecture (import
+Excel, import SAP, nœuds du référentiel, relations techniques) → écran
+Bibliothèque de normes (ajout de documents, import GitHub, import
+Google Drive).
+
+### 30.3 Résultat : aucun bug applicatif trouvé
+
+Zéro erreur console, zéro requête HTTP en échec (`>= 400`) sur
+l'ensemble du parcours. Quelques échecs de sélecteur dans mes propres
+scripts Playwright (ex. cibler la barre de recherche au lieu du champ
+« Nom de l'entreprise ») ont été corrigés en cours de route — ce sont
+des erreurs de script de test, pas des bugs de l'application.
+
+Points positifs concrets confirmés en conditions réelles (pas seulement
+en lecture de code) :
+- L'attribution ALCOA+ fonctionne réellement de bout en bout : le projet
+  créé affiche « Créé par : test-local@validapharm.local », dérivé de la
+  vraie session JWT, jamais d'un champ fabriqué.
+- L'écran Structure Système affiche exactement l'algorithme
+  correctif documenté en §29.4 (détection du rang depuis la position
+  réelle du fichier, jamais depuis le rendu visuel).
+- L'écran Bibliothèque de normes confirme que le blocage documenté en
+  §29.6 est bien un blocage d'identifiants réels, pas de mécanique
+  manquante — l'écran d'import est complet et fonctionnel.
+
+### 30.4 Conclusion
+
+Cette validation live s'ajoute (elle ne remplace pas) aux suites de
+tests automatisés déjà vertes. Elle ne remplace pas non plus un audit
+UX/ergonomie exhaustif de tous les écrans de l'application (il en reste
+plusieurs dizaines, hors du périmètre raisonnable d'une session) — mais
+sur le parcours central testé (client → projet → structure système →
+normes), l'application se comporte exactement comme le code et la
+documentation le décrivent, sans écart trouvé entre l'un et l'autre.
+L'environnement local jetable a été entièrement démonté en fin de
+session (serveurs arrêtés, `.dev.vars` supprimé) ; le dépôt reste
+inchangé (`.wrangler/` et `.dev.vars` déjà couverts par
+`.gitignore`).
