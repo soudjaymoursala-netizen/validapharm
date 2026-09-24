@@ -5160,6 +5160,14 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     })
     expect(creation.corps.contentPlan.readiness).toBe('besoin_information')
 
+    const avantChaine = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/content-plans/${creation.corps.contentPlan.id}/recalculer-readiness`,
+      { jeton: admin.jeton },
+    )
+    expect(avantChaine.corps.raisons).toEqual(['Aucune exigence rattachée à cet actif.'])
+
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const recalcul = await requete(
@@ -5170,7 +5178,8 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     )
     expect(recalcul.status).toBe(200)
     expect(recalcul.corps.contentPlan.readiness).toBe('pret')
-    expect(recalcul.corps.contentPlan.auditLog).toHaveLength(2)
+    expect(recalcul.corps.raisons).toEqual([])
+    expect(recalcul.corps.contentPlan.auditLog).toHaveLength(3)
   })
 
   test('recalculer readiness sur un plan gelé -> deja_gele', async () => {

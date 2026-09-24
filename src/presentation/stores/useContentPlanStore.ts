@@ -87,6 +87,8 @@ export function contentPlanDomaineVersWire(p: ContentPlan): ContentPlanWire {
 export const useContentPlanStore = defineStore('contentPlan', () => {
   const contentPlans = ref<ContentPlan[]>([])
   const enChargement = ref(false)
+  /** Diagnostic du dernier recalcul : ce qui empêche le plan d'être prêt (jamais persisté). */
+  const raisonsReadiness = ref<Record<string, string[]>>({})
 
   /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que les autres stores de ce chantier. */
   async function obtenirApi() {
@@ -182,6 +184,10 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
     }
     const miseAJour = contentPlanWireVersDomaine(resultat.donnees.contentPlan)
     contentPlans.value = contentPlans.value.map((p) => (p.id === contentPlanId ? miseAJour : p))
+    raisonsReadiness.value = {
+      ...raisonsReadiness.value,
+      [contentPlanId]: resultat.donnees.raisons,
+    }
     return miseAJour
   }
 
@@ -235,6 +241,7 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
   return {
     contentPlans,
     enChargement,
+    raisonsReadiness,
     charger,
     creerContentPlan,
     validerContentPlan,

@@ -5752,8 +5752,15 @@ async function calculerReadinessContentPlan(
   ctx: Contexte,
   clientId: string,
   assetNodeId: string | null,
-): Promise<string> {
-  if (assetNodeId === null) return 'besoin_information'
+): Promise<{ readiness: string; raisons: string[] }> {
+  if (assetNodeId === null) {
+    return {
+      readiness: 'besoin_information',
+      raisons: [
+        'Aucun nœud Structure Système associé au plan : la traçabilité ne peut être résolue.',
+      ],
+    }
+  }
 
   const [requirements, couvertures, tests, executions, evidences, qualityEvents] =
     await Promise.all([
@@ -5765,50 +5772,71 @@ async function calculerReadinessContentPlan(
       ctx.qualityEventRepo.listerEvenements(clientId),
     ])
 
-  const evenementBloquant = qualityEvents.some(
+  const evenementsBloquants = qualityEvents.filter(
     (e) => e.assetNodeId === assetNodeId && e.statut !== 'cloture',
   )
-  if (evenementBloquant) return 'bloque'
+  if (evenementsBloquants.length > 0) {
+    return {
+      readiness: 'bloque',
+      raisons: evenementsBloquants.map(
+        (e) => `Événement qualité non clôturé sur cet actif : « ${e.titre} ».`,
+      ),
+    }
+  }
 
   const requirementsPertinents = requirements.filter((r) => r.assetNodeId === assetNodeId)
-  if (requirementsPertinents.length === 0) return 'besoin_information'
+  if (requirementsPertinents.length === 0) {
+    return { readiness: 'besoin_information', raisons: ['Aucune exigence rattachée à cet actif.'] }
+  }
 
   let resultat = 'pret'
+  const raisons: string[] = []
+  const signaler = (niveau: string, raison: string) => {
+    resultat = pireReadiness(resultat, niveau)
+    if (niveau !== 'pret') raisons.push(raison)
+  }
   for (const requirement of requirementsPertinents) {
     const testIdsCouvrants = couvertures
       .filter((c) => c.requirementId === requirement.id)
       .map((c) => c.testId)
     if (testIdsCouvrants.length === 0) {
-      resultat = pireReadiness(resultat, 'besoin_revue')
+      signaler(
+        'besoin_revue',
+        `${requirement.reference} : aucun test déclaré comme couvrant cette exigence.`,
+      )
       continue
     }
 
     const testsCouvrants = tests.filter((t) => testIdsCouvrants.includes(t.id))
     for (const test of testsCouvrants) {
+      const prefixe = `${requirement.reference} → « ${test.titre} »`
       if (test.statut === 'brouillon') {
-        resultat = pireReadiness(resultat, 'besoin_revue')
+        signaler('besoin_revue', `${prefixe} : test encore en brouillon (non approuvé).`)
         continue
       }
       const executionsDuTest = executions.filter((e) => e.testId === test.id)
       if (executionsDuTest.length === 0) {
-        resultat = pireReadiness(resultat, 'besoin_information')
+        signaler('besoin_information', `${prefixe} : jamais exécuté.`)
         continue
       }
       for (const execution of executionsDuTest) {
         if (execution.statut !== 'terminee') {
-          resultat = pireReadiness(resultat, 'besoin_information')
+          signaler('besoin_information', `${prefixe} : une exécution est en cours, non clôturée.`)
           continue
         }
         if (execution.verdict === 'non_conforme') {
-          resultat = pireReadiness(resultat, 'bloque')
+          signaler('bloque', `${prefixe} : une exécution a été clôturée « non conforme ».`)
           continue
         }
         const aDeLaPreuve = evidences.some((ev) => ev.executionId === execution.id)
-        resultat = pireReadiness(resultat, aDeLaPreuve ? 'pret' : 'besoin_revue')
+        signaler(
+          aDeLaPreuve ? 'pret' : 'besoin_revue',
+          `${prefixe} : une exécution clôturée n'a aucune preuve associée.`,
+        )
       }
     }
   }
-  return resultat
+  return { readiness: resultat, raisons }
 }
 
 async function gererObtenirContentPlans(
@@ -5853,7 +5881,7 @@ async function gererCreerContentPlan(
   }
 
   const assetNodeId = corps.assetNodeId ?? null
-  const readiness = await calculerReadinessContentPlan(ctx, clientId, assetNodeId)
+  const { readiness } = await calculerReadinessContentPlan(ctx, clientId, assetNodeId)
   const maintenant = horodatage()
   const plan: ContentPlanEnregistre = {
     id: genererId(),
@@ -5893,7 +5921,11 @@ async function gererRecalculerReadiness(
     return reponseJson({ erreur: 'deja_gele' }, 400, entetes)
   }
 
-  const readiness = await calculerReadinessContentPlan(ctx, clientId, existant.assetNodeId)
+  const { readiness, raisons } = await calculerReadinessContentPlan(
+    ctx,
+    clientId,
+    existant.assetNodeId,
+  )
   const maintenant = horodatage()
   const miseAJour: ContentPlanEnregistre = {
     ...existant,
@@ -5909,7 +5941,7 @@ async function gererRecalculerReadiness(
     ],
   }
   await ctx.contentPlanRepo.remplacerContentPlan(miseAJour)
-  return reponseJson({ contentPlan: miseAJour }, 200, entetes)
+  return reponseJson({ contentPlan: miseAJour, raisons }, 200, entetes)
 }
 
 async function gererValiderContentPlan(
@@ -5962,7 +5994,7 @@ async function gererGelerContentPlan(
     return reponseJson({ erreur: 'non_valide' }, 400, entetes)
   }
 
-  const readiness = await calculerReadinessContentPlan(ctx, clientId, existant.assetNodeId)
+  const { readiness } = await calculerReadinessContentPlan(ctx, clientId, existant.assetNodeId)
   if (readiness !== 'pret') {
     return reponseJson({ erreur: 'donnees_non_pretes' }, 400, entetes)
   }

@@ -9,7 +9,12 @@ import { useContentPlanStore } from '../stores/useContentPlanStore'
 import { useProcessContextStore } from '../stores/useProcessContextStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import type { ErreurEcritureContentPlan } from '../stores/useContentPlanStore'
-import type { TemplateType, TypeMethodProfileReference } from '../../logique-metier/domaine/types'
+import type {
+  StatutContentPlan,
+  TemplateType,
+  TypeMethodProfileReference,
+} from '../../logique-metier/domaine/types'
+import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -28,19 +33,10 @@ onMounted(async () => {
   await contentPlanStore.charger(props.clientId)
 })
 
-const LIBELLES_TEMPLATE: Record<TemplateType, string> = {
-  contexte_procede: 'Contexte procédé',
-  urs: 'URS',
-  dq: 'DQ',
-  fat: 'FAT',
-  sat: 'SAT',
-  iq: 'IQ',
-  oq: 'OQ',
-  pq: 'PQ',
-  validation_procede: 'Validation procédé',
-  plan_metrologie: 'Plan de métrologie',
-  plan_maintenance: 'Plan de maintenance',
-  csv: 'CSV — Dossier de validation de système informatisé',
+const LIBELLES_STATUT: Record<StatutContentPlan, string> = {
+  brouillon: 'Brouillon',
+  valide: 'Validé',
+  gele: 'Gelé',
 }
 
 const LIBELLES_READINESS: Record<string, string> = {
@@ -117,8 +113,8 @@ const plansTries = computed(() =>
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Plans de livrable — {{ nomClient ?? props.clientId }}</h1>
     <p class="rappel">
-      `readiness` est recalculé à la demande, jamais en tâche de fond. Un plan ne peut être gelé que
-      s'il est déjà validé ET que ses données sont prêtes — jamais l'un sans l'autre.
+      La readiness est recalculée à la demande, jamais en tâche de fond. Un plan ne peut être gelé
+      que s'il est déjà validé ET que ses données sont prêtes — jamais l'un sans l'autre.
     </p>
 
     <section class="bloc-creation">
@@ -128,7 +124,7 @@ const plansTries = computed(() =>
           Gabarit
           <select v-model="templateSelectionne" required>
             <option value="">— choisir —</option>
-            <option v-for="(libelle, type) in LIBELLES_TEMPLATE" :key="type" :value="type">
+            <option v-for="(libelle, type) in LIBELLES_GABARIT" :key="type" :value="type">
               {{ libelle }}
             </option>
           </select>
@@ -176,13 +172,21 @@ const plansTries = computed(() =>
       <ul v-if="plansTries.length > 0" class="liste-plans">
         <li v-for="plan in plansTries" :key="plan.id" class="carte-plan">
           <p>
-            <strong>{{ LIBELLES_TEMPLATE[plan.template_id] }}</strong> —
+            <strong>{{ LIBELLES_GABARIT[plan.template_id] }}</strong> —
             {{ libelleAssetNode(plan.asset_node_id) }}
           </p>
           <p class="meta">
-            Statut : <strong>{{ plan.statut }}</strong> — Readiness :
+            Statut : <strong>{{ LIBELLES_STATUT[plan.statut] }}</strong> — Readiness :
             <strong>{{ LIBELLES_READINESS[plan.readiness] }}</strong>
           </p>
+          <ul
+            v-if="(contentPlanStore.raisonsReadiness[plan.id] ?? []).length > 0"
+            class="raisons-readiness"
+          >
+            <li v-for="raison in contentPlanStore.raisonsReadiness[plan.id]" :key="raison">
+              {{ raison }}
+            </li>
+          </ul>
           <p v-if="erreursParPlan[plan.id]" class="bandeau-erreur" role="alert">
             {{ erreursParPlan[plan.id] }}
           </p>
@@ -203,6 +207,12 @@ const plansTries = computed(() =>
 </template>
 
 <style scoped>
+.raisons-readiness {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.9em;
+  margin: 0.25rem 0;
+}
+
 .content-plan {
   padding: 2rem;
   font-family: var(--vp-police);
