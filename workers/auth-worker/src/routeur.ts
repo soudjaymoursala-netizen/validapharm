@@ -268,6 +268,15 @@ async function lireCorpsJson<T>(request: Request): Promise<T | null> {
   }
 }
 
+/** Valeur optionnelle (`null`/absente acceptée) mais hors de son énumération de domaine. */
+function horsDomaine(valeur: string | null | undefined, valides: readonly string[]): boolean {
+  return valeur !== null && valeur !== undefined && !valides.includes(valeur)
+}
+
+const VERDICTS_ACFC = ['critique', 'non_critique'] as const
+const VERDICTS_IMPACT_ASSESSMENT = ['impact_direct', 'non_impact_direct'] as const
+const VERDICTS_RISK_ASSESSMENT = ['acceptable', 'action_requise'] as const
+
 async function authentifier(
   request: Request,
   ctx: Contexte,
@@ -2678,7 +2687,8 @@ async function gererCreerEvaluationAcfc(
     !corps?.methodProfileId ||
     !corps.methodProfileVersion ||
     !corps.nomElement ||
-    !corps.reponses
+    !corps.reponses ||
+    horsDomaine(corps.verdict, VERDICTS_ACFC)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
@@ -3152,7 +3162,8 @@ async function gererCreerEvaluationImpactAssessment(
     !corps?.methodProfileId ||
     !corps.methodProfileVersion ||
     !corps.nomElement ||
-    !corps.reponses
+    !corps.reponses ||
+    horsDomaine(corps.verdict, VERDICTS_IMPACT_ASSESSMENT)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
@@ -3432,7 +3443,8 @@ async function gererCreerEvaluationRiskAssessment(
     !corps.modeDefaillance ||
     corps.effetDefaillance === undefined ||
     corps.causePotentielle === undefined ||
-    corps.controleActuel === undefined
+    corps.controleActuel === undefined ||
+    horsDomaine(corps.verdictInitial, VERDICTS_RISK_ASSESSMENT)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
@@ -3507,7 +3519,9 @@ async function gererEnregistrerActionResiduelleRiskAssessment(
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const corps = await lireCorpsJson<SaisieActionResiduelleRiskAssessment>(request)
-  if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps || horsDomaine(corps.verdictResiduel, VERDICTS_RISK_ASSESSMENT)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const evaluationRisque: RiskAssessmentEnregistre = {
@@ -4568,6 +4582,8 @@ interface SaisieResultatEtape {
   observation?: string
 }
 
+const RESULTATS_ETAPE_EXECUTION = ['conforme', 'non_conforme', 'non_applicable'] as const
+
 /** Immutable une fois créé — une correction passe par un `ExecutionEvent`, jamais une réécriture. */
 async function gererEnregistrerResultatEtape(
   request: Request,
@@ -4589,7 +4605,12 @@ async function gererEnregistrerResultatEtape(
   }
 
   const corps = await lireCorpsJson<SaisieResultatEtape>(request)
-  if (!corps?.testStepId || !corps.resultat || corps.observation === undefined) {
+  if (
+    !corps?.testStepId ||
+    !corps.resultat ||
+    !(RESULTATS_ETAPE_EXECUTION as readonly string[]).includes(corps.resultat) ||
+    corps.observation === undefined
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
   const test = await ctx.testDefinitionRepo.testParId(execution.testId)
@@ -4655,6 +4676,17 @@ interface SaisieEvenementExecution {
   qualityEventId?: string | null
 }
 
+const TYPES_EVENEMENT_EXECUTION = [
+  'continuer',
+  'action',
+  'retest',
+  'deviation',
+  'changement',
+  'arret',
+  'externe',
+  'commentaire',
+] as const
+
 /** `qualityEventId` référence optionnellement un `QualityEvent` déjà existant — jamais créé automatiquement ici. */
 async function gererConsignerEvenement(
   request: Request,
@@ -4675,7 +4707,11 @@ async function gererConsignerEvenement(
   }
 
   const corps = await lireCorpsJson<SaisieEvenementExecution>(request)
-  if (!corps?.type || corps.description === undefined) {
+  if (
+    !corps?.type ||
+    !(TYPES_EVENEMENT_EXECUTION as readonly string[]).includes(corps.type) ||
+    corps.description === undefined
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
@@ -4697,6 +4733,8 @@ interface SaisieClotureExecution {
   verdict?: string
 }
 
+const VERDICTS_EXECUTION = ['conforme', 'non_conforme', 'conforme_avec_ecart'] as const
+
 /** Le verdict est toujours fourni explicitement par l'appelant — jamais déduit des ExecutionStep. */
 async function gererCloturerExecution(
   request: Request,
@@ -4717,7 +4755,9 @@ async function gererCloturerExecution(
   }
 
   const corps = await lireCorpsJson<SaisieClotureExecution>(request)
-  if (!corps?.verdict) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.verdict || !(VERDICTS_EXECUTION as readonly string[]).includes(corps.verdict)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const execution: ExecutionEnregistree = {
@@ -4827,6 +4867,8 @@ interface SaisieEnregistrementPreuve {
   description?: string
 }
 
+const TYPES_EVIDENCE = ['native', 'document'] as const
+
 /** Une Evidence n'existe que pour une Execution réelle, non clôturée (immutabilité post-clôture, cohérent avec Phase 6b). */
 async function gererEnregistrerPreuve(
   request: Request,
@@ -4841,6 +4883,7 @@ async function gererEnregistrerPreuve(
   if (
     !corps?.executionId ||
     !corps.type ||
+    !(TYPES_EVIDENCE as readonly string[]).includes(corps.type) ||
     corps.titre === undefined ||
     corps.description === undefined
   ) {

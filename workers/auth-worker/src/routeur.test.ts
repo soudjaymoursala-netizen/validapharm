@@ -2039,6 +2039,19 @@ describe('routerRequete — ACFC (méthode configurable par client, Phase 4a du 
       { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
     ])
 
+    const verdictInvente = await requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, {
+      jeton: admin.jeton,
+      body: {
+        methodProfileId: profil.corps.profil.id,
+        methodProfileVersion: profil.corps.profil.version,
+        assetNodeId: null,
+        nomElement: 'Vanne V-102',
+        reponses: { 'q-1': 'oui' },
+        verdict: 'tres_critique',
+      },
+    })
+    expect(verdictInvente.status).toBe(400)
+
     const liste = await requete(ctx, 'GET', `/clients/${clientId}/acfc`, { jeton: admin.jeton })
     expect(liste.corps.evaluations.map((e) => e.id)).toContain(evaluation.corps.evaluation.id)
   })
@@ -2390,6 +2403,24 @@ describe('routerRequete — Impact Assessment / System Classification (F1 du cat
       { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
     ])
 
+    const verdictInvente = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/impact-assessment/evaluations`,
+      {
+        jeton: admin.jeton,
+        body: {
+          methodProfileId: profil.corps.profilImpact.id,
+          methodProfileVersion: profil.corps.profilImpact.version,
+          assetNodeId: null,
+          nomElement: 'Ligne L-202',
+          reponses: { 'q-1': 'oui' },
+          verdict: 'impact_indirect',
+        },
+      },
+    )
+    expect(verdictInvente.status).toBe(400)
+
     const liste = await requete(ctx, 'GET', `/clients/${clientId}/impact-assessment`, {
       jeton: admin.jeton,
     })
@@ -2677,6 +2708,14 @@ describe('routerRequete — Risk Assessment / AMDEC (Target Architecture §10, P
     expect(evaluation.corps.evaluationRisque.verdictInitial).toBe('acceptable')
     expect(evaluation.corps.evaluationRisque.iprResiduel).toBeNull()
     expect(evaluation.corps.evaluationRisque.verdictResiduel).toBeNull()
+
+    const residuelInvente = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/risk-assessment/evaluations/${evaluation.corps.evaluationRisque.id}/action-residuelle`,
+      { jeton: admin.jeton, body: { verdictResiduel: 'a_surveiller' } },
+    )
+    expect(residuelInvente.status).toBe(400)
     expect(evaluation.corps.evaluationRisque.auditLog).toEqual([
       { timestamp: expect.any(String), actor: 'admin@pharmatech.example', action: 'création' },
     ])
@@ -4021,6 +4060,61 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
     )
     expect(recloture.status).toBe(400)
     expect(recloture.corps.erreur).toBe('execution_deja_cloturee')
+  })
+
+  test('valeurs hors domaine refusées : un enregistrement d’exécution immuable ne doit jamais porter un verdict/résultat/type inventé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const test = await creerTestApprouveDeTest(ctx, admin.jeton, clientId)
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId: test.id, assetNodeId: null },
+    })
+    const executionId = demarrage.corps.execution.id
+
+    const etape = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${executionId}/etapes`,
+      {
+        jeton: admin.jeton,
+        body: { testStepId: test.etapes[0]?.id, resultat: 'peut-etre', observation: '' },
+      },
+    )
+    expect(etape.status).toBe(400)
+    expect(etape.corps.erreur).toBe('corps_invalide')
+
+    const evenement = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${executionId}/evenements`,
+      { jeton: admin.jeton, body: { type: 'inconnu', description: 'x', qualityEventId: null } },
+    )
+    expect(evenement.status).toBe(400)
+
+    const preuve = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton: admin.jeton,
+      body: { executionId, executionStepId: null, type: 'video', titre: 'x', description: '' },
+    })
+    expect(preuve.status).toBe(400)
+
+    const cloture = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/executions/${executionId}/cloturer`,
+      { jeton: admin.jeton, body: { verdict: 'banane' } },
+    )
+    expect(cloture.status).toBe(400)
+    expect(cloture.corps.erreur).toBe('corps_invalide')
+
+    const encoreOuverte = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/executions/${executionId}/cloturer`,
+      { jeton: admin.jeton, body: { verdict: 'conforme_avec_ecart' } },
+    )
+    expect(encoreOuverte.status).toBe(200)
   })
 
   test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
