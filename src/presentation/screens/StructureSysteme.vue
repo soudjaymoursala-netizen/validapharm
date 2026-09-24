@@ -195,7 +195,8 @@ onMounted(async () => {
 
 async function ajouterNiveau(): Promise<void> {
   if (brouillonNiveau.key.trim().length === 0) return
-  await structureStore.ajouterNiveau(props.clientId, {
+  erreurNiveau.value = null
+  const resultat = await structureStore.ajouterNiveau(props.clientId, {
     key: brouillonNiveau.key.trim(),
     label: {
       fr: brouillonNiveau.libelleFr,
@@ -204,6 +205,10 @@ async function ajouterNiveau(): Promise<void> {
     },
     numbering_pattern: brouillonNiveau.numbering_pattern,
   })
+  if (!resultat.ok) {
+    erreurNiveau.value = messageErreurNiveau(resultat)
+    return
+  }
   brouillonNiveau.key = ''
   brouillonNiveau.libelleFr = ''
   brouillonNiveau.numbering_pattern = ''

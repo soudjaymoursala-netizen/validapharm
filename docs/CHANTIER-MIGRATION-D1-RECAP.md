@@ -3426,3 +3426,88 @@ L'environnement local jetable a été entièrement démonté en fin de
 session (serveurs arrêtés, `.dev.vars` supprimé) ; le dépôt reste
 inchangé (`.wrangler/` et `.dev.vars` déjà couverts par
 `.gitignore`).
+
+## 31. Deuxième passe de test en direct (23/09/2026) — 2 bugs réels trouvés et corrigés
+
+Suite à la demande explicite de pousser le test plus loin (« tester le
+logiciel, et corriger les bugs »), le même environnement local jetable
+(§30) a été relancé pour un balayage systématique des 28 routes de
+l'application, puis pour dérouler en direct, dans le navigateur, la
+chaîne complète Structure Système → Risk Assessment (AMDEC) → Test
+Design Engine → Exécution — la même chaîne fonctionnelle déjà vérifiée
+en lecture de code (§29 et sessions précédentes), mais jamais encore
+réellement exécutée de bout en bout par un utilisateur.
+
+### 31.1 Balayage des 28 routes
+
+Chaque route de `src/presentation/router/index.ts` chargée dans un
+navigateur réel avec session authentifiée : zéro erreur console, zéro
+requête HTTP en échec, aucune redirection inattendue sur les 28 routes.
+
+### 31.2 Bug réel n°1 — clé de niveau dupliquée non détectée
+
+**Trouvé** en manipulant réellement l'écran Structure Système : deux
+niveaux affichés comme « Équipement (equipement) » identiques dans la
+liste, indiscernables l'un de l'autre.
+
+**Cause racine** (`src/presentation/stores/useStructureSystemeStore.ts`,
+fonction `ajouterNiveau`) : contrairement à `modifierNiveau` juste
+en-dessous, qui refuse explicitement une clé déjà utilisée (raison
+`cle_deja_utilisee`), `ajouterNiveau` empilait le nouveau niveau sans
+aucune vérification d'unicité de `key`. Aggravant : le `v-for` de
+`StructureSysteme.vue` utilise `niveau.key` comme `:key` Vue — deux
+niveaux de même clé produisent une collision de clé de rendu Vue, un
+comportement non garanti.
+
+**Correctif** : `ajouterNiveau` retourne désormais
+`ResultatAjoutNiveau` (`{ ok: true } | { ok: false; raison:
+'cle_deja_utilisee' }`), même discipline que `modifierNiveau` ; le
+composant affiche le message d'erreur déjà existant
+(`messageErreurNiveau`) au lieu de vider silencieusement le
+formulaire. Un test de régression a été ajouté
+(`structureSysteme.test.ts`). Vérifié en direct dans le navigateur
+après correctif : le message « Cette clé est déjà utilisée par un
+autre niveau. » s'affiche bien et aucun doublon n'est créé.
+
+### 31.3 Bug réel n°2 — `.wrangler/**` absent des exclusions ESLint
+
+**Trouvé** en relançant `npm run lint` après une session de test local
+avec `wrangler dev` : ~380 erreurs de style remontées, toutes situées
+dans `workers/auth-worker/.wrangler/tmp/**` — du code de bundling
+généré par Wrangler lui-même (jamais commité, déjà exclu par
+`.gitignore`), jamais du code du projet.
+
+**Cause racine** (`eslint.config.js`) : la liste `ignores` excluait
+`dist/**`, `node_modules/**` et `prototype-initial/**`, mais pas
+`.wrangler/**` — un gouffre qui ne se manifeste que pour tout
+contributeur ayant déjà lancé `wrangler dev` localement au moins une
+fois, jamais en CI (qui ne lance jamais le Worker avant de linter).
+
+**Correctif** : ajout de `'**/.wrangler/**'` à `ignores`. Revérifié :
+`npm run lint` (`--max-warnings 0`) revient propre après un cycle
+complet `wrangler dev` + suppression du dossier.
+
+### 31.4 Chaîne fonctionnelle vérifiée en direct, de bout en bout
+
+Sur un client/projet de test jetable : création d'un niveau et d'un
+nœud Structure Système (« Pompe P-101 ») → configuration du profil
+AMDEC → création d'une ligne AMDEC (S=5, O=5, D=3 → IPR 75, verdict
+« Action requise », calcul confirmé conforme à
+`evaluerVerdictRiskAssessment`) → création d'une exigence liée au
+nœud (indicateur « ⚠ non couvert » confirmé) → création d'un objectif
+de test → clic réel sur « Proposer des candidats depuis les risques »
+→ un candidat réellement généré, badge « proposé depuis l'analyse de
+risque », indicateur de couverture passé à « ✓ couvert » → acceptation
+du candidat → création et approbation du test → déclaration de la
+couverture (« URS-001 … couvert par « Test de maîtrise de la pression
+de refoulement » ») → le test approuvé apparaît correctement dans
+l'écran Exécution de tests. Zéro erreur console/réseau sur l'ensemble
+de la chaîne.
+
+**Conclusion : le Test Design Engine (§29, `genererCandidatsDepuisRisques`/
+`evaluerCouvertureRisques`) fonctionne réellement de bout en bout**, pas
+seulement en tests automatisés — première confirmation par clic réel
+depuis sa construction. Validation : `vue-tsc -b --noEmit` propre,
+`eslint . --max-warnings 0` propre, 1483/1483 tests unitaires verts
+(167 fichiers). Environnement local à nouveau entièrement démonté en
+fin de section (`.dev.vars` et `.wrangler/` supprimés).

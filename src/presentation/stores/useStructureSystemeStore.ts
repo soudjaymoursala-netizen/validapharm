@@ -56,6 +56,8 @@ export interface NouveauNoeudInput {
   workspace_id?: string | null
 }
 
+export type ResultatAjoutNiveau = { ok: true } | { ok: false; raison: 'cle_deja_utilisee' }
+
 export type ResultatModificationNiveau =
   | { ok: true }
   | { ok: false; raison: 'niveau_introuvable' }
@@ -310,10 +312,24 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     return schemaWireVersDomaine(resultat.donnees.schema)
   }
 
-  async function ajouterNiveau(clientId: string, niveau: NouveauNiveauInput): Promise<void> {
+  /**
+   * Refuse une clé déjà utilisée par un autre niveau — même discipline que
+   * `modifierNiveau`, qui la garantit déjà à la correction ; sans ce
+   * contrôle à la création, deux niveaux identiques dans `<select>` (menu
+   * « Niveau » du formulaire nœud) deviennent indiscernables l'un de
+   * l'autre pour l'utilisateur comme pour le référencement `level_key`.
+   */
+  async function ajouterNiveau(
+    clientId: string,
+    niveau: NouveauNiveauInput,
+  ): Promise<ResultatAjoutNiveau> {
     const actuel = await schemaActuelFrais(clientId)
+    if (actuel.levels.some((n) => n.key === niveau.key)) {
+      return { ok: false, raison: 'cle_deja_utilisee' }
+    }
     const misAJour = await enregistrerSchema(clientId, [...actuel.levels, niveau])
     schema.value = misAJour
+    return { ok: true }
   }
 
   /**
