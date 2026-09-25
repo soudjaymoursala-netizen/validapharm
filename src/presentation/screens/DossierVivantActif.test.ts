@@ -8,6 +8,7 @@ import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import type { Section } from '../../logique-metier/domaine/types'
 import {
   connecterAdminDeTest,
+  creerProjetDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
@@ -210,6 +211,7 @@ describe('DossierVivantActif', () => {
       createdAt: maintenant,
       updatedAt: maintenant,
     })
+    await creerProjetDeTest(ctx, 'projet-1')
     await seedSection({
       id: 'section-1',
       project_id: 'projet-1',

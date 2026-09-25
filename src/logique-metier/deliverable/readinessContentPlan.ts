@@ -91,24 +91,54 @@ function evaluerRequirement(
   return resultat
 }
 
+/**
+ * Dernière exécution clôturée (`statut === 'terminee'`), ordonnée par
+ * `date_fin`, puis `created_at`, puis `id` — ordre total, donc résultat
+ * déterministe même à horodatage égal.
+ */
+export function derniereExecutionCloturee(executions: readonly Execution[]): Execution | undefined {
+  const cle = (e: Execution) => [e.date_fin ?? '', e.created_at, e.id] as const
+  let derniere: Execution | undefined
+  for (const e of executions) {
+    if (e.statut !== 'terminee') continue
+    if (!derniere) {
+      derniere = e
+      continue
+    }
+    const [a, b] = [cle(e), cle(derniere)]
+    const plusRecente = a[0] !== b[0] ? a[0] > b[0] : a[1] !== b[1] ? a[1] > b[1] : a[2] > b[2]
+    if (plusRecente) derniere = e
+  }
+  return derniere
+}
+
 function evaluerTest(test: Test, donnees: DonneesReadinessContentPlan): ReadinessContentPlan {
   if (test.statut === 'brouillon') return 'besoin_revue'
 
-  const executionsDuTest = donnees.executions.filter((e) => e.test_id === test.id)
+  // Exécutions de ce test sur CET équipement : une exécution rattachée
+  // explicitement à un autre nœud est ignorée ; sans nœud, elle compte.
+  const executionsDuTest = donnees.executions.filter(
+    (e) =>
+      e.test_id === test.id &&
+      (e.asset_node_id === null || e.asset_node_id === donnees.assetNodeId),
+  )
   if (executionsDuTest.length === 0) return 'besoin_information'
 
-  let resultat: ReadinessContentPlan = 'pret'
-  for (const execution of executionsDuTest) {
-    resultat = pire(resultat, evaluerExecution(execution, donnees))
-  }
+  let resultat: ReadinessContentPlan = executionsDuTest.some((e) => e.statut !== 'terminee')
+    ? 'besoin_information'
+    : 'pret'
+  // Décision utilisateur du 25/09/2026 : seule la dernière exécution
+  // clôturée compte — un échec antérieur reste tracé mais ne bloque plus si
+  // le retest est conforme et prouvé.
+  const derniere = derniereExecutionCloturee(executionsDuTest)
+  if (derniere) resultat = pire(resultat, evaluerExecutionCloturee(derniere, donnees))
   return resultat
 }
 
-function evaluerExecution(
+function evaluerExecutionCloturee(
   execution: Execution,
   donnees: DonneesReadinessContentPlan,
 ): ReadinessContentPlan {
-  if (execution.statut !== 'terminee') return 'besoin_information'
   if (execution.verdict === 'non_conforme') return 'bloque'
 
   const aDeLaPreuve = donnees.evidences.some((ev) => ev.execution_id === execution.id)

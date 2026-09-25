@@ -19,6 +19,7 @@ import {
   evaluerVerdictImpactAssessment,
   methodeCompletementRepondue,
 } from '../../logique-metier/assessment/evaluerVerdictImpactAssessment'
+import { libelleVerdictImpact } from '../i18n/libellesVerdictQuestionnaire'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -96,6 +97,8 @@ const complet = computed(() =>
     : false,
 )
 
+// `null` tant que le questionnaire est incomplet OU qu'un « Inconnu » empêche
+// de conclure (décision du 25/09/2026) — `complet` distingue les deux cas.
 const verdict = computed(() => {
   if (!methodeStore.profilActif || !complet.value) return null
   return evaluerVerdictImpactAssessment(
@@ -106,7 +109,7 @@ const verdict = computed(() => {
 })
 
 async function enregistrerEvaluation(): Promise<void> {
-  if (!verdict.value || nomElement.value.trim().length === 0) return
+  if (!complet.value || nomElement.value.trim().length === 0) return
   const resultat = await methodeStore.creerEvaluation(props.clientId, {
     nomElement: nomElement.value.trim(),
     assetNodeId: assetNodeIdSelectionne.value || null,
@@ -226,14 +229,17 @@ function nouvelleEvaluation(): void {
               </div>
             </li>
           </ul>
-          <p v-if="verdict" class="resultat-partiel" role="status">
+          <p v-if="complet" class="resultat-partiel" role="status">
             Verdict :
-            <strong>{{
-              verdict === 'impact_direct' ? 'Direct Impact' : 'Not Direct Impact'
-            }}</strong>
+            <strong>{{ libelleVerdictImpact(verdict) }}</strong>
+          </p>
+          <p v-if="complet && verdict === null" class="rappel">
+            Aucune réponse « Oui » et au moins une réponse « Inconnu » : pas de verdict tant que
+            l'inconnu n'est pas levé. L'évaluation peut être enregistrée « à compléter », puis
+            refaite une fois la réponse connue.
           </p>
           <button
-            v-if="verdict && !evaluationEnregistree"
+            v-if="complet && !evaluationEnregistree"
             type="button"
             @click="enregistrerEvaluation"
           >
@@ -254,7 +260,7 @@ function nouvelleEvaluation(): void {
       <ul>
         <li v-for="e in methodeStore.evaluations" :key="e.id">
           {{ e.nom_element }} —
-          {{ e.verdict === 'impact_direct' ? 'Direct Impact' : 'Not Direct Impact' }}
+          {{ libelleVerdictImpact(e.verdict) }}
         </li>
       </ul>
     </section>

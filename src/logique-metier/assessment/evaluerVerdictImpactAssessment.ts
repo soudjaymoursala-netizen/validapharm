@@ -1,6 +1,6 @@
 import type { MethodProfileImpactAssessment, QuestionImpactAssessment } from '../domaine/types'
 import {
-  auMoinsUneReponseOui,
+  conclusionQuestionnaireOuiNon,
   questionsCompletementRepondues,
   type ReponseQuestionOuiNon,
 } from './moteurQuestionsOuiNon'
@@ -17,21 +17,26 @@ import {
  * 2ᵉ édition retire explicitement la notion "Indirect Impact" (ternaire) de
  * sa 1ʳᵉ édition.
  *
+ * **(25/09/2026, décision utilisateur)** Sans aucun "oui", une réponse
+ * "inconnu" empêche de conclure : `null` = pas de verdict, évaluation « à
+ * compléter » (ce n'est pas un troisième verdict, c'est l'absence de verdict).
+ *
  * @requirement F1, Impact Assessment / System Classification
  */
 export function evaluerVerdictImpactAssessment(
   questions: readonly QuestionImpactAssessment[],
   reponses: Readonly<Record<string, ReponseQuestionOuiNon>>,
   decisionRule: MethodProfileImpactAssessment['decision_rule'],
-): 'impact_direct' | 'non_impact_direct' {
+): 'impact_direct' | 'non_impact_direct' | null {
   switch (decisionRule) {
-    case 'au_moins_un_oui_impact_direct':
-      return auMoinsUneReponseOui(
+    case 'au_moins_un_oui_impact_direct': {
+      const conclusion = conclusionQuestionnaireOuiNon(
         questions.map((q) => q.id),
         reponses,
       )
-        ? 'impact_direct'
-        : 'non_impact_direct'
+      if (conclusion === null) return null
+      return conclusion === 'positif' ? 'impact_direct' : 'non_impact_direct'
+    }
   }
 }
 

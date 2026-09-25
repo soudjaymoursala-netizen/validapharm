@@ -3,8 +3,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Project, Section } from '../../logique-metier/domaine/types'
 import { db } from '../../persistance/db'
+import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import {
   connecterAdminDeTest,
+  creerProjetDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
@@ -89,6 +91,7 @@ function encoderBase64Utf8(texte: string): string {
 // `installerFauxWorkerAuth`, qui délègue tout le reste à `fetchMock`).
 let fetchMock: ReturnType<typeof vi.fn>
 let demonter: () => void
+let ctx: Contexte
 
 beforeEach(async () => {
   setActivePinia(createPinia())
@@ -96,7 +99,9 @@ beforeEach(async () => {
   await db.etatSynchronisation.clear()
   fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
-  demonter = installerFauxWorkerAuth().demonter
+  const installation = installerFauxWorkerAuth()
+  ctx = installation.ctx
+  demonter = installation.demonter
   await connecterAdminDeTest()
 })
 
@@ -188,6 +193,9 @@ describe('useSynchronisationStore — synchroniser', () => {
       shaBrancheConnue: 'sha-connue',
       derniereSynchronisation: null,
     })
+    // Une section ne peut exister que dans un projet réel (protection
+    // réelle des projets/sections, 25/09/2026).
+    await creerProjetDeTest(ctx, 'p1')
     await seedSection({
       id: 's1',
       project_id: 'p1',
@@ -215,6 +223,7 @@ describe('useSynchronisationStore — synchroniser', () => {
       .mockResolvedValueOnce(reponseMock({ object: { sha: 'sha-connue' } })) // vérif dans ecrireGroupe
       .mockResolvedValueOnce(reponseMock({ tree: { sha: 'sha-arbre-base' } }))
       .mockResolvedValueOnce(reponseMock({ sha: 'sha-blob-1' }))
+      .mockResolvedValueOnce(reponseMock({ sha: 'sha-blob-2' }))
       .mockResolvedValueOnce(reponseMock({ sha: 'sha-nouvel-arbre' }))
       .mockResolvedValueOnce(reponseMock({ sha: 'sha-nouveau-commit' }))
       .mockResolvedValueOnce(reponseMock({ object: { sha: 'sha-nouveau-commit' } }))
@@ -223,7 +232,10 @@ describe('useSynchronisationStore — synchroniser', () => {
 
     const store = useSynchronisationStore()
     await store.synchroniser()
-    expect(fetchMock).toHaveBeenCalledTimes(6)
+    // 1 vérification de SHA en amont (jamais une seconde lecture par
+    // avance) + arbre de base + 2 blobs (projet p1, section s1) + arbre +
+    // commit + mise à jour de la référence.
+    expect(fetchMock).toHaveBeenCalledTimes(7)
   })
 
   test('conflit détecté : retourne conflit=true, ne met pas à jour le SHA connu', async () => {

@@ -111,4 +111,33 @@ describe('ComputerSystemAssessment', () => {
       pertinenceEresPart11: false,
     })
   })
+
+  test("la catégorie 2 (retirée de GAMP 5) n'est plus proposée, mais une évaluation historique en catégorie 2 reste lisible", async () => {
+    const maintenant = new Date().toISOString()
+    await ctx.csvAssessmentRepo.creerEvaluation({
+      id: 'csv-historique',
+      clientId: CLIENT_ID,
+      assetNodeId: null,
+      nomSysteme: 'Automate historique',
+      categorieGamp5: 2,
+      justificationCategorie: 'Évaluée avant GAMP 5',
+      pertinenceGxp: true,
+      pertinenceEresPart11: false,
+      justificationPertinence: 'x',
+      auditLog: [{ timestamp: maintenant, actor: 'admin@test', action: 'création' }],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    })
+    const wrapper = mount(ComputerSystemAssessment, {
+      props: { clientId: CLIENT_ID },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await attendreQue(() => wrapper.text().includes('Automate historique'))
+
+    const valeurs = wrapper
+      .findAll('.categorie input[type="radio"]')
+      .map((radio) => radio.attributes('value'))
+    expect(valeurs).toEqual(['1', '3', '4', '5'])
+    expect(wrapper.text()).toContain('Catégorie 2 — Firmware (retirée de GAMP 5, historique)')
+  })
 })

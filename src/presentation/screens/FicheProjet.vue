@@ -18,6 +18,7 @@ import PipelineQualification from '../composants/PipelineQualification.vue'
 import IconeSvg from '../composants/IconeSvg.vue'
 import { useClientActifStore } from '../stores/useClientActifStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useSectionsStore } from '../stores/useSectionsStore'
 import { useProjectDocumentsStore } from '../stores/useProjectDocumentsStore'
 import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
@@ -26,6 +27,7 @@ const props = defineProps<{ projectId: string }>()
 
 const router = useRouter()
 const projetsStore = useProjectsStore()
+const authStore = useAuthStore()
 const sectionsStore = useSectionsStore()
 const documentsStore = useProjectDocumentsStore()
 const projet = ref<Project | undefined>(undefined)
@@ -74,13 +76,16 @@ function libelleErreurAction(resultat: { erreur: string }): string {
 }
 
 /**
- * Garde d'affichage du partage de projet — convention
- * UX, jamais une frontière de sécurité réelle (voir `permissionsProjet.ts`).
+ * Reflet dans l'interface du droit d'écriture sur le projet — le Worker
+ * applique réellement la même règle (403), voir `permissionsProjet.ts`.
+ * Un admin peut toujours modifier.
  * `true` tant que le projet n'est pas encore chargé, pour ne jamais
  * masquer les contrôles pendant le chargement initial.
  */
 const peutModifier = computed(() =>
-  projet.value ? peutModifierProjet(projet.value, projetsStore.identiteCourante) : true,
+  projet.value
+    ? authStore.estAdmin || peutModifierProjet(projet.value, projetsStore.identiteCourante)
+    : true,
 )
 
 async function ajouterPartage(): Promise<void> {
@@ -430,9 +435,9 @@ async function importerFichier(evenement: Event): Promise<void> {
     <section class="carte partage">
       <h2 class="carte__titre-discret">Partage</h2>
       <p class="rappel">
-        Lecture toujours ouverte à tous. Seuls le créateur et les personnes partagées en édition
-        peuvent modifier ce projet — une convention d'affichage, pas une frontière de sécurité
-        réelle (l'accès au dépôt Git reste au niveau du client).
+        Lecture ouverte à toute personne ayant accès au client du projet (et aux personnes
+        partagées). Seuls le créateur, les personnes partagées en édition et les administrateurs
+        peuvent modifier ce projet, ses sections et ses documents — règle appliquée par le serveur.
       </p>
       <p class="meta-proprietaire">Créé par : {{ projet.owner_id }}</p>
       <ul v-if="projet.shared_with.length > 0" class="liste-partages">

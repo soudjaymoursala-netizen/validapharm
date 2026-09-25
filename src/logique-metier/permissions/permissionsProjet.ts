@@ -1,13 +1,12 @@
-import type { Project } from '../domaine/types'
+import type { Project, Section } from '../domaine/types'
 
 /**
- * Contrôle d'affichage du partage de projet (Authentification
- * multi-utilisateur) — jamais une frontière de sécurité réelle :
- * le dépôt Git sous-jacent reste accessible dans son ensemble à qui
- * détient le jeton du client. Cette fonction ne pilote que l'affichage
- * des contrôles d'édition dans l'interface, exactement comme
- * `Section.owner_id`/`shared_with` (jamais câblés jusqu'ici
- * faute d'identité résolue).
+ * Droit d'écriture sur un projet, côté interface. **(25/09/2026, décision
+ * utilisateur « Protection réelle »)** Ce n'est plus une simple convention
+ * d'affichage : le Worker applique la même règle et refuse (403) toute
+ * écriture d'un projet, d'une section ou d'un document de projet à qui n'est
+ * ni propriétaire, ni partagé en édition, ni admin. Cette fonction ne fait
+ * que refléter ce droit dans l'interface (masquer/désactiver les contrôles).
  *
  * Lecture toujours ouverte pour qui a accès au projet (vision de
  * l'utilisateur : "lecture pour tous les accès, écriture pour le
@@ -26,15 +25,10 @@ export function peutModifierProjet(
 }
 
 /**
- * Contrôle de visibilité d'un projet pour un compte non-admin : visible
- * si propriétaire (`owner_id`) ou explicitement partagé (`shared_with`,
- * quel que soit le niveau d'accès). Un compte admin n'est jamais soumis
- * à cette fonction (voir `useProjectsStore.chargerProjets`/
- * `obtenirProjet`) — il continue de tout voir, sans régression pour les
- * comptes déjà existants.
- *
- * Reste, comme `peutModifierProjet`, une convention côté client : le
- * dépôt Git synchronisé n'est pas lui-même partitionné par utilisateur.
+ * Visibilité d'un projet pour un compte non-admin, du seul point de vue du
+ * partage (`owner_id`/`shared_with`). Le Worker ouvre en plus la lecture à
+ * quiconque a accès au client du projet (décision du 25/09/2026) — c'est
+ * lui qui filtre réellement ce que chaque compte reçoit.
  */
 export function peutVoirProjet(
   project: Pick<Project, 'owner_id' | 'shared_with'>,
@@ -42,4 +36,23 @@ export function peutVoirProjet(
 ): boolean {
   if (project.owner_id === userId) return true
   return project.shared_with.some((partage) => partage.user_id === userId)
+}
+
+/**
+ * Droit d'écriture sur une section : celui de son projet (admin,
+ * propriétaire, partagé en édition), ou le partage propre à la section.
+ * Même règle que `droitsSection` côté Worker, qui l'applique réellement.
+ */
+export function peutModifierSection(
+  project: Pick<Project, 'owner_id' | 'shared_with'> | undefined,
+  section: Pick<Section, 'owner_id' | 'shared_with'>,
+  userId: string,
+  estAdmin: boolean,
+): boolean {
+  if (estAdmin) return true
+  if (project && peutModifierProjet(project, userId)) return true
+  if (section.owner_id === userId) return true
+  return section.shared_with.some(
+    (partage) => partage.user_id === userId && partage.access_level === 'édition',
+  )
 }

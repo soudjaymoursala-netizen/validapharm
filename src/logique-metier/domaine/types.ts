@@ -128,9 +128,10 @@ export interface Project {
    * jamais utilisé (retombe sur `IDENTIFIANT_UTILISATEUR_LOCAL_PHASE1`
    * hors session, cas défensif qui ne devrait jamais se produire derrière
    * la garde de routeur globale).
-   * `shared_with` : même convention UX que `Section.owner_id`/`shared_with`
-   * — un contrôle d'affichage, jamais une frontière de sécurité
-   * réelle (l'accès Git sous-jacent reste au niveau du dépôt entier).
+   * `shared_with` : partage lecture/édition, comme `Section.owner_id`/
+   * `shared_with`. **Depuis le 25/09/2026, appliqué réellement par le
+   * Worker** (décision utilisateur « Protection réelle ») : écriture
+   * réservée au propriétaire, aux partagés en édition et aux admins.
    */
   owner_id: string
   shared_with: Array<{ user_id: string; access_level: 'lecture' | 'édition' }>
@@ -663,6 +664,15 @@ export interface EvaluationImpactAssessment {
  * à configurer, seulement une catégorie à sélectionner et justifier.
  */
 export type CategorieGAMP5 = 1 | 2 | 3 | 4 | 5
+
+/**
+ * Catégories proposées pour une **nouvelle** évaluation : grille GAMP 5
+ * (1, 3, 4, 5). La catégorie 2 (Firmware) a été retirée de GAMP 5 ; décision
+ * utilisateur du 25/09/2026 : elle n'est plus sélectionnable, mais reste dans
+ * `CategorieGAMP5` pour que les évaluations déjà enregistrées en catégorie 2
+ * restent lisibles (historique immuable, ALCOA+).
+ */
+export const CATEGORIES_GAMP5_SELECTIONNABLES: readonly CategorieGAMP5[] = [1, 3, 4, 5]
 
 /**
  * Computer System Assessment (F3 du catalogue §10, URS v27) — évaluation

@@ -38,6 +38,7 @@ import { useQualityEventStore } from '../stores/useQualityEventStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import { sectionWireVersDomaine } from '../stores/useSectionsStore'
 import { LIBELLES_STATUT_QUALIFICATION } from '../../logique-metier/i18n/libellesStatutQualification'
+import { libelleVerdictAcfc, libelleVerdictImpact } from '../i18n/libellesVerdictQuestionnaire'
 
 const props = defineProps<{ clientId: string; noeudId: string }>()
 
@@ -182,11 +183,13 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
         </p>
         <ul v-else class="liste-evaluations">
           <li v-for="e in evaluationsACFC" :key="e.id">
-            ACFC — {{ e.nom_element }} ({{ e.created_at.slice(0, 10) }})
+            ACFC — {{ e.nom_element }} : {{ libelleVerdictAcfc(e.verdict) }} ({{
+              e.created_at.slice(0, 10)
+            }})
           </li>
           <li v-for="e in evaluationsImpact" :key="e.id">
             Impact Assessment — {{ e.nom_element }} :
-            {{ e.verdict === 'impact_direct' ? 'Direct Impact' : 'Not Direct Impact' }}
+            {{ libelleVerdictImpact(e.verdict) }}
             ({{ e.created_at.slice(0, 10) }})
           </li>
           <li v-for="e in evaluationsCSV" :key="e.id">

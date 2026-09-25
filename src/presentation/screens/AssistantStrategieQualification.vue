@@ -26,6 +26,7 @@ import {
   VERSION_GRILLE_STRATEGIE_QUALIFICATION,
   type NiveauComplexite,
 } from '../../logique-metier/strategie-qualification/grilleDecision'
+import { libelleVerdictAcfc } from '../i18n/libellesVerdictQuestionnaire'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -128,7 +129,7 @@ const verdict = computed(() => {
 })
 
 async function enregistrerEvaluation(): Promise<void> {
-  if (!verdict.value || nomElement.value.trim().length === 0) return
+  if (!complet.value || nomElement.value.trim().length === 0) return
   erreurEvaluation.value = null
   const resultat = await methodeStore.creerEvaluation(props.clientId, {
     nomElement: nomElement.value.trim(),
@@ -259,12 +260,17 @@ const conclusion = computed(() =>
               </div>
             </li>
           </ul>
-          <p v-if="verdict" class="resultat-partiel" role="status">
+          <p v-if="complet" class="resultat-partiel" role="status">
             Verdict ACFC :
-            <strong>{{ verdict === 'critique' ? 'Critique' : 'Non critique' }}</strong>
+            <strong>{{ libelleVerdictAcfc(verdict) }}</strong>
+          </p>
+          <p v-if="complet && verdict === null" class="rappel">
+            Aucune réponse « Oui » et au moins une réponse « Inconnu » : pas de verdict, donc pas de
+            stratégie de qualification tant que l'inconnu n'est pas levé. L'évaluation peut être
+            enregistrée « à compléter ».
           </p>
           <button
-            v-if="verdict && !evaluationEnregistree"
+            v-if="complet && !evaluationEnregistree"
             type="button"
             @click="enregistrerEvaluation"
           >
