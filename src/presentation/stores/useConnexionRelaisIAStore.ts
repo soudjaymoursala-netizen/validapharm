@@ -2,13 +2,23 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { RelayProviderAdapter } from '../../connecteurs/ia/RelayProviderAdapter'
 import { useAuthStore } from './useAuthStore'
+import { useConnexionAuthentificationStore } from './useConnexionAuthentificationStore'
 
+/** Saisie admin : `jeton` vide = conserver le jeton déjà enregistré côté serveur. */
 export interface SaisieConnexionRelaisIA {
   relayUrl: string
   jeton: string
 }
 
-export type ConnexionRelaisIA = SaisieConnexionRelaisIA
+/**
+ * Configuration lue côté navigateur — **sans le jeton du relais**
+ * (25/09/2026) : le Worker ne le renvoie plus ; les appels passent par
+ * `<Worker d'authentification>/relais-ia`, qui l'ajoute côté serveur.
+ */
+export interface ConnexionRelaisIA {
+  relayUrl: string
+  jetonConfigure: boolean
+}
 
 export type ResultatEnregistrementParametreInstallation =
   { ok: true } | { ok: false; erreur: string }
@@ -49,10 +59,10 @@ export const useConnexionRelaisIAStore = defineStore('connexionRelaisIA', () => 
         return
       }
       const resultat = await api.obtenirParametreInstallation(authStore.jeton, CLE_PARAMETRE)
-      connexion.value =
-        resultat.ok && resultat.donnees.parametre
-          ? (resultat.donnees.parametre.valeur as unknown as ConnexionRelaisIA)
-          : null
+      const valeur = resultat.ok ? resultat.donnees.parametre?.valeur : undefined
+      connexion.value = valeur
+        ? { relayUrl: valeur.relayUrl ?? '', jetonConfigure: valeur.jetonConfigure === 'oui' }
+        : null
     } catch {
       // Panne réseau transitoire : la configuration déjà chargée (le cas
       // échéant) reste affichée, jamais effacée sur un simple incident.
@@ -68,17 +78,17 @@ export const useConnexionRelaisIAStore = defineStore('connexionRelaisIA', () => 
     const api = await authStore.client()
     if (!api || !authStore.jeton) return { ok: false, erreur: 'relais_non_configure' }
 
-    const valeur: ConnexionRelaisIA = {
-      relayUrl: saisie.relayUrl.trim(),
-      jeton: saisie.jeton.trim(),
-    }
+    const valeur = { relayUrl: saisie.relayUrl.trim(), jeton: saisie.jeton.trim() }
     const resultat = await api.enregistrerParametreInstallation(
       authStore.jeton,
       CLE_PARAMETRE,
-      valeur as unknown as Record<string, string>,
+      valeur,
     )
     if (!resultat.ok) return { ok: false, erreur: resultat.erreur }
-    connexion.value = valeur
+    connexion.value = {
+      relayUrl: valeur.relayUrl,
+      jetonConfigure: resultat.donnees.parametre?.valeur.jetonConfigure === 'oui',
+    }
     return { ok: true }
   }
 
@@ -100,12 +110,13 @@ export const useConnexionRelaisIAStore = defineStore('connexionRelaisIA', () => 
    * fournisseur au seul geste de test.
    */
   async function testerConnexion(): Promise<ResultatTestConnexionRelaisIA> {
-    if (connexion.value === null) {
+    const acces = accesRelais()
+    if (connexion.value === null || acces.relayUrl === undefined) {
       return { ok: false, message: 'Aucune configuration enregistrée.' }
     }
     const adaptateur = new RelayProviderAdapter({
-      relayUrl: connexion.value.relayUrl,
-      jeton: connexion.value.jeton,
+      relayUrl: acces.relayUrl,
+      jeton: acces.jetonRelais,
       nomAffiche: 'relais-ia',
     })
     try {
@@ -116,5 +127,21 @@ export const useConnexionRelaisIAStore = defineStore('connexionRelaisIA', () => 
     }
   }
 
-  return { connexion, enChargement, charger, enregistrer, effacer, testerConnexion }
+  /**
+   * Paramètres à passer à `construireAdaptateursIA` : l'adaptateur appelle
+   * le relais du Worker d'authentification (`/relais-ia`) avec la session
+   * courante — jamais le relais IA directement avec son jeton. `undefined`
+   * tant qu'aucun relais IA n'est configuré (l'adaptateur affiche alors
+   * « Relais IA non configuré »).
+   */
+  function accesRelais(): { relayUrl: string | undefined; jetonRelais: string | undefined } {
+    const urlWorker = useConnexionAuthentificationStore().connexion?.relayUrl
+    const jetonSession = useAuthStore().jeton
+    if (connexion.value === null || !urlWorker || !jetonSession) {
+      return { relayUrl: undefined, jetonRelais: undefined }
+    }
+    return { relayUrl: `${urlWorker}/relais-ia`, jetonRelais: jetonSession }
+  }
+
+  return { connexion, enChargement, charger, enregistrer, effacer, accesRelais, testerConnexion }
 })

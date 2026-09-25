@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { DriveConnector, type FichierAMirroir } from '../../connecteurs/drive/DriveConnector'
-import { GitHubConnector } from '../../connecteurs/github/GitHubConnector'
 import { etatMiroirDriveAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
 import { useConnexionGitHubStore } from './useConnexionGitHubStore'
@@ -62,9 +61,8 @@ export const useMiroirDriveStore = defineStore('miroirDrive', () => {
   }
 
   async function miroirVersDrive(clientId: string): Promise<ResultatMiroir> {
-    const githubStore = useConnexionGitHubStore()
-    await githubStore.charger()
-    if (githubStore.connexion === null) {
+    const githubConnecteur = await useConnexionGitHubStore().creerConnecteur()
+    if (githubConnecteur === null) {
       return {
         ok: false,
         message:
@@ -88,7 +86,6 @@ export const useMiroirDriveStore = defineStore('miroirDrive', () => {
 
     miroirEnCours.value = true
     try {
-      const githubConnecteur = new GitHubConnector(githubStore.connexion)
       const arborescence = await githubConnecteur.chargerArborescence()
       const fichiers: FichierAMirroir[] = await Promise.all(
         arborescence.map(async (entree) => ({

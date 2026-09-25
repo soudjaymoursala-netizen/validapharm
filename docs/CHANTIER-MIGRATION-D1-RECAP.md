@@ -3748,10 +3748,180 @@ admin) ; `AdminUtilisateurs.test.ts` (refus expliqué, rôle inchangé) ;
 `connexionDrive.test.ts` (échec → copie locale conservée ; succès →
 migrée puis retirée).
 
-### 35.1 Question ouverte pour l'utilisateur
+### 35.1 Question ouverte pour l'utilisateur — **tranchée, voir §36**
 
 **Bibliothèque de normes** : `DELETE /documents-normatifs/:id` n'exige que
 l'authentification — tout compte connecté peut supprimer un document de la
 bibliothèque commune à l'organisation. Pas modifié sans décision :
 réserver la suppression aux admins (et/ou à la personne qui l'a importé) ?
+
+## 36. Bibliothèque de normes : suppression réservée aux admins (25/09/2026)
+
+Décision de l'utilisateur (réponse au §35.1) : « réserver les suppressions
+aux admins ». Il autorise aussi, pour la suite, les améliorations et
+corrections jugées utiles.
+
+- Worker : `DELETE /documents-normatifs/:id` passe par `exigerAdmin`
+  (403 `non_autorise` sinon). Renommer/réparer restent ouverts à tout
+  compte (non demandé).
+- Écran `BibliothequeNormes.vue` : bouton « Supprimer » affiché aux admins
+  seulement.
+- Test Worker : un utilisateur reçoit 403, le document reste listé.
+- `GUIDE-UTILISATEUR.md` : §0 « Comprendre l'outil » réécrit — il
+  décrivait encore l'ancienne architecture (données « dans le
+  navigateur », « GitHub source de vérité ») alors que D1 est la source de
+  vérité depuis le chantier de migration ; documents de projet décrits
+  comme « uniquement en local (IndexedDB) » alors qu'ils sont en D1+R2 ;
+  libellés de synchronisation GitHub et de résolution de conflit alignés.
+
+### 36.1 Risque connu signalé — **traité pour GitHub, voir §38**
+
+`GET /parametres-installation/:cle` et `POST /drive/rafraichir-jeton` sont
+ouverts à **tout compte connecté** (choix documenté : le navigateur utilise
+directement ces jetons). Conséquence : tout utilisateur peut lire le **PAT
+GitHub de l'installation** (accès en écriture au dépôt) et obtenir un jeton
+Drive frais. Correction de fond possible : faire transiter les appels
+GitHub/Drive par le Worker (le jeton ne quitte plus jamais le serveur) —
+chantier à décider avec l'utilisateur, non lancé.
+
+## 37. Bandeau « serveur injoignable » (25/09/2026, amélioration autorisée)
+
+**Constat** : 23 stores suivent le repli « jamais une exception non
+gérée » au chargement — en cas de panne réseau ou de Worker injoignable,
+ils remplacent les données par des **listes vides**, sans rien signaler.
+L'écran affiche alors un état vide trompeur, indiscernable de la réalité :
+p. ex. Impact Assessment affiche « Aucune méthode n'est configurée —
+saisissez les questions… », ce qui pousse à recréer une méthode qui existe.
+
+**Correctif (un seul point, pas 23 stores modifiés)** :
+- `AuthApiClient` : les 6 appels `fetch` dupliqués (délai, conversion des
+  pannes en `TimeoutAuthError`/`IndisponibleAuthError`, 5xx) sont
+  factorisés dans `envoyer()`, qui prévient un `observateurConnectivite`
+  optionnel (`true` dès que le Worker répond, même par un refus 4xx ;
+  `false` sur panne réseau, délai dépassé ou 5xx).
+- `useConnectiviteServeurStore` (nouveau) : `serveurInjoignable`, alimenté
+  par `useAuthStore.client()`.
+- `CoquilleApplication.vue` : bandeau d'alerte collant « Serveur
+  injoignable : les données affichées peuvent être incomplètes ou vides à
+  tort. N'enregistrez rien de nouveau avant le retour de la connexion. »
+  + « Réessayer » ; il disparaît dès qu'un appel aboutit.
+
+Tests : `AuthApiClient.test.ts` (séquence réseau KO / 503 / 403 / 200 →
+`[false, false, true, true]`), `CoquilleApplication.test.ts` (bandeau
+affiché puis retiré). Vérifié en navigateur réel : Worker arrêté en cours
+de session → bandeau affiché, aucune erreur console.
+
+## 38. Relais GitHub : le PAT ne quitte plus jamais le serveur (25/09/2026)
+
+Chantier lancé à la demande de l'utilisateur (« lance tous les chantiers
+que tu peux »), en réponse au risque §36.1.
+
+**Avant** : `GET /parametres-installation/github` renvoyait le PAT à tout
+compte connecté ; le navigateur appelait `api.github.com` directement avec.
+N'importe quel utilisateur pouvait donc récupérer un jeton en écriture sur
+le dépôt et l'utiliser hors de l'application.
+
+**Après** :
+- **Worker — `/github/api/<chemin GitHub>`** (`gererRelaisGitHub`) :
+  session exigée ; dépôt de l'installation uniquement
+  (`/repos/<owner>/<repo>/`) ; **liste blanche** des seules opérations
+  dont `GitHubConnector` a besoin — `GET contents/…` (sans `..`),
+  `GET git/ref/heads/<branche>`, `GET git/trees/<branche|sha>`,
+  `GET git/blobs|commits/<sha>`, `POST git/blobs|trees|commits`,
+  `PATCH git/refs/heads/<branche>` avec `force: false` obligatoire (jamais
+  de réécriture d'historique). Tout le reste → 403
+  `operation_github_non_autorisee`, GitHub jamais appelé. Le PAT, le
+  `User-Agent` (exigé par GitHub depuis un Worker) et les en-têtes d'API
+  sont ajoutés côté serveur ; statut et en-têtes de quota
+  (`X-RateLimit-*`, exposés en CORS) relayés tels quels.
+- **Worker — paramètre `github`** : le PAT n'est plus jamais renvoyé
+  (lecture comme réponse d'enregistrement) → `jetonConfigure: 'oui'|'non'`.
+  Enregistrer sans jeton conserve le jeton en place ; premier
+  enregistrement sans jeton → 400 `jeton_obligatoire`.
+- **`GitHubConnector`** : option `relais: { url, jetonSession }` ; en mode
+  relais, seuls `Authorization` (session) et `Content-Type` sont envoyés
+  (un `X-GitHub-Api-Version` côté navigateur était bloqué par CORS —
+  **trouvé en test navigateur réel**) ; les refus du Worker (`{ erreur }`)
+  donnent un message explicite, les erreurs GitHub relayées gardent les
+  mêmes erreurs typées qu'en direct (401, 404, 409/422, quota).
+- **`useConnexionGitHubStore.creerConnecteur()`** : seul moyen de
+  construire un connecteur pour le dépôt de l'installation, toujours en
+  mode relais — utilisé par synchronisation, récupération, miroir Drive,
+  import de normes et test de connexion. `ConnexionGitHub` ne contient
+  plus de jeton.
+- **`ConfigurationClient.vue`** : champ jeton vide après enregistrement,
+  facultatif si un jeton existe (placeholder explicite), rappel « le jeton
+  reste sur le serveur ».
+- Hors périmètre : l'adaptateur QMS `GitHubDocumentConnectorAdapter`
+  (dépôts/jetons propres à chaque client, mode direct inchangé).
+
+**Tests** : Worker (relais autorisé avec PAT ajouté côté serveur ; 401
+sans session ; 7 opérations hors liste blanche → 403 sans appel à GitHub ;
+dépôt non configuré → 404 ; PAT jamais renvoyé ; réenregistrement sans
+jeton conserve le PAT) ; `GitHubConnector` (mode relais, refus Worker,
+erreur GitHub relayée) ; stores de synchronisation, miroir Drive, normes et
+connexion GitHub passés par le relais du faux Worker.
+
+**Vérifié en navigateur réel** (Worker local jetable) : enregistrement
+d'un faux jeton → champ vide + placeholder après rechargement ; aucune
+réponse `/parametres-installation` ne contient le jeton ; « Tester la
+connexion » → un seul appel au relais, **zéro appel du navigateur vers
+api.github.com**, le Worker a réellement appelé GitHub qui a refusé le faux
+jeton → « Authentification refusée par l'API GitHub ».
+
+**Suite traitée au §39** (relais IA, relais OCR, jeton de rafraîchissement
+Google).
+
+## 39. Secrets des paramètres jamais renvoyés + relais IA (25/09/2026)
+
+Suite directe du §38, même demande (« lance tous les chantiers »).
+
+**Constats** :
+- `relais-ia.jeton` et `relais-ocr.jeton` étaient renvoyés à tout compte
+  connecté (le navigateur appelait le relais IA directement avec) ;
+- plus grave : `drive-normes.refreshToken`, **jeton de rafraîchissement
+  Google longue durée**, était lui aussi renvoyé à tout compte connecté.
+
+**Correctif** :
+- Worker — `CHAMPS_SECRETS_PARAMETRE` (`github.jeton`, `relais-ia.jeton`,
+  `relais-ocr.jeton`, `drive-normes.refreshToken`) : jamais renvoyés
+  (lecture comme réponse d'enregistrement) → indicateur
+  `<champ>Configure: 'oui'|'non'` ; un enregistrement sans le secret
+  conserve celui en place (remplace le cas particulier `github` du §38 ;
+  `jeton_obligatoire` reste imposé au premier enregistrement `github`).
+  Non masqué : `drive-normes.jeton`, jeton d'accès Drive de 1h saisi à la
+  main et utilisé par le navigateur.
+- Worker — **`/relais-ia`** (`gererRelaisIA`) : session exigée ; `GET`
+  (test, jamais facturé) et `POST` (message, corps relayé tel quel) vers
+  l'URL du relais IA configuré, jeton ajouté côté serveur ; relais non
+  configuré → 404 `relais_ia_non_configure`, injoignable → 502.
+- `useConnexionRelaisIAStore.accesRelais()` : l'adaptateur IA appelle
+  `<Worker>/relais-ia` avec la session ; les 5 appelants
+  (`usePanneauChatStore`, `EditeurSection` ×2, `RevueStructureProcedure`,
+  `MissionWorkspace`) passent par lui. `ConnexionRelaisIA` et
+  `ConnexionRelaisOCR` ne contiennent plus de jeton.
+- `useNormativeDocumentsStore` : s'appuie sur `refreshTokenConfigure`
+  (jeton d'accès frais obtenu via `/drive/rafraichir-jeton`) ; ne relit
+  plus le `refreshToken` pour le préserver (le Worker le conserve).
+- `ConfigurationClient.vue` : champ jeton du relais IA comme pour GitHub.
+
+**Tests** : Worker (`/relais-ia` : 404 non configuré, 401 sans session,
+jeton ajouté, corps relayé ; secrets conservés au réenregistrement pour
+`relais-ia` et `drive-normes` et jamais renvoyés ; OCR et callback OAuth
+Google : secrets stockés mais jamais renvoyés) ; stores relais IA/OCR et
+panneau de chat (appel relayé, jeton jamais côté navigateur).
+`ConfigurationConnecteursQMS.test.ts` rendu robuste (attente bornée en
+temps, chargement initial attendu) après un échec intermittent sous
+charge.
+
+**Vérifié en navigateur réel** : jeton IA enregistré → champ vide avec
+placeholder après rechargement, aucune réponse ne le contient ; « Tester
+la connexion » → uniquement `GET /relais-ia` du Worker, **zéro appel du
+navigateur au relais IA**, relais injoignable → « Fournisseur IA
+indisponible ».
+
+**Reste lisible par le navigateur (assumé)** : le jeton d'accès Drive de
+courte durée (1h) renvoyé par `/drive/rafraichir-jeton` et les connexions
+Drive par client — le lecteur/miroir Drive tourne dans le navigateur ; un
+relais Drive serait le prochain pas si nécessaire.
 

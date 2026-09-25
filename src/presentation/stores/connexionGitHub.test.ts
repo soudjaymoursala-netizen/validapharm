@@ -41,16 +41,18 @@ describe('useConnexionGitHubStore — enregistrer/charger', () => {
       jeton: 'ghp_xxx',
     })
     expect(resultat).toEqual({ ok: true })
+    // Le PAT n'est jamais conservé ni relu par le navigateur.
     expect(store.connexion).toEqual({
       owner: 'acme',
       repo: 'validapharm-data',
       branche: 'main',
-      jeton: 'ghp_xxx',
+      jetonConfigure: true,
     })
 
     const autreVue = useConnexionGitHubStore()
     await autreVue.charger()
     expect(autreVue.connexion).toEqual(store.connexion)
+    expect(JSON.stringify(autreVue.connexion)).not.toContain('ghp_xxx')
   })
 
   test('un utilisateur non-admin ne peut pas enregistrer (paramètre partagé par toute l’installation)', async () => {
@@ -101,26 +103,22 @@ describe('useConnexionGitHubStore — testerConnexion', () => {
   test("configuration valide : appelle réellement l'API et retourne le SHA de branche", async () => {
     const store = useConnexionGitHubStore()
     await store.enregistrer({ owner: 'acme', repo: 'data', branche: 'main', jeton: 'x' })
-    fetchGitHubMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      headers: { get: () => null },
-      json: async () => ({ object: { sha: 'sha-actuel' } }),
-    })
+    fetchGitHubMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ object: { sha: 'sha-actuel' } }), { status: 200 }),
+    )
 
     const resultat = await store.testerConnexion()
     expect(resultat).toEqual({ ok: true, shaBranche: 'sha-actuel' })
+    // Appel relayé par le Worker : GitHub reçoit le PAT ajouté côté serveur.
+    const [url, init] = fetchGitHubMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://api.github.com/repos/acme/data/git/ref/heads/main')
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer x')
   })
 
   test('jeton invalide : retourne un échec explicite, jamais le jeton dans le message', async () => {
     const store = useConnexionGitHubStore()
     await store.enregistrer({ owner: 'acme', repo: 'data', branche: 'main', jeton: 'jeton-secret' })
-    fetchGitHubMock.mockResolvedValueOnce({
-      ok: false,
-      status: 401,
-      headers: { get: () => null },
-      json: async () => ({}),
-    })
+    fetchGitHubMock.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 401 }))
 
     const resultat = await store.testerConnexion()
     expect(resultat.ok).toBe(false)

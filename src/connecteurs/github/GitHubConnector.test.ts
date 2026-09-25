@@ -200,3 +200,44 @@ describe('GitHubConnector — ecrireGroupe', () => {
     ).rejects.toBeInstanceOf(ConflitShaError)
   })
 })
+
+describe('GitHubConnector — mode relais (le PAT ne quitte jamais le serveur)', () => {
+  function connecteurRelais(): GitHubConnector {
+    return new GitHubConnector({
+      owner: 'acme',
+      repo: 'data',
+      relais: { url: 'https://auth.exemple.workers.dev', jetonSession: 'session-123' },
+    })
+  }
+
+  test('appelle le Worker avec la session, sans aucun en-tête GitHub (bloqué par CORS)', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ object: { sha: 'sha-actuel' } }), { status: 200 }),
+    )
+    expect(await connecteurRelais().shaBrancheActuel()).toBe('sha-actuel')
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      'https://auth.exemple.workers.dev/github/api/repos/acme/data/git/ref/heads/main',
+    )
+    expect(init.headers).toEqual({ Authorization: 'Bearer session-123' })
+  })
+
+  test('refus du Worker ({ erreur }) : message explicite, jamais confondu avec une erreur GitHub', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ erreur: 'github_non_configure' }), { status: 404 }),
+    )
+    await expect(connecteurRelais().shaBrancheActuel()).rejects.toThrow(
+      "Le dépôt GitHub de l'installation n'est pas configuré.",
+    )
+  })
+
+  test('erreur GitHub relayée (401) : même erreur typée qu’en appel direct', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Bad credentials' }), { status: 401 }),
+    )
+    await expect(connecteurRelais().shaBrancheActuel()).rejects.toBeInstanceOf(
+      AuthentificationError,
+    )
+  })
+})

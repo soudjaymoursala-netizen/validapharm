@@ -624,8 +624,7 @@ async function genererBrouillon(): Promise<void> {
     const { principal, local } = construireAdaptateursIA({
       estFournisseurCloud,
       nomFournisseurActuel: nomFournisseurActuel.value,
-      relayUrl: relaisStore.connexion?.relayUrl,
-      jetonRelais: relaisStore.connexion?.jeton,
+      ...relaisStore.accesRelais(),
     })
     const resultat = await sectionsStore.genererBrouillonIA(
       props.sectionId,
@@ -679,8 +678,7 @@ async function poserQuestionAssistant(): Promise<void> {
     const { principal, local } = construireAdaptateursIA({
       estFournisseurCloud,
       nomFournisseurActuel: nomFournisseurActuel.value,
-      relayUrl: relaisStore.connexion?.relayUrl,
-      jetonRelais: relaisStore.connexion?.jeton,
+      ...relaisStore.accesRelais(),
     })
     const { response } = await reasoningStore.executerRaisonnement(projet.value.client_id, {
       objectif: construireObjectifAssistantSection(

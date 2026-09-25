@@ -158,6 +158,36 @@ function estCleParametreInstallationValide(cle: string): cle is CleParametreInst
   return (CLES_PARAMETRES_INSTALLATION as readonly string[]).includes(cle)
 }
 
+/**
+ * Champs secrets de chaque paramètre d'installation (25/09/2026) : jamais
+ * renvoyés au navigateur (lecture comme réponse d'enregistrement), remplacés
+ * par un indicateur `<champ>Configure: 'oui' | 'non'` ; un enregistrement
+ * qui ne les fournit pas conserve la valeur déjà en place. Les appels qui
+ * en ont besoin passent par un relais du Worker (`/github/api/*`,
+ * `/relais-ia`, `/drive/rafraichir-jeton`).
+ *
+ * Non masqué : `drive-normes.jeton`, jeton d'accès Drive de courte durée
+ * (1h) saisi manuellement, que le navigateur utilise directement.
+ */
+const CHAMPS_SECRETS_PARAMETRE: Record<CleParametreInstallation, readonly string[]> = {
+  github: ['jeton'],
+  'relais-ia': ['jeton'],
+  'relais-ocr': ['jeton'],
+  'drive-normes': ['refreshToken'],
+}
+
+function masquerSecretsParametre(
+  cle: CleParametreInstallation,
+  valeur: ValeurParametreInstallation,
+): ValeurParametreInstallation {
+  const secrets = CHAMPS_SECRETS_PARAMETRE[cle]
+  const masquee: ValeurParametreInstallation = Object.fromEntries(
+    Object.entries(valeur).filter(([champ]) => !secrets.includes(champ)),
+  )
+  for (const champ of secrets) masquee[`${champ}Configure`] = valeur[champ] ? 'oui' : 'non'
+  return masquee
+}
+
 export interface Contexte {
   utilisateursRepo: UtilisateursRepo
   clientsRepo: ClientsRepo
@@ -242,6 +272,9 @@ function entetesCors(corsOrigin: string): Record<string, string> {
     'Access-Control-Allow-Origin': corsOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    // Relais GitHub : le navigateur doit pouvoir lire l'état du quota
+    // pour distinguer « quota épuisé » d'une portée insuffisante (403).
+    'Access-Control-Expose-Headers': 'X-RateLimit-Remaining, X-RateLimit-Reset',
   }
 }
 
@@ -1743,6 +1776,16 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   }
   if (matchDocumentProjetId && request.method === 'DELETE') {
     return gererSupprimerDocumentProjet(request, ctx, entetes, matchDocumentProjetId[1] as string)
+  }
+
+  // --- Relais IA : le jeton du relais ne quitte jamais le serveur ---
+  if (chemin === '/relais-ia' && (request.method === 'GET' || request.method === 'POST')) {
+    return gererRelaisIA(request, ctx, entetes)
+  }
+
+  // --- Relais GitHub : le jeton du dépôt ne quitte jamais le serveur ---
+  if (chemin.startsWith('/github/api/')) {
+    return gererRelaisGitHub(request, ctx, entetes, chemin.slice('/github/api'.length), url.search)
   }
 
   // --- Paramètres d'installation (dépôt GitHub dédié, Relais IA, Drive normes) ---
@@ -9338,6 +9381,11 @@ async function gererObtenirParametreInstallation(
   // directement depuis le navigateur par n'importe quel compte de
   // l'organisation — exactement ce que chacun devait ressaisir
   // manuellement avant cette migration (stockage local par poste).
+  //
+  // **Secrets masqués (25/09/2026)** : `CHAMPS_SECRETS_PARAMETRE` (PAT
+  // GitHub, jetons des relais IA/OCR, jeton de rafraîchissement Google) ne
+  // sont plus jamais renvoyés, même à un admin — écriture seule ; les
+  // appels qui en ont besoin passent par un relais du Worker.
   const utilisateur = await authentifier(request, ctx)
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
   if (!estCleParametreInstallationValide(cle)) {
@@ -9345,7 +9393,12 @@ async function gererObtenirParametreInstallation(
   }
 
   const parametre = await ctx.parametresInstallationRepo.obtenir(cle)
-  return reponseJson({ parametre }, 200, entetes)
+  if (!parametre) return reponseJson({ parametre: null }, 200, entetes)
+  return reponseJson(
+    { parametre: { ...parametre, valeur: masquerSecretsParametre(cle, parametre.valeur) } },
+    200,
+    entetes,
+  )
 }
 
 async function gererEnregistrerParametreInstallation(
@@ -9365,10 +9418,31 @@ async function gererEnregistrerParametreInstallation(
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
-  await ctx.parametresInstallationRepo.enregistrer(cle, corps.valeur, acteur.id)
+  // Les secrets n'étant plus jamais renvoyés au navigateur, un
+  // enregistrement qui ne les fournit pas conserve ceux déjà en place
+  // (ex. changer la branche GitHub sans ressaisir le PAT, ajuster le dossier
+  // Drive sans perdre la connexion Google). Les indicateurs `…Configure`
+  // ne sont jamais stockés.
+  const existant = await ctx.parametresInstallationRepo.obtenir(cle)
+  const secrets = CHAMPS_SECRETS_PARAMETRE[cle]
+  const indicateurs = secrets.map((champ) => `${champ}Configure`)
+  const valeur: ValeurParametreInstallation = Object.fromEntries(
+    Object.entries(corps.valeur).filter(
+      ([champ, contenu]) => !indicateurs.includes(champ) && !(secrets.includes(champ) && !contenu),
+    ),
+  )
+  for (const champ of secrets) {
+    const precedent = existant?.valeur[champ]
+    if (!valeur[champ] && precedent) valeur[champ] = precedent
+  }
+  if (cle === 'github' && !valeur.jeton) {
+    return reponseJson({ erreur: 'jeton_obligatoire' }, 400, entetes)
+  }
+
+  await ctx.parametresInstallationRepo.enregistrer(cle, valeur, acteur.id)
   await consignerAudit(ctx, acteur, 'modification_parametre_installation', 'parametre', cle, null)
-  const parametre = await ctx.parametresInstallationRepo.obtenir(cle)
-  return reponseJson({ parametre }, 200, entetes)
+  // Même masquage qu'à la lecture : le PAT n'est jamais renvoyé.
+  return gererObtenirParametreInstallation(request, ctx, entetes, cle)
 }
 
 async function gererEffacerParametreInstallation(
@@ -9386,6 +9460,169 @@ async function gererEffacerParametreInstallation(
   await ctx.parametresInstallationRepo.effacer(cle)
   await consignerAudit(ctx, acteur, 'suppression_parametre_installation', 'parametre', cle, null)
   return reponseJson({ ok: true }, 200, entetes)
+}
+
+// --- Relais GitHub (25/09/2026) ---
+//
+// Remplace l'appel direct du navigateur à api.github.com avec le PAT de
+// l'installation (lisible par tout compte connecté — risque §36.1 du
+// récapitulatif). Le navigateur appelle `/github/api/<chemin GitHub>` avec
+// sa session ; le Worker vérifie la session, n'autorise QUE les opérations
+// dont `GitHubConnector` a besoin, sur le SEUL dépôt configuré, puis ajoute
+// le jeton côté serveur. Le jeton ne quitte jamais le serveur et ne peut
+// plus servir à autre chose (autre dépôt, réglages, suppression…).
+
+const SEGMENT_SUR = /^[A-Za-z0-9._-]+$/
+
+/** Vrai si `suffixe` (après `/repos/<owner>/<repo>/`) est une opération autorisée pour `methode`. */
+function operationGitHubAutorisee(methode: string, suffixe: string, branche: string): boolean {
+  const refEncodee = encodeURIComponent(branche)
+  if (methode === 'GET') {
+    if (suffixe.startsWith('contents/')) {
+      const chemin = suffixe.slice('contents/'.length)
+      return (
+        chemin.length > 0 &&
+        chemin.split('/').every((segment) => segment !== '..' && segment !== '')
+      )
+    }
+    if (suffixe === `git/ref/heads/${branche}` || suffixe === `git/ref/heads/${refEncodee}`) {
+      return true
+    }
+    // Lecture d'un objet du dépôt configuré par son identifiant (SHA) :
+    // sans risque, seul le format de segment est contrôlé.
+    const matchTrees = suffixe.match(/^git\/trees\/(.+)$/)
+    if (matchTrees) return matchTrees[1] === branche || SEGMENT_SUR.test(matchTrees[1] ?? '')
+    const matchObjet = suffixe.match(/^git\/(blobs|commits)\/([^/]+)$/)
+    return matchObjet !== null && SEGMENT_SUR.test(matchObjet[2] ?? '')
+  }
+  if (methode === 'POST') {
+    return suffixe === 'git/blobs' || suffixe === 'git/trees' || suffixe === 'git/commits'
+  }
+  if (methode === 'PATCH') {
+    return suffixe === `git/refs/heads/${branche}` || suffixe === `git/refs/heads/${refEncodee}`
+  }
+  return false
+}
+
+async function gererRelaisGitHub(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  cheminGitHub: string,
+  recherche: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const parametre = await ctx.parametresInstallationRepo.obtenir('github')
+  const owner = parametre?.valeur.owner
+  const repo = parametre?.valeur.repo
+  const jeton = parametre?.valeur.jeton
+  const branche = parametre?.valeur.branche || 'main'
+  if (!owner || !repo || !jeton) {
+    return reponseJson({ erreur: 'github_non_configure' }, 404, entetes)
+  }
+
+  const prefixe = `/repos/${owner}/${repo}/`
+  if (
+    !SEGMENT_SUR.test(owner) ||
+    !SEGMENT_SUR.test(repo) ||
+    !cheminGitHub.startsWith(prefixe) ||
+    !operationGitHubAutorisee(request.method, cheminGitHub.slice(prefixe.length), branche)
+  ) {
+    return reponseJson({ erreur: 'operation_github_non_autorisee' }, 403, entetes)
+  }
+
+  let corps: string | undefined
+  if (request.method === 'POST' || request.method === 'PATCH') {
+    corps = await request.text()
+    if (request.method === 'PATCH') {
+      // Mise à jour de branche : jamais forcée (pas de réécriture
+      // d'historique possible via le relais).
+      let lu: { force?: unknown } | null
+      try {
+        lu = JSON.parse(corps) as { force?: unknown }
+      } catch {
+        lu = null
+      }
+      if (!lu || lu.force !== false) {
+        return reponseJson({ erreur: 'operation_github_non_autorisee' }, 403, entetes)
+      }
+    }
+  }
+
+  let reponse: Response
+  try {
+    reponse = await fetch(`https://api.github.com${cheminGitHub}${recherche}`, {
+      method: request.method,
+      headers: {
+        Authorization: `Bearer ${jeton}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'validapharm-auth-worker',
+        ...(corps !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(corps !== undefined ? { body: corps } : {}),
+    })
+  } catch {
+    return reponseJson({ erreur: 'github_injoignable' }, 502, entetes)
+  }
+
+  const entetesReponse: Record<string, string> = {
+    ...entetes,
+    'Content-Type': reponse.headers.get('Content-Type') ?? 'application/json',
+  }
+  for (const nom of ['X-RateLimit-Remaining', 'X-RateLimit-Reset']) {
+    const valeur = reponse.headers.get(nom)
+    if (valeur !== null) entetesReponse[nom] = valeur
+  }
+  // Statut de GitHub conservé tel quel : `GitHubConnector` en déduit les
+  // mêmes erreurs typées qu'en appel direct (401, 404, 409/422, 403 quota).
+  return new Response(await reponse.text(), { status: reponse.status, headers: entetesReponse })
+}
+
+// --- Relais IA (25/09/2026) ---
+//
+// Même principe que le relais GitHub : le navigateur appelait le relais IA
+// (Worker distinct qui masque la clé du fournisseur) avec un jeton lu dans
+// `parametres-installation/relais-ia`, donc lisible par tout compte. Il
+// appelle désormais `/relais-ia` avec sa session ; ce Worker ajoute le
+// jeton du relais IA côté serveur. `GET` = test de connexion (jamais
+// facturé), `POST` = message (corps relayé tel quel).
+
+async function gererRelaisIA(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const parametre = await ctx.parametresInstallationRepo.obtenir('relais-ia')
+  const relayUrl = parametre?.valeur.relayUrl
+  if (!relayUrl) return reponseJson({ erreur: 'relais_ia_non_configure' }, 404, entetes)
+
+  const jeton = parametre?.valeur.jeton
+  let reponse: Response
+  try {
+    reponse = await fetch(relayUrl, {
+      method: request.method,
+      headers: {
+        ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}),
+        ...(request.method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(request.method === 'POST' ? { body: await request.text() } : {}),
+    })
+  } catch {
+    return reponseJson({ erreur: 'relais_ia_injoignable' }, 502, entetes)
+  }
+  return new Response(await reponse.text(), {
+    status: reponse.status,
+    headers: {
+      ...entetes,
+      'Content-Type': reponse.headers.get('Content-Type') ?? 'application/json',
+    },
+  })
 }
 
 // --- Handlers : OAuth Google (Drive normes) ---
@@ -9894,8 +10131,11 @@ async function gererSupprimerDocumentNormatif(
   entetes: Record<string, string>,
   id: string,
 ): Promise<Response> {
-  const utilisateur = await authentifier(request, ctx)
-  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+  // Bibliothèque commune à toute l'organisation : suppression réservée aux
+  // admins (décision utilisateur du 25/09/2026) — avant, tout compte
+  // connecté pouvait supprimer n'importe quel document normatif.
+  const utilisateur = await exigerAdmin(request, ctx, entetes)
+  if (utilisateur instanceof Response) return utilisateur
 
   await ctx.stockageBinaireRepo.supprimer(cleTexteDocument(id))
   await ctx.stockageBinaireRepo.supprimer(cleContenuDocument(id))

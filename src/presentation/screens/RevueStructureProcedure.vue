@@ -177,8 +177,7 @@ async function genererLaProposition(): Promise<void> {
     const { principal, local } = construireAdaptateursIA({
       estFournisseurCloud,
       nomFournisseurActuel: nomFournisseurActuel.value,
-      relayUrl: relaisStore.connexion?.relayUrl,
-      jetonRelais: relaisStore.connexion?.jeton,
+      ...relaisStore.accesRelais(),
     })
     const proposition = await procedureStore.genererProposition(
       texteBrut.value,

@@ -61,28 +61,30 @@
 
 ## 0. Comprendre l'outil avant de commencer
 
-**ValidaPharm est une PWA (Progressive Web App) sans serveur central pour les
-données métier, mais avec une authentification réelle multi-utilisateur**
-(Worker Cloudflare dédié + base D1) : toute l'application — à l'exception de
-l'écran de connexion lui-même et de « Configuration client » — exige une
-session valide avant d'être accessible ([§2.1](#21-se-connecter)). Quatre
-idées à comprendre avant de commencer :
+**ValidaPharm est une PWA (Progressive Web App) adossée à un serveur réel**
+(Worker Cloudflare dédié + base D1, fichiers sur R2) : toute l'application — à
+l'exception de l'écran de connexion lui-même et de « Configuration client » —
+exige une session valide avant d'être accessible ([§2.1](#21-se-connecter)).
+Quatre idées à comprendre avant de commencer :
 
-1. **Vos données de projet vivent d'abord dans le navigateur** (base locale
-   IndexedDB). Rien n'est envoyé nulle part tant que vous ne cliquez pas
-   explicitement sur « Synchroniser vers GitHub ».
-2. **GitHub est la source de vérité.** Un dépôt GitHub dédié stocke la copie
-   officielle de vos projets/sections au format JSON. Vous vous « connectez » à ce
-   dépôt via un jeton d'accès (PAT), configuré une seule fois pour toute
+1. **Vos données vivent sur le serveur** (base D1 : clients, projets, sections,
+   documents, structure système, évaluations, tests, exécutions, missions…).
+   Elles sont donc disponibles depuis n'importe quel appareil après connexion,
+   et chaque écriture est contrôlée par le serveur selon vos droits (accès au
+   client, créateur, partage — [§6](#6-fiche-projet)).
+2. **GitHub est une sauvegarde secondaire, pas la source de vérité.** Un dépôt
+   GitHub dédié peut recevoir, sur clic explicite « Synchroniser vers
+   GitHub », une copie JSON des projets et sections. Vous vous « connectez » à
+   ce dépôt via un jeton d'accès (PAT), configuré une seule fois pour toute
    l'installation (écran [§1](#1-premier-lancement--connexion-au-dépôt-github-au-relais-ia-et-au-worker-dauthentification)).
+   La récupération depuis GitHub est contrôlée fichier par fichier et ne
+   restaure que ce que vous avez le droit de modifier.
 3. **Google Drive n'est jamais une source de vérité**, seulement un miroir de
    sauvegarde manuel, par client, qui **écrase** son contenu à chaque sauvegarde
    ([§9](#9-miroir-google-drive-sauvegarde-manuelle)).
-4. **Les comptes clients (« Clients ») sont hébergés côté serveur** (base D1,
-   même Worker que l'authentification) : c'est ce qui permet à un administrateur
-   de voir réellement tous les clients de l'organisation, quel que soit
-   l'appareil utilisé — contrairement aux projets/sections, qui restent locaux à
-   chaque appareil tant qu'ils ne sont pas synchronisés vers GitHub.
+4. **Les droits sont appliqués par le serveur**, jamais seulement par
+   l'affichage : un écran peut masquer un bouton, mais c'est le serveur qui
+   accepte ou refuse chaque lecture et chaque modification.
 
 ### Navigation générale (barre latérale)
 
@@ -173,7 +175,15 @@ dépôt, un seul relais IA, un seul Worker d'authentification, jamais un par cli
 | Propriétaire (owner) | texte | oui | `ex. acme-corp` |
 | Dépôt | texte | oui | `ex. validapharm-data` |
 | Branche | texte | non (défaut `main`) | `main` |
-| Jeton d'accès personnel | mot de passe | oui | — |
+| Jeton d'accès personnel | mot de passe | oui à la première configuration, ensuite facultatif | `Jeton enregistré sur le serveur — laisser vide pour le conserver` (si un jeton existe déjà) |
+
+**Le jeton reste sur le serveur** (depuis le 25/09/2026) : il n'est jamais
+renvoyé au navigateur, même à un administrateur — le champ apparaît donc vide
+après enregistrement. Laisser le champ vide conserve le jeton existant (pour
+changer seulement le dépôt ou la branche) ; saisir un nouveau jeton le
+remplace. Tous les appels GitHub (synchronisation, récupération, miroir
+Drive, import de normes, test de connexion) passent par le serveur, qui
+n'autorise que les opérations nécessaires sur ce seul dépôt.
 
 Boutons : **« Effacer »** (vide tout et réinitialise), **« Enregistrer »** (sauve
 la connexion, affiche brièvement « ✓ Enregistré. »), **« Tester la connexion »**
@@ -198,7 +208,12 @@ l'installation). » à la place de la confirmation.
 | Champ | Type | Obligatoire | Placeholder |
 |---|---|---|---|
 | URL du relais | URL | oui | `https://relais.exemple.workers.dev` |
-| Jeton d'accès | mot de passe | oui | — |
+| Jeton d'accès | mot de passe | oui à la première configuration, ensuite facultatif | `Jeton enregistré sur le serveur — laisser vide pour le conserver` (si un jeton existe déjà) |
+
+**Le jeton du relais IA reste sur le serveur** (depuis le 25/09/2026) : il n'est
+jamais renvoyé au navigateur ; l'assistant IA (panneau de chat, éditeur de
+section, procédures, missions) passe par le serveur d'authentification, qui
+l'ajoute lui-même. Laisser le champ vide conserve le jeton existant.
 
 Mêmes boutons « Effacer » / « Enregistrer » (affiche aussi brièvement
 « ✓ Enregistré. » ; pas de test de connexion sur ce bloc) — même
@@ -493,9 +508,11 @@ En-tête : nombre de projets actifs, boutons « Clients », « Configuration »,
 
 ### Synchronisation GitHub
 Deux boutons toujours visibles :
-- **« Synchroniser vers GitHub »** (devient « Synchronisation… ») : pousse l'état
-  local (projets + sections) vers le dépôt.
-- **« Récupérer depuis GitHub »** : rapatrie l'état distant vers la base locale.
+- **« Synchroniser vers GitHub »** (devient « Synchronisation… ») : pousse une
+  copie des projets et sections du serveur vers le dépôt (sauvegarde
+  secondaire).
+- **« Récupérer depuis GitHub »** : restaure sur le serveur les projets et
+  sections du dépôt (écrasement délibéré).
   **Sécurités** (depuis le 25/09/2026) :
   - une **confirmation** est demandée avant l'écrasement ;
   - chaque fichier du dépôt est **contrôlé avant restauration** : JSON lisible,
@@ -661,7 +678,8 @@ manuels, SOP…) « sous n'importe quel format ».
   chargé, désactivé si le contenu binaire est absent) et **« Supprimer »**.
 - État vide : « Aucun document chargé pour l'instant. »
 
-Ces documents sont stockés uniquement en local (IndexedDB) — ils ne sont
+Ces documents sont stockés sur le serveur (métadonnées en base D1, fichier et
+texte extrait sur R2), visibles selon les droits du projet — ils ne sont
 **jamais synchronisés vers GitHub** ni vers le miroir Drive.
 
 ### Analyse structurelle du dossier
@@ -1675,7 +1693,8 @@ neuf), liste avec source et, par document, boutons **« Consulter »** (ouvre le
 texte extrait dans un nouvel onglet — toujours disponible), **« Télécharger »**
 (fichier d'origine tel qu'importé — uniquement pour un téléversement direct,
 les imports GitHub/Drive ne conservent que le texte extrait) et
-**« Supprimer »**. État vide : « Aucun document importé. » Cette bibliothèque
+**« Supprimer »** — **réservé aux administrateurs** (bibliothèque commune à
+toute l'organisation ; le serveur refuse la suppression à tout autre compte). État vide : « Aucun document importé. » Cette bibliothèque
 est globale à l'installation (jamais scopée par client, contrairement aux
 Documents d'un projet, [§6](#6-fiche-projet)) — une norme s'applique
 indépendamment du client.
@@ -1766,7 +1785,7 @@ dans l'outil. »
 **Écran** : route `/resolution-conflit` (atteint via le lien « Résoudre le
 conflit » affiché après une synchronisation en conflit, [§5](#5-tableau-de-bord-et-projets)).
 
-Pour chaque enregistrement modifié à la fois localement et sur GitHub depuis la
+Pour chaque enregistrement modifié à la fois sur le serveur et sur GitHub depuis la
 dernière synchronisation, et pour chaque champ qui diverge réellement, trois
 choix radio :
 1. **« Garder local — {valeur locale} »**

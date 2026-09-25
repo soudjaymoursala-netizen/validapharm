@@ -11,12 +11,12 @@ import { useConnexionRelaisIAStore } from './useConnexionRelaisIAStore'
 import { usePanneauChatStore } from './usePanneauChatStore'
 
 function reponseMock(corps: unknown, options: { status?: number } = {}): Response {
-  const status = options.status ?? 200
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => corps,
-  } as Response
+  // Vraie `Response` : l'appel passe désormais par le relais IA du faux
+  // Worker (`/relais-ia`), qui relit le corps avant de le renvoyer.
+  return new Response(JSON.stringify(corps), {
+    status: options.status ?? 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 // Le Relais IA est désormais un paramètre d'installation stocké côté
@@ -91,6 +91,15 @@ describe('usePanneauChatStore — envoyerQuestion (fournisseur cloud)', () => {
       documentJoint: false,
     })
     expect(store.erreur).toBeNull()
+    // Relais IA appelé par le Worker, avec son jeton ajouté côté serveur —
+    // le navigateur ne l'a jamais eu.
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://relais.workers.dev')
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer jeton-x')
+    expect(useConnexionRelaisIAStore().connexion).toEqual({
+      relayUrl: 'https://relais.workers.dev',
+      jetonConfigure: true,
+    })
   })
 
   test('indisponibilité cloud -> bascule automatique vers le modèle local', async () => {

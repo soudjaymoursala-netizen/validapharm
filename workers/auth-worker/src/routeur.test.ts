@@ -134,6 +134,8 @@ interface EntreeAuditJson {
 // une forme précise).
 interface CorpsReponse {
   erreur: string
+  /** Réponse relayée du relais IA (`/relais-ia`). */
+  texte: string
   jeton: string
   ok: boolean
   valide: boolean
@@ -8809,11 +8811,42 @@ describe('routerRequete — paramètres d’installation (dépôt GitHub, Relais
       jeton: jetonUtilisateur,
     })
     expect(lecture.status).toBe(200)
+    // Le PAT GitHub n'est JAMAIS renvoyé (écriture seule) : tous les appels
+    // GitHub passent par le relais du Worker.
     expect(lecture.corps.parametre?.valeur).toEqual({
       owner: 'acme-corp',
       repo: 'validapharm-data',
       branche: 'main',
-      jeton: 'ghp_xxx',
+      jetonConfigure: 'oui',
+    })
+    expect(JSON.stringify(enregistrement.corps)).not.toContain('ghp_xxx')
+  })
+
+  test('github : réenregistrer sans jeton conserve le PAT déjà en place ; premier enregistrement sans jeton refusé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const sansJeton = await requete(ctx, 'PUT', '/parametres-installation/github', {
+      jeton: admin.jeton,
+      body: { valeur: { owner: 'acme-corp', repo: 'data', branche: 'main', jeton: '' } },
+    })
+    expect(sansJeton.status).toBe(400)
+    expect(sansJeton.corps.erreur).toBe('jeton_obligatoire')
+
+    await requete(ctx, 'PUT', '/parametres-installation/github', {
+      jeton: admin.jeton,
+      body: { valeur: { owner: 'acme-corp', repo: 'data', branche: 'main', jeton: 'ghp_secret' } },
+    })
+    const changementDeBranche = await requete(ctx, 'PUT', '/parametres-installation/github', {
+      jeton: admin.jeton,
+      body: { valeur: { owner: 'acme-corp', repo: 'data', branche: 'dev', jeton: '' } },
+    })
+    expect(changementDeBranche.status).toBe(200)
+    const stocke = await ctx.parametresInstallationRepo.obtenir('github')
+    expect(stocke?.valeur).toEqual({
+      owner: 'acme-corp',
+      repo: 'data',
+      branche: 'dev',
+      jeton: 'ghp_secret',
     })
   })
 
@@ -8881,10 +8914,14 @@ describe('routerRequete — paramètres d’installation (dépôt GitHub, Relais
     const lecture = await requete(ctx, 'GET', '/parametres-installation/relais-ocr', {
       jeton: admin.jeton,
     })
+    // Jeton du relais jamais renvoyé (écriture seule), mais bien stocké.
     expect(lecture.corps.parametre?.valeur).toEqual({
       relayUrl: 'https://ocr-relay.workers.dev',
-      jeton: 'jeton-ocr',
+      jetonConfigure: 'oui',
     })
+    expect((await ctx.parametresInstallationRepo.obtenir('relais-ocr'))?.valeur.jeton).toBe(
+      'jeton-ocr',
+    )
   })
 
   test('sans authentification -> 401', async () => {
@@ -9031,6 +9068,32 @@ describe('routerRequete — documents normatifs (Bibliothèque de normes)', () =
 
     const liste = await requete(ctx, 'GET', '/documents-normatifs', { jeton: admin.jeton })
     expect(liste.corps.documents).toEqual([])
+  })
+
+  test('suppression réservée aux admins : un utilisateur reçoit 403, le document reste', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps } = await creerDocumentNormatif(ctx, admin.jeton)
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'consultant@pharmatech.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'N',
+        prenom: 'P',
+        role: 'utilisateur',
+      },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email: 'consultant@pharmatech.example', motDePasse: 'MotDePasse!1' },
+    })
+
+    const refus = await requete(ctx, 'DELETE', `/documents-normatifs/${corps.document.id}`, {
+      jeton: login.corps.jeton,
+    })
+    expect(refus.status).toBe(403)
+    const liste = await requete(ctx, 'GET', '/documents-normatifs', { jeton: admin.jeton })
+    expect(liste.corps.documents).toHaveLength(1)
   })
 
   test('réparation du contenu binaire -> hasBinaryContent passe à true, contenu relu identique, métadonnées inchangées', async () => {
@@ -9401,10 +9464,16 @@ describe('routerRequete — OAuth Google (Drive normes)', () => {
     const parametre = await requete(ctx, 'GET', '/parametres-installation/drive-normes', {
       jeton: admin.jeton,
     })
+    // Jeton de rafraîchissement Google stocké, mais jamais renvoyé au
+    // navigateur (seul l'indicateur l'est).
     expect(parametre.corps.parametre?.valeur).toMatchObject({
       dossierId: 'dossier-existant-1',
-      refreshToken: 'jeton-refresh-1',
+      refreshTokenConfigure: 'oui',
     })
+    expect(JSON.stringify(parametre.corps)).not.toContain('jeton-refresh-1')
+    expect(
+      (await ctx.parametresInstallationRepo.obtenir('drive-normes'))?.valeur.refreshToken,
+    ).toBe('jeton-refresh-1')
 
     const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
     expect(audit.corps.entrees.some((e) => e.action === 'connexion_oauth_drive')).toBe(true)
@@ -9789,5 +9858,185 @@ describe('routerRequete — protection réelle projets/sections/documents (déci
       jeton: admin.jeton,
     })
     expect(suppression.status).toBe(200)
+  })
+})
+
+describe('routerRequete — relais GitHub (le PAT ne quitte jamais le serveur)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function preparer() {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    await requete(ctx, 'PUT', '/parametres-installation/github', {
+      jeton: admin.jeton,
+      body: {
+        valeur: { owner: 'acme-corp', repo: 'data', branche: 'main', jeton: 'ghp_secret' },
+      },
+    })
+    const appels: { url: string; init: RequestInit | undefined }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        appels.push({ url, init })
+        return new Response(JSON.stringify({ object: { sha: 'a'.repeat(40) } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'X-RateLimit-Remaining': '4999' },
+        })
+      }),
+    )
+    return { ctx, admin, appels }
+  }
+
+  test('opération autorisée : relayée vers GitHub avec le PAT ajouté côté serveur', async () => {
+    const { ctx, admin, appels } = await preparer()
+    const reponse = await routerRequete(
+      new Request('https://relais.workers.dev/github/api/repos/acme-corp/data/git/ref/heads/main', {
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+      }),
+      ctx,
+    )
+    expect(reponse.status).toBe(200)
+    expect(reponse.headers.get('X-RateLimit-Remaining')).toBe('4999')
+    expect(appels).toHaveLength(1)
+    expect(appels[0]?.url).toBe('https://api.github.com/repos/acme-corp/data/git/ref/heads/main')
+    expect((appels[0]?.init?.headers as Record<string, string>).Authorization).toBe(
+      'Bearer ghp_secret',
+    )
+  })
+
+  test('sans session -> 401 ; GitHub jamais appelé', async () => {
+    const { ctx, appels } = await preparer()
+    const reponse = await routerRequete(
+      new Request('https://relais.workers.dev/github/api/repos/acme-corp/data/git/ref/heads/main'),
+      ctx,
+    )
+    expect(reponse.status).toBe(401)
+    expect(appels).toHaveLength(0)
+  })
+
+  test('toute opération hors liste blanche -> 403 ; GitHub jamais appelé', async () => {
+    const { ctx, admin, appels } = await preparer()
+    const interdits: [string, string, string?][] = [
+      ['GET', '/github/api/repos/autre-org/autre-repo/git/ref/heads/main'],
+      ['DELETE', '/github/api/repos/acme-corp/data'],
+      ['GET', '/github/api/repos/acme-corp/data/collaborators'],
+      ['PATCH', '/github/api/repos/acme-corp/data/git/refs/heads/main', '{"sha":"x","force":true}'],
+      ['PATCH', '/github/api/repos/acme-corp/data/git/refs/heads/autre-branche', '{"force":false}'],
+      ['POST', '/github/api/repos/acme-corp/data/hooks', '{}'],
+      ['GET', '/github/api/user/repos'],
+    ]
+    for (const [methode, chemin, corps] of interdits) {
+      const reponse = await routerRequete(
+        new Request(`https://relais.workers.dev${chemin}`, {
+          method: methode,
+          headers: { Authorization: `Bearer ${admin.jeton}` },
+          ...(corps ? { body: corps } : {}),
+        }),
+        ctx,
+      )
+      expect(reponse.status, `${methode} ${chemin}`).toBe(403)
+    }
+    expect(appels).toHaveLength(0)
+  })
+
+  test('dépôt non configuré -> 404 github_non_configure', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const reponse = await requete(
+      ctx,
+      'GET',
+      '/github/api/repos/acme-corp/data/git/ref/heads/main',
+      {
+        jeton: admin.jeton,
+      },
+    )
+    expect(reponse.status).toBe(404)
+    expect(reponse.corps.erreur).toBe('github_non_configure')
+  })
+})
+
+describe('routerRequete — relais IA et secrets des paramètres (jamais renvoyés au navigateur)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  test('/relais-ia : session exigée, jeton du relais ajouté côté serveur, corps relayé tel quel', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const nonConfigure = await requete(ctx, 'POST', '/relais-ia', {
+      jeton: admin.jeton,
+      body: { mode: 'chat_normatif', question: 'Q' },
+    })
+    expect(nonConfigure.status).toBe(404)
+    expect(nonConfigure.corps.erreur).toBe('relais_ia_non_configure')
+
+    await requete(ctx, 'PUT', '/parametres-installation/relais-ia', {
+      jeton: admin.jeton,
+      body: { valeur: { relayUrl: 'https://relais-ia.example.workers.dev', jeton: 'jeton-ia' } },
+    })
+    const appels: { url: string; init: RequestInit | undefined }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        appels.push({ url, init })
+        return new Response(JSON.stringify({ texte: 'Réponse' }), { status: 200 })
+      }),
+    )
+
+    const sansSession = await requete(ctx, 'POST', '/relais-ia', {
+      body: { mode: 'chat_normatif', question: 'Q' },
+    })
+    expect(sansSession.status).toBe(401)
+    expect(appels).toHaveLength(0)
+
+    const message = await requete(ctx, 'POST', '/relais-ia', {
+      jeton: admin.jeton,
+      body: { mode: 'chat_normatif', question: 'Q' },
+    })
+    expect(message.status).toBe(200)
+    expect(message.corps.texte).toBe('Réponse')
+    expect(appels[0]?.url).toBe('https://relais-ia.example.workers.dev')
+    expect((appels[0]?.init?.headers as Record<string, string>).Authorization).toBe(
+      'Bearer jeton-ia',
+    )
+    expect(JSON.parse(appels[0]?.init?.body as string)).toEqual({
+      mode: 'chat_normatif',
+      question: 'Q',
+    })
+  })
+
+  test('réenregistrer sans secret conserve celui en place (relais IA, Drive normes)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    await requete(ctx, 'PUT', '/parametres-installation/relais-ia', {
+      jeton: admin.jeton,
+      body: { valeur: { relayUrl: 'https://a.workers.dev', jeton: 'jeton-ia' } },
+    })
+    await requete(ctx, 'PUT', '/parametres-installation/relais-ia', {
+      jeton: admin.jeton,
+      body: { valeur: { relayUrl: 'https://b.workers.dev', jeton: '', jetonConfigure: 'oui' } },
+    })
+    expect((await ctx.parametresInstallationRepo.obtenir('relais-ia'))?.valeur).toEqual({
+      relayUrl: 'https://b.workers.dev',
+      jeton: 'jeton-ia',
+    })
+
+    await ctx.parametresInstallationRepo.enregistrer(
+      'drive-normes',
+      { dossierId: 'd1', jeton: '', refreshToken: 'refresh-google' },
+      'admin',
+    )
+    const ajustement = await requete(ctx, 'PUT', '/parametres-installation/drive-normes', {
+      jeton: admin.jeton,
+      body: { valeur: { dossierId: 'd2', jeton: 'acces-court' } },
+    })
+    expect(JSON.stringify(ajustement.corps)).not.toContain('refresh-google')
+    expect((await ctx.parametresInstallationRepo.obtenir('drive-normes'))?.valeur).toEqual({
+      dossierId: 'd2',
+      jeton: 'acces-court',
+      refreshToken: 'refresh-google',
+    })
   })
 })

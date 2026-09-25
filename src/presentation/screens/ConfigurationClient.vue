@@ -37,9 +37,12 @@ const testRelaisEnCours = ref(false)
 
 /** Réservé à un admin côté Worker (paramètre partagé par toute l'installation) — jamais un message technique brut pour ce cas attendu. */
 function messageErreurParametreInstallation(erreur: string): string {
-  return erreur === 'non_autorise'
-    ? "Réservé à un administrateur (paramètre partagé par toute l'installation)."
-    : `Échec de l'enregistrement : ${erreur}`
+  if (erreur === 'non_autorise') {
+    return "Réservé à un administrateur (paramètre partagé par toute l'installation)."
+  }
+  if (erreur === 'jeton_obligatoire')
+    return "Le jeton d'accès est obligatoire lors de la première configuration."
+  return `Échec de l'enregistrement : ${erreur}`
 }
 
 /** Panne de connectivité réelle (Worker injoignable, délai dépassé, 5xx) — `AuthApiClient` lève dans ce cas plutôt que de renvoyer `{ ok: false }` (voir erreurs.ts). */
@@ -97,7 +100,9 @@ onMounted(async () => {
       brouillon.owner = store.connexion.owner
       brouillon.repo = store.connexion.repo
       brouillon.branche = store.connexion.branche
-      brouillon.jeton = store.connexion.jeton
+      // Le PAT n'est jamais renvoyé par le serveur (écriture seule) : champ
+      // laissé vide = jeton déjà enregistré conservé.
+      brouillon.jeton = ''
     }
   } catch {
     // Ignoré délibérément : voir le commentaire ci-dessus.
@@ -107,7 +112,8 @@ onMounted(async () => {
     await relaisStore.charger()
     if (relaisStore.connexion) {
       brouillonRelais.relayUrl = relaisStore.connexion.relayUrl
-      brouillonRelais.jeton = relaisStore.connexion.jeton
+      // Jeton du relais jamais renvoyé par le serveur : vide = conservé.
+      brouillonRelais.jeton = ''
     }
   } catch {
     // Ignoré délibérément : voir le commentaire ci-dessus.
@@ -240,8 +246,22 @@ async function testerConnexionAuthentification(): Promise<void> {
         </label>
         <label>
           Jeton d'accès personnel
-          <input v-model="brouillon.jeton" type="password" required autocomplete="off" />
+          <input
+            v-model="brouillon.jeton"
+            type="password"
+            :required="!store.connexion?.jetonConfigure"
+            autocomplete="off"
+            :placeholder="
+              store.connexion?.jetonConfigure
+                ? 'Jeton enregistré sur le serveur — laisser vide pour le conserver'
+                : ''
+            "
+          />
         </label>
+        <p class="aide-jeton">
+          Le jeton reste sur le serveur : il n'est jamais renvoyé au navigateur, et tous les appels
+          GitHub passent par le serveur.
+        </p>
         <div class="actions">
           <button type="button" @click="effacer">Effacer</button>
           <button type="submit">Enregistrer</button>
@@ -288,8 +308,22 @@ async function testerConnexionAuthentification(): Promise<void> {
         </label>
         <label>
           Jeton d'accès
-          <input v-model="brouillonRelais.jeton" type="password" required autocomplete="off" />
+          <input
+            v-model="brouillonRelais.jeton"
+            type="password"
+            :required="!relaisStore.connexion?.jetonConfigure"
+            autocomplete="off"
+            :placeholder="
+              relaisStore.connexion?.jetonConfigure
+                ? 'Jeton enregistré sur le serveur — laisser vide pour le conserver'
+                : ''
+            "
+          />
         </label>
+        <p class="aide-jeton">
+          Le jeton reste sur le serveur : l'assistant IA passe par le serveur, qui l'ajoute
+          lui-même.
+        </p>
         <div class="actions">
           <button type="button" @click="effacerRelais">Effacer</button>
           <button type="submit">Enregistrer</button>

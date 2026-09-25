@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { AuthApiClient, type UtilisateurWire } from '../../connecteurs/auth/AuthApiClient'
 import { db } from '../../persistance/db'
 import { useClientActifStore } from './useClientActifStore'
+import { useConnectiviteServeurStore } from './useConnectiviteServeurStore'
 import { useConnexionAuthentificationStore } from './useConnexionAuthentificationStore'
 
 const IDENTIFIANT_SESSION_UNIQUE = 'unique'
@@ -29,7 +30,8 @@ export const useAuthStore = defineStore('auth', () => {
     if (!connexionStore.connexion) await connexionStore.charger()
     const relayUrl = connexionStore.connexion?.relayUrl
     if (!relayUrl) return null
-    return new AuthApiClient(relayUrl)
+    const connectivite = useConnectiviteServeurStore()
+    return new AuthApiClient(relayUrl, undefined, (joignable) => connectivite.signaler(joignable))
   }
 
   /** Relit la session persistée (IndexedDB) — appelé au démarrage de l'application. */

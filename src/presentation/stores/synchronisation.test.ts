@@ -70,13 +70,12 @@ function reponseMock(
   corps: unknown,
   options: { status?: number; headers?: Record<string, string> } = {},
 ): Response {
-  const status = options.status ?? 200
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    headers: { get: (nom: string) => options.headers?.[nom] ?? null },
-    json: async () => corps,
-  } as Response
+  // Vraie `Response` : les appels GitHub passent désormais par le relais du
+  // faux Worker, qui relit le corps (`text()`) et les en-têtes.
+  return new Response(JSON.stringify(corps), {
+    status: options.status ?? 200,
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+  })
 }
 
 function encoderBase64Utf8(texte: string): string {
