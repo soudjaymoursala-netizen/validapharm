@@ -54,11 +54,16 @@ export const useConnexionDriveStore = defineStore('connexionDrive', () => {
     const api = await authStore.client()
     if (!api || !authStore.jeton) return
     const existant = await api.obtenirConnexionDrive(authStore.jeton, clientId)
-    if (existant.ok && existant.donnees.connexionDrive === null) {
-      await api.enregistrerConnexionDrive(authStore.jeton, clientId, {
+    // Jamais retirer la copie locale avant une écriture confirmée : un
+    // échec (réseau, serveur) la conserve pour un nouvel essai au prochain
+    // chargement — avant, elle était effacée même en cas d'échec (perte).
+    if (!existant.ok) return
+    if (existant.donnees.connexionDrive === null) {
+      const ecriture = await api.enregistrerConnexionDrive(authStore.jeton, clientId, {
         dossierId: locale.dossierId,
         jeton: locale.jeton,
       })
+      if (!ecriture.ok) return
     }
     connexionDriveAMigrer.splice(index, 1)
   }
@@ -107,7 +112,9 @@ export const useConnexionDriveStore = defineStore('connexionDrive', () => {
     const authStore = useAuthStore()
     const api = await authStore.client()
     if (api && authStore.jeton) {
-      await api.effacerConnexionDrive(authStore.jeton, clientId)
+      const resultat = await api.effacerConnexionDrive(authStore.jeton, clientId)
+      // Jamais afficher « effacée » si le serveur l'a conservée.
+      if (!resultat.ok) throw new Error(`Échec de l'effacement : ${resultat.erreur}`)
     }
     connexion.value = null
   }

@@ -379,11 +379,17 @@ function annulerSuppression(): void {
   documentIdASupprimer.value = null
 }
 
+const erreurSuppression = ref<string | null>(null)
+
 async function confirmerSuppression(documentId: string): Promise<void> {
   enSuppression.value = true
+  erreurSuppression.value = null
   try {
     await documentsStore.supprimerDocument(documentId)
     documentIdASupprimer.value = null
+  } catch (e) {
+    // Le document reste affiché : le serveur l'a conservé.
+    erreurSuppression.value = e instanceof Error ? e.message : 'Échec de la suppression.'
   } finally {
     enSuppression.value = false
   }
@@ -745,6 +751,7 @@ onMounted(async () => {
           </li>
         </ul>
       </details>
+      <p v-if="erreurSuppression" class="erreur" role="alert">{{ erreurSuppression }}</p>
       <p v-if="erreurRenommage" class="erreur" role="alert">{{ erreurRenommage }}</p>
       <p v-if="erreurApercu" class="erreur" role="alert">{{ erreurApercu }}</p>
       <p v-if="erreurTelechargement" class="erreur" role="alert">{{ erreurTelechargement }}</p>

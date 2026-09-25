@@ -1419,6 +1419,41 @@ describe('routerRequete — administration des comptes (admin uniquement)', () =
     expect(modifie.corps.utilisateur.statut).toBe('desactive')
   })
 
+  test('jamais zéro admin actif : le dernier admin ne peut être ni rétrogradé ni désactivé (409)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const me = await requete(ctx, 'GET', '/auth/me', { jeton: admin.jeton })
+    const idAdmin = me.corps.utilisateur.id
+
+    for (const body of [{ role: 'utilisateur' }, { statut: 'desactive' }]) {
+      const refus = await requete(ctx, 'PATCH', `/admin/utilisateurs/${idAdmin}`, {
+        jeton: admin.jeton,
+        body,
+      })
+      expect(refus.status).toBe(409)
+      expect(refus.corps.erreur).toBe('dernier_admin')
+    }
+    expect((await ctx.utilisateursRepo.parId(idAdmin))?.role).toBe('admin')
+
+    // Avec un second admin actif, la rétrogradation redevient possible.
+    const second = await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'second-admin@pharmatech.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'N',
+        prenom: 'P',
+        role: 'admin',
+      },
+    })
+    expect(second.status).toBe(201)
+    const retrogradation = await requete(ctx, 'PATCH', `/admin/utilisateurs/${idAdmin}`, {
+      jeton: admin.jeton,
+      body: { role: 'utilisateur' },
+    })
+    expect(retrogradation.status).toBe(200)
+  })
+
   test('lister les utilisateurs est réservé à un admin', async () => {
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)

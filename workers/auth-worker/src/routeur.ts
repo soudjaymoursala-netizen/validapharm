@@ -2096,6 +2096,24 @@ async function gererModifierUtilisateur(
     return reponseJson({ erreur: 'statut_invalide' }, 400, entetes)
   }
 
+  // Garde-fou : jamais zéro admin actif. `bootstrap-admin` n'est possible
+  // que tant qu'aucun compte n'existe — retirer le dernier admin actif
+  // (rétrogradation ou désactivation, y compris de soi-même) rendrait
+  // l'administration définitivement impossible sans intervention directe
+  // en base de production.
+  const cible = await ctx.utilisateursRepo.parId(idCible)
+  if (!cible) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  const cibleResteAdminActif =
+    (corps.role ?? cible.role) === 'admin' && (corps.statut ?? cible.statut) === 'actif'
+  if (cible.role === 'admin' && cible.statut === 'actif' && !cibleResteAdminActif) {
+    const adminsActifs = (await ctx.utilisateursRepo.listerTous()).filter(
+      (u) => u.role === 'admin' && u.statut === 'actif',
+    )
+    if (adminsActifs.length <= 1) {
+      return reponseJson({ erreur: 'dernier_admin' }, 409, entetes)
+    }
+  }
+
   const misAJour = await ctx.utilisateursRepo.mettreAJour(idCible, {
     ...(corps.role !== undefined ? { role: corps.role } : {}),
     ...(corps.statut !== undefined ? { statut: corps.statut } : {}),

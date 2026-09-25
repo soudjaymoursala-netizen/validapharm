@@ -237,11 +237,16 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     const relationsClient = relationsTechniquesAMigrer.filter((r) => r.client_id === clientId)
     for (const r of relationsClient) {
       const { api, jeton } = await obtenirApi()
-      await api.creerRelationTechnique(jeton, clientId, {
+      const ecriture = await api.creerRelationTechnique(jeton, clientId, {
         typeRelation: r.type_relation,
         noeudSourceId: r.noeud_source_id,
         noeudCibleId: r.noeud_cible_id,
       })
+      // Même discipline que les nœuds ci-dessus : jamais retirer une
+      // relation de la file de migration sans écriture confirmée.
+      if (!ecriture.ok) {
+        throw new Error(`Échec de la migration des relations techniques : ${ecriture.erreur}`)
+      }
       const index = relationsTechniquesAMigrer.findIndex((x) => x.id === r.id)
       if (index !== -1) relationsTechniquesAMigrer.splice(index, 1)
     }

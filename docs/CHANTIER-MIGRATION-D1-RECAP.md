@@ -3729,3 +3729,29 @@ erreur console/réseau :
   connexion GitHub configurée. » (le parcours avec un vrai dépôt n'a pas
   pu être rejoué ici — couvert par les tests `synchronisation.test.ts`).
 
+## 35. Chasse aux écritures non vérifiées (25/09/2026)
+
+Suite du bug trouvé au §33 (`remplacerSection` ignoré à 10 endroits), un
+balayage de tous les `await api.xxx(...)` dont le résultat est jeté a
+trouvé 13 appels. Tous revus :
+
+| Cas | Risque | Correctif |
+|---|---|---|
+| Admin : rétrograder/désactiver le **dernier admin actif** (Worker) | **Blocage définitif** de l'administration : `bootstrap-admin` n'est possible que sans aucun compte | Worker : refus 409 `dernier_admin` si l'opération laisserait zéro admin actif (soi-même compris) ; écran : message clair au-dessus de la liste (le bandeau d'erreur n'existait que dans le formulaire de création fermé) |
+| Migrations locales → serveur : connexion Drive, `ClientConfig`, état du miroir Drive, relations techniques | **Perte de données** : la copie locale était retirée de la file même si l'écriture avait échoué | Retrait de la file uniquement après écriture confirmée (sinon nouvel essai au prochain chargement) |
+| Suppression d'un document normatif, effacement connexion Drive / GitHub / relais IA / relais OCR | Faux succès : disparaît de l'écran alors que le serveur l'a conservé | Résultat vérifié ; erreur affichée (Bibliothèque de normes, Configuration Drive ; Configuration client l'affichait déjà) |
+| Miroir Drive : date du dernier miroir non enregistrée | Succès annoncé alors que l'état n'est pas tracé | Message explicite « N fichier(s) copié(s)… mais la date du dernier miroir n'a pas pu être enregistrée » |
+| Journal de session IA (`creerAiChatSessionLog`) | — | Inchangé : perte assumée et documentée dans le code (la fermeture du panneau ne doit jamais échouer) |
+
+Tests : Worker « jamais zéro admin actif » (409 puis 200 avec un second
+admin) ; `AdminUtilisateurs.test.ts` (refus expliqué, rôle inchangé) ;
+`connexionDrive.test.ts` (échec → copie locale conservée ; succès →
+migrée puis retirée).
+
+### 35.1 Question ouverte pour l'utilisateur
+
+**Bibliothèque de normes** : `DELETE /documents-normatifs/:id` n'exige que
+l'authentification — tout compte connecté peut supprimer un document de la
+bibliothèque commune à l'organisation. Pas modifié sans décision :
+réserver la suppression aux admins (et/ou à la personne qui l'a importé) ?
+

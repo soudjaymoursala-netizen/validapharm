@@ -6,6 +6,7 @@ import {
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
+import { connexionDriveAMigrer } from '../../persistance/db'
 import { useConnexionDriveStore } from './useConnexionDriveStore'
 
 // `fetchMock` doit être stubbé **avant** `installerFauxWorkerAuth()` : sa
@@ -133,5 +134,25 @@ describe('useConnexionDriveStore — testerConnexion', () => {
     const resultat = await store.testerConnexion()
     expect(resultat.ok).toBe(false)
     expect(JSON.stringify(resultat)).not.toContain('jeton-secret')
+  })
+})
+
+describe('useConnexionDriveStore — migration locale', () => {
+  test('échec côté serveur : la copie locale est conservée pour un nouvel essai (jamais perdue)', async () => {
+    connexionDriveAMigrer.push({ client_id: 'client-inaccessible', dossierId: 'd', jeton: 't' })
+    try {
+      await useConnexionDriveStore().charger('client-inaccessible')
+      expect(connexionDriveAMigrer.some((c) => c.client_id === 'client-inaccessible')).toBe(true)
+    } finally {
+      connexionDriveAMigrer.splice(0, connexionDriveAMigrer.length)
+    }
+  })
+
+  test('succès : la copie locale est migrée puis retirée de la file', async () => {
+    connexionDriveAMigrer.push({ client_id: 'client-1', dossierId: 'dossier-local', jeton: 't' })
+    const store = useConnexionDriveStore()
+    await store.charger('client-1')
+    expect(connexionDriveAMigrer).toHaveLength(0)
+    expect(store.connexion?.dossierId).toBe('dossier-local')
   })
 })

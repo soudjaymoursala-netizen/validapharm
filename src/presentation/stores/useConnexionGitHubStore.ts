@@ -94,7 +94,9 @@ export const useConnexionGitHubStore = defineStore('connexionGitHub', () => {
     const authStore = useAuthStore()
     const api = await authStore.client()
     if (api && authStore.jeton) {
-      await api.effacerParametreInstallation(authStore.jeton, CLE_PARAMETRE)
+      const resultat = await api.effacerParametreInstallation(authStore.jeton, CLE_PARAMETRE)
+      // Jamais afficher « effacée » si le serveur l'a conservée.
+      if (!resultat.ok) throw new Error(`Échec de l'effacement : ${resultat.erreur}`)
     }
     connexion.value = null
   }

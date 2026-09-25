@@ -305,7 +305,15 @@ Chaque compte listé affiche son nom, son email, un badge de rôle
 (admin/utilisateur) et un badge de statut (actif/desactive), avec deux
 actions : **« Promouvoir admin » / « Rétrograder »** et **« Désactiver » /
 « Réactiver »**. Le premier compte admin de l'installation est créé en dehors
-de cette interface (`/auth/bootstrap-admin`).
+de cette interface (`/auth/bootstrap-admin`, possible uniquement tant qu'aucun
+compte n'existe).
+
+**Garde-fou « dernier admin »** : le serveur refuse de rétrograder ou de
+désactiver le **dernier administrateur actif**, y compris soi-même, avec le
+message « Impossible : c'est le dernier administrateur actif. Nommez d'abord un
+autre administrateur… ». Sans ce garde-fou, plus personne ne pourrait
+administrer l'application. Tout autre refus du serveur s'affiche au-dessus de
+la liste des comptes.
 
 ### 2.3 Mon profil
 

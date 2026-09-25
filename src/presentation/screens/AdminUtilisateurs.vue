@@ -13,6 +13,9 @@ const authStore = useAuthStore()
 const utilisateurs = ref<UtilisateurWire[]>([])
 const enChargement = ref(false)
 const erreur = ref<string | null>(null)
+// Refus d'une action sur un compte existant (rôle, statut) — affiché
+// au-dessus de la liste, jamais dans le formulaire de création fermé.
+const erreurAction = ref<string | null>(null)
 
 const formulaireOuvert = ref(false)
 const brouillon = reactive({
@@ -29,6 +32,8 @@ const LIBELLES_ERREUR: Record<string, string> = {
   mot_de_passe_trop_court: 'Le mot de passe doit contenir au moins 8 caractères.',
   nom_obligatoire: 'Le nom est obligatoire.',
   prenom_obligatoire: 'Le prénom est obligatoire.',
+  dernier_admin:
+    "Impossible : c'est le dernier administrateur actif. Nommez d'abord un autre administrateur, sinon plus personne ne pourrait administrer l'application.",
 }
 
 async function charger(): Promise<void> {
@@ -71,22 +76,29 @@ async function creerUtilisateur(): Promise<void> {
   await charger()
 }
 
-async function basculerRole(u: UtilisateurWire): Promise<void> {
+/**
+ * Applique la modification puis recharge la liste — et affiche le refus du
+ * serveur s'il y en a un (avant : ignoré, la liste rechargée ne changeait
+ * simplement pas, sans explication).
+ */
+async function modifier(
+  u: UtilisateurWire,
+  changements: { role?: 'admin' | 'utilisateur'; statut?: 'actif' | 'desactive' },
+): Promise<void> {
   const api = await authStore.client()
   if (!api || !authStore.jeton) return
-  await api.modifierUtilisateur(authStore.jeton, u.id, {
-    role: u.role === 'admin' ? 'utilisateur' : 'admin',
-  })
+  erreurAction.value = null
+  const resultat = await api.modifierUtilisateur(authStore.jeton, u.id, changements)
   await charger()
+  if (!resultat.ok) erreurAction.value = LIBELLES_ERREUR[resultat.erreur] ?? 'Erreur inattendue.'
+}
+
+async function basculerRole(u: UtilisateurWire): Promise<void> {
+  await modifier(u, { role: u.role === 'admin' ? 'utilisateur' : 'admin' })
 }
 
 async function basculerStatut(u: UtilisateurWire): Promise<void> {
-  const api = await authStore.client()
-  if (!api || !authStore.jeton) return
-  await api.modifierUtilisateur(authStore.jeton, u.id, {
-    statut: u.statut === 'actif' ? 'desactive' : 'actif',
-  })
-  await charger()
+  await modifier(u, { statut: u.statut === 'actif' ? 'desactive' : 'actif' })
 }
 </script>
 
@@ -135,6 +147,7 @@ async function basculerStatut(u: UtilisateurWire): Promise<void> {
       </div>
     </form>
 
+    <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
     <p v-if="enChargement" class="etat-vide">Chargement…</p>
     <ul v-else class="liste-comptes">
       <li v-for="u in utilisateurs" :key="u.id">

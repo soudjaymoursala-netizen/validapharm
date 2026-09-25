@@ -48,8 +48,15 @@ export const useMiroirDriveStore = defineStore('miroirDrive', () => {
     const api = await authStore.client()
     if (!api || !authStore.jeton) return
     const existant = await api.obtenirEtatMiroirDrive(authStore.jeton, clientId)
-    if (existant.ok && existant.donnees.etatMiroirDrive === null) {
-      await api.enregistrerEtatMiroirDrive(authStore.jeton, clientId, locale.dernierMiroirReussi)
+    // Copie locale conservée tant que l'écriture n'est pas confirmée.
+    if (!existant.ok) return
+    if (existant.donnees.etatMiroirDrive === null) {
+      const ecriture = await api.enregistrerEtatMiroirDrive(
+        authStore.jeton,
+        clientId,
+        locale.dernierMiroirReussi,
+      )
+      if (!ecriture.ok) return
     }
     etatMiroirDriveAMigrer.splice(index, 1)
   }
@@ -93,7 +100,19 @@ export const useMiroirDriveStore = defineStore('miroirDrive', () => {
       const driveConnecteur = new DriveConnector(connexionDrive)
       const confirmation = await driveConnecteur.miroir(fichiers)
 
-      await api.enregistrerEtatMiroirDrive(authStore.jeton, clientId, new Date().toISOString())
+      const etat = await api.enregistrerEtatMiroirDrive(
+        authStore.jeton,
+        clientId,
+        new Date().toISOString(),
+      )
+      if (!etat.ok) {
+        // Le miroir a bien eu lieu, mais sa date n'est pas tracée : le dire,
+        // plutôt qu'un succès qui laisserait croire l'état à jour.
+        return {
+          ok: false,
+          message: `${confirmation.nbFichiers} fichier(s) copié(s) vers Drive, mais la date du dernier miroir n'a pas pu être enregistrée (${etat.erreur}).`,
+        }
+      }
       return { ok: true, nbFichiers: confirmation.nbFichiers }
     } catch (erreur) {
       return {
