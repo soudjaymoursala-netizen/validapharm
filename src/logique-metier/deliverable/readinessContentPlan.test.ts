@@ -7,7 +7,7 @@ import type {
   Requirement,
   Test as TestEntity,
 } from '../domaine/types'
-import { construireReadinessContentPlan } from './readinessContentPlan'
+import { construireReadinessContentPlan, derniereExecutionCloturee } from './readinessContentPlan'
 
 function requirement(surcharge: Partial<Requirement> = {}): Requirement {
   return {
@@ -300,5 +300,114 @@ describe('construireReadinessContentPlan', () => {
         qualityEvents: [],
       }),
     ).toBe('besoin_revue')
+  })
+
+  describe('retest : seule la dernière exécution clôturée sur cet équipement compte (décision du 25/09/2026)', () => {
+    const echec = execution({
+      id: 'exec-echec',
+      verdict: 'non_conforme',
+      date_fin: '2026-01-01T01:00:00.000Z',
+    })
+    const retest = execution({
+      id: 'exec-retest',
+      verdict: 'conforme',
+      date_fin: '2026-01-02T01:00:00.000Z',
+    })
+    const base = {
+      assetNodeId: 'n1',
+      requirements: [requirement()],
+      couvertures: [couverture()],
+      tests: [uneTest()],
+      qualityEvents: [],
+    }
+
+    test('échec puis retest conforme prouvé -> pret (l’échec reste tracé, ne bloque plus)', () => {
+      expect(
+        construireReadinessContentPlan({
+          ...base,
+          executions: [retest, echec],
+          evidences: [evidence({ execution_id: 'exec-retest' })],
+        }),
+      ).toBe('pret')
+    })
+
+    test('retest conforme sans preuve -> besoin_revue (la preuve de l’échec ne compte pas)', () => {
+      expect(
+        construireReadinessContentPlan({
+          ...base,
+          executions: [echec, retest],
+          evidences: [evidence({ execution_id: 'exec-echec' })],
+        }),
+      ).toBe('besoin_revue')
+    })
+
+    test('conforme puis dernière exécution non conforme -> bloque', () => {
+      expect(
+        construireReadinessContentPlan({
+          ...base,
+          executions: [
+            execution({ id: 'exec-a', verdict: 'conforme', date_fin: '2026-01-01T01:00:00.000Z' }),
+            execution({
+              id: 'exec-b',
+              verdict: 'non_conforme',
+              date_fin: '2026-01-03T01:00:00.000Z',
+            }),
+          ],
+          evidences: [evidence({ execution_id: 'exec-a' })],
+        }),
+      ).toBe('bloque')
+    })
+
+    test('retest en cours après un échec -> bloque (la dernière clôturée reste l’échec)', () => {
+      expect(
+        construireReadinessContentPlan({
+          ...base,
+          executions: [
+            echec,
+            execution({ id: 'exec-cours', statut: 'en_cours', verdict: null, date_fin: null }),
+          ],
+          evidences: [],
+        }),
+      ).toBe('bloque')
+    })
+
+    test('un échec sur un AUTRE équipement ne compte pas pour celui-ci', () => {
+      expect(
+        construireReadinessContentPlan({
+          ...base,
+          executions: [
+            execution({ id: 'exec-n1', date_fin: '2026-01-01T01:00:00.000Z' }),
+            execution({
+              id: 'exec-n2',
+              asset_node_id: 'n2',
+              verdict: 'non_conforme',
+              date_fin: '2026-01-05T01:00:00.000Z',
+            }),
+          ],
+          evidences: [evidence({ execution_id: 'exec-n1' })],
+        }),
+      ).toBe('pret')
+    })
+
+    test('seulement exécuté sur un autre équipement -> besoin_information', () => {
+      expect(
+        construireReadinessContentPlan({
+          ...base,
+          executions: [execution({ asset_node_id: 'n2' })],
+          evidences: [evidence()],
+        }),
+      ).toBe('besoin_information')
+    })
+  })
+
+  test('derniereExecutionCloturee : ordre total déterministe, même à date_fin égale', () => {
+    const a = execution({ id: 'a', created_at: '2026-01-01T00:00:00.000Z' })
+    const b = execution({ id: 'b', created_at: '2026-01-01T00:00:00.001Z' })
+    const c = execution({ id: 'c', created_at: '2026-01-01T00:00:00.001Z' })
+    expect(derniereExecutionCloturee([a, b, c])?.id).toBe('c')
+    expect(derniereExecutionCloturee([c, b, a])?.id).toBe('c')
+    expect(
+      derniereExecutionCloturee([execution({ statut: 'en_cours', verdict: null, date_fin: null })]),
+    ).toBeUndefined()
   })
 })

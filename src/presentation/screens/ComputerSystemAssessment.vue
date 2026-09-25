@@ -11,7 +11,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useCSVAssessmentStore } from '../stores/useCSVAssessmentStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
-import type { CategorieGAMP5 } from '../../logique-metier/domaine/types'
+import {
+  CATEGORIES_GAMP5_SELECTIONNABLES,
+  type CategorieGAMP5,
+} from '../../logique-metier/domaine/types'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -30,7 +33,9 @@ onMounted(async () => {
 
 const LIBELLES_CATEGORIE: Record<CategorieGAMP5, string> = {
   1: 'Catégorie 1 — Infrastructure',
-  2: 'Catégorie 2 — Firmware',
+  // Plus sélectionnable (retirée de GAMP 5) — libellé conservé pour
+  // l'affichage des évaluations historiques.
+  2: 'Catégorie 2 — Firmware (retirée de GAMP 5, historique)',
   3: 'Catégorie 3 — Logiciel standard non configuré',
   4: 'Catégorie 4 — Logiciel configurable',
   5: 'Catégorie 5 — Sur mesure',
@@ -108,8 +113,8 @@ function nouvelleEvaluation(): void {
         </label>
 
         <fieldset class="categorie">
-          <legend>Catégorie GAMP5 (grille fixe, non modulable par client)</legend>
-          <label v-for="n in [1, 2, 3, 4, 5] as CategorieGAMP5[]" :key="n">
+          <legend>Catégorie GAMP 5 (grille fixe, non modulable par client)</legend>
+          <label v-for="n in CATEGORIES_GAMP5_SELECTIONNABLES" :key="n">
             <input v-model.number="categorieGamp5" type="radio" :value="n" />
             {{ LIBELLES_CATEGORIE[n] }}
           </label>

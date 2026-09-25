@@ -165,3 +165,38 @@ export async function reinitialiserAuthDeTest(): Promise<void> {
   await db.connexionAuthentification.clear()
   await db.sessionAuthentification.clear()
 }
+
+/**
+ * Projet minimal enregistré directement dans le faux Worker — depuis la
+ * protection réelle des projets/sections (25/09/2026), une section ne peut
+ * être écrite que dans un projet existant et modifiable par l'appelant.
+ */
+export async function creerProjetDeTest(
+  ctx: Contexte,
+  id: string,
+  ownerId = 'admin@pharmatech.example',
+): Promise<void> {
+  const maintenant = new Date().toISOString()
+  await ctx.projectsRepo.creerProjet({
+    id,
+    name: `Projet ${id}`,
+    context: '',
+    scopeIn: '',
+    scopeOut: '',
+    deadline: null,
+    languageDefault: 'fr',
+    clientId: null,
+    sections: [],
+    documents: [],
+    links: [],
+    statut: 'actif',
+    phase: 'concept',
+    ownerId,
+    sharedWith: [],
+    archivedAt: null,
+    archivedBy: null,
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  })
+}

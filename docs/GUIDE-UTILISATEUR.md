@@ -545,20 +545,32 @@ Rappel en lecture seule des trois champs saisis à la création (Contexte, Port�
 incluse, Portée exclue) — un tiret `—` s'affiche si un champ est vide.
 
 ### Partage du projet
-Rappel affiché : « Lecture toujours ouverte à tous. Seuls le créateur et les
-personnes partagées en édition peuvent modifier ce projet — une convention
-d'affichage, pas une frontière de sécurité réelle (l'accès au dépôt Git reste
-au niveau du client). » Affiche « Créé par : {identité} ».
+Rappel affiché : « Lecture ouverte à toute personne ayant accès au client du
+projet (et aux personnes partagées). Seuls le créateur, les personnes partagées
+en édition et les administrateurs peuvent modifier ce projet, ses sections et
+ses documents — règle appliquée par le serveur. » Affiche « Créé par :
+{identité} ».
+
+**Règle réellement appliquée par le serveur** (depuis le 25/09/2026) : un
+projet, ses sections et ses documents sont **invisibles** (« introuvable ») pour
+qui n'a ni accès au client du projet, ni partage, ni rôle admin ; toute
+**modification** (phase, archivage, section, document, restauration) est
+**refusée** à qui n'est ni créateur, ni partagé en édition, ni admin. Un projet
+ne peut être rattaché qu'à un client auquel on a accès, et jamais créé au nom
+d'une autre personne. Une personne partagée en édition peut modifier le projet
+mais pas s'en attribuer la propriété via une restauration.
 
 Formulaire d'ajout d'un partage : email (obligatoire) + niveau d'accès
 (**lecture** / **édition**) → bouton **« Partager »**. Chaque partage déjà
 accordé peut être retiré (« Retirer »). État vide : « Pas encore partagé avec
 personne d'autre. »
 
-Si vous n'êtes ni le créateur ni une personne partagée en édition, un message
-« Lecture seule — vous n'êtes ni créateur ni partagé en édition. » remplace
-les actions de modification du reste de l'écran (sections, documents, partage
-inclus).
+Si vous n'êtes ni le créateur, ni une personne partagée en édition, ni
+administrateur, un message « Lecture seule — vous n'êtes ni créateur ni partagé
+en édition. » remplace les actions de modification du reste de l'écran
+(sections, documents, partage inclus). Dans l'**éditeur de section**, un
+bandeau « Lecture seule » s'affiche et tous les contrôles (édition, liens,
+cycle de vérification, export) sont désactivés : la section reste lisible.
 
 ### Progression du dossier de qualification (pipeline guidé)
 Un bandeau **« Prochaine étape recommandée »** indique la première étape du
@@ -1209,11 +1221,17 @@ V-101`) + **« Nœud Structure Système »** (optionnel), puis une réponse
 **oui / non / inconnu / sans objet** pour chaque question de la méthode
 active. Dès que toutes les questions ont une réponse, un verdict s'affiche
 automatiquement : **« Verdict ACFC : Critique »** ou **« Verdict ACFC : Non
-critique »** (règle fixe : au moins un « oui » → critique). Bouton
-« Enregistrer cette évaluation » ; confirmation : « Évaluation enregistrée. »
+critique »** (règle fixe : au moins un « oui » → critique). **Sans aucun
+« oui », une seule réponse « inconnu » empêche de conclure** : le verdict
+affiché est **« À compléter — réponse « Inconnu » à lever »**, jamais « Non
+critique » par défaut ; l'évaluation peut être enregistrée ainsi, puis refaite
+une fois l'inconnu levé (un « oui » suffit toujours, même s'il reste des
+« inconnu »). Bouton « Enregistrer cette évaluation » ; confirmation :
+« Évaluation enregistrée. »
 
 ### Évaluation de la complexité et conclusion
-Une fois un verdict obtenu : choix radio **« Catalogue — système sans
+Une fois un verdict obtenu (pas d'étape complexité pour une évaluation « à
+compléter ») : choix radio **« Catalogue — système sans
 adaptation particulière du fournisseur »** ou **« Spécifique — système fait à
 façon ou hautement configuré »**. La conclusion finale se calcule
 automatiquement à partir du croisement verdict × complexité (non critique +
@@ -1239,6 +1257,9 @@ versionnée, import `.txt` possible), puis évaluation d'un « Système évalué
 Système optionnel, et réponses **oui / non / inconnu / sans objet** à chaque
 question. Verdict strictement binaire dès que le questionnaire est complet :
 **« Direct Impact »** (au moins un « oui ») ou **« Not Direct Impact »**.
+Même règle que l'ACFC pour « inconnu » : sans aucun « oui », une réponse
+« inconnu » donne **« À compléter — réponse « Inconnu » à lever »** (pas de
+verdict), affiché aussi dans l'historique et le Dossier vivant de l'actif.
 Confirmation à l'enregistrement : « Évaluation enregistrée. »
 
 ---
@@ -1255,7 +1276,7 @@ configurable** (contrairement à l'ACFC/Impact Assessment). Bandeau permanent :
 |---|---|---|
 | Système évalué | texte (`ex. SCADA ligne STICK002`) | oui |
 | Nœud Structure Système (optionnel) | liste | non |
-| Catégorie GAMP5 | 5 boutons radio : Catégorie 1 — Infrastructure · Catégorie 2 — Firmware · Catégorie 3 — Logiciel standard non configuré · Catégorie 4 — Logiciel configurable · Catégorie 5 — Sur mesure | oui |
+| Catégorie GAMP 5 | 4 boutons radio : Catégorie 1 — Infrastructure · Catégorie 3 — Logiciel standard non configuré · Catégorie 4 — Logiciel configurable · Catégorie 5 — Sur mesure. La catégorie 2 (Firmware), retirée de GAMP 5, n'est plus proposée ; une évaluation déjà enregistrée en catégorie 2 reste affichée telle quelle (« Catégorie 2 — Firmware (retirée de GAMP 5, historique) ») | oui |
 | Justification de la catégorie | zone de texte | oui |
 | Pertinence GxP | oui/non | oui |
 | Pertinence ERES / 21 CFR Part 11 | oui/non | oui |
@@ -1440,6 +1461,14 @@ Chaque plan affiche son statut (Brouillon → Validé → Gelé) et son readines
 recalculé uniquement sur clic « Recalculer readiness ». Boutons « Valider »
 (depuis Brouillon) puis « Geler » (depuis Validé, refusé tant que le readiness
 n'est pas « Prêt » — message « Les données ne sont pas encore prêtes »).
+Le détail des raisons s'affiche sous le plan après recalcul.
+
+**Retest** : pour chaque test couvrant une exigence de l'actif, **seule la
+dernière exécution clôturée sur cet équipement compte**. Un échec antérieur
+reste tracé dans l'historique des exécutions (jamais effacé), mais ne bloque
+plus le plan si le retest est clôturé « Conforme » (ou « Conforme avec écart »)
+**avec une preuve**. Une exécution rattachée à un autre équipement est ignorée ;
+une exécution encore en cours donne « Besoin d'information ».
 Autres messages d'erreur possibles : « Plan introuvable. », « Ce plan est déjà
 gelé. »
 

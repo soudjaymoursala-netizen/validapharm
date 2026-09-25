@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'vitest'
-import { auMoinsUneReponseOui, questionsCompletementRepondues } from './moteurQuestionsOuiNon'
+import {
+  auMoinsUneReponseOui,
+  conclusionQuestionnaireOuiNon,
+  questionsCompletementRepondues,
+} from './moteurQuestionsOuiNon'
 
 describe('auMoinsUneReponseOui', () => {
   test('un seul "oui" parmi plusieurs réponses -> true', () => {
@@ -32,5 +36,27 @@ describe('questionsCompletementRepondues', () => {
 
   test('une question sans réponse -> false', () => {
     expect(questionsCompletementRepondues(['q1', 'q2'], { q1: 'oui' })).toBe(false)
+  })
+})
+
+describe('conclusionQuestionnaireOuiNon', () => {
+  test('un "oui" -> positif, même avec des "inconnu" restants', () => {
+    expect(conclusionQuestionnaireOuiNon(['q1', 'q2'], { q1: 'inconnu', q2: 'oui' })).toBe(
+      'positif',
+    )
+  })
+
+  test('aucun "oui" mais un "inconnu" -> null (pas de verdict)', () => {
+    expect(conclusionQuestionnaireOuiNon(['q1', 'q2'], { q1: 'non', q2: 'inconnu' })).toBeNull()
+  })
+
+  test('question sans réponse et aucun "oui" -> null', () => {
+    expect(conclusionQuestionnaireOuiNon(['q1', 'q2'], { q1: 'non' })).toBeNull()
+  })
+
+  test('uniquement "non"/"sans_objet" -> negatif', () => {
+    expect(conclusionQuestionnaireOuiNon(['q1', 'q2'], { q1: 'non', q2: 'sans_objet' })).toBe(
+      'negatif',
+    )
   })
 })

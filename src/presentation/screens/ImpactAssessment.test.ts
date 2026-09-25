@@ -163,4 +163,51 @@ describe('ImpactAssessment', () => {
     // L'historique reste visible après réinitialisation du formulaire.
     expect(wrapper.text()).toContain('Isolateur STICK002')
   })
+
+  test('une réponse « Inconnu » sans aucun « Oui » : pas de verdict, évaluation enregistrée « à compléter »', async () => {
+    const maintenant = new Date().toISOString()
+    await ctx.impactAssessmentRepo.creerProfil({
+      id: 'profil-1',
+      clientId: CLIENT_ID,
+      version: 'v1',
+      effectiveDate: maintenant,
+      source: 'Procédure interne QD-001',
+      origin: 'procedure_client',
+      questions: [
+        { id: 'q1', texte: { fr: 'Le système touche-t-il le produit ?' } },
+        { id: 'q2', texte: { fr: 'Le système génère-t-il des données GxP ?' } },
+      ],
+      decisionRule: 'au_moins_un_oui_impact_direct',
+      createdAt: maintenant,
+    })
+    const wrapper = mount(ImpactAssessment, {
+      props: { clientId: CLIENT_ID },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await attendreQue(() => wrapper.find('.bloc-evaluation').exists())
+
+    await wrapper.find('.nom-element input').setValue('Balance B-12')
+    const questions = wrapper.findAll('.liste-questions li')
+    await questions[0]?.find('input[value="non"]').setValue(true)
+    await questions[1]?.find('input[value="inconnu"]').setValue(true)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('À compléter')
+    expect(wrapper.text()).not.toContain('Not Direct Impact')
+
+    const enregistrerBtn = wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Enregistrer cette évaluation')
+    await enregistrerBtn?.trigger('click')
+    await attendreQue(
+      async () => (await ctx.impactAssessmentRepo.listerEvaluations(CLIENT_ID)).length > 0,
+    )
+    const evals = await ctx.impactAssessmentRepo.listerEvaluations(CLIENT_ID)
+    expect(evals[0]?.verdict).toBeNull()
+
+    // Un « Oui » suffit : l'inconnu restant n'empêche plus de conclure.
+    await questions[0]?.find('input[value="oui"]').setValue(true)
+    await flushPromises()
+    expect(wrapper.find('.resultat-partiel').text()).toContain('Direct Impact')
+  })
 })

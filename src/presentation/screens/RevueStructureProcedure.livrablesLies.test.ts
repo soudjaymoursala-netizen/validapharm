@@ -6,6 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Section } from '../../logique-metier/domaine/types'
 import {
   connecterAdminDeTest,
+  creerProjetDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
@@ -67,6 +68,7 @@ beforeEach(async () => {
   const installation = installerFauxWorkerAuth()
   demonter = installation.demonter
   await connecterAdminDeTest()
+  await creerProjetDeTest(installation.ctx, 'projet-1')
   await installation.ctx.clientsRepo.creer({
     id: 'client-1',
     name: 'Client de test',

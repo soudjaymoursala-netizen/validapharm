@@ -172,6 +172,28 @@ export const useSectionsStore = defineStore('sections', () => {
     return { api, jeton: authStore.jeton }
   }
 
+  /**
+   * Écrit une section et **vérifie** la réponse du Worker — jamais un succès
+   * supposé : depuis la protection réelle des projets/sections (25/09/2026),
+   * le Worker refuse l'écriture (403) à qui n'est ni propriétaire, ni
+   * partagé en édition, ni admin. Avant, le résultat était ignoré et une
+   * écriture refusée ressemblait à une sauvegarde réussie.
+   */
+  async function ecrireSection(sectionMiseAJour: Section): Promise<void> {
+    const { api, jeton } = await obtenirApiSection()
+    const resultat = await api.remplacerSection(
+      jeton,
+      sectionMiseAJour.id,
+      sectionDomaineVersWire(sectionMiseAJour),
+    )
+    if (resultat.ok) return
+    throw new Error(
+      resultat.erreur === 'non_autorise'
+        ? "Modification refusée : vous n'avez qu'un accès en lecture à cette section."
+        : `Échec de l'enregistrement de la section : ${resultat.erreur}`,
+    )
+  }
+
   /** `null` si le relais n'est pas configuré — appels au Worker liés au projet (`Project.sections[]`/`documents[]`) alors silencieusement ignorés, même dégradation gracieuse que le reste de l'application. */
   async function obtenirApiProjet() {
     const authStore = useAuthStore()
@@ -398,8 +420,7 @@ export const useSectionsStore = defineStore('sections', () => {
         },
       ],
     }
-    const { api, jeton } = await obtenirApiSection()
-    await api.remplacerSection(jeton, section.id, sectionDomaineVersWire(sectionMiseAJour))
+    await ecrireSection(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
 
     return {
@@ -482,8 +503,7 @@ export const useSectionsStore = defineStore('sections', () => {
         },
       ],
     }
-    const { api, jeton } = await obtenirApiSection()
-    await api.remplacerSection(jeton, section.id, sectionDomaineVersWire(sectionMiseAJour))
+    await ecrireSection(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
   }
 
@@ -512,8 +532,7 @@ export const useSectionsStore = defineStore('sections', () => {
         },
       ],
     }
-    const { api, jeton } = await obtenirApiSection()
-    await api.remplacerSection(jeton, section.id, sectionDomaineVersWire(sectionMiseAJour))
+    await ecrireSection(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
   }
 
@@ -532,8 +551,7 @@ export const useSectionsStore = defineStore('sections', () => {
       procedure_id: procedureId,
       updated_at: new Date().toISOString(),
     }
-    const { api, jeton } = await obtenirApiSection()
-    await api.remplacerSection(jeton, section.id, sectionDomaineVersWire(sectionMiseAJour))
+    await ecrireSection(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
   }
 
@@ -545,8 +563,7 @@ export const useSectionsStore = defineStore('sections', () => {
       asset_node_id: assetNodeId,
       updated_at: new Date().toISOString(),
     }
-    const { api, jeton } = await obtenirApiSection()
-    await api.remplacerSection(jeton, section.id, sectionDomaineVersWire(sectionMiseAJour))
+    await ecrireSection(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
   }
 
@@ -576,8 +593,7 @@ export const useSectionsStore = defineStore('sections', () => {
         { timestamp: maintenant, actor: section.owner_id, action: 'modification' },
       ],
     }
-    const { api, jeton } = await obtenirApiSection()
-    await api.remplacerSection(jeton, section.id, sectionDomaineVersWire(sectionMiseAJour))
+    await ecrireSection(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
   }
 
@@ -604,8 +620,7 @@ export const useSectionsStore = defineStore('sections', () => {
         { timestamp: maintenant, actor: section.owner_id, action: 'modification' },
       ],
     }
-    const { api, jeton } = await obtenirApiSection()
-    await api.remplacerSection(jeton, section.id, sectionDomaineVersWire(sectionMiseAJour))
+    await ecrireSection(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
   }
 
@@ -622,8 +637,7 @@ export const useSectionsStore = defineStore('sections', () => {
       workflow: { ...section.workflow, approver_final: userId },
       updated_at: new Date().toISOString(),
     }
-    const { api, jeton } = await obtenirApiSection()
-    await api.remplacerSection(jeton, section.id, sectionDomaineVersWire(sectionMiseAJour))
+    await ecrireSection(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
   }
 
@@ -648,8 +662,7 @@ export const useSectionsStore = defineStore('sections', () => {
       },
       updated_at: maintenant,
     }
-    const { api, jeton } = await obtenirApiSection()
-    await api.remplacerSection(jeton, section.id, sectionDomaineVersWire(sectionMiseAJour))
+    await ecrireSection(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
   }
 
@@ -815,8 +828,7 @@ export const useSectionsStore = defineStore('sections', () => {
             ]
           : section.revisions,
     }
-    const { api, jeton } = await obtenirApiSection()
-    await api.remplacerSection(jeton, section.id, sectionDomaineVersWire(sectionMiseAJour))
+    await ecrireSection(sectionMiseAJour)
     await chargerSectionsDuProjet(section.project_id)
     return { ok: true }
   }

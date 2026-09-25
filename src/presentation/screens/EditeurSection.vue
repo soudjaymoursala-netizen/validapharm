@@ -31,6 +31,8 @@ import {
 import { construireObjectifAssistantSection } from '../../logique-metier/raisonnement/assistantSection'
 import RenduGabarit from '../composants/RenduGabarit.vue'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
+import { peutModifierSection } from '../../logique-metier/permissions/permissionsProjet'
+import { useAuthStore } from '../stores/useAuthStore'
 import { libelleStatut, messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
 import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
 import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
@@ -60,6 +62,20 @@ const procedureStore = useProcedureStore()
 const structureStore = useStructureSystemeStore()
 const section = ref<Section | undefined>(undefined)
 const projet = ref<Project | undefined>(undefined)
+const authStore = useAuthStore()
+// Faux tant que la section et son projet ne sont pas chargés : jamais un
+// bandeau « lecture seule » affiché à tort pendant le chargement (le Worker
+// reste de toute façon le seul juge du droit d'écriture).
+const lectureSeule = computed(() =>
+  section.value && projet.value
+    ? !peutModifierSection(
+        projet.value,
+        section.value,
+        identifiantActeurCourant(),
+        authStore.estAdmin,
+      )
+    : false,
+)
 // Un projet appartient à un client : la barre latérale doit proposer les
 // outils de CE client, jamais ceux du client visité précédemment.
 watch(
@@ -729,469 +745,500 @@ async function ajouterAvisRelecteur(): Promise<void> {
       <strong>{{ libelleStatut(section.status, section.language) }}</strong>
     </p>
 
-    <details v-if="nombreFormulationsFaibles > 0" class="revue-de-style no-print">
-      <summary>
-        Revue de style — {{ nombreFormulationsFaibles }} formulation{{
-          nombreFormulationsFaibles > 1 ? 's' : ''
-        }}
-        à reconsidérer
-      </summary>
-      <p class="rappel">
-        Signal purement informatif, jamais un verdict de conformité — à vous d'apprécier si une
-        reformulation est utile.
-      </p>
-      <ul>
-        <li v-for="champ in revueDeStyle" :key="champ.champ">
-          <strong>{{ champ.champ }}</strong>
-          <ul>
-            <li v-for="(formulation, index) in champ.formulations" :key="index">
-              « {{ formulation.extrait }} » — {{ formulation.motif }}. {{ formulation.suggestion }}
-            </li>
-          </ul>
-        </li>
-      </ul>
-    </details>
+    <p v-if="lectureSeule" class="bandeau-lecture-seule no-print" role="status">
+      Lecture seule : seuls le créateur du projet, les personnes partagées en édition et les
+      administrateurs peuvent modifier ou exporter cette section.
+    </p>
 
-    <RenduGabarit
-      v-if="definitionGabarit"
-      :key="section.id"
-      :definition="definitionGabarit"
-      :values="section.values"
-      :tables="section.tables"
-      :langue="section.language"
-      :verrouille="section.status === 'valide_en_interne'"
-      :champs-signales="section.generation_source.generated_fields"
-      @maj-valeurs="majValeursGabarit"
-      @maj-table="majTableGabarit"
-    />
-    <label v-else class="champ-contenu">
-      Contenu
-      <textarea v-model="contenu" :disabled="section.status === 'valide_en_interne'" rows="10" />
-    </label>
-
-    <section
-      v-if="section.status === 'brouillon_aide' && definitionGabarit && projet?.client_id"
-      class="generation-brouillon no-print"
-    >
-      <h2>Génération de brouillon par adaptation (§4.1bis)</h2>
-      <p class="rappel">
-        Adapte un document de référence (structure, langage, raisonnement) au contexte du nouveau
-        cas — le résultat reste au statut « proposé par IA — non validé » tant que chaque section du
-        gabarit n'a pas été relue explicitement.
-      </p>
-
-      <fieldset class="choix-reference">
-        <label>
-          <input v-model="modeReference" type="radio" value="coller" />
-          Coller le texte
-        </label>
-        <label>
-          <input v-model="modeReference" type="radio" value="uploader" />
-          Uploader un fichier (.docx, .pdf)
-        </label>
-      </fieldset>
-
-      <label v-if="modeReference === 'coller'">
-        Texte du document de référence
-        <textarea v-model="texteDocumentReference" rows="6" />
-      </label>
-      <template v-else>
-        <label class="bouton-fichier">
-          Choisir un fichier (.docx, .pdf)
-          <input type="file" accept=".docx,.pdf" @change="importerFichierReference" />
-        </label>
-        <p v-if="enExtractionReference">Extraction du texte en cours…</p>
-        <p v-if="erreurExtractionReference" class="bandeau-erreur" role="alert">
-          {{ erreurExtractionReference }}
+    <!-- Désactive d'un coup tous les contrôles d'édition pour un lecteur :
+         le Worker refuserait de toute façon l'écriture (403). -->
+    <fieldset class="zone-edition" :disabled="lectureSeule">
+      <details v-if="nombreFormulationsFaibles > 0" class="revue-de-style no-print">
+        <summary>
+          Revue de style — {{ nombreFormulationsFaibles }} formulation{{
+            nombreFormulationsFaibles > 1 ? 's' : ''
+          }}
+          à reconsidérer
+        </summary>
+        <p class="rappel">
+          Signal purement informatif, jamais un verdict de conformité — à vous d'apprécier si une
+          reformulation est utile.
         </p>
-        <p v-if="nomDocumentReference && !enExtractionReference">
-          Fichier chargé : « {{ nomDocumentReference }} » ({{ texteDocumentReference.length }}
-          caractères extraits)
-        </p>
-      </template>
+        <ul>
+          <li v-for="champ in revueDeStyle" :key="champ.champ">
+            <strong>{{ champ.champ }}</strong>
+            <ul>
+              <li v-for="(formulation, index) in champ.formulations" :key="index">
+                « {{ formulation.extrait }} » — {{ formulation.motif }}.
+                {{ formulation.suggestion }}
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </details>
 
-      <label v-if="modeReference === 'coller'">
-        Nom du document de référence
-        <input v-model="nomDocumentReference" type="text" placeholder="ex. IQ ligne A11 (2024)" />
+      <RenduGabarit
+        v-if="definitionGabarit"
+        :key="section.id"
+        :definition="definitionGabarit"
+        :values="section.values"
+        :tables="section.tables"
+        :langue="section.language"
+        :verrouille="section.status === 'valide_en_interne'"
+        :champs-signales="section.generation_source.generated_fields"
+        @maj-valeurs="majValeursGabarit"
+        @maj-table="majTableGabarit"
+      />
+      <label v-else class="champ-contenu">
+        Contenu
+        <textarea v-model="contenu" :disabled="section.status === 'valide_en_interne'" rows="10" />
       </label>
 
-      <label>
-        Contexte du nouveau cas
-        <textarea v-model="contexteNouveauCas" rows="3" />
-      </label>
-
-      <label class="confirmation-droit-usage">
-        <input v-model="confirmationDroitUsage" type="checkbox" />
-        {{
-          messageSysteme('U-07', section.language, {
-            titre: nomDocumentReference || 'ce document',
-          })
-        }}
-      </label>
-
-      <p v-if="erreurGeneration" class="bandeau-erreur" role="alert">{{ erreurGeneration }}</p>
-
-      <button
-        type="button"
-        :disabled="
-          enGeneration || texteDocumentReference.trim().length === 0 || !confirmationDroitUsage
-        "
-        @click="genererBrouillon"
+      <section
+        v-if="section.status === 'brouillon_aide' && definitionGabarit && projet?.client_id"
+        class="generation-brouillon no-print"
       >
-        {{ enGeneration ? 'Génération en cours…' : 'Générer le brouillon' }}
-      </button>
-    </section>
+        <h2>Génération de brouillon par adaptation (§4.1bis)</h2>
+        <p class="rappel">
+          Adapte un document de référence (structure, langage, raisonnement) au contexte du nouveau
+          cas — le résultat reste au statut « proposé par IA — non validé » tant que chaque section
+          du gabarit n'a pas été relue explicitement.
+        </p>
 
-    <section v-if="projet?.client_id" class="assistant-section no-print">
-      <h2>Assistant contextuel</h2>
-      <p class="rappel">
-        Pose une question sur cette section précise — l'assistant voit son contenu actuel et dispose
-        des mêmes outils de traçabilité que le Reasoning Engine (§4.21). Fournisseur actuel :
-        {{ nomFournisseurActuel }}. Jamais une écriture automatique dans la section — une réponse,
-        jamais une action.
-      </p>
-      <ul v-if="historiqueAssistant.length > 0" class="historique-assistant">
-        <li v-for="(echange, index) in historiqueAssistant" :key="index">
-          <p class="question-assistant"><strong>Vous :</strong> {{ echange.question }}</p>
-          <p class="reponse-assistant">
-            <strong>Assistant :</strong> {{ echange.reponse }}
-            <span class="badge-confiance">{{
-              LIBELLES_CONFIANCE_ASSISTANT[echange.etatConfiance]
-            }}</span>
+        <fieldset class="choix-reference">
+          <label>
+            <input v-model="modeReference" type="radio" value="coller" />
+            Coller le texte
+          </label>
+          <label>
+            <input v-model="modeReference" type="radio" value="uploader" />
+            Uploader un fichier (.docx, .pdf)
+          </label>
+        </fieldset>
+
+        <label v-if="modeReference === 'coller'">
+          Texte du document de référence
+          <textarea v-model="texteDocumentReference" rows="6" />
+        </label>
+        <template v-else>
+          <label class="bouton-fichier">
+            Choisir un fichier (.docx, .pdf)
+            <input type="file" accept=".docx,.pdf" @change="importerFichierReference" />
+          </label>
+          <p v-if="enExtractionReference">Extraction du texte en cours…</p>
+          <p v-if="erreurExtractionReference" class="bandeau-erreur" role="alert">
+            {{ erreurExtractionReference }}
           </p>
-        </li>
-      </ul>
-      <p v-if="erreurAssistant" class="bandeau-erreur" role="alert">{{ erreurAssistant }}</p>
-      <form class="formulaire-assistant" @submit.prevent="poserQuestionAssistant">
-        <textarea
-          v-model="questionAssistant"
-          rows="2"
-          placeholder="ex. Quels risques ne sont pas encore couverts par un test pour cet actif ?"
-        />
-        <button type="submit" :disabled="assistantEnCours || questionAssistant.trim().length === 0">
-          {{ assistantEnCours ? 'Réflexion en cours…' : 'Poser la question' }}
-        </button>
-      </form>
-    </section>
+          <p v-if="nomDocumentReference && !enExtractionReference">
+            Fichier chargé : « {{ nomDocumentReference }} » ({{ texteDocumentReference.length }}
+            caractères extraits)
+          </p>
+        </template>
 
-    <section v-if="section.status === 'propose_par_ia_non_valide'" class="revue-ia no-print">
-      <h2>Revue du brouillon proposé par IA</h2>
-      <p v-if="documentReferenceUtilise">
-        Document de référence : « {{ documentReferenceUtilise.filename }} »
-      </p>
-      <p class="rappel">
-        Relisez explicitement chaque section ci-dessus avant de pouvoir valider — aucune validation
-        globale en un clic n'est possible.
-      </p>
-      <fieldset v-if="definitionGabarit" class="checklist-revue">
-        <label v-for="s in definitionGabarit.sections" :key="s.section_key">
-          <input
-            type="checkbox"
-            :checked="sousSectionsRevues.has(s.section_key)"
-            @change="
-              (e: Event) =>
-                (e.target as HTMLInputElement).checked
-                  ? sousSectionsRevues.add(s.section_key)
-                  : sousSectionsRevues.delete(s.section_key)
-            "
-          />
-          J'ai relu et validé « {{ s.labels[section.language] ?? s.labels.fr }} »
+        <label v-if="modeReference === 'coller'">
+          Nom du document de référence
+          <input v-model="nomDocumentReference" type="text" placeholder="ex. IQ ligne A11 (2024)" />
         </label>
-      </fieldset>
-    </section>
 
-    <section class="liens-sections no-print">
-      <h2>Liens vers d'autres sections</h2>
-      <p class="rappel">
-        Un lien vers la section requise (ex. Contexte procédé pour l'OQ/PQ, Plan de métrologie pour
-        l'IQ) est la façon normale de satisfaire un garde-fou de finalisation — « Forcer » reste
-        réservé aux exceptions justifiées.
-      </p>
-      <p v-if="erreurLienSection" class="bandeau-erreur" role="alert">{{ erreurLienSection }}</p>
-      <ul v-if="sectionsLiees.length > 0" class="liste-liens">
-        <li v-for="s in sectionsLiees" :key="s.id">
-          {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
-          <button
-            v-if="section.status !== 'valide_en_interne'"
-            type="button"
-            @click="delierSection(s.id)"
-          >
-            Délier
-          </button>
-        </li>
-      </ul>
-      <p v-else>Aucun lien pour l'instant.</p>
-      <div v-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
         <label>
-          Lier à
-          <select v-model="sectionCibleLienId" :disabled="sectionsLiablesRestantes.length === 0">
-            <option value="">— choisir une section —</option>
-            <option v-for="s in sectionsLiablesRestantes" :key="s.id" :value="s.id">
-              {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
-            </option>
-          </select>
+          Contexte du nouveau cas
+          <textarea v-model="contexteNouveauCas" rows="3" />
         </label>
-        <button type="button" :disabled="!sectionCibleLienId" @click="lierSectionSelectionnee">
-          Lier
-        </button>
-      </div>
-    </section>
 
-    <section class="liens-structurels no-print">
-      <h2>Liens structurels (procédure, actif)</h2>
-      <p class="rappel">
-        Liens réels (tâche #118), retrouvables depuis la fiche procédure ou le dossier vivant de
-        l'actif — jamais un simple texte d'audit.
-      </p>
-      <!-- `procedureStore`/`structureStore` se chargent en fin de chaîne
+        <label class="confirmation-droit-usage">
+          <input v-model="confirmationDroitUsage" type="checkbox" />
+          {{
+            messageSysteme('U-07', section.language, {
+              titre: nomDocumentReference || 'ce document',
+            })
+          }}
+        </label>
+
+        <p v-if="erreurGeneration" class="bandeau-erreur" role="alert">{{ erreurGeneration }}</p>
+
+        <button
+          type="button"
+          :disabled="
+            enGeneration || texteDocumentReference.trim().length === 0 || !confirmationDroitUsage
+          "
+          @click="genererBrouillon"
+        >
+          {{ enGeneration ? 'Génération en cours…' : 'Générer le brouillon' }}
+        </button>
+      </section>
+
+      <section v-if="projet?.client_id" class="assistant-section no-print">
+        <h2>Assistant contextuel</h2>
+        <p class="rappel">
+          Pose une question sur cette section précise — l'assistant voit son contenu actuel et
+          dispose des mêmes outils de traçabilité que le Reasoning Engine (§4.21). Fournisseur
+          actuel :
+          {{ nomFournisseurActuel }}. Jamais une écriture automatique dans la section — une réponse,
+          jamais une action.
+        </p>
+        <ul v-if="historiqueAssistant.length > 0" class="historique-assistant">
+          <li v-for="(echange, index) in historiqueAssistant" :key="index">
+            <p class="question-assistant"><strong>Vous :</strong> {{ echange.question }}</p>
+            <p class="reponse-assistant">
+              <strong>Assistant :</strong> {{ echange.reponse }}
+              <span class="badge-confiance">{{
+                LIBELLES_CONFIANCE_ASSISTANT[echange.etatConfiance]
+              }}</span>
+            </p>
+          </li>
+        </ul>
+        <p v-if="erreurAssistant" class="bandeau-erreur" role="alert">{{ erreurAssistant }}</p>
+        <form class="formulaire-assistant" @submit.prevent="poserQuestionAssistant">
+          <textarea
+            v-model="questionAssistant"
+            rows="2"
+            placeholder="ex. Quels risques ne sont pas encore couverts par un test pour cet actif ?"
+          />
+          <button
+            type="submit"
+            :disabled="assistantEnCours || questionAssistant.trim().length === 0"
+          >
+            {{ assistantEnCours ? 'Réflexion en cours…' : 'Poser la question' }}
+          </button>
+        </form>
+      </section>
+
+      <section v-if="section.status === 'propose_par_ia_non_valide'" class="revue-ia no-print">
+        <h2>Revue du brouillon proposé par IA</h2>
+        <p v-if="documentReferenceUtilise">
+          Document de référence : « {{ documentReferenceUtilise.filename }} »
+        </p>
+        <p class="rappel">
+          Relisez explicitement chaque section ci-dessus avant de pouvoir valider — aucune
+          validation globale en un clic n'est possible.
+        </p>
+        <fieldset v-if="definitionGabarit" class="checklist-revue">
+          <label v-for="s in definitionGabarit.sections" :key="s.section_key">
+            <input
+              type="checkbox"
+              :checked="sousSectionsRevues.has(s.section_key)"
+              @change="
+                (e: Event) =>
+                  (e.target as HTMLInputElement).checked
+                    ? sousSectionsRevues.add(s.section_key)
+                    : sousSectionsRevues.delete(s.section_key)
+              "
+            />
+            J'ai relu et validé « {{ s.labels[section.language] ?? s.labels.fr }} »
+          </label>
+        </fieldset>
+      </section>
+
+      <section class="liens-sections no-print">
+        <h2>Liens vers d'autres sections</h2>
+        <p class="rappel">
+          Un lien vers la section requise (ex. Contexte procédé pour l'OQ/PQ, Plan de métrologie
+          pour l'IQ) est la façon normale de satisfaire un garde-fou de finalisation — « Forcer »
+          reste réservé aux exceptions justifiées.
+        </p>
+        <p v-if="erreurLienSection" class="bandeau-erreur" role="alert">{{ erreurLienSection }}</p>
+        <ul v-if="sectionsLiees.length > 0" class="liste-liens">
+          <li v-for="s in sectionsLiees" :key="s.id">
+            {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
+            <button
+              v-if="section.status !== 'valide_en_interne'"
+              type="button"
+              @click="delierSection(s.id)"
+            >
+              Délier
+            </button>
+          </li>
+        </ul>
+        <p v-else>Aucun lien pour l'instant.</p>
+        <div v-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+          <label>
+            Lier à
+            <select v-model="sectionCibleLienId" :disabled="sectionsLiablesRestantes.length === 0">
+              <option value="">— choisir une section —</option>
+              <option v-for="s in sectionsLiablesRestantes" :key="s.id" :value="s.id">
+                {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
+              </option>
+            </select>
+          </label>
+          <button type="button" :disabled="!sectionCibleLienId" @click="lierSectionSelectionnee">
+            Lier
+          </button>
+        </div>
+      </section>
+
+      <section class="liens-structurels no-print">
+        <h2>Liens structurels (procédure, actif)</h2>
+        <p class="rappel">
+          Liens réels (tâche #118), retrouvables depuis la fiche procédure ou le dossier vivant de
+          l'actif — jamais un simple texte d'audit.
+        </p>
+        <!-- `procedureStore`/`structureStore` se chargent en fin de chaîne
            séquentielle dans `onMounted` — sans cette garde, un lien
            structurel bel et bien enregistré s'affichait comme absent
            pendant ce court instant (`procedureLiee`/`noeudLie` restent
            `null` tant que ces stores n'ont pas fini de charger), un vrai
            flash de contenu trompeur (bug réel trouvé le 13/09/2026). -->
-      <p v-if="chargementInitial" class="etat-vide">Chargement…</p>
-      <template v-else>
-        <div class="lien-structurel">
-          <template v-if="procedureLiee">
-            <span
-              >Procédure :
-              <strong
-                >{{ procedureLiee.reference }} v{{ procedureLiee.numero_version }} —
-                {{ procedureLiee.titre }}</strong
-              ></span
-            >
-            <span v-if="procedureStore.remplaceePar(procedureLiee)" class="alerte-obsolete">
-              ⚠ Révision obsolète — remplacée par la v{{
-                procedureStore.remplaceePar(procedureLiee)
-              }}
-            </span>
-            <button
-              v-if="section.status !== 'valide_en_interne'"
-              type="button"
-              @click="delierProcedure"
-            >
-              Délier
-            </button>
-          </template>
-          <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
-            <label>
-              Lier à une procédure
-              <select v-model="procedureLienId">
-                <option value="">— choisir —</option>
-                <option v-for="p in procedureStore.procedures" :key="p.id" :value="p.id">
-                  {{ p.reference }} v{{ p.numero_version }} — {{ p.titre
-                  }}{{ procedureStore.remplaceePar(p) ? ' (obsolète)' : '' }}
-                </option>
-              </select>
-            </label>
-            <button type="button" :disabled="!procedureLienId" @click="lierProcedureSelectionnee">
-              Lier
-            </button>
-          </div>
-          <p v-else>Aucune procédure liée.</p>
-        </div>
-        <div class="lien-structurel">
-          <template v-if="noeudLie">
-            <span
-              >Actif :
-              <RouterLink
-                v-if="projet?.client_id"
-                :to="{
-                  name: 'dossier-vivant-actif',
-                  params: { clientId: projet.client_id, noeudId: noeudLie.id },
-                }"
+        <p v-if="chargementInitial" class="etat-vide">Chargement…</p>
+        <template v-else>
+          <div class="lien-structurel">
+            <template v-if="procedureLiee">
+              <span
+                >Procédure :
+                <strong
+                  >{{ procedureLiee.reference }} v{{ procedureLiee.numero_version }} —
+                  {{ procedureLiee.titre }}</strong
+                ></span
               >
-                {{ noeudLie.name }} ({{ noeudLie.code }})
-              </RouterLink>
-              <template v-else>{{ noeudLie.name }} ({{ noeudLie.code }})</template></span
-            >
-            <button
-              v-if="section.status !== 'valide_en_interne'"
-              type="button"
-              @click="delierAssetNode"
-            >
-              Délier
-            </button>
-          </template>
-          <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
-            <label>
-              Lier à un nœud Structure Système
-              <select v-model="noeudLienId">
-                <option value="">— choisir —</option>
-                <option v-for="n in structureStore.noeuds" :key="n.id" :value="n.id">
-                  {{ n.name }} ({{ n.code }})
-                </option>
-              </select>
-            </label>
-            <button type="button" :disabled="!noeudLienId" @click="lierAssetNodeSelectionne">
-              Lier
-            </button>
+              <span v-if="procedureStore.remplaceePar(procedureLiee)" class="alerte-obsolete">
+                ⚠ Révision obsolète — remplacée par la v{{
+                  procedureStore.remplaceePar(procedureLiee)
+                }}
+              </span>
+              <button
+                v-if="section.status !== 'valide_en_interne'"
+                type="button"
+                @click="delierProcedure"
+              >
+                Délier
+              </button>
+            </template>
+            <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+              <label>
+                Lier à une procédure
+                <select v-model="procedureLienId">
+                  <option value="">— choisir —</option>
+                  <option v-for="p in procedureStore.procedures" :key="p.id" :value="p.id">
+                    {{ p.reference }} v{{ p.numero_version }} — {{ p.titre
+                    }}{{ procedureStore.remplaceePar(p) ? ' (obsolète)' : '' }}
+                  </option>
+                </select>
+              </label>
+              <button type="button" :disabled="!procedureLienId" @click="lierProcedureSelectionnee">
+                Lier
+              </button>
+            </div>
+            <p v-else>Aucune procédure liée.</p>
           </div>
-          <p v-else>Aucun actif lié.</p>
-        </div>
-      </template>
-    </section>
+          <div class="lien-structurel">
+            <template v-if="noeudLie">
+              <span
+                >Actif :
+                <RouterLink
+                  v-if="projet?.client_id"
+                  :to="{
+                    name: 'dossier-vivant-actif',
+                    params: { clientId: projet.client_id, noeudId: noeudLie.id },
+                  }"
+                >
+                  {{ noeudLie.name }} ({{ noeudLie.code }})
+                </RouterLink>
+                <template v-else>{{ noeudLie.name }} ({{ noeudLie.code }})</template></span
+              >
+              <button
+                v-if="section.status !== 'valide_en_interne'"
+                type="button"
+                @click="delierAssetNode"
+              >
+                Délier
+              </button>
+            </template>
+            <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+              <label>
+                Lier à un nœud Structure Système
+                <select v-model="noeudLienId">
+                  <option value="">— choisir —</option>
+                  <option v-for="n in structureStore.noeuds" :key="n.id" :value="n.id">
+                    {{ n.name }} ({{ n.code }})
+                  </option>
+                </select>
+              </label>
+              <button type="button" :disabled="!noeudLienId" @click="lierAssetNodeSelectionne">
+                Lier
+              </button>
+            </div>
+            <p v-else>Aucun actif lié.</p>
+          </div>
+        </template>
+      </section>
 
-    <section v-if="section.status !== 'valide_en_interne'" class="workflow no-print">
-      <h2>Workflow</h2>
-      <p>
-        Approbateur final :
-        <strong>{{ section.workflow.approver_final ?? 'non renseigné' }}</strong>
-      </p>
-      <div class="ligne-formulaire">
-        <label>
-          Identifiant approbateur final
-          <input v-model="nouvelApprobateur" type="text" placeholder="ex. qa-1" />
-        </label>
-        <button type="button" @click="assignerApprobateur">Assigner</button>
-      </div>
-
-      <p>Avis relecteurs : {{ section.workflow.reviewers.length }}</p>
-      <ul v-if="section.workflow.reviewers.length > 0" class="liste-avis">
-        <li v-for="(avis, index) in section.workflow.reviewers" :key="index">
-          {{ avis.user_id }} — {{ avis.avis }}
-        </li>
-      </ul>
-      <div class="ligne-formulaire">
-        <label>
-          Identifiant relecteur
-          <input v-model="nouvelAvisRelecteurId" type="text" placeholder="ex. revu-1" />
-        </label>
-        <label>
-          Avis
-          <input v-model="nouvelAvisRelecteurTexte" type="text" placeholder="ex. Favorable" />
-        </label>
-        <button type="button" @click="ajouterAvisRelecteur">Ajouter l'avis</button>
-      </div>
-    </section>
-
-    <div v-if="messagesBlocage.length > 0" class="blocage no-print" role="alert">
-      <p v-for="message in messagesBlocage" :key="message">
-        {{ message }}
-      </p>
-      <label>
-        Motif du forçage (obligatoire)
-        <input v-model="motifForcage" type="text" />
-      </label>
-      <button
-        type="button"
-        @click="
-          section.status === 'en_approbation' ? forcerApprouver() : forcerEngagerVerification()
-        "
-      >
-        Forcer
-      </button>
-    </div>
-
-    <p v-if="raisonTransitionBloquee" class="blocage no-print" role="alert">
-      {{ raisonTransitionBloquee }}
-    </p>
-
-    <div class="actions-cycle no-print">
-      <template v-if="section.status === 'brouillon_aide'">
-        <button type="button" @click="engagerVerification">
-          Engager le cycle « validé en interne »
-        </button>
-      </template>
-
-      <template v-else-if="section.status === 'propose_par_ia_non_valide'">
-        <button type="button" :disabled="!toutesLesSousSectionsRevues" @click="validerSectionIA">
-          Valider cette section (contenu proposé par IA)
-        </button>
-        <p v-if="!toutesLesSousSectionsRevues" class="rappel">
-          Relisez chaque section ci-dessus avant de pouvoir valider.
+      <section v-if="section.status !== 'valide_en_interne'" class="workflow no-print">
+        <h2>Workflow</h2>
+        <p>
+          Approbateur final :
+          <strong>{{ section.workflow.approver_final ?? 'non renseigné' }}</strong>
         </p>
-      </template>
-
-      <template v-else-if="section.status === 'en_verification'">
-        <button type="button" @click="transmettreApprobation">Transmettre à l'approbation</button>
-        <label>
-          Motif de rejet
-          <input v-model="motifRejet" type="text" />
-        </label>
-        <button type="button" class="bouton-danger" @click="rejeter">Rejeter</button>
-      </template>
-
-      <template v-else-if="section.status === 'en_approbation'">
-        <button type="button" @click="approuver">Approuver</button>
-        <label>
-          Motif de rejet
-          <input v-model="motifRejet" type="text" />
-        </label>
-        <button type="button" class="bouton-danger" @click="rejeter">Rejeter</button>
-      </template>
-
-      <p v-else-if="section.status === 'valide_en_interne'" class="verrouille">
-        Section verrouillée (validée en interne — pas une signature électronique opposable).
-        Nouvelle révision : backlog.
-      </p>
-    </div>
-
-    <section class="export no-print">
-      <h2>Export</h2>
-
-      <div v-if="blocageExport.bloque && !exportForce" class="blocage" role="alert">
-        <p>{{ blocageExport.motif }}</p>
-        <button type="button" @click="exportForce = true">
-          Forcer l'export malgré l'avertissement
-        </button>
-      </div>
-
-      <div v-else class="actions-export">
-        <button type="button" @click="exporterJSON">Exporter en JSON</button>
-        <button type="button" @click="exporterWord">Exporter en Word (.doc)</button>
-        <button type="button" @click="imprimer">Imprimer / Exporter en PDF</button>
-        <button
-          v-for="champ in tableauxExportables"
-          :key="champ.field_key"
-          type="button"
-          @click="exporterCSV(champ)"
-        >
-          Exporter « {{ champ.labels[section.language] ?? champ.labels.fr }} » en CSV
-        </button>
-      </div>
-
-      <div v-if="projet?.client_id" class="gabarit-export-client">
-        <h3>Gabarit d'export personnalisé</h3>
-        <p v-if="erreurGabaritExport" class="bandeau-erreur" role="alert">
-          {{ erreurGabaritExport }}
-        </p>
-
-        <div v-if="gabaritExportStore.gabarits.length > 0" class="selection-gabarit">
+        <div class="ligne-formulaire">
           <label>
-            Gabarit
-            <select v-model="gabaritSelectionneId">
-              <option value="">— Gabarit par défaut —</option>
-              <option v-for="g in gabaritExportStore.gabarits" :key="g.id" :value="g.id">
-                {{ g.nom }}
-              </option>
-            </select>
+            Identifiant approbateur final
+            <input v-model="nouvelApprobateur" type="text" placeholder="ex. qa-1" />
           </label>
-          <button
-            v-if="gabaritSelectionneId"
-            type="button"
-            :disabled="blocageExport.bloque && !exportForce"
-            @click="exporterWordGabaritClient"
-          >
-            Exporter en Word (gabarit client, .docx)
+          <button type="button" @click="assignerApprobateur">Assigner</button>
+        </div>
+
+        <p>Avis relecteurs : {{ section.workflow.reviewers.length }}</p>
+        <ul v-if="section.workflow.reviewers.length > 0" class="liste-avis">
+          <li v-for="(avis, index) in section.workflow.reviewers" :key="index">
+            {{ avis.user_id }} — {{ avis.avis }}
+          </li>
+        </ul>
+        <div class="ligne-formulaire">
+          <label>
+            Identifiant relecteur
+            <input v-model="nouvelAvisRelecteurId" type="text" placeholder="ex. revu-1" />
+          </label>
+          <label>
+            Avis
+            <input v-model="nouvelAvisRelecteurTexte" type="text" placeholder="ex. Favorable" />
+          </label>
+          <button type="button" @click="ajouterAvisRelecteur">Ajouter l'avis</button>
+        </div>
+      </section>
+
+      <div v-if="messagesBlocage.length > 0" class="blocage no-print" role="alert">
+        <p v-for="message in messagesBlocage" :key="message">
+          {{ message }}
+        </p>
+        <label>
+          Motif du forçage (obligatoire)
+          <input v-model="motifForcage" type="text" />
+        </label>
+        <button
+          type="button"
+          @click="
+            section.status === 'en_approbation' ? forcerApprouver() : forcerEngagerVerification()
+          "
+        >
+          Forcer
+        </button>
+      </div>
+
+      <p v-if="raisonTransitionBloquee" class="blocage no-print" role="alert">
+        {{ raisonTransitionBloquee }}
+      </p>
+
+      <div class="actions-cycle no-print">
+        <template v-if="section.status === 'brouillon_aide'">
+          <button type="button" @click="engagerVerification">
+            Engager le cycle « validé en interne »
+          </button>
+        </template>
+
+        <template v-else-if="section.status === 'propose_par_ia_non_valide'">
+          <button type="button" :disabled="!toutesLesSousSectionsRevues" @click="validerSectionIA">
+            Valider cette section (contenu proposé par IA)
+          </button>
+          <p v-if="!toutesLesSousSectionsRevues" class="rappel">
+            Relisez chaque section ci-dessus avant de pouvoir valider.
+          </p>
+        </template>
+
+        <template v-else-if="section.status === 'en_verification'">
+          <button type="button" @click="transmettreApprobation">Transmettre à l'approbation</button>
+          <label>
+            Motif de rejet
+            <input v-model="motifRejet" type="text" />
+          </label>
+          <button type="button" class="bouton-danger" @click="rejeter">Rejeter</button>
+        </template>
+
+        <template v-else-if="section.status === 'en_approbation'">
+          <button type="button" @click="approuver">Approuver</button>
+          <label>
+            Motif de rejet
+            <input v-model="motifRejet" type="text" />
+          </label>
+          <button type="button" class="bouton-danger" @click="rejeter">Rejeter</button>
+        </template>
+
+        <p v-else-if="section.status === 'valide_en_interne'" class="verrouille">
+          Section verrouillée (validée en interne — pas une signature électronique opposable).
+          Nouvelle révision : backlog.
+        </p>
+      </div>
+
+      <section class="export no-print">
+        <h2>Export</h2>
+
+        <div v-if="blocageExport.bloque && !exportForce" class="blocage" role="alert">
+          <p>{{ blocageExport.motif }}</p>
+          <button type="button" @click="exportForce = true">
+            Forcer l'export malgré l'avertissement
           </button>
         </div>
 
-        <div class="import-gabarit">
-          <input v-model="nomNouveauGabarit" type="text" placeholder="Nom du gabarit à importer" />
-          <label class="bouton-fichier">
-            Importer un gabarit (.docx)
-            <input type="file" accept=".docx" @change="importerGabaritExport" />
-          </label>
+        <div v-else class="actions-export">
+          <button type="button" @click="exporterJSON">Exporter en JSON</button>
+          <button type="button" @click="exporterWord">Exporter en Word (.doc)</button>
+          <button type="button" @click="imprimer">Imprimer / Exporter en PDF</button>
+          <button
+            v-for="champ in tableauxExportables"
+            :key="champ.field_key"
+            type="button"
+            @click="exporterCSV(champ)"
+          >
+            Exporter « {{ champ.labels[section.language] ?? champ.labels.fr }} » en CSV
+          </button>
         </div>
-      </div>
-    </section>
+
+        <div v-if="projet?.client_id" class="gabarit-export-client">
+          <h3>Gabarit d'export personnalisé</h3>
+          <p v-if="erreurGabaritExport" class="bandeau-erreur" role="alert">
+            {{ erreurGabaritExport }}
+          </p>
+
+          <div v-if="gabaritExportStore.gabarits.length > 0" class="selection-gabarit">
+            <label>
+              Gabarit
+              <select v-model="gabaritSelectionneId">
+                <option value="">— Gabarit par défaut —</option>
+                <option v-for="g in gabaritExportStore.gabarits" :key="g.id" :value="g.id">
+                  {{ g.nom }}
+                </option>
+              </select>
+            </label>
+            <button
+              v-if="gabaritSelectionneId"
+              type="button"
+              :disabled="blocageExport.bloque && !exportForce"
+              @click="exporterWordGabaritClient"
+            >
+              Exporter en Word (gabarit client, .docx)
+            </button>
+          </div>
+
+          <div class="import-gabarit">
+            <input
+              v-model="nomNouveauGabarit"
+              type="text"
+              placeholder="Nom du gabarit à importer"
+            />
+            <label class="bouton-fichier">
+              Importer un gabarit (.docx)
+              <input type="file" accept=".docx" @change="importerGabaritExport" />
+            </label>
+          </div>
+        </div>
+      </section>
+    </fieldset>
   </main>
   <p v-else-if="chargementInitial">Chargement…</p>
   <p v-else>Section introuvable.</p>
 </template>
 
 <style scoped>
+.zone-edition {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.bandeau-lecture-seule {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+
 .editeur-section {
   padding: 2rem;
   font-family: var(--vp-police);

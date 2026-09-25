@@ -3350,7 +3350,10 @@ async function gererCreerEvaluationCsvAssessment(
   if (
     !corps?.nomSysteme ||
     !corps.categorieGamp5 ||
-    ![1, 2, 3, 4, 5].includes(corps.categorieGamp5) ||
+    // Catégorie 2 (Firmware) retirée de GAMP 5 : refusée à la création
+    // (décision utilisateur du 25/09/2026) ; les évaluations historiques en
+    // catégorie 2 restent lisibles, rien n'est réécrit.
+    ![1, 3, 4, 5].includes(corps.categorieGamp5) ||
     !corps.justificationCategorie ||
     typeof corps.pertinenceGxp !== 'boolean' ||
     typeof corps.pertinenceEresPart11 !== 'boolean' ||
@@ -5738,6 +5741,30 @@ function pireReadiness(a: string, b: string): string {
 }
 
 /**
+ * Dernière exécution clôturée (`statut === 'terminee'`), ordonnée par
+ * `dateFin`, puis `createdAt`, puis `id` — ordre total, donc résultat
+ * déterministe même à horodatage égal. Même règle que
+ * `derniereExecutionCloturee` côté frontend (`readinessContentPlan.ts`).
+ */
+function derniereExecutionCloturee<
+  E extends { id: string; statut: string; dateFin: string | null; createdAt: string },
+>(executions: readonly E[]): E | undefined {
+  const cle = (e: E) => [e.dateFin ?? '', e.createdAt, e.id] as const
+  let derniere: E | undefined
+  for (const e of executions) {
+    if (e.statut !== 'terminee') continue
+    if (!derniere) {
+      derniere = e
+      continue
+    }
+    const [a, b] = [cle(e), cle(derniere)]
+    const plusRecente = a[0] !== b[0] ? a[0] > b[0] : a[1] !== b[1] ? a[1] > b[1] : a[2] > b[2]
+    if (plusRecente) derniere = e
+  }
+  return derniere
+}
+
+/**
  * Calcul déterministe de `readiness` — porté côté serveur (jamais fait
  * confiance à une valeur fournie par le client, notamment pour le
  * garde-fou de `gererGelerContentPlan`) à partir des mêmes dépôts D1 que
@@ -5814,26 +5841,34 @@ async function calculerReadinessContentPlan(
         signaler('besoin_revue', `${prefixe} : test encore en brouillon (non approuvé).`)
         continue
       }
-      const executionsDuTest = executions.filter((e) => e.testId === test.id)
+      // Exécutions de CE test sur CET équipement : une exécution rattachée
+      // explicitement à un autre nœud ne dit rien de celui-ci ; une
+      // exécution sans nœud reste prise en compte (comportement antérieur).
+      const executionsDuTest = executions.filter(
+        (e) => e.testId === test.id && (e.assetNodeId === null || e.assetNodeId === assetNodeId),
+      )
       if (executionsDuTest.length === 0) {
-        signaler('besoin_information', `${prefixe} : jamais exécuté.`)
+        signaler('besoin_information', `${prefixe} : jamais exécuté sur cet actif.`)
         continue
       }
-      for (const execution of executionsDuTest) {
-        if (execution.statut !== 'terminee') {
-          signaler('besoin_information', `${prefixe} : une exécution est en cours, non clôturée.`)
-          continue
-        }
-        if (execution.verdict === 'non_conforme') {
-          signaler('bloque', `${prefixe} : une exécution a été clôturée « non conforme ».`)
-          continue
-        }
-        const aDeLaPreuve = evidences.some((ev) => ev.executionId === execution.id)
-        signaler(
-          aDeLaPreuve ? 'pret' : 'besoin_revue',
-          `${prefixe} : une exécution clôturée n'a aucune preuve associée.`,
-        )
+      if (executionsDuTest.some((e) => e.statut !== 'terminee')) {
+        signaler('besoin_information', `${prefixe} : une exécution est en cours, non clôturée.`)
       }
+      // Décision utilisateur du 25/09/2026 : seule la DERNIÈRE exécution
+      // clôturée compte. Un échec antérieur reste tracé (l'exécution est
+      // immuable et visible dans l'historique) mais ne bloque plus si le
+      // retest est conforme et prouvé.
+      const derniere = derniereExecutionCloturee(executionsDuTest)
+      if (!derniere) continue
+      if (derniere.verdict === 'non_conforme') {
+        signaler('bloque', `${prefixe} : la dernière exécution a été clôturée « non conforme ».`)
+        continue
+      }
+      const aDeLaPreuve = evidences.some((ev) => ev.executionId === derniere.id)
+      signaler(
+        aDeLaPreuve ? 'pret' : 'besoin_revue',
+        `${prefixe} : la dernière exécution clôturée n'a aucune preuve associée.`,
+      )
     }
   }
   return { readiness: resultat, raisons }
@@ -7949,13 +7984,91 @@ async function gererCreerWorkspace(
 // ici une vraie frontière — même durcissement que `peutModifierClient` en
 // Phase 39.
 
-function peutVoirProjetServeur(
+//
+// **(25/09/2026, décision utilisateur « Protection réelle »)** La lecture
+// d'un projet est ouverte à qui a accès au client du projet (en plus du
+// propriétaire, des partagés et des admins) ; la modification reste
+// réservée au propriétaire, aux partagés en édition et aux admins. Les
+// sections et documents d'un projet héritent de ces droits — plus aucune
+// route projet/section/document n'est « authentification seule ».
+
+async function peutVoirProjetServeur(
+  ctx: Contexte,
   projet: ProjectEnregistre,
   utilisateur: UtilisateurEnregistre,
-): boolean {
+): Promise<boolean> {
   if (utilisateur.role === 'admin') return true
   if (projet.ownerId === utilisateur.email) return true
-  return projet.sharedWith.some((p) => p.userId === utilisateur.email)
+  if (projet.sharedWith.some((p) => p.userId === utilisateur.email)) return true
+  if (projet.clientId === null) return false
+  const client = await ctx.clientsRepo.parId(projet.clientId)
+  return client !== null && peutVoirClient(utilisateur, client)
+}
+
+/** Ids des projets visibles par l'utilisateur — `null` pour un admin (tout est visible). */
+async function idsProjetsVisibles(
+  ctx: Contexte,
+  utilisateur: UtilisateurEnregistre,
+): Promise<Set<string> | null> {
+  if (utilisateur.role === 'admin') return null
+  const projets = await listerProjetsVisibles(ctx, utilisateur)
+  return new Set(projets.map((p) => p.id))
+}
+
+async function listerProjetsVisibles(
+  ctx: Contexte,
+  utilisateur: UtilisateurEnregistre,
+): Promise<ProjectEnregistre[]> {
+  const directs = await ctx.projectsRepo.listerVisiblesPar(utilisateur)
+  if (utilisateur.role === 'admin') return directs
+  const parId = new Map(directs.map((p) => [p.id, p]))
+  for (const client of await ctx.clientsRepo.listerVisiblesPar(utilisateur)) {
+    for (const p of await ctx.projectsRepo.listerParClient(client.id)) parId.set(p.id, p)
+  }
+  return [...parId.values()]
+}
+
+/**
+ * Droits sur une section : ceux de son projet (lecture si le projet est
+ * visible, écriture s'il est modifiable), plus le partage propre à la
+ * section (`ownerId`/`sharedWith`, déjà modélisés). Une section dont le
+ * projet n'existe pas n'est accessible qu'à un admin ou à son propriétaire.
+ */
+async function droitsSection(
+  ctx: Contexte,
+  section: Pick<SectionEnregistree, 'projectId' | 'ownerId' | 'sharedWith'>,
+  utilisateur: UtilisateurEnregistre,
+): Promise<{ voir: boolean; modifier: boolean }> {
+  if (utilisateur.role === 'admin') return { voir: true, modifier: true }
+  const proprietaire = section.ownerId === utilisateur.email
+  const partage = (section.sharedWith ?? []).find((p) => p.userId === utilisateur.email)
+  const projet = await ctx.projectsRepo.obtenirProjet(section.projectId)
+  const voirProjet = projet !== null && (await peutVoirProjetServeur(ctx, projet, utilisateur))
+  const modifierProjet = projet !== null && peutModifierProjetServeur(projet, utilisateur)
+  return {
+    voir: voirProjet || proprietaire || partage !== undefined,
+    modifier: modifierProjet || proprietaire || partage?.accessLevel === 'édition',
+  }
+}
+
+/**
+ * Authentifie puis vérifie l'accès au projet `projectId` — `'modifier'`
+ * exige le droit d'écriture. 404 générique si le projet est invisible (ou
+ * inexistant), 403 `non_autorise` s'il est visible mais pas modifiable.
+ */
+async function exigerAccesProjet(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  projectId: string,
+  niveau: 'voir' | 'modifier',
+): Promise<{ utilisateur: UtilisateurEnregistre; projet: ProjectEnregistre } | Response> {
+  const charge = await chargerProjetVisible(request, ctx, entetes, projectId)
+  if (charge instanceof Response) return charge
+  if (niveau === 'modifier' && !peutModifierProjetServeur(charge.projet, charge.utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+  return charge
 }
 
 function peutModifierProjetServeur(
@@ -7977,7 +8090,7 @@ async function gererListerProjets(
   const utilisateur = await authentifier(request, ctx)
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
-  const projects = await ctx.projectsRepo.listerVisiblesPar(utilisateur)
+  const projects = await listerProjetsVisibles(ctx, utilisateur)
   return reponseJson({ projects }, 200, entetes)
 }
 
@@ -8004,7 +8117,7 @@ async function gererObtenirProjet(
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
   const projet = await ctx.projectsRepo.obtenirProjet(id)
-  if (!projet || !peutVoirProjetServeur(projet, utilisateur)) {
+  if (!projet || !(await peutVoirProjetServeur(ctx, projet, utilisateur))) {
     // 404 générique — même discipline que `gererObtenirClient` : jamais
     // distinguer "introuvable" de "non autorisé".
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
@@ -8036,14 +8149,59 @@ async function gererRestaurerProjet(
   const corps = await lireCorpsJson<ProjectEnregistre>(request)
   if (!corps?.name) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
 
-  const projetAEcrire: ProjectEnregistre = { ...corps, id }
   const existant = await ctx.projectsRepo.obtenirProjet(id)
+  const refus = await refusEcritureProjetComplet(ctx, utilisateur, existant, corps)
+  if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
+
+  const projetAEcrire: ProjectEnregistre = { ...corps, id }
   if (existant) {
     await ctx.projectsRepo.remplacerProjet(projetAEcrire)
   } else {
     await ctx.projectsRepo.creerProjet(projetAEcrire)
   }
   return reponseJson({ projet: projetAEcrire }, 200, entetes)
+}
+
+/**
+ * Garde commune aux routes qui écrivent un projet complet fourni par
+ * l'appelant (restauration, migration locale) :
+ * - projet existant : droit d'écriture exigé ; seul son propriétaire (ou
+ *   un admin) peut en changer `ownerId`/`sharedWith` — un partagé en
+ *   édition ne peut pas s'approprier le projet ni en changer le partage ;
+ * - nouveau projet : attribué à l'appelant (`ownerId` = son email), sauf
+ *   admin — jamais un projet créé au nom de quelqu'un d'autre ;
+ * - `clientId` renseigné : l'appelant doit avoir accès à ce client.
+ */
+async function refusEcritureProjetComplet(
+  ctx: Contexte,
+  utilisateur: UtilisateurEnregistre,
+  existant: ProjectEnregistre | null,
+  corps: ProjectEnregistre,
+): Promise<{ erreur: string; statut: number } | null> {
+  const admin = utilisateur.role === 'admin'
+  if (existant) {
+    if (!(await peutVoirProjetServeur(ctx, existant, utilisateur))) {
+      return { erreur: 'introuvable', statut: 404 }
+    }
+    if (!peutModifierProjetServeur(existant, utilisateur)) {
+      return { erreur: 'non_autorise', statut: 403 }
+    }
+    const partageModifie =
+      corps.ownerId !== existant.ownerId ||
+      JSON.stringify(corps.sharedWith ?? []) !== JSON.stringify(existant.sharedWith)
+    if (partageModifie && !admin && existant.ownerId !== utilisateur.email) {
+      return { erreur: 'non_autorise', statut: 403 }
+    }
+  } else if (!admin && corps.ownerId !== utilisateur.email) {
+    return { erreur: 'non_autorise', statut: 403 }
+  }
+  if (corps.clientId) {
+    const client = await ctx.clientsRepo.parId(corps.clientId)
+    if (!client || !peutVoirClient(utilisateur, client)) {
+      return { erreur: 'client_introuvable', statut: 400 }
+    }
+  }
+  return null
 }
 
 async function gererCreerProjet(
@@ -8065,6 +8223,12 @@ async function gererCreerProjet(
   }>(request)
   if (!corps?.name || corps.name.trim().length === 0) {
     return reponseJson({ erreur: 'nom_obligatoire' }, 400, entetes)
+  }
+  if (corps.clientId) {
+    const client = await ctx.clientsRepo.parId(corps.clientId)
+    if (!client || !peutVoirClient(utilisateur, client)) {
+      return reponseJson({ erreur: 'client_introuvable' }, 400, entetes)
+    }
   }
 
   const maintenant = horodatage()
@@ -8126,9 +8290,13 @@ async function gererMigrerProjetsLocaux(
     if (!p.id || !p.name) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
     const existant = await ctx.projectsRepo.obtenirProjet(p.id)
     if (existant) {
-      projects.push(existant)
+      // Idempotence inchangée, mais jamais une fuite : un projet existant
+      // invisible pour l'appelant n'est pas renvoyé.
+      if (await peutVoirProjetServeur(ctx, existant, utilisateur)) projects.push(existant)
       continue
     }
+    const refus = await refusEcritureProjetComplet(ctx, utilisateur, null, p)
+    if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
     await ctx.projectsRepo.creerProjet(p)
     projects.push(p)
   }
@@ -8147,7 +8315,7 @@ async function chargerProjetVisible(
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
   const projet = await ctx.projectsRepo.obtenirProjet(id)
-  if (!projet || !peutVoirProjetServeur(projet, utilisateur)) {
+  if (!projet || !(await peutVoirProjetServeur(ctx, projet, utilisateur))) {
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   return { utilisateur, projet }
@@ -8574,14 +8742,12 @@ async function gererRetirerLienProjet(
 
 // --- Handlers : Sections (Phase 3b du chantier de migration D1) ---
 //
-// Contrairement à Project (Phase 3a), aucune vérification de visibilité
-// par projet ici : `Section.owner_id`/`shared_with` ne sont, comme avant
-// cette migration, jamais câblés comme une frontière de sécurité réelle
-// (voir `permissionsProjet.ts`) — même régime d'accès que l'ancienne
-// table Dexie unique (authentification seule), pas une régression. Toute
-// la logique métier (machine à états, garde-fous de finalisation) reste
-// côté client, déjà testée — ces handlers ne font qu'authentifier et
-// persister l'état déjà validé.
+// **(25/09/2026)** Les droits d'une section sont désormais réellement
+// appliqués (`droitsSection`) : ceux de son projet, plus son propre partage
+// `ownerId`/`sharedWith`. Auparavant « authentification seule ». Toute la
+// logique métier (machine à états, garde-fous de finalisation) reste côté
+// client, déjà testée — ces handlers vérifient les droits puis persistent
+// l'état déjà validé.
 
 async function gererListerToutesLesSections(
   request: Request,
@@ -8591,7 +8757,19 @@ async function gererListerToutesLesSections(
   const utilisateur = await authentifier(request, ctx)
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
-  const sections = await ctx.sectionsRepo.listerToutes()
+  const [toutes, visibles] = await Promise.all([
+    ctx.sectionsRepo.listerToutes(),
+    idsProjetsVisibles(ctx, utilisateur),
+  ])
+  const sections =
+    visibles === null
+      ? toutes
+      : toutes.filter(
+          (s) =>
+            visibles.has(s.projectId) ||
+            s.ownerId === utilisateur.email ||
+            (s.sharedWith ?? []).some((p) => p.userId === utilisateur.email),
+        )
   return reponseJson({ sections }, 200, entetes)
 }
 
@@ -8601,8 +8779,8 @@ async function gererListerSectionsProjet(
   entetes: Record<string, string>,
   projectId: string,
 ): Promise<Response> {
-  const utilisateur = await authentifier(request, ctx)
-  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+  const acces = await exigerAccesProjet(request, ctx, entetes, projectId, 'voir')
+  if (acces instanceof Response) return acces
 
   const sections = await ctx.sectionsRepo.listerParProjet(projectId)
   return reponseJson({ sections }, 200, entetes)
@@ -8618,7 +8796,9 @@ async function gererObtenirSection(
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
   const section = await ctx.sectionsRepo.obtenirSection(id)
-  if (!section) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  if (!section || !(await droitsSection(ctx, section, utilisateur)).voir) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
   return reponseJson({ section }, 200, entetes)
 }
 
@@ -8634,9 +8814,30 @@ async function gererCreerSection(
   if (!corps?.id || !corps.projectId || !corps.templateType) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refus = await refusEcritureSection(ctx, utilisateur, corps.projectId)
+  if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
 
   await ctx.sectionsRepo.creerSection(corps)
   return reponseJson({ section: corps }, 201, entetes)
+}
+
+/**
+ * Création d'une section dans `projectId` : le projet doit exister, être
+ * visible (sinon 404 générique) et modifiable par l'appelant (sinon 403).
+ */
+async function refusEcritureSection(
+  ctx: Contexte,
+  utilisateur: UtilisateurEnregistre,
+  projectId: string,
+): Promise<{ erreur: string; statut: number } | null> {
+  const projet = await ctx.projectsRepo.obtenirProjet(projectId)
+  if (!projet || !(await peutVoirProjetServeur(ctx, projet, utilisateur))) {
+    return { erreur: 'introuvable', statut: 404 }
+  }
+  if (!peutModifierProjetServeur(projet, utilisateur)) {
+    return { erreur: 'non_autorise', statut: 403 }
+  }
+  return null
 }
 
 async function gererRemplacerSection(
@@ -8650,6 +8851,9 @@ async function gererRemplacerSection(
 
   const existante = await ctx.sectionsRepo.obtenirSection(id)
   if (!existante) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  const droits = await droitsSection(ctx, existante, utilisateur)
+  if (!droits.voir) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  if (!droits.modifier) return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
 
   const corps = await lireCorpsJson<SectionEnregistree>(request)
   if (!corps?.templateType) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
@@ -8691,9 +8895,11 @@ async function gererMigrerSectionsLocales(
     }
     const existante = await ctx.sectionsRepo.obtenirSection(s.id)
     if (existante) {
-      sections.push(existante)
+      if ((await droitsSection(ctx, existante, utilisateur)).voir) sections.push(existante)
       continue
     }
+    const refus = await refusEcritureSection(ctx, utilisateur, s.projectId)
+    if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
     await ctx.sectionsRepo.creerSection(s)
     sections.push(s)
   }
@@ -8727,6 +8933,17 @@ async function gererRestaurerSection(
   const section: SectionEnregistree = { ...corps, id }
   const existante = await ctx.sectionsRepo.obtenirSection(id)
   if (existante) {
+    const droits = await droitsSection(ctx, existante, utilisateur)
+    if (!droits.voir) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+    if (!droits.modifier) return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+  // La section restaurée doit aussi pouvoir être écrite dans son projet
+  // cible (évite de déplacer une section vers un projet d'un autre client).
+  if (!existante || existante.projectId !== section.projectId) {
+    const refus = await refusEcritureSection(ctx, utilisateur, section.projectId)
+    if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
+  }
+  if (existante) {
     await ctx.sectionsRepo.remplacerSection(section)
   } else {
     await ctx.sectionsRepo.creerSection(section)
@@ -8737,12 +8954,10 @@ async function gererRestaurerSection(
 // --- Handlers : ProjectDocument (Phase 3c du chantier de migration D1) ---
 //
 // Même répartition D1 (métadonnées)/R2 (texte extrait + contenu binaire)
-// que les documents normatifs, même absence de frontière de sécurité par
-// projet que `sections` (authentification seule, voir en-tête des routes
-// ci-dessus) — `ProjectDocument.content` n'était déjà synchronisé nulle
-// part avant cette migration (portée de `useSynchronisationStore` limitée
-// à projects/sections), donc aucune perte de fonctionnalité de partage à
-// combler.
+// que les documents normatifs. **(25/09/2026)** Droits hérités du projet
+// (`documentProjetAccessible`) : lecture si le projet est visible,
+// création/suppression s'il est modifiable — plus « authentification
+// seule ».
 
 interface ProjectDocumentWire {
   id: string
@@ -8754,6 +8969,19 @@ interface ProjectDocumentWire {
   hasBinaryContent: boolean
   uploadedAt: string
   uploadedBy: string
+}
+
+/** Droits sur un document de projet : ceux de son projet (un document orphelin n'est accessible qu'à un admin). */
+async function documentProjetAccessible(
+  ctx: Contexte,
+  utilisateur: UtilisateurEnregistre,
+  document: ProjectDocumentEnregistre,
+  niveau: 'voir' | 'modifier',
+): Promise<boolean> {
+  if (utilisateur.role === 'admin') return true
+  const projet = await ctx.projectsRepo.obtenirProjet(document.projectId)
+  if (!projet || !(await peutVoirProjetServeur(ctx, projet, utilisateur))) return false
+  return niveau === 'voir' || peutModifierProjetServeur(projet, utilisateur)
 }
 
 /** Assemble la réponse complète (métadonnées D1 + texte extrait R2) — jamais le contenu binaire, récupéré séparément via `/contenu` pour ne pas alourdir la liste. */
@@ -8781,8 +9009,8 @@ async function gererListerDocumentsProjet(
   entetes: Record<string, string>,
   projectId: string,
 ): Promise<Response> {
-  const utilisateur = await authentifier(request, ctx)
-  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+  const acces = await exigerAccesProjet(request, ctx, entetes, projectId, 'voir')
+  if (acces instanceof Response) return acces
 
   const metadonnees = await ctx.projectDocumentsRepo.listerParProjet(projectId)
   const documentsProjet = await Promise.all(metadonnees.map((d) => assemblerDocumentProjet(ctx, d)))
@@ -8857,6 +9085,8 @@ async function gererCreerDocumentProjet(
   if (!corps.filename || corps.filename.trim().length === 0) {
     return reponseJson({ erreur: 'filename_obligatoire' }, 400, entetes)
   }
+  const refus = await refusEcritureSection(ctx, utilisateur, corps.projectId)
+  if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
   const mimeType = corps.mimeType ?? 'application/octet-stream'
   const status = corps.status ?? 'reference_de_travail_non_maitre'
 
@@ -8920,12 +9150,17 @@ async function gererMigrerDocumentProjetLocal(
 
   const existant = await ctx.projectDocumentsRepo.parId(id)
   if (existant) {
+    if (!(await documentProjetAccessible(ctx, utilisateur, existant, 'voir'))) {
+      return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+    }
     return reponseJson(
       { documentProjet: await assemblerDocumentProjet(ctx, existant) },
       201,
       entetes,
     )
   }
+  const refus = await refusEcritureSection(ctx, utilisateur, corps.projectId)
+  if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
 
   const mimeType = corps.mimeType ?? 'application/octet-stream'
   const status = corps.status ?? 'reference_de_travail_non_maitre'
@@ -8965,7 +9200,9 @@ async function gererObtenirDocumentProjet(
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
   const document = await ctx.projectDocumentsRepo.parId(id)
-  if (!document) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  if (!document || !(await documentProjetAccessible(ctx, utilisateur, document, 'voir'))) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
   return reponseJson({ documentProjet: await assemblerDocumentProjet(ctx, document) }, 200, entetes)
 }
 
@@ -8979,7 +9216,11 @@ async function gererObtenirContenuDocumentProjet(
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
   const document = await ctx.projectDocumentsRepo.parId(id)
-  if (!document || !document.hasBinaryContent) {
+  if (
+    !document ||
+    !document.hasBinaryContent ||
+    !(await documentProjetAccessible(ctx, utilisateur, document, 'voir'))
+  ) {
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
   const contenu = await ctx.stockageBinaireRepo.lire(cleContenuDocumentProjet(id))
@@ -9003,6 +9244,16 @@ async function gererSupprimerDocumentProjet(
 ): Promise<Response> {
   const utilisateur = await authentifier(request, ctx)
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const document = await ctx.projectDocumentsRepo.parId(id)
+  if (document) {
+    if (!(await documentProjetAccessible(ctx, utilisateur, document, 'voir'))) {
+      return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+    }
+    if (!(await documentProjetAccessible(ctx, utilisateur, document, 'modifier'))) {
+      return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+    }
+  }
 
   await ctx.stockageBinaireRepo.supprimer(cleTexteDocumentProjet(id))
   await ctx.stockageBinaireRepo.supprimer(cleContenuDocumentProjet(id))

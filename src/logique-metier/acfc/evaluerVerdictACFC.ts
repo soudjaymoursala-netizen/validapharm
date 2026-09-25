@@ -1,6 +1,6 @@
 import type { MethodProfileACFC, QuestionACFC, ReponseQuestionACFC } from '../domaine/types'
 import {
-  auMoinsUneReponseOui,
+  conclusionQuestionnaireOuiNon,
   questionsCompletementRepondues,
 } from '../assessment/moteurQuestionsOuiNon'
 
@@ -20,21 +20,27 @@ import {
  * `evaluerVerdictImpactAssessment.ts`. Comportement et signature publique
  * inchangés.
  *
+ * **(25/09/2026, décision utilisateur)** Sans aucun "oui", une réponse
+ * `inconnu` empêche de conclure : `null` = pas de verdict, évaluation « à
+ * compléter ». Auparavant `inconnu` aboutissait à "non critique", ce qui
+ * revenait à deviner la réponse.
+ *
  * @requirement F2, Analyse de risque
  */
 export function evaluerVerdictACFC(
   questions: readonly QuestionACFC[],
   reponses: Readonly<Record<string, ReponseQuestionACFC>>,
   decisionRule: MethodProfileACFC['decision_rule'],
-): 'critique' | 'non_critique' {
+): 'critique' | 'non_critique' | null {
   switch (decisionRule) {
-    case 'au_moins_un_oui_critique':
-      return auMoinsUneReponseOui(
+    case 'au_moins_un_oui_critique': {
+      const conclusion = conclusionQuestionnaireOuiNon(
         questions.map((q) => q.id),
         reponses,
       )
-        ? 'critique'
-        : 'non_critique'
+      if (conclusion === null) return null
+      return conclusion === 'positif' ? 'critique' : 'non_critique'
+    }
   }
 }
 

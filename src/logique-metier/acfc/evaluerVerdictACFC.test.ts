@@ -24,9 +24,19 @@ describe('evaluerVerdictACFC — règle "au moins un oui"', () => {
     expect(evaluerVerdictACFC(questions, reponses, 'au_moins_un_oui_critique')).toBe('critique')
   })
 
-  test('inconnu et sans_objet ne comptent jamais comme un oui', () => {
-    const reponses = { q1: 'inconnu', q2: 'sans_objet', q3: 'non' } as const
+  test('sans_objet ne compte jamais comme un oui', () => {
+    const reponses = { q1: 'sans_objet', q2: 'sans_objet', q3: 'non' } as const
     expect(evaluerVerdictACFC(questions, reponses, 'au_moins_un_oui_critique')).toBe('non_critique')
+  })
+
+  test('un inconnu sans aucun oui -> pas de verdict (null), jamais "non critique" deviné', () => {
+    const reponses = { q1: 'inconnu', q2: 'sans_objet', q3: 'non' } as const
+    expect(evaluerVerdictACFC(questions, reponses, 'au_moins_un_oui_critique')).toBeNull()
+  })
+
+  test("un oui suffit à conclure critique même s'il reste des inconnu", () => {
+    const reponses = { q1: 'inconnu', q2: 'oui', q3: 'inconnu' } as const
+    expect(evaluerVerdictACFC(questions, reponses, 'au_moins_un_oui_critique')).toBe('critique')
   })
 
   test('méthode à 1 seule question (cas réel Sanofi Lyon-Gerland : 4 questions, ici réduit à 1 pour le test unitaire)', () => {

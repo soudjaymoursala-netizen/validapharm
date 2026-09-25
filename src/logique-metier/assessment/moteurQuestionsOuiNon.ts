@@ -23,6 +23,27 @@ export function auMoinsUneReponseOui(
   return questionIds.some((id) => reponses[id] === 'oui')
 }
 
+/**
+ * Conclusion tri-état du questionnaire (décision utilisateur du 25/09/2026) :
+ * - au moins un `oui` → `'positif'` (un seul Oui suffit, même s'il reste des
+ *   `inconnu`) ;
+ * - sinon, au moins une réponse `inconnu` (ou une question sans réponse) →
+ *   `null` : **pas de verdict**, l'évaluation reste « à compléter ». Un
+ *   `inconnu` n'est jamais assimilé à un `non` — le deviner serait fabriquer
+ *   une conclusion ;
+ * - sinon (uniquement des `non`/`sans_objet`) → `'negatif'`.
+ */
+export function conclusionQuestionnaireOuiNon(
+  questionIds: readonly string[],
+  reponses: Readonly<Record<string, ReponseQuestionOuiNon>>,
+): 'positif' | 'negatif' | null {
+  if (auMoinsUneReponseOui(questionIds, reponses)) return 'positif'
+  const indetermine = questionIds.some(
+    (id) => reponses[id] === undefined || reponses[id] === 'inconnu',
+  )
+  return indetermine ? null : 'negatif'
+}
+
 /** Un questionnaire est complet si chaque question a reçu une réponse (y compris `inconnu`/`sans_objet`). */
 export function questionsCompletementRepondues(
   questionIds: readonly string[],

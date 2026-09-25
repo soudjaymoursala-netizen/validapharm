@@ -34,10 +34,30 @@ describe('evaluerVerdictImpactAssessment — règle "au moins un oui" (F1, Ferri
   test('modèle strictement binaire : jamais de troisième verdict "indirect" (ISPE Baseline Guide 2e éd.)', () => {
     const verdict = evaluerVerdictImpactAssessment(
       questions,
-      { q1: 'inconnu', q2: 'sans_objet' },
+      { q1: 'non', q2: 'sans_objet' },
       'au_moins_un_oui_impact_direct',
     )
     expect(['impact_direct', 'non_impact_direct']).toContain(verdict)
+  })
+
+  test('un "inconnu" sans aucun "oui" -> pas de verdict (null) : évaluation à compléter', () => {
+    expect(
+      evaluerVerdictImpactAssessment(
+        questions,
+        { q1: 'inconnu', q2: 'non' },
+        'au_moins_un_oui_impact_direct',
+      ),
+    ).toBeNull()
+  })
+
+  test('un "oui" suffit à conclure Direct Impact même avec un "inconnu"', () => {
+    expect(
+      evaluerVerdictImpactAssessment(
+        questions,
+        { q1: 'inconnu', q2: 'oui' },
+        'au_moins_un_oui_impact_direct',
+      ),
+    ).toBe('impact_direct')
   })
 })
 

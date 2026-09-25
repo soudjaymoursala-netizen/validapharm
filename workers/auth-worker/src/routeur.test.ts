@@ -2541,7 +2541,11 @@ describe('routerRequete — Computer System Assessment (F3 du catalogue §10, Ph
     })
     expect(liste.corps.evaluationsCsv.map((e) => e.id)).toContain(creation.corps.evaluationCsv.id)
 
-    for (const invalide of [{ categorieGamp5: 7 }, { pertinenceGxp: 'oui' }]) {
+    for (const invalide of [
+      { categorieGamp5: 7 },
+      { categorieGamp5: 2 },
+      { pertinenceGxp: 'oui' },
+    ]) {
       const refus = await requete(ctx, 'POST', `/clients/${clientId}/csv-assessment/evaluations`, {
         jeton: admin.jeton,
         body: {
@@ -4991,7 +4995,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     jeton: string,
     clientId: string,
     assetNodeId: string,
-  ): Promise<void> {
+  ): Promise<{ testId: string }> {
     const requirement = await requete(
       ctx,
       'POST',
@@ -5065,7 +5069,80 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
       `/clients/${clientId}/executions/${demarrage.corps.execution.id}/cloturer`,
       { jeton, body: { verdict: 'conforme' } },
     )
+    return { testId: test.corps.test.id }
   }
+
+  /** Démarre puis clôture une exécution (avec ou sans preuve) — pour les scénarios de retest. */
+  async function executerTest(
+    ctx: Contexte,
+    jeton: string,
+    clientId: string,
+    testId: string,
+    assetNodeId: string,
+    verdict: 'conforme' | 'non_conforme',
+    avecPreuve: boolean,
+  ): Promise<void> {
+    // Horodatages strictement croissants entre exécutions successives.
+    await new Promise((resolve) => setTimeout(resolve, 3))
+    const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton,
+      body: { testId, assetNodeId },
+    })
+    if (avecPreuve) {
+      await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+        jeton,
+        body: {
+          executionId: demarrage.corps.execution.id,
+          executionStepId: null,
+          type: 'native',
+          titre: 'Observation directe',
+          description: 'x',
+        },
+      })
+    }
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/executions/${demarrage.corps.execution.id}/cloturer`,
+      { jeton, body: { verdict } },
+    )
+  }
+
+  test('retest : seule la dernière exécution clôturée sur cet équipement compte', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = await creerClientDeTest(ctx, admin.jeton)
+    const { testId } = await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
+    const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
+      jeton: admin.jeton,
+      body: { templateId: 'gabarit-iq', assetNodeId: 'noeud-1', contextSnapshot: '{}' },
+    })
+    const planId = creation.corps.contentPlan.id
+    const recalculer = () =>
+      requete(ctx, 'PATCH', `/clients/${clientId}/content-plans/${planId}/recalculer-readiness`, {
+        jeton: admin.jeton,
+      })
+
+    // Un échec sur un AUTRE équipement ne dit rien de celui-ci.
+    await executerTest(ctx, admin.jeton, clientId, testId, 'noeud-2', 'non_conforme', true)
+    expect((await recalculer()).corps.contentPlan.readiness).toBe('pret')
+
+    // Dernière exécution sur cet équipement : non conforme -> bloque.
+    await executerTest(ctx, admin.jeton, clientId, testId, 'noeud-1', 'non_conforme', true)
+    const apresEchec = await recalculer()
+    expect(apresEchec.corps.contentPlan.readiness).toBe('bloque')
+    expect(apresEchec.corps.raisons.join(' ')).toContain('dernière exécution')
+
+    // Retest conforme mais sans preuve -> besoin_revue (plus bloqué).
+    await executerTest(ctx, admin.jeton, clientId, testId, 'noeud-1', 'conforme', false)
+    expect((await recalculer()).corps.contentPlan.readiness).toBe('besoin_revue')
+
+    // Retest conforme prouvé -> pret : l'échec antérieur reste tracé, ne bloque plus.
+    await executerTest(ctx, admin.jeton, clientId, testId, 'noeud-1', 'conforme', true)
+    expect((await recalculer()).corps.contentPlan.readiness).toBe('pret')
+    const executions = await ctx.executionRepo.listerExecutions(clientId)
+    expect(executions.filter((e) => e.verdict === 'non_conforme')).toHaveLength(2)
+  })
 
   test('GET sans rien configuré -> liste vide, jamais 404', async () => {
     const ctx = nouveauContexte()
@@ -9420,5 +9497,214 @@ describe('routerRequete — OAuth Google (Drive normes)', () => {
     })
     expect(status).toBe(501)
     expect(corps.erreur).toBe('oauth_google_non_configure')
+  })
+})
+
+describe('routerRequete — protection réelle projets/sections/documents (décision du 25/09/2026)', () => {
+  async function creerUtilisateur(
+    ctx: Contexte,
+    jetonAdmin: string,
+    email: string,
+  ): Promise<{ email: string; jeton: string; id: string }> {
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: jetonAdmin,
+      body: { email, motDePasse: 'MotDePasse!1', nom: 'N', prenom: 'P', role: 'utilisateur' },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email, motDePasse: 'MotDePasse!1' },
+    })
+    const me = await requete(ctx, 'GET', '/auth/me', { jeton: login.corps.jeton })
+    return { email, jeton: login.corps.jeton, id: me.corps.utilisateur.id }
+  }
+
+  function section(id: string, projectId: string, ownerId: string): SectionJson {
+    return {
+      id,
+      projectId,
+      templateType: 'oq',
+      templateEngineVersion: '0.1.0',
+      ownerId,
+      sharedWith: [],
+      language: 'fr',
+      status: 'brouillon_aide',
+      meta: { ref: '', titre: 'OQ', version: '0.1' },
+      workflow: { authors: [ownerId], reviewers: [], approverFinal: null },
+      signatures: { redacteur: {}, verificateur: {}, approbateur: {} },
+      revisions: [],
+      values: {},
+      tables: {},
+      generationSource: { sourceDocumentId: null, generatedFields: [] },
+      procedureId: null,
+      assetNodeId: null,
+      auditLog: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+  }
+
+  /**
+   * A crée un client partagé avec B (C n'y a pas accès), puis un projet de
+   * ce client, une section et un document.
+   */
+  async function preparer() {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const a = await creerUtilisateur(ctx, admin.jeton, 'a@pharmatech.example')
+    const b = await creerUtilisateur(ctx, admin.jeton, 'b@pharmatech.example')
+    const c = await creerUtilisateur(ctx, admin.jeton, 'c@pharmatech.example')
+    const client = await requete(ctx, 'POST', '/clients', { jeton: a.jeton, body: { name: 'X' } })
+    const clientId = client.corps.client.id
+    await requete(ctx, 'PATCH', `/clients/${clientId}`, {
+      jeton: a.jeton,
+      body: { sharedWith: [b.id] },
+    })
+    const projet = await requete(ctx, 'POST', '/projects', {
+      jeton: a.jeton,
+      body: { name: 'Qualification ligne A', clientId },
+    })
+    const projectId = projet.corps.projet.id
+    const creationSection = await requete(ctx, 'POST', '/sections', {
+      jeton: a.jeton,
+      body: section('s1', projectId, a.email),
+    })
+    expect(creationSection.status).toBe(201)
+    const doc = await creerDocumentProjet(ctx, a.jeton, projectId)
+    expect(doc.status).toBe(201)
+    return { ctx, admin, a, b, c, clientId, projectId, documentId: doc.corps.documentProjet.id }
+  }
+
+  test('lecture ouverte à qui a accès au client du projet, modification refusée (403)', async () => {
+    const { ctx, b, projectId, documentId } = await preparer()
+
+    const liste = await requete(ctx, 'GET', '/projects', { jeton: b.jeton })
+    expect(liste.corps.projects.map((p) => p.id)).toContain(projectId)
+    expect((await requete(ctx, 'GET', `/projects/${projectId}`, { jeton: b.jeton })).status).toBe(
+      200,
+    )
+    const sections = await requete(ctx, 'GET', `/projects/${projectId}/sections`, {
+      jeton: b.jeton,
+    })
+    expect(sections.corps.sections.map((s) => s.id)).toEqual(['s1'])
+    expect((await requete(ctx, 'GET', '/sections/s1', { jeton: b.jeton })).status).toBe(200)
+    expect(
+      (await requete(ctx, 'GET', `/project-documents/${documentId}`, { jeton: b.jeton })).status,
+    ).toBe(200)
+
+    const phase = await requete(ctx, 'PATCH', `/projects/${projectId}/phase`, {
+      jeton: b.jeton,
+      body: { phase: 'realisation' },
+    })
+    expect(phase.status).toBe(403)
+    const nouvelleSection = await requete(ctx, 'POST', '/sections', {
+      jeton: b.jeton,
+      body: section('s2', projectId, b.email),
+    })
+    expect(nouvelleSection.status).toBe(403)
+    const remplacement = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: section('s1', projectId, b.email),
+    })
+    expect(remplacement.status).toBe(403)
+    expect((await creerDocumentProjet(ctx, b.jeton, projectId)).status).toBe(403)
+    const suppression = await requete(ctx, 'DELETE', `/project-documents/${documentId}`, {
+      jeton: b.jeton,
+    })
+    expect(suppression.status).toBe(403)
+    expect(await ctx.projectDocumentsRepo.parId(documentId)).not.toBeNull()
+  })
+
+  test('sans accès au client ni partage : tout est introuvable (404), rien ne fuit', async () => {
+    const { ctx, c, projectId, documentId } = await preparer()
+
+    expect((await requete(ctx, 'GET', '/projects', { jeton: c.jeton })).corps.projects).toEqual([])
+    expect((await requete(ctx, 'GET', `/projects/${projectId}`, { jeton: c.jeton })).status).toBe(
+      404,
+    )
+    for (const chemin of [
+      `/projects/${projectId}/sections`,
+      `/projects/${projectId}/documents`,
+      '/sections/s1',
+      `/project-documents/${documentId}`,
+      `/project-documents/${documentId}/contenu`,
+    ]) {
+      expect((await requete(ctx, 'GET', chemin, { jeton: c.jeton })).status).toBe(404)
+    }
+    const toutes = await requete(ctx, 'GET', '/sections', { jeton: c.jeton })
+    expect(toutes.corps.sections).toEqual([])
+
+    const ecrasement = await requete(ctx, 'PUT', '/sections/s1/restauration', {
+      jeton: c.jeton,
+      body: section('s1', projectId, c.email),
+    })
+    expect(ecrasement.status).toBe(404)
+    expect((await ctx.sectionsRepo.obtenirSection('s1'))?.ownerId).toBe('a@pharmatech.example')
+
+    const suppression = await requete(ctx, 'DELETE', `/project-documents/${documentId}`, {
+      jeton: c.jeton,
+    })
+    expect(suppression.status).toBe(404)
+    expect(await ctx.projectDocumentsRepo.parId(documentId)).not.toBeNull()
+  })
+
+  test('partagé en édition : peut modifier, mais ni s’approprier le projet ni en changer le partage', async () => {
+    const { ctx, a, b, projectId } = await preparer()
+    await requete(ctx, 'POST', `/projects/${projectId}/partage`, {
+      jeton: a.jeton,
+      body: { userId: b.email, accessLevel: 'édition' },
+    })
+
+    const nouvelleSection = await requete(ctx, 'POST', '/sections', {
+      jeton: b.jeton,
+      body: section('s2', projectId, b.email),
+    })
+    expect(nouvelleSection.status).toBe(201)
+
+    const projet = (await requete(ctx, 'GET', `/projects/${projectId}`, { jeton: b.jeton })).corps
+      .projet
+    const appropriation = await requete(ctx, 'PUT', `/projects/${projectId}/restauration`, {
+      jeton: b.jeton,
+      body: { ...projet, ownerId: b.email },
+    })
+    expect(appropriation.status).toBe(403)
+    const restaurationLegitime = await requete(ctx, 'PUT', `/projects/${projectId}/restauration`, {
+      jeton: b.jeton,
+      body: { ...projet, context: 'Mis à jour par B' },
+    })
+    expect(restaurationLegitime.status).toBe(200)
+  })
+
+  test('jamais un projet créé au nom d’un autre, ni rattaché à un client inaccessible', async () => {
+    const { ctx, c, clientId } = await preparer()
+
+    const creation = await requete(ctx, 'POST', '/projects', {
+      jeton: c.jeton,
+      body: { name: 'Intrus', clientId },
+    })
+    expect(creation.status).toBe(400)
+    expect(creation.corps.erreur).toBe('client_introuvable')
+
+    const restauration = await requete(ctx, 'PUT', '/projects/p-fabrique/restauration', {
+      jeton: c.jeton,
+      body: {
+        id: 'p-fabrique',
+        name: 'Fabriqué',
+        ownerId: 'a@pharmatech.example',
+        sharedWith: [],
+        clientId: null,
+      },
+    })
+    expect(restauration.status).toBe(403)
+    expect(await ctx.projectsRepo.obtenirProjet('p-fabrique')).toBeNull()
+  })
+
+  test('un admin voit et modifie tout', async () => {
+    const { ctx, admin, projectId, documentId } = await preparer()
+    expect(
+      (await requete(ctx, 'GET', `/projects/${projectId}/sections`, { jeton: admin.jeton })).status,
+    ).toBe(200)
+    const suppression = await requete(ctx, 'DELETE', `/project-documents/${documentId}`, {
+      jeton: admin.jeton,
+    })
+    expect(suppression.status).toBe(200)
   })
 })

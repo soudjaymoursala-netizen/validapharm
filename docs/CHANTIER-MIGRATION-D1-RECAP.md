@@ -3547,7 +3547,7 @@ de périodicité (calcul de retard exact), CSV Assessment, structuration de
 procédure déterministe sans relais IA (conditions d'étape détectées),
 « Raisonner » sans relais IA (message clair).
 
-### 32.2 Questions de méthode signalées à l'utilisateur, **non tranchées**
+### 32.2 Questions de méthode signalées à l'utilisateur — **tranchées le 25/09/2026, voir §33**
 
 1. **Réponses « Inconnu » (ACFC / Impact Assessment)** : un questionnaire
    entièrement répondu « Inconnu » est complet et aboutit au verdict le
@@ -3576,3 +3576,87 @@ test déjà poussé (`CorpsReponse.raisons`, que Vitest ne vérifie pas) a
 été trouvée par la validation complète et corrigée dans le commit suivant.
 La CI du dépôt ne tourne que sur pull request : les commits de cette
 section sont regroupés dans une PR pour passer la barrière qualité.
+
+## 33. Les 4 questions de méthode tranchées par l'utilisateur (25/09/2026)
+
+Posées via `AskUserQuestion` ; l'utilisateur a retenu l'option recommandée
+pour chacune. Toutes implémentées, testées, documentées dans la même PR.
+
+| # | Question | Décision | Où |
+|---|---|---|---|
+| 1 | Réponses « Inconnu » (ACFC / Impact Assessment) | **Pas de verdict** tant qu'un « Inconnu » subsiste sans aucun « Oui » ; l'évaluation reste « à compléter ». Un « Oui » suffit toujours pour conclure critique / Direct Impact. | `moteurQuestionsOuiNon.conclusionQuestionnaireOuiNon` (tri-état), `evaluerVerdictACFC`/`evaluerVerdictImpactAssessment` → `… \| null`, `i18n/libellesVerdictQuestionnaire.ts` |
+| 2 | Catégorie GAMP 2 (Firmware) | **Retirée** des choix (grille GAMP 5 : 1, 3, 4, 5) ; les évaluations déjà enregistrées en cat. 2 restent lisibles (« Catégorie 2 — Firmware (retirée de GAMP 5, historique) »). | `CATEGORIES_GAMP5_SELECTIONNABLES` (`types.ts`), `ComputerSystemAssessment.vue`, Worker refuse `categorieGamp5: 2` à la création |
+| 3 | Readiness et retest | **Seule la dernière exécution clôturée sur CET équipement compte** ; l'échec antérieur reste tracé mais ne bloque plus si le retest est conforme avec preuve. Une exécution rattachée à un autre équipement est ignorée (sans équipement : prise en compte, comme avant). | Worker `calculerReadinessContentPlan` + `derniereExecutionCloturee` ; front `readinessContentPlan.ts` (même règle) |
+| 4 | Partage projets/sections | **Protection réelle** par le Worker : lecture = accès au client du projet, propriétaire, partagés, admin ; écriture = propriétaire, partagés en édition, admin. | Worker `peutVoirProjetServeur` (async, accès client), `droitsSection`, `documentProjetAccessible`, `refusEcritureProjetComplet`, `refusEcritureSection`, `exigerAccesProjet` |
+
+### 33.1 Détails d'implémentation à connaître
+
+- **Inconnu** : `complet` (toutes les questions répondues) et `verdict`
+  (peut être `null`) sont désormais distincts à l'écran. Une évaluation
+  complète sans verdict **peut être enregistrée** (verdict `null`, déjà
+  accepté par le Worker via `horsDomaine`) et s'affiche « À compléter —
+  réponse « Inconnu » à lever » dans l'historique (Impact Assessment) et le
+  Dossier vivant (ACFC + Impact). Pas d'étape complexité/conclusion dans
+  l'Assistant stratégie tant que le verdict est `null`. Les évaluations
+  historiques déjà enregistrées « non critique » avec des « Inconnu » ne
+  sont **pas** réécrites (immuables).
+- **Retest** : ordre total `dateFin` → `createdAt` → `id` (déterministe
+  même à horodatage égal). Une exécution **en cours** donne toujours
+  « besoin d'information » ; si la dernière clôturée est un échec, le plan
+  reste bloqué tant que le retest n'est pas clôturé. Raisons Worker
+  reformulées (« la dernière exécution… », « jamais exécuté sur cet
+  actif »).
+- **Protection réelle** — ce qui change concrètement :
+  - `GET /projects` = projets possédés/partagés **+ projets des clients
+    visibles** (`listerProjetsVisibles`) ; `GET /sections` filtré sur les
+    projets visibles (+ sections possédées/partagées).
+  - Sections/documents : 404 générique si invisibles, 403 `non_autorise`
+    si visibles mais non modifiables (création, remplacement,
+    restauration, migration, suppression de document).
+  - `POST /projects` avec `clientId` inaccessible → 400
+    `client_introuvable`. Restauration/migration d'un **nouveau** projet :
+    `ownerId` doit être l'appelant (sauf admin). Restauration d'un projet
+    **existant** par un partagé en édition : autorisée, mais changer
+    `ownerId`/`sharedWith` → 403.
+  - Une section doit désormais appartenir à un **projet existant** (même
+    pour un admin) — 3 tests front qui créaient des sections orphelines
+    ont reçu un projet (`creerProjetDeTest` ajouté à
+    `test-utils/fauxWorkerAuth.ts`).
+  - **Bug latent corrigé au passage** : `useSectionsStore` ignorait le
+    résultat de `api.remplacerSection` à 10 endroits → une écriture
+    refusée aurait ressemblé à une sauvegarde réussie. Nouveau helper
+    `ecrireSection` qui lève « Modification refusée : vous n'avez qu'un
+    accès en lecture à cette section. »
+  - `EditeurSection.vue` : bandeau « Lecture seule » + `<fieldset
+    :disabled>` autour de tous les contrôles (export inclus, car
+    l'export journalise dans la section — un lecteur ne pourrait pas
+    tracer son export). `FicheProjet.vue` : un admin peut toujours
+    modifier ; texte « convention d'affichage » remplacé.
+  - Docs : `TECHNICAL_DECISIONS.md` (nouvelle décision + renvoi depuis
+    celle du 03/09), `ARCHITECTURE_CONFLICTS.md`, `GUIDE-UTILISATEUR.md`
+    (§ partage, éditeur de section, ACFC, Impact Assessment, GAMP 5,
+    readiness/retest).
+
+### 33.2 Tests ajoutés
+
+- Worker : GAMP 2 refusé ; scénario retest complet (autre équipement
+  ignoré → échec bloque → retest sans preuve = revue → retest prouvé =
+  prêt, échecs toujours présents) ; 5 tests « protection réelle
+  projets/sections/documents » (lecteur du client, sans accès, partagé en
+  édition, attribution, admin).
+- Front : moteur tri-état, ACFC/Impact « Inconnu » → `null`, écran Impact
+  Assessment « à compléter », écran CSV sans cat. 2 + historique cat. 2
+  lisible, 6 cas retest dans `readinessContentPlan.test.ts`, écran
+  `EditeurSection.lectureSeule.test.ts`.
+
+### 33.3 Points ouverts / suites possibles
+
+- La récupération GitHub (`recupererDepuisGitHub`) ignore silencieusement
+  les refus serveur (résultat de `restaurerProjet`/`restaurerSection` non
+  vérifié) : pour un non-admin, les projets d'autrui ne sont simplement
+  pas restaurés. Afficher un compte rendu des éléments refusés serait un
+  petit plus.
+- `gererPartagerProjet` laisse un partagé **en édition** modifier le
+  partage (comportement antérieur, non modifié ici) — à confirmer avec
+  l'utilisateur si seul le propriétaire doit pouvoir partager.
+
