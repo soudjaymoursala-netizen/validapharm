@@ -3713,3 +3713,19 @@ créateur et admin autorisés. Front : `controleFichierRecupere.test.ts`
 serveur listés, p1 jamais écrasé ; résolution refusée → aucun appel
 GitHub).
 
+### 34.4 Vérification en navigateur réel
+
+Environnement local jetable (Worker + D1 locaux, supprimé ensuite), aucune
+erreur console/réseau :
+
+- Partagé en édition : `POST /projects/:id/partage` → 403,
+  `PATCH /projects/:id/phase` → 200 (le contenu reste modifiable). Sur la
+  fiche projet : ni formulaire de partage ni bouton « Retirer », message
+  « Vous êtes partagé en édition : … seul le créateur ou un administrateur
+  peut ajouter ou retirer des personnes. »
+- Admin : formulaire de partage et « Retirer » présents.
+- Tableau de bord : « Récupérer depuis GitHub » ouvre la confirmation ;
+  refusée → rien ne se passe ; acceptée sans connexion GitHub → « Aucune
+  connexion GitHub configurée. » (le parcours avec un vrai dépôt n'a pas
+  pu être rejoué ici — couvert par les tests `synchronisation.test.ts`).
+
