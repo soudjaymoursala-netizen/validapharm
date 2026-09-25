@@ -112,7 +112,8 @@ onMounted(async () => {
     await relaisStore.charger()
     if (relaisStore.connexion) {
       brouillonRelais.relayUrl = relaisStore.connexion.relayUrl
-      brouillonRelais.jeton = relaisStore.connexion.jeton
+      // Jeton du relais jamais renvoyé par le serveur : vide = conservé.
+      brouillonRelais.jeton = ''
     }
   } catch {
     // Ignoré délibérément : voir le commentaire ci-dessus.
@@ -307,8 +308,22 @@ async function testerConnexionAuthentification(): Promise<void> {
         </label>
         <label>
           Jeton d'accès
-          <input v-model="brouillonRelais.jeton" type="password" required autocomplete="off" />
+          <input
+            v-model="brouillonRelais.jeton"
+            type="password"
+            :required="!relaisStore.connexion?.jetonConfigure"
+            autocomplete="off"
+            :placeholder="
+              relaisStore.connexion?.jetonConfigure
+                ? 'Jeton enregistré sur le serveur — laisser vide pour le conserver'
+                : ''
+            "
+          />
         </label>
+        <p class="aide-jeton">
+          Le jeton reste sur le serveur : l'assistant IA passe par le serveur, qui l'ajoute
+          lui-même.
+        </p>
         <div class="actions">
           <button type="button" @click="effacerRelais">Effacer</button>
           <button type="submit">Enregistrer</button>

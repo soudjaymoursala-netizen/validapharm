@@ -29,14 +29,16 @@ describe('useConnexionRelaisIAStore', () => {
       jeton: 'jeton-x',
     })
     expect(resultat).toEqual({ ok: true })
+    // Le jeton n'est jamais renvoyé au navigateur (écriture seule).
     expect(store.connexion).toEqual({
       relayUrl: 'https://relais.workers.dev',
-      jeton: 'jeton-x',
+      jetonConfigure: true,
     })
 
     const autreVue = useConnexionRelaisIAStore()
     await autreVue.charger()
     expect(autreVue.connexion).toEqual(store.connexion)
+    expect(JSON.stringify(autreVue.connexion)).not.toContain('jeton-x')
   })
 
   test('effacer supprime la configuration stockée', async () => {

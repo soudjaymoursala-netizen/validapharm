@@ -3869,8 +3869,59 @@ connexion » → un seul appel au relais, **zéro appel du navigateur vers
 api.github.com**, le Worker a réellement appelé GitHub qui a refusé le faux
 jeton → « Authentification refusée par l'API GitHub ».
 
-**Reste à traiter (même famille de risque)** : jetons du relais IA
-(`relais-ia`) et du relais OCR, et jeton Drive (`/drive/rafraichir-jeton`,
-connexions Drive par client) restent lisibles par le navigateur — même
-patron de relais applicable.
+**Suite traitée au §39** (relais IA, relais OCR, jeton de rafraîchissement
+Google).
+
+## 39. Secrets des paramètres jamais renvoyés + relais IA (25/09/2026)
+
+Suite directe du §38, même demande (« lance tous les chantiers »).
+
+**Constats** :
+- `relais-ia.jeton` et `relais-ocr.jeton` étaient renvoyés à tout compte
+  connecté (le navigateur appelait le relais IA directement avec) ;
+- plus grave : `drive-normes.refreshToken`, **jeton de rafraîchissement
+  Google longue durée**, était lui aussi renvoyé à tout compte connecté.
+
+**Correctif** :
+- Worker — `CHAMPS_SECRETS_PARAMETRE` (`github.jeton`, `relais-ia.jeton`,
+  `relais-ocr.jeton`, `drive-normes.refreshToken`) : jamais renvoyés
+  (lecture comme réponse d'enregistrement) → indicateur
+  `<champ>Configure: 'oui'|'non'` ; un enregistrement sans le secret
+  conserve celui en place (remplace le cas particulier `github` du §38 ;
+  `jeton_obligatoire` reste imposé au premier enregistrement `github`).
+  Non masqué : `drive-normes.jeton`, jeton d'accès Drive de 1h saisi à la
+  main et utilisé par le navigateur.
+- Worker — **`/relais-ia`** (`gererRelaisIA`) : session exigée ; `GET`
+  (test, jamais facturé) et `POST` (message, corps relayé tel quel) vers
+  l'URL du relais IA configuré, jeton ajouté côté serveur ; relais non
+  configuré → 404 `relais_ia_non_configure`, injoignable → 502.
+- `useConnexionRelaisIAStore.accesRelais()` : l'adaptateur IA appelle
+  `<Worker>/relais-ia` avec la session ; les 5 appelants
+  (`usePanneauChatStore`, `EditeurSection` ×2, `RevueStructureProcedure`,
+  `MissionWorkspace`) passent par lui. `ConnexionRelaisIA` et
+  `ConnexionRelaisOCR` ne contiennent plus de jeton.
+- `useNormativeDocumentsStore` : s'appuie sur `refreshTokenConfigure`
+  (jeton d'accès frais obtenu via `/drive/rafraichir-jeton`) ; ne relit
+  plus le `refreshToken` pour le préserver (le Worker le conserve).
+- `ConfigurationClient.vue` : champ jeton du relais IA comme pour GitHub.
+
+**Tests** : Worker (`/relais-ia` : 404 non configuré, 401 sans session,
+jeton ajouté, corps relayé ; secrets conservés au réenregistrement pour
+`relais-ia` et `drive-normes` et jamais renvoyés ; OCR et callback OAuth
+Google : secrets stockés mais jamais renvoyés) ; stores relais IA/OCR et
+panneau de chat (appel relayé, jeton jamais côté navigateur).
+`ConfigurationConnecteursQMS.test.ts` rendu robuste (attente bornée en
+temps, chargement initial attendu) après un échec intermittent sous
+charge.
+
+**Vérifié en navigateur réel** : jeton IA enregistré → champ vide avec
+placeholder après rechargement, aucune réponse ne le contient ; « Tester
+la connexion » → uniquement `GET /relais-ia` du Worker, **zéro appel du
+navigateur au relais IA**, relais injoignable → « Fournisseur IA
+indisponible ».
+
+**Reste lisible par le navigateur (assumé)** : le jeton d'accès Drive de
+courte durée (1h) renvoyé par `/drive/rafraichir-jeton` et les connexions
+Drive par client — le lecteur/miroir Drive tourne dans le navigateur ; un
+relais Drive serait le prochain pas si nécessaire.
 

@@ -584,4 +584,5 @@
 - **Alternatives écartées**: (1) GitHub App avec jetons courts par utilisateur — plus lourd (création d'app sur le compte GitHub de l'utilisateur, hors de portée sans son intervention) ; (2) déplacer toute la synchronisation côté Worker — refonte bien plus large pour le même gain de sécurité immédiat.
 - **Limite assumée**: un utilisateur connecté peut toujours, via le relais, écrire sur le dépôt de l'installation (c'est la fonction de synchronisation) ; il ne peut plus en revanche obtenir le jeton ni faire autre chose que les opérations listées.
 - **Reversibility**: Élevée — `GitHubConnector` garde son mode direct (utilisé par l'adaptateur QMS) ; revenir en arrière = reconstruire le connecteur sans `relais`.
+- **Extension (25/09/2026)**: même principe pour tous les secrets des paramètres d'installation (`CHAMPS_SECRETS_PARAMETRE` : jetons des relais IA/OCR, jeton de rafraîchissement Google) — jamais renvoyés, conservés au réenregistrement — et relais `/relais-ia` pour l'assistant IA. Seul le jeton d'accès Drive de courte durée reste côté navigateur (lecture/miroir Drive exécutés dans le navigateur).
 

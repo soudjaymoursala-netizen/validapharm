@@ -14,8 +14,14 @@ import ConfigurationConnecteursQMS from './ConfigurationConnecteursQMS.vue'
 // `flushPromises` seul ne suffit pas toujours à attendre la fin d'une
 // transaction IndexedDB (fake-indexeddb) déclenchée par un handler
 // d'événement — même patron que `ComputerSystemAssessment.test.ts`.
+/**
+ * Attente bornée dans le temps (2 s), pas en nombre de tours : ~250 ms
+ * suffisaient isolément mais pas sous la charge de la suite complète
+ * (échec intermittent constaté le 25/09/2026).
+ */
 async function attendreQue(condition: () => Promise<boolean> | boolean): Promise<void> {
-  for (let tentative = 0; tentative < 50; tentative++) {
+  const limite = Date.now() + 2000
+  while (Date.now() < limite) {
     await flushPromises()
     if (await condition()) return
     await new Promise((resolve) => setTimeout(resolve, 5))
@@ -102,6 +108,9 @@ describe('ConfigurationConnecteursQMS', () => {
       props: { clientId: 'client-1' },
       global: { plugins: [routeurDeTest()] },
     })
+    // Chargement initial terminé avant toute saisie : un chargement tardif
+    // ne doit pas se mêler à la création.
+    await attendreQue(() => wrapper.find('.formulaire').exists())
     await flushPromises()
 
     await wrapper.find('input[type="text"]').setValue('Dossier réseau')

@@ -45,10 +45,15 @@ async function obtenirConnexionDriveNormes(): Promise<ConnexionDriveLectureNorme
     CLE_PARAMETRE_DRIVE_NORMES,
   )
   if (!resultat.ok || !resultat.donnees.parametre) return null
+  // Le jeton de rafraîchissement Google n'est jamais renvoyé au navigateur
+  // (25/09/2026) : seul l'indicateur `refreshTokenConfigure` l'est ; le
+  // jeton d'accès frais (1h) est obtenu via le Worker.
   const valeur = resultat.donnees.parametre.valeur as unknown as ConnexionDriveLectureNormes & {
-    refreshToken?: string
+    refreshTokenConfigure?: string
   }
-  if (!valeur.refreshToken) return valeur
+  if (valeur.refreshTokenConfigure !== 'oui') {
+    return { dossierId: valeur.dossierId, jeton: valeur.jeton }
+  }
 
   const frais = await api.rafraichirJetonOAuthDrive(authStore.jeton)
   if (!frais.ok) throw new Error(`Échec du renouvellement du jeton Drive : ${frais.erreur}`)
@@ -278,15 +283,11 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     const api = await authStore.client()
     if (!api || !authStore.jeton) return { ok: false, erreur: 'relais_non_configure' }
 
-    const existant = await api.obtenirParametreInstallation(
-      authStore.jeton,
-      CLE_PARAMETRE_DRIVE_NORMES,
-    )
-    const refreshToken = existant.ok ? existant.donnees.parametre?.valeur.refreshToken : undefined
+    // Le jeton de rafraîchissement Google déjà connecté est conservé côté
+    // serveur (jamais relu ni renvoyé par le navigateur).
     const valeur: Record<string, string> = {
       dossierId: dossierId.trim(),
       jeton: jeton.trim(),
-      ...(refreshToken ? { refreshToken } : {}),
     }
     const resultat = await api.enregistrerParametreInstallation(
       authStore.jeton,

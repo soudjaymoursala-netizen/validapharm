@@ -158,6 +158,36 @@ function estCleParametreInstallationValide(cle: string): cle is CleParametreInst
   return (CLES_PARAMETRES_INSTALLATION as readonly string[]).includes(cle)
 }
 
+/**
+ * Champs secrets de chaque paramètre d'installation (25/09/2026) : jamais
+ * renvoyés au navigateur (lecture comme réponse d'enregistrement), remplacés
+ * par un indicateur `<champ>Configure: 'oui' | 'non'` ; un enregistrement
+ * qui ne les fournit pas conserve la valeur déjà en place. Les appels qui
+ * en ont besoin passent par un relais du Worker (`/github/api/*`,
+ * `/relais-ia`, `/drive/rafraichir-jeton`).
+ *
+ * Non masqué : `drive-normes.jeton`, jeton d'accès Drive de courte durée
+ * (1h) saisi manuellement, que le navigateur utilise directement.
+ */
+const CHAMPS_SECRETS_PARAMETRE: Record<CleParametreInstallation, readonly string[]> = {
+  github: ['jeton'],
+  'relais-ia': ['jeton'],
+  'relais-ocr': ['jeton'],
+  'drive-normes': ['refreshToken'],
+}
+
+function masquerSecretsParametre(
+  cle: CleParametreInstallation,
+  valeur: ValeurParametreInstallation,
+): ValeurParametreInstallation {
+  const secrets = CHAMPS_SECRETS_PARAMETRE[cle]
+  const masquee: ValeurParametreInstallation = Object.fromEntries(
+    Object.entries(valeur).filter(([champ]) => !secrets.includes(champ)),
+  )
+  for (const champ of secrets) masquee[`${champ}Configure`] = valeur[champ] ? 'oui' : 'non'
+  return masquee
+}
+
 export interface Contexte {
   utilisateursRepo: UtilisateursRepo
   clientsRepo: ClientsRepo
@@ -1746,6 +1776,11 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   }
   if (matchDocumentProjetId && request.method === 'DELETE') {
     return gererSupprimerDocumentProjet(request, ctx, entetes, matchDocumentProjetId[1] as string)
+  }
+
+  // --- Relais IA : le jeton du relais ne quitte jamais le serveur ---
+  if (chemin === '/relais-ia' && (request.method === 'GET' || request.method === 'POST')) {
+    return gererRelaisIA(request, ctx, entetes)
   }
 
   // --- Relais GitHub : le jeton du dépôt ne quitte jamais le serveur ---
@@ -9347,10 +9382,10 @@ async function gererObtenirParametreInstallation(
   // l'organisation — exactement ce que chacun devait ressaisir
   // manuellement avant cette migration (stockage local par poste).
   //
-  // **Exception `github` (25/09/2026)** : le PAT du dépôt n'est plus jamais
-  // renvoyé (même à un admin — écriture seule). Tous les appels GitHub
-  // passent par `gererRelaisGitHub`, qui l'ajoute côté serveur ; le
-  // navigateur ne reçoit que `jetonConfigure: 'oui' | 'non'`.
+  // **Secrets masqués (25/09/2026)** : `CHAMPS_SECRETS_PARAMETRE` (PAT
+  // GitHub, jetons des relais IA/OCR, jeton de rafraîchissement Google) ne
+  // sont plus jamais renvoyés, même à un admin — écriture seule ; les
+  // appels qui en ont besoin passent par un relais du Worker.
   const utilisateur = await authentifier(request, ctx)
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
   if (!estCleParametreInstallationValide(cle)) {
@@ -9358,20 +9393,12 @@ async function gererObtenirParametreInstallation(
   }
 
   const parametre = await ctx.parametresInstallationRepo.obtenir(cle)
-  if (parametre && cle === 'github') {
-    const { jeton, ...sansJeton } = parametre.valeur
-    return reponseJson(
-      {
-        parametre: {
-          ...parametre,
-          valeur: { ...sansJeton, jetonConfigure: jeton ? 'oui' : 'non' },
-        },
-      },
-      200,
-      entetes,
-    )
-  }
-  return reponseJson({ parametre }, 200, entetes)
+  if (!parametre) return reponseJson({ parametre: null }, 200, entetes)
+  return reponseJson(
+    { parametre: { ...parametre, valeur: masquerSecretsParametre(cle, parametre.valeur) } },
+    200,
+    entetes,
+  )
 }
 
 async function gererEnregistrerParametreInstallation(
@@ -9391,20 +9418,25 @@ async function gererEnregistrerParametreInstallation(
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
-  let valeur = corps.valeur
-  if (cle === 'github') {
-    // Le PAT n'étant plus jamais renvoyé au navigateur, un enregistrement
-    // sans jeton conserve le jeton déjà en place (modifier owner/repo/
-    // branche sans ressaisir le PAT). `jetonConfigure` n'est qu'un
-    // indicateur d'affichage, jamais stocké.
-    const { jetonConfigure: _indicateur, ...saisie } = valeur
-    void _indicateur
-    valeur = saisie
-    if (!valeur.jeton) {
-      const existant = await ctx.parametresInstallationRepo.obtenir('github')
-      if (!existant?.valeur.jeton) return reponseJson({ erreur: 'jeton_obligatoire' }, 400, entetes)
-      valeur = { ...valeur, jeton: existant.valeur.jeton }
-    }
+  // Les secrets n'étant plus jamais renvoyés au navigateur, un
+  // enregistrement qui ne les fournit pas conserve ceux déjà en place
+  // (ex. changer la branche GitHub sans ressaisir le PAT, ajuster le dossier
+  // Drive sans perdre la connexion Google). Les indicateurs `…Configure`
+  // ne sont jamais stockés.
+  const existant = await ctx.parametresInstallationRepo.obtenir(cle)
+  const secrets = CHAMPS_SECRETS_PARAMETRE[cle]
+  const indicateurs = secrets.map((champ) => `${champ}Configure`)
+  const valeur: ValeurParametreInstallation = Object.fromEntries(
+    Object.entries(corps.valeur).filter(
+      ([champ, contenu]) => !indicateurs.includes(champ) && !(secrets.includes(champ) && !contenu),
+    ),
+  )
+  for (const champ of secrets) {
+    const precedent = existant?.valeur[champ]
+    if (!valeur[champ] && precedent) valeur[champ] = precedent
+  }
+  if (cle === 'github' && !valeur.jeton) {
+    return reponseJson({ erreur: 'jeton_obligatoire' }, 400, entetes)
   }
 
   await ctx.parametresInstallationRepo.enregistrer(cle, valeur, acteur.id)
@@ -9547,6 +9579,50 @@ async function gererRelaisGitHub(
   // Statut de GitHub conservé tel quel : `GitHubConnector` en déduit les
   // mêmes erreurs typées qu'en appel direct (401, 404, 409/422, 403 quota).
   return new Response(await reponse.text(), { status: reponse.status, headers: entetesReponse })
+}
+
+// --- Relais IA (25/09/2026) ---
+//
+// Même principe que le relais GitHub : le navigateur appelait le relais IA
+// (Worker distinct qui masque la clé du fournisseur) avec un jeton lu dans
+// `parametres-installation/relais-ia`, donc lisible par tout compte. Il
+// appelle désormais `/relais-ia` avec sa session ; ce Worker ajoute le
+// jeton du relais IA côté serveur. `GET` = test de connexion (jamais
+// facturé), `POST` = message (corps relayé tel quel).
+
+async function gererRelaisIA(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const parametre = await ctx.parametresInstallationRepo.obtenir('relais-ia')
+  const relayUrl = parametre?.valeur.relayUrl
+  if (!relayUrl) return reponseJson({ erreur: 'relais_ia_non_configure' }, 404, entetes)
+
+  const jeton = parametre?.valeur.jeton
+  let reponse: Response
+  try {
+    reponse = await fetch(relayUrl, {
+      method: request.method,
+      headers: {
+        ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}),
+        ...(request.method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(request.method === 'POST' ? { body: await request.text() } : {}),
+    })
+  } catch {
+    return reponseJson({ erreur: 'relais_ia_injoignable' }, 502, entetes)
+  }
+  return new Response(await reponse.text(), {
+    status: reponse.status,
+    headers: {
+      ...entetes,
+      'Content-Type': reponse.headers.get('Content-Type') ?? 'application/json',
+    },
+  })
 }
 
 // --- Handlers : OAuth Google (Drive normes) ---

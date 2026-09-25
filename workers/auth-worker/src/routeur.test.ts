@@ -134,6 +134,8 @@ interface EntreeAuditJson {
 // une forme précise).
 interface CorpsReponse {
   erreur: string
+  /** Réponse relayée du relais IA (`/relais-ia`). */
+  texte: string
   jeton: string
   ok: boolean
   valide: boolean
@@ -8912,10 +8914,14 @@ describe('routerRequete — paramètres d’installation (dépôt GitHub, Relais
     const lecture = await requete(ctx, 'GET', '/parametres-installation/relais-ocr', {
       jeton: admin.jeton,
     })
+    // Jeton du relais jamais renvoyé (écriture seule), mais bien stocké.
     expect(lecture.corps.parametre?.valeur).toEqual({
       relayUrl: 'https://ocr-relay.workers.dev',
-      jeton: 'jeton-ocr',
+      jetonConfigure: 'oui',
     })
+    expect((await ctx.parametresInstallationRepo.obtenir('relais-ocr'))?.valeur.jeton).toBe(
+      'jeton-ocr',
+    )
   })
 
   test('sans authentification -> 401', async () => {
@@ -9458,10 +9464,16 @@ describe('routerRequete — OAuth Google (Drive normes)', () => {
     const parametre = await requete(ctx, 'GET', '/parametres-installation/drive-normes', {
       jeton: admin.jeton,
     })
+    // Jeton de rafraîchissement Google stocké, mais jamais renvoyé au
+    // navigateur (seul l'indicateur l'est).
     expect(parametre.corps.parametre?.valeur).toMatchObject({
       dossierId: 'dossier-existant-1',
-      refreshToken: 'jeton-refresh-1',
+      refreshTokenConfigure: 'oui',
     })
+    expect(JSON.stringify(parametre.corps)).not.toContain('jeton-refresh-1')
+    expect(
+      (await ctx.parametresInstallationRepo.obtenir('drive-normes'))?.valeur.refreshToken,
+    ).toBe('jeton-refresh-1')
 
     const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
     expect(audit.corps.entrees.some((e) => e.action === 'connexion_oauth_drive')).toBe(true)
@@ -9942,5 +9954,89 @@ describe('routerRequete — relais GitHub (le PAT ne quitte jamais le serveur)',
     )
     expect(reponse.status).toBe(404)
     expect(reponse.corps.erreur).toBe('github_non_configure')
+  })
+})
+
+describe('routerRequete — relais IA et secrets des paramètres (jamais renvoyés au navigateur)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  test('/relais-ia : session exigée, jeton du relais ajouté côté serveur, corps relayé tel quel', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const nonConfigure = await requete(ctx, 'POST', '/relais-ia', {
+      jeton: admin.jeton,
+      body: { mode: 'chat_normatif', question: 'Q' },
+    })
+    expect(nonConfigure.status).toBe(404)
+    expect(nonConfigure.corps.erreur).toBe('relais_ia_non_configure')
+
+    await requete(ctx, 'PUT', '/parametres-installation/relais-ia', {
+      jeton: admin.jeton,
+      body: { valeur: { relayUrl: 'https://relais-ia.example.workers.dev', jeton: 'jeton-ia' } },
+    })
+    const appels: { url: string; init: RequestInit | undefined }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        appels.push({ url, init })
+        return new Response(JSON.stringify({ texte: 'Réponse' }), { status: 200 })
+      }),
+    )
+
+    const sansSession = await requete(ctx, 'POST', '/relais-ia', {
+      body: { mode: 'chat_normatif', question: 'Q' },
+    })
+    expect(sansSession.status).toBe(401)
+    expect(appels).toHaveLength(0)
+
+    const message = await requete(ctx, 'POST', '/relais-ia', {
+      jeton: admin.jeton,
+      body: { mode: 'chat_normatif', question: 'Q' },
+    })
+    expect(message.status).toBe(200)
+    expect(message.corps.texte).toBe('Réponse')
+    expect(appels[0]?.url).toBe('https://relais-ia.example.workers.dev')
+    expect((appels[0]?.init?.headers as Record<string, string>).Authorization).toBe(
+      'Bearer jeton-ia',
+    )
+    expect(JSON.parse(appels[0]?.init?.body as string)).toEqual({
+      mode: 'chat_normatif',
+      question: 'Q',
+    })
+  })
+
+  test('réenregistrer sans secret conserve celui en place (relais IA, Drive normes)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    await requete(ctx, 'PUT', '/parametres-installation/relais-ia', {
+      jeton: admin.jeton,
+      body: { valeur: { relayUrl: 'https://a.workers.dev', jeton: 'jeton-ia' } },
+    })
+    await requete(ctx, 'PUT', '/parametres-installation/relais-ia', {
+      jeton: admin.jeton,
+      body: { valeur: { relayUrl: 'https://b.workers.dev', jeton: '', jetonConfigure: 'oui' } },
+    })
+    expect((await ctx.parametresInstallationRepo.obtenir('relais-ia'))?.valeur).toEqual({
+      relayUrl: 'https://b.workers.dev',
+      jeton: 'jeton-ia',
+    })
+
+    await ctx.parametresInstallationRepo.enregistrer(
+      'drive-normes',
+      { dossierId: 'd1', jeton: '', refreshToken: 'refresh-google' },
+      'admin',
+    )
+    const ajustement = await requete(ctx, 'PUT', '/parametres-installation/drive-normes', {
+      jeton: admin.jeton,
+      body: { valeur: { dossierId: 'd2', jeton: 'acces-court' } },
+    })
+    expect(JSON.stringify(ajustement.corps)).not.toContain('refresh-google')
+    expect((await ctx.parametresInstallationRepo.obtenir('drive-normes'))?.valeur).toEqual({
+      dossierId: 'd2',
+      jeton: 'acces-court',
+      refreshToken: 'refresh-google',
+    })
   })
 })

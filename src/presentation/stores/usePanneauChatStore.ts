@@ -180,8 +180,7 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
     return construireAdaptateursIA({
       estFournisseurCloud: estFournisseurCloud.value,
       nomFournisseurActuel: nomFournisseurActuel.value,
-      relayUrl: relaisStore.connexion?.relayUrl,
-      jetonRelais: relaisStore.connexion?.jeton,
+      ...relaisStore.accesRelais(),
     })
   }
 

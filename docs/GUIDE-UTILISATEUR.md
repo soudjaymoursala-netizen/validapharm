@@ -208,7 +208,12 @@ l'installation). » à la place de la confirmation.
 | Champ | Type | Obligatoire | Placeholder |
 |---|---|---|---|
 | URL du relais | URL | oui | `https://relais.exemple.workers.dev` |
-| Jeton d'accès | mot de passe | oui | — |
+| Jeton d'accès | mot de passe | oui à la première configuration, ensuite facultatif | `Jeton enregistré sur le serveur — laisser vide pour le conserver` (si un jeton existe déjà) |
+
+**Le jeton du relais IA reste sur le serveur** (depuis le 25/09/2026) : il n'est
+jamais renvoyé au navigateur ; l'assistant IA (panneau de chat, éditeur de
+section, procédures, missions) passe par le serveur d'authentification, qui
+l'ajoute lui-même. Laisser le champ vide conserve le jeton existant.
 
 Mêmes boutons « Effacer » / « Enregistrer » (affiche aussi brièvement
 « ✓ Enregistré. » ; pas de test de connexion sur ce bloc) — même

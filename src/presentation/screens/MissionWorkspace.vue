@@ -188,8 +188,7 @@ async function raisonner(): Promise<void> {
     const { principal, local } = construireAdaptateursIA({
       estFournisseurCloud,
       nomFournisseurActuel: nomFournisseurActuel.value,
-      relayUrl: relaisStore.connexion?.relayUrl,
-      jetonRelais: relaisStore.connexion?.jeton,
+      ...relaisStore.accesRelais(),
     })
     await reasoningStore.executerRaisonnement(props.clientId, {
       objectif: objectifRaisonnement.value,
