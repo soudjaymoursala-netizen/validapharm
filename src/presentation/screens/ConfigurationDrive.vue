@@ -50,8 +50,18 @@ async function enregistrer(): Promise<void> {
   resultatTest.value = undefined
 }
 
+const erreurEffacement = ref<string | null>(null)
+
 async function effacer(): Promise<void> {
-  await connexionStore.effacer(props.clientId)
+  erreurEffacement.value = null
+  try {
+    await connexionStore.effacer(props.clientId)
+  } catch (e) {
+    // La connexion est toujours enregistrée côté serveur : ne pas vider le
+    // formulaire comme si l'effacement avait réussi.
+    erreurEffacement.value = e instanceof Error ? e.message : "Échec de l'effacement."
+    return
+  }
   brouillon.dossierId = ''
   brouillon.jeton = ''
   resultatTest.value = undefined
@@ -99,6 +109,9 @@ async function sauvegarderMaintenant(): Promise<void> {
           <button type="button" @click="effacer">Effacer</button>
           <button type="submit">Enregistrer</button>
         </div>
+        <p v-if="erreurEffacement" class="message-miroir message-miroir--erreur" role="alert">
+          {{ erreurEffacement }}
+        </p>
       </form>
 
       <div class="test-connexion">

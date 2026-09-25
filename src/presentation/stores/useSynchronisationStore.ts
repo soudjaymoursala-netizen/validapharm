@@ -11,6 +11,11 @@ import {
   type ChoixResolutionChamp,
 } from '../../logique-metier/resolution-conflit/diffChamps'
 import type { Project, Section } from '../../logique-metier/domaine/types'
+import {
+  controlerFichierRecupere,
+  raisonRefusServeur,
+  type TypeFichierRecupere,
+} from '../../logique-metier/securite/controleFichierRecupere'
 import { db } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
 import { useConnexionGitHubStore } from './useConnexionGitHubStore'
@@ -22,7 +27,16 @@ export type ResultatSynchronisation =
   | { ok: false; conflit: true }
   | { ok: false; conflit: false; message: string }
 
-export type ResultatRecuperation = { ok: true; nbFichiers: number } | { ok: false; message: string }
+/** Fichier GitHub non restauré, avec sa raison — jamais un refus silencieux. */
+export interface ElementRefuseRecuperation {
+  type: TypeFichierRecupere
+  chemin: string
+  raison: string
+}
+
+export type ResultatRecuperation =
+  | { ok: true; nbFichiers: number; refuses: ElementRefuseRecuperation[] }
+  | { ok: false; message: string }
 
 export interface ConflitEnregistrement {
   type: 'project' | 'section'
@@ -179,6 +193,13 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
    * récupération après conflit détecté par `synchroniser()`. Écrasement
    * délibéré (pas de fusion) : à utiliser en connaissance de cause,
    * jamais déclenché automatiquement.
+   *
+   * **Sécurité (25/09/2026)** : chaque fichier est contrôlé avant envoi
+   * (`controlerFichierRecupere` : JSON lisible, structure minimale,
+   * identifiant = nom du fichier), puis la réponse du serveur est
+   * vérifiée (droits réels). Tout fichier écarté est listé dans
+   * `refuses` avec sa raison ; seuls les fichiers réellement restaurés
+   * sont comptés.
    */
   async function recupererDepuisGitHub(): Promise<ResultatRecuperation> {
     const connecteur = await obtenirConnecteur()
@@ -193,32 +214,58 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
       const entreesSections = arborescence.filter((e) => e.chemin.startsWith('data/sections/'))
 
       const apiClient = await obtenirApi()
-      for (const entree of entreesProjets) {
-        const contenu = await connecteur.lireBlob(entree.sha)
-        const projet = JSON.parse(contenu) as Project
-        if (apiClient) {
-          await apiClient.api.restaurerProjet(
-            apiClient.jeton,
-            projet.id,
-            projetDomaineVersWireComplet(projet),
-          )
+      if (!apiClient) {
+        return {
+          ok: false,
+          message: "Relais d'authentification non configuré : rien n'a été récupéré.",
         }
       }
-      for (const entree of entreesSections) {
-        const contenu = await connecteur.lireBlob(entree.sha)
-        const section = JSON.parse(contenu) as Section
-        if (apiClient) {
-          await apiClient.api.restaurerSection(
-            apiClient.jeton,
-            section.id,
-            sectionDomaineVersWire(section),
+
+      const refuses: ElementRefuseRecuperation[] = []
+      let nbFichiers = 0
+      // Projets d'abord : une section ne peut être restaurée que dans un
+      // projet existant.
+      for (const [type, entrees] of [
+        ['project', entreesProjets],
+        ['section', entreesSections],
+      ] as const) {
+        for (const entree of entrees) {
+          const controle = controlerFichierRecupere(
+            type,
+            entree.chemin,
+            await connecteur.lireBlob(entree.sha),
           )
+          if (!controle.ok) {
+            refuses.push({ type, chemin: entree.chemin, raison: controle.raison })
+            continue
+          }
+          const resultat =
+            type === 'project'
+              ? await apiClient.api.restaurerProjet(
+                  apiClient.jeton,
+                  controle.donnees.id as string,
+                  projetDomaineVersWireComplet(controle.donnees as unknown as Project),
+                )
+              : await apiClient.api.restaurerSection(
+                  apiClient.jeton,
+                  controle.donnees.id as string,
+                  sectionDomaineVersWire(controle.donnees as unknown as Section),
+                )
+          if (resultat.ok) {
+            nbFichiers += 1
+          } else {
+            refuses.push({
+              type,
+              chemin: entree.chemin,
+              raison: raisonRefusServeur(resultat.status, resultat.erreur),
+            })
+          }
         }
       }
 
       const shaActuel = await connecteur.shaBrancheActuel()
       await enregistrerNouvelEtat(shaActuel)
-      return { ok: true, nbFichiers: entreesProjets.length + entreesSections.length }
+      return { ok: true, nbFichiers, refuses }
     } catch (erreur) {
       return {
         ok: false,
@@ -304,13 +351,22 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
     }
 
     const maintenant = new Date().toISOString()
+    const refusesResolution: string[] = []
     for (const { conflit, choix } of resolutions) {
       const motif = construireMotifResolution(choix)
       if (conflit.type === 'project') {
         const apiClient = await obtenirApi()
-        if (!apiClient) continue
+        if (!apiClient) {
+          refusesResolution.push(`projet ${conflit.id} : relais d'authentification non configuré`)
+          continue
+        }
         const resultatLocal = await apiClient.api.obtenirProjet(apiClient.jeton, conflit.id)
-        if (!resultatLocal.ok) continue
+        if (!resultatLocal.ok) {
+          refusesResolution.push(
+            `projet ${conflit.id} : ${raisonRefusServeur(resultatLocal.status, resultatLocal.erreur)}`,
+          )
+          continue
+        }
         const local = projetWireVersDomaine(resultatLocal.donnees.projet)
         const fusionne = appliquerResolutions(
           local,
@@ -329,16 +385,28 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
             },
           ],
         }
-        await apiClient.api.restaurerProjet(
+        const ecriture = await apiClient.api.restaurerProjet(
           apiClient.jeton,
           conflit.id,
           projetDomaineVersWireComplet(projetFinal),
         )
+        if (!ecriture.ok)
+          refusesResolution.push(
+            `projet ${conflit.id} : ${raisonRefusServeur(ecriture.status, ecriture.erreur)}`,
+          )
       } else {
         const apiClient = await obtenirApi()
-        if (!apiClient) continue
+        if (!apiClient) {
+          refusesResolution.push(`section ${conflit.id} : relais d'authentification non configuré`)
+          continue
+        }
         const resultatLocal = await apiClient.api.obtenirSection(apiClient.jeton, conflit.id)
-        if (!resultatLocal.ok) continue
+        if (!resultatLocal.ok) {
+          refusesResolution.push(
+            `section ${conflit.id} : ${raisonRefusServeur(resultatLocal.status, resultatLocal.erreur)}`,
+          )
+          continue
+        }
         const local = sectionWireVersDomaine(resultatLocal.donnees.section)
         const fusionne = appliquerResolutions(
           local,
@@ -357,11 +425,25 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
             { version: local.meta.version, date: maintenant, auteur: local.owner_id, motif },
           ],
         }
-        await apiClient.api.restaurerSection(
+        const ecriture = await apiClient.api.restaurerSection(
           apiClient.jeton,
           conflit.id,
           sectionDomaineVersWire(sectionFinale),
         )
+        if (!ecriture.ok)
+          refusesResolution.push(
+            `section ${conflit.id} : ${raisonRefusServeur(ecriture.status, ecriture.erreur)}`,
+          )
+      }
+    }
+
+    // Sécurité : si le serveur a refusé une écriture, ne JAMAIS pousser
+    // vers GitHub un état qui ne contient pas la résolution choisie.
+    if (refusesResolution.length > 0) {
+      return {
+        ok: false,
+        conflit: false,
+        message: `Résolution interrompue, rien n'a été envoyé vers GitHub — ${refusesResolution.join(' ; ')}`,
       }
     }
 

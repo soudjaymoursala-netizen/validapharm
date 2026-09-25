@@ -93,4 +93,16 @@ describe('AdminUtilisateurs — gestion des comptes', () => {
     await attendreQue(() => ligneEmploye()?.find('.badge--desactive').exists() ?? false)
     expect(ligneEmployeOuEchec().text()).toContain('desactive')
   })
+
+  test('le dernier admin actif ne peut pas se rétrograder : refus expliqué, rôle inchangé', async () => {
+    const wrapper = mount(AdminUtilisateurs, { global: { stubs: { RouterLink: true } } })
+    await attendreQue(() => wrapper.text().includes('admin@pharmatech.example'))
+
+    const rétrograder = wrapper.findAll('button').find((b) => b.text() === 'Rétrograder')
+    await rétrograder?.trigger('click')
+    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('dernier administrateur actif')
+    expect(wrapper.find('.badge--admin').exists()).toBe(true)
+  })
 })

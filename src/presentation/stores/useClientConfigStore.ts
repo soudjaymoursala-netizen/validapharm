@@ -128,12 +128,16 @@ export const useClientConfigStore = defineStore('clientConfig', () => {
     const api = await authStore.client()
     if (!api || !authStore.jeton) return
     const existant = await api.obtenirClientConfig(authStore.jeton, clientId)
-    if (existant.ok && existant.donnees.clientConfig === null) {
-      await api.enregistrerClientConfig(
+    // Copie locale conservée tant que l'écriture n'est pas confirmée
+    // (avant : effacée même en cas d'échec — perte de configuration).
+    if (!existant.ok) return
+    if (existant.donnees.clientConfig === null) {
+      const ecriture = await api.enregistrerClientConfig(
         authStore.jeton,
         clientId,
         clientConfigDomaineVersWire(locale),
       )
+      if (!ecriture.ok) return
     }
     clientConfigsAMigrer.splice(index, 1)
   }

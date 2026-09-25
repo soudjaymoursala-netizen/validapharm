@@ -422,6 +422,28 @@ describe('useSynchronisationStore — analyserConflit', () => {
 })
 
 describe('useSynchronisationStore — confirmerResolutionConflits', () => {
+  test('sécurité : un élément refusé par le serveur interrompt la résolution, rien n’est poussé vers GitHub', async () => {
+    await configurerConnexion()
+    const resultat = await useSynchronisationStore().confirmerResolutionConflits([
+      {
+        conflit: {
+          type: 'project',
+          id: 'projet-inaccessible',
+          local: {},
+          distant: {},
+          divergences: [],
+        },
+        choix: [],
+      },
+    ])
+    expect(resultat.ok).toBe(false)
+    if (!resultat.ok && !resultat.conflit) {
+      expect(resultat.message).toContain("rien n'a été envoyé vers GitHub")
+      expect(resultat.message).toContain('projet-inaccessible')
+    }
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   test('applique le choix par champ, journalise le motif structuré, puis repousse via synchroniser()', async () => {
     await configurerConnexion()
     await seedProjet({
@@ -555,10 +577,96 @@ describe('useSynchronisationStore — recupererDepuisGitHub', () => {
 
     const store = useSynchronisationStore()
     const resultat = await store.recupererDepuisGitHub()
-    expect(resultat).toEqual({ ok: true, nbFichiers: 1 })
+    expect(resultat).toEqual({ ok: true, nbFichiers: 1, refuses: [] })
 
     const projetEnBase = await obtenirProjetDeTest('p1')
     expect(projetEnBase?.name).toBe('Récupéré')
     expect((await db.etatSynchronisation.get('unique'))?.shaBrancheConnue).toBe('sha-post-pull')
+  })
+
+  test('sécurité : fichier altéré, JSON illisible et refus serveur sont écartés et listés, jamais restaurés en silence', async () => {
+    await configurerConnexion()
+    const projetValide = {
+      id: 'p1',
+      name: 'Récupéré',
+      context: '',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+      sections: [],
+      documents: [],
+      links: [],
+      statut: 'actif',
+      phase: 'concept',
+      owner_id: 'admin@pharmatech.example',
+      shared_with: [],
+      archived_at: null,
+      archived_by: null,
+      audit_log: [],
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    }
+    // Fichier `p2.json` dont le contenu prétend être `p1` : écraserait p1.
+    const usurpe = { ...projetValide, name: 'Usurpé' }
+    const sectionOrpheline = {
+      id: 's9',
+      project_id: 'projet-inexistant',
+      template_type: 'oq',
+      template_engine_version: '0.1.0',
+      owner_id: 'admin@pharmatech.example',
+      shared_with: [],
+      language: 'fr',
+      status: 'brouillon_aide',
+      meta: { ref: '', titre: 't', version: '0.1' },
+      workflow: { authors: [], reviewers: [], approver_final: null },
+      signatures: { redacteur: {}, verificateur: {}, approbateur: {} },
+      revisions: [],
+      values: {},
+      tables: {},
+      generation_source: { source_document_id: null, generated_fields: [] },
+      procedure_id: null,
+      asset_node_id: null,
+      audit_log: [],
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    }
+
+    fetchMock
+      .mockResolvedValueOnce(
+        reponseMock({
+          tree: [
+            { path: 'data/projects/p1.json', type: 'blob', sha: 'sha-p1' },
+            { path: 'data/projects/p2.json', type: 'blob', sha: 'sha-p2' },
+            { path: 'data/projects/p3.json', type: 'blob', sha: 'sha-p3' },
+            { path: 'data/sections/s9.json', type: 'blob', sha: 'sha-s9' },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        reponseMock({ content: encoderBase64Utf8(JSON.stringify(projetValide)) }),
+      )
+      .mockResolvedValueOnce(reponseMock({ content: encoderBase64Utf8(JSON.stringify(usurpe)) }))
+      .mockResolvedValueOnce(reponseMock({ content: encoderBase64Utf8('{pas du json') }))
+      .mockResolvedValueOnce(
+        reponseMock({ content: encoderBase64Utf8(JSON.stringify(sectionOrpheline)) }),
+      )
+      .mockResolvedValueOnce(reponseMock({ object: { sha: 'sha-post-pull' } }))
+
+    const resultat = await useSynchronisationStore().recupererDepuisGitHub()
+    if (!resultat.ok) throw new Error(resultat.message)
+    expect(resultat.nbFichiers).toBe(1)
+    expect(resultat.refuses.map((r) => r.chemin)).toEqual([
+      'data/projects/p2.json',
+      'data/projects/p3.json',
+      'data/sections/s9.json',
+    ])
+    expect(resultat.refuses[0]?.raison).toContain('nom du fichier')
+    expect(resultat.refuses[1]?.raison).toContain('JSON invalide')
+    expect(resultat.refuses[2]?.raison).toContain('refusé par le serveur')
+
+    // Le contenu usurpé n'a jamais écrasé p1.
+    expect((await obtenirProjetDeTest('p1'))?.name).toBe('Récupéré')
   })
 })

@@ -1419,6 +1419,41 @@ describe('routerRequete — administration des comptes (admin uniquement)', () =
     expect(modifie.corps.utilisateur.statut).toBe('desactive')
   })
 
+  test('jamais zéro admin actif : le dernier admin ne peut être ni rétrogradé ni désactivé (409)', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const me = await requete(ctx, 'GET', '/auth/me', { jeton: admin.jeton })
+    const idAdmin = me.corps.utilisateur.id
+
+    for (const body of [{ role: 'utilisateur' }, { statut: 'desactive' }]) {
+      const refus = await requete(ctx, 'PATCH', `/admin/utilisateurs/${idAdmin}`, {
+        jeton: admin.jeton,
+        body,
+      })
+      expect(refus.status).toBe(409)
+      expect(refus.corps.erreur).toBe('dernier_admin')
+    }
+    expect((await ctx.utilisateursRepo.parId(idAdmin))?.role).toBe('admin')
+
+    // Avec un second admin actif, la rétrogradation redevient possible.
+    const second = await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'second-admin@pharmatech.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'N',
+        prenom: 'P',
+        role: 'admin',
+      },
+    })
+    expect(second.status).toBe(201)
+    const retrogradation = await requete(ctx, 'PATCH', `/admin/utilisateurs/${idAdmin}`, {
+      jeton: admin.jeton,
+      body: { role: 'utilisateur' },
+    })
+    expect(retrogradation.status).toBe(200)
+  })
+
   test('lister les utilisateurs est réservé à un admin', async () => {
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
@@ -9695,6 +9730,54 @@ describe('routerRequete — protection réelle projets/sections/documents (déci
     })
     expect(restauration.status).toBe(403)
     expect(await ctx.projectsRepo.obtenirProjet('p-fabrique')).toBeNull()
+  })
+
+  test('seuls le créateur et un admin gèrent le partage, jamais un partagé en édition', async () => {
+    const { ctx, admin, a, b, c, projectId } = await preparer()
+    await requete(ctx, 'POST', `/projects/${projectId}/partage`, {
+      jeton: a.jeton,
+      body: { userId: b.email, accessLevel: 'édition' },
+    })
+
+    // B (édition) modifie le contenu, mais ne distribue ni ne retire de droits.
+    const ajoutParB = await requete(ctx, 'POST', `/projects/${projectId}/partage`, {
+      jeton: b.jeton,
+      body: { userId: c.email, accessLevel: 'édition' },
+    })
+    expect(ajoutParB.status).toBe(403)
+    const retraitParB = await requete(
+      ctx,
+      'DELETE',
+      `/projects/${projectId}/partage/${encodeURIComponent(b.email)}`,
+      { jeton: b.jeton },
+    )
+    expect(retraitParB.status).toBe(403)
+    const s1 = (await requete(ctx, 'GET', '/sections/s1', { jeton: b.jeton })).corps.section
+    const partageSection = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...s1, sharedWith: [{ userId: c.email, accessLevel: 'édition' }] },
+    })
+    expect(partageSection.status).toBe(403)
+    const contenuSection = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...s1, values: { contenu: 'Rédigé par B' } },
+    })
+    expect(contenuSection.status).toBe(200)
+
+    // Le créateur et un admin, eux, peuvent.
+    const ajoutParA = await requete(ctx, 'POST', `/projects/${projectId}/partage`, {
+      jeton: a.jeton,
+      body: { userId: c.email, accessLevel: 'lecture' },
+    })
+    expect(ajoutParA.status).toBe(200)
+    const retraitParAdmin = await requete(
+      ctx,
+      'DELETE',
+      `/projects/${projectId}/partage/${encodeURIComponent(c.email)}`,
+      { jeton: admin.jeton },
+    )
+    expect(retraitParAdmin.status).toBe(200)
+    expect(retraitParAdmin.corps.projet.sharedWith.map((p) => p.userId)).toEqual([b.email])
   })
 
   test('un admin voit et modifie tout', async () => {

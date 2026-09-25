@@ -495,7 +495,9 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     const authStore = useAuthStore()
     const api = await authStore.client()
     if (api && authStore.jeton) {
-      await api.supprimerDocumentNormatif(authStore.jeton, documentId)
+      const resultat = await api.supprimerDocumentNormatif(authStore.jeton, documentId)
+      // Jamais retirer de l'écran un document que le serveur a conservé.
+      if (!resultat.ok) throw new Error(`Échec de la suppression : ${resultat.erreur}`)
     }
     documents.value = documents.value.filter((d) => d.id !== documentId)
   }
