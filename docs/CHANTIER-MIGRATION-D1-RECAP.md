@@ -3649,7 +3649,7 @@ pour chacune. Toutes implémentées, testées, documentées dans la même PR.
   lisible, 6 cas retest dans `readinessContentPlan.test.ts`, écran
   `EditeurSection.lectureSeule.test.ts`.
 
-### 33.3 Points ouverts / suites possibles
+### 33.3 Points ouverts / suites possibles — **tranchés, voir §34**
 
 - La récupération GitHub (`recupererDepuisGitHub`) ignore silencieusement
   les refus serveur (résultat de `restaurerProjet`/`restaurerSection` non
@@ -3659,4 +3659,57 @@ pour chacune. Toutes implémentées, testées, documentées dans la même PR.
 - `gererPartagerProjet` laisse un partagé **en édition** modifier le
   partage (comportement antérieur, non modifié ici) — à confirmer avec
   l'utilisateur si seul le propriétaire doit pouvoir partager.
+
+## 34. Partage réservé au créateur + récupération GitHub sécurisée (25/09/2026)
+
+Réponses de l'utilisateur aux deux points ouverts du §33.3 :
+« seul le créateur et l'admin doivent donner ces privilèges » et « pour le
+GitHub rajoute une sécurité ».
+
+**Note sur la PR #93** : fusionnée sans relecture humaine (5 min après
+ouverture) ; le contrôle de sécurité de l'environnement l'a signalé.
+Désormais, **aucune fusion sans accord explicite de l'utilisateur**.
+
+### 34.1 Partage : créateur et admin uniquement
+
+- Worker : `peutGererPartageProjet` (admin ou `ownerId`) sur
+  `POST /projects/:id/partage` et `DELETE /projects/:id/partage/:userId`
+  (avant : tout partagé en édition). La restauration d'un projet réutilise
+  la même règle pour `ownerId`/`sharedWith`.
+- Sections : `droitsSection` renvoie `gererPartage` (admin, créateur du
+  projet, créateur de la section) ; `PUT /sections/:id` et la restauration
+  refusent (403) un changement d'`ownerId`/`sharedWith` par un partagé en
+  édition, qui peut toujours modifier le contenu.
+- `partageModifie` compare les listes indépendamment de l'ordre (entrées
+  et clés JSON) : aucun refus à tort d'une simple modification de contenu.
+- Front : `peutGererPartageProjet` (`permissionsProjet.ts`) ;
+  `FicheProjet.vue` n'affiche le formulaire de partage et les boutons
+  « Retirer » qu'au créateur/admin, avec une explication pour un partagé
+  en édition.
+
+### 34.2 Récupération GitHub sécurisée
+
+- `logique-metier/securite/controleFichierRecupere.ts` (pur, testé) :
+  refuse JSON illisible, structure minimale absente, et surtout un
+  **identifiant différent du nom du fichier** (un `p2.json` contenant l'id
+  `p1` écraserait `p1`). `raisonRefusServeur` traduit 403/404/400.
+- `recupererDepuisGitHub` : contrôle chaque fichier, vérifie chaque
+  réponse du serveur, renvoie `refuses[]` (chemin + raison) ; ne compte
+  que les fichiers réellement restaurés ; relais absent → erreur explicite
+  (avant : « succès » sans rien restaurer).
+- `confirmerResolutionConflits` : tout refus (lecture ou écriture) est
+  collecté ; s'il y en a, **rien n'est poussé vers GitHub** (avant : les
+  refus étaient ignorés puis l'état non résolu était poussé).
+- `TableauDeBord.vue` : confirmation avant écrasement ; liste des fichiers
+  écartés avec leur raison.
+
+### 34.3 Tests
+
+Worker : partagé en édition refusé (403) pour ajouter/retirer un partage
+et changer le partage d'une section, contenu toujours modifiable ;
+créateur et admin autorisés. Front : `controleFichierRecupere.test.ts`
+(5 cas), `permissionsProjet.test.ts` (partage, section),
+`synchronisation.test.ts` (fichier altéré + JSON illisible + refus
+serveur listés, p1 jamais écrasé ; résolution refusée → aucun appel
+GitHub).
 

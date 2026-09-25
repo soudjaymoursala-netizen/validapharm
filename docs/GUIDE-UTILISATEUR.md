@@ -488,6 +488,20 @@ Deux boutons toujours visibles :
 - **« Synchroniser vers GitHub »** (devient « Synchronisation… ») : pousse l'état
   local (projets + sections) vers le dépôt.
 - **« Récupérer depuis GitHub »** : rapatrie l'état distant vers la base locale.
+  **Sécurités** (depuis le 25/09/2026) :
+  - une **confirmation** est demandée avant l'écrasement ;
+  - chaque fichier du dépôt est **contrôlé avant restauration** : JSON lisible,
+    structure minimale (identifiant, propriétaire, partage, projet de
+    rattachement d'une section), et **identifiant identique au nom du
+    fichier** — un fichier altéré qui prétendrait être un autre projet n'est
+    jamais restauré ;
+  - le serveur applique les droits réels : on ne restaure que ce qu'on a le
+    droit de modifier ;
+  - tout fichier écarté est **listé à l'écran avec sa raison** (« {n}
+    fichier(s) récupéré(s), {m} écarté(s) par sécurité : … »), jamais ignoré
+    en silence.
+  Lors d'une **résolution de conflit**, si le serveur refuse l'un des
+  éléments, la résolution s'arrête et **rien n'est envoyé vers GitHub**.
 
 Messages possibles après une synchronisation :
 - Succès : « {n} fichier(s) synchronisé(s). »
@@ -558,12 +572,18 @@ qui n'a ni accès au client du projet, ni partage, ni rôle admin ; toute
 **refusée** à qui n'est ni créateur, ni partagé en édition, ni admin. Un projet
 ne peut être rattaché qu'à un client auquel on a accès, et jamais créé au nom
 d'une autre personne. Une personne partagée en édition peut modifier le projet
-mais pas s'en attribuer la propriété via une restauration.
+mais ni s'en attribuer la propriété, ni gérer le partage (réservé au créateur et
+aux admins).
 
 Formulaire d'ajout d'un partage : email (obligatoire) + niveau d'accès
 (**lecture** / **édition**) → bouton **« Partager »**. Chaque partage déjà
 accordé peut être retiré (« Retirer »). État vide : « Pas encore partagé avec
 personne d'autre. »
+
+**Seuls le créateur du projet et les administrateurs** voient ce formulaire et
+les boutons « Retirer » (décision du 25/09/2026). Une personne partagée en
+édition modifie le contenu mais ne peut ni ajouter ni retirer quelqu'un, ni
+changer le partage d'une section — le serveur le refuse aussi.
 
 Si vous n'êtes ni le créateur, ni une personne partagée en édition, ni
 administrateur, un message « Lecture seule — vous n'êtes ni créateur ni partagé

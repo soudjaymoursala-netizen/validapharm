@@ -56,3 +56,17 @@ export function peutModifierSection(
     (partage) => partage.user_id === userId && partage.access_level === 'édition',
   )
 }
+
+/**
+ * Gérer le partage d'un projet (ajouter/retirer une personne) : réservé au
+ * créateur et aux admins (décision utilisateur du 25/09/2026) — une
+ * personne partagée en édition modifie le contenu, jamais les droits.
+ * Même règle que `peutGererPartageProjet` côté Worker.
+ */
+export function peutGererPartageProjet(
+  project: Pick<Project, 'owner_id'>,
+  userId: string,
+  estAdmin: boolean,
+): boolean {
+  return estAdmin || project.owner_id === userId
+}

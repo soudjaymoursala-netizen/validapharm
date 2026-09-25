@@ -9697,6 +9697,54 @@ describe('routerRequete — protection réelle projets/sections/documents (déci
     expect(await ctx.projectsRepo.obtenirProjet('p-fabrique')).toBeNull()
   })
 
+  test('seuls le créateur et un admin gèrent le partage, jamais un partagé en édition', async () => {
+    const { ctx, admin, a, b, c, projectId } = await preparer()
+    await requete(ctx, 'POST', `/projects/${projectId}/partage`, {
+      jeton: a.jeton,
+      body: { userId: b.email, accessLevel: 'édition' },
+    })
+
+    // B (édition) modifie le contenu, mais ne distribue ni ne retire de droits.
+    const ajoutParB = await requete(ctx, 'POST', `/projects/${projectId}/partage`, {
+      jeton: b.jeton,
+      body: { userId: c.email, accessLevel: 'édition' },
+    })
+    expect(ajoutParB.status).toBe(403)
+    const retraitParB = await requete(
+      ctx,
+      'DELETE',
+      `/projects/${projectId}/partage/${encodeURIComponent(b.email)}`,
+      { jeton: b.jeton },
+    )
+    expect(retraitParB.status).toBe(403)
+    const s1 = (await requete(ctx, 'GET', '/sections/s1', { jeton: b.jeton })).corps.section
+    const partageSection = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...s1, sharedWith: [{ userId: c.email, accessLevel: 'édition' }] },
+    })
+    expect(partageSection.status).toBe(403)
+    const contenuSection = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...s1, values: { contenu: 'Rédigé par B' } },
+    })
+    expect(contenuSection.status).toBe(200)
+
+    // Le créateur et un admin, eux, peuvent.
+    const ajoutParA = await requete(ctx, 'POST', `/projects/${projectId}/partage`, {
+      jeton: a.jeton,
+      body: { userId: c.email, accessLevel: 'lecture' },
+    })
+    expect(ajoutParA.status).toBe(200)
+    const retraitParAdmin = await requete(
+      ctx,
+      'DELETE',
+      `/projects/${projectId}/partage/${encodeURIComponent(c.email)}`,
+      { jeton: admin.jeton },
+    )
+    expect(retraitParAdmin.status).toBe(200)
+    expect(retraitParAdmin.corps.projet.sharedWith.map((p) => p.userId)).toEqual([b.email])
+  })
+
   test('un admin voit et modifie tout', async () => {
     const { ctx, admin, projectId, documentId } = await preparer()
     expect(

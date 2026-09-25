@@ -8038,8 +8038,8 @@ async function droitsSection(
   ctx: Contexte,
   section: Pick<SectionEnregistree, 'projectId' | 'ownerId' | 'sharedWith'>,
   utilisateur: UtilisateurEnregistre,
-): Promise<{ voir: boolean; modifier: boolean }> {
-  if (utilisateur.role === 'admin') return { voir: true, modifier: true }
+): Promise<{ voir: boolean; modifier: boolean; gererPartage: boolean }> {
+  if (utilisateur.role === 'admin') return { voir: true, modifier: true, gererPartage: true }
   const proprietaire = section.ownerId === utilisateur.email
   const partage = (section.sharedWith ?? []).find((p) => p.userId === utilisateur.email)
   const projet = await ctx.projectsRepo.obtenirProjet(section.projectId)
@@ -8048,7 +8048,29 @@ async function droitsSection(
   return {
     voir: voirProjet || proprietaire || partage !== undefined,
     modifier: modifierProjet || proprietaire || partage?.accessLevel === 'édition',
+    // Créateur de la section, créateur du projet ou admin — jamais un
+    // simple partagé en édition (décision du 25/09/2026).
+    gererPartage: proprietaire || (projet !== null && peutGererPartageProjet(projet, utilisateur)),
   }
+}
+
+/**
+ * Vrai si l'écriture change le propriétaire ou la liste de partage —
+ * comparaison indépendante de l'ordre (des entrées comme des clés JSON),
+ * pour ne jamais refuser à tort une modification de contenu légitime.
+ */
+function partageModifie(
+  existant: { ownerId: string; sharedWith?: { userId: string; accessLevel: string }[] },
+  nouveau: { ownerId?: string; sharedWith?: { userId: string; accessLevel: string }[] },
+): boolean {
+  const cle = (liste: { userId: string; accessLevel: string }[] | undefined) =>
+    (liste ?? [])
+      .map((p) => `${p.userId}\u0000${p.accessLevel}`)
+      .sort()
+      .join('\u0001')
+  return (
+    nouveau.ownerId !== existant.ownerId || cle(nouveau.sharedWith) !== cle(existant.sharedWith)
+  )
 }
 
 /**
@@ -8080,6 +8102,19 @@ function peutModifierProjetServeur(
   return projet.sharedWith.some(
     (p) => p.userId === utilisateur.email && p.accessLevel === 'édition',
   )
+}
+
+/**
+ * Gérer le partage (ajouter/retirer une personne, changer le propriétaire)
+ * est réservé au **créateur** du projet et aux **admins** — décision
+ * utilisateur du 25/09/2026 : une personne partagée en édition peut
+ * modifier le contenu, jamais distribuer ou retirer des droits.
+ */
+function peutGererPartageProjet(
+  projet: ProjectEnregistre,
+  utilisateur: UtilisateurEnregistre,
+): boolean {
+  return utilisateur.role === 'admin' || projet.ownerId === utilisateur.email
 }
 
 async function gererListerProjets(
@@ -8186,10 +8221,7 @@ async function refusEcritureProjetComplet(
     if (!peutModifierProjetServeur(existant, utilisateur)) {
       return { erreur: 'non_autorise', statut: 403 }
     }
-    const partageModifie =
-      corps.ownerId !== existant.ownerId ||
-      JSON.stringify(corps.sharedWith ?? []) !== JSON.stringify(existant.sharedWith)
-    if (partageModifie && !admin && existant.ownerId !== utilisateur.email) {
+    if (partageModifie(existant, corps) && !peutGererPartageProjet(existant, utilisateur)) {
       return { erreur: 'non_autorise', statut: 403 }
     }
   } else if (!admin && corps.ownerId !== utilisateur.email) {
@@ -8517,7 +8549,7 @@ async function gererPartagerProjet(
   const charge = await chargerProjetVisible(request, ctx, entetes, id)
   if (charge instanceof Response) return charge
   const { utilisateur, projet } = charge
-  if (!peutModifierProjetServeur(projet, utilisateur)) {
+  if (!peutGererPartageProjet(projet, utilisateur)) {
     return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
   }
 
@@ -8558,7 +8590,7 @@ async function gererRetirerPartageProjet(
   const charge = await chargerProjetVisible(request, ctx, entetes, id)
   if (charge instanceof Response) return charge
   const { utilisateur, projet } = charge
-  if (!peutModifierProjetServeur(projet, utilisateur)) {
+  if (!peutGererPartageProjet(projet, utilisateur)) {
     return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
   }
 
@@ -8857,6 +8889,9 @@ async function gererRemplacerSection(
 
   const corps = await lireCorpsJson<SectionEnregistree>(request)
   if (!corps?.templateType) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (partageModifie(existante, corps) && !droits.gererPartage) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
 
   const section: SectionEnregistree = { ...corps, id, projectId: existante.projectId }
   await ctx.sectionsRepo.remplacerSection(section)
@@ -8936,6 +8971,9 @@ async function gererRestaurerSection(
     const droits = await droitsSection(ctx, existante, utilisateur)
     if (!droits.voir) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
     if (!droits.modifier) return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+    if (partageModifie(existante, section) && !droits.gererPartage) {
+      return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+    }
   }
   // La section restaurée doit aussi pouvoir être écrite dans son projet
   // cible (évite de déplacer une section vers un projet d'un autre client).

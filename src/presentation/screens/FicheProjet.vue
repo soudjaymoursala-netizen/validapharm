@@ -11,7 +11,10 @@ import { useRouter } from 'vue-router'
 import { detecterEcartsStructurels } from '../../logique-metier/analyse-projet/detecterEcartsStructurels'
 import type { PhaseProjet, Project, TemplateType } from '../../logique-metier/domaine/types'
 import { analyserImportJSON } from '../../logique-metier/export/analyserImportJSON'
-import { peutModifierProjet } from '../../logique-metier/permissions/permissionsProjet'
+import {
+  peutGererPartageProjet,
+  peutModifierProjet,
+} from '../../logique-metier/permissions/permissionsProjet'
 import ModaleConfirmationArchivage from '../composants/ModaleConfirmationArchivage.vue'
 import PastilleStatutSection from '../composants/PastilleStatutSection.vue'
 import PipelineQualification from '../composants/PipelineQualification.vue'
@@ -86,6 +89,13 @@ const peutModifier = computed(() =>
   projet.value
     ? authStore.estAdmin || peutModifierProjet(projet.value, projetsStore.identiteCourante)
     : true,
+)
+
+/** Ajouter/retirer une personne : créateur du projet ou admin uniquement (le Worker l'applique). */
+const peutGererPartage = computed(() =>
+  projet.value
+    ? peutGererPartageProjet(projet.value, projetsStore.identiteCourante, authStore.estAdmin)
+    : false,
 )
 
 async function ajouterPartage(): Promise<void> {
@@ -437,14 +447,19 @@ async function importerFichier(evenement: Event): Promise<void> {
       <p class="rappel">
         Lecture ouverte à toute personne ayant accès au client du projet (et aux personnes
         partagées). Seuls le créateur, les personnes partagées en édition et les administrateurs
-        peuvent modifier ce projet, ses sections et ses documents — règle appliquée par le serveur.
+        peuvent modifier ce projet, ses sections et ses documents ; seuls le créateur et les
+        administrateurs peuvent gérer le partage — règles appliquées par le serveur.
+      </p>
+      <p v-if="peutModifier && !peutGererPartage" class="rappel">
+        Vous êtes partagé en édition : vous pouvez modifier le contenu, mais seul le créateur ou un
+        administrateur peut ajouter ou retirer des personnes.
       </p>
       <p class="meta-proprietaire">Créé par : {{ projet.owner_id }}</p>
       <ul v-if="projet.shared_with.length > 0" class="liste-partages">
         <li v-for="partage in projet.shared_with" :key="partage.user_id">
           {{ partage.user_id }} — {{ partage.access_level }}
           <button
-            v-if="peutModifier"
+            v-if="peutGererPartage"
             type="button"
             class="bouton-texte-danger"
             @click="retirerPartage(partage.user_id)"
@@ -454,7 +469,7 @@ async function importerFichier(evenement: Event): Promise<void> {
         </li>
       </ul>
       <p v-else class="etat-vide">Pas encore partagé avec personne d'autre.</p>
-      <form v-if="peutModifier" class="formulaire-partage" @submit.prevent="ajouterPartage">
+      <form v-if="peutGererPartage" class="formulaire-partage" @submit.prevent="ajouterPartage">
         <input
           v-model="nouvelUtilisateurPartage"
           type="email"

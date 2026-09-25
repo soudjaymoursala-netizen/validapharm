@@ -49,9 +49,13 @@ const dernierResultatSync = ref<ResultatSynchronisation | ResultatRecuperation |
 const messageSync = computed(() => {
   if (dernierResultatSync.value === undefined) return null
   if (dernierResultatSync.value.ok) {
+    const refuses = 'refuses' in dernierResultatSync.value ? dernierResultatSync.value.refuses : []
     return {
-      type: 'succes',
-      texte: `${dernierResultatSync.value.nbFichiers} fichier(s) synchronisé(s).`,
+      type: refuses.length > 0 ? 'erreur' : 'succes',
+      texte:
+        refuses.length > 0
+          ? `${dernierResultatSync.value.nbFichiers} fichier(s) récupéré(s), ${refuses.length} écarté(s) par sécurité :`
+          : `${dernierResultatSync.value.nbFichiers} fichier(s) synchronisé(s).`,
     }
   }
   if ('conflit' in dernierResultatSync.value && dernierResultatSync.value.conflit) {
@@ -105,7 +109,22 @@ async function synchroniser(): Promise<void> {
   dernierResultatSync.value = await syncStore.synchroniser()
 }
 
+/** Fichiers GitHub écartés lors de la dernière récupération (contrôle local ou refus serveur). */
+const fichiersRefuses = computed(() =>
+  dernierResultatSync.value?.ok && 'refuses' in dernierResultatSync.value
+    ? dernierResultatSync.value.refuses
+    : [],
+)
+
 async function recupererDepuisGitHub(): Promise<void> {
+  // Sécurité : écrasement délibéré des données du serveur par la version
+  // GitHub — jamais sans confirmation explicite.
+  const confirme = window.confirm(
+    'Récupérer depuis GitHub écrase les projets et sections du serveur par la version du dépôt ' +
+      '(seuls ceux que vous avez le droit de modifier). Chaque fichier est contrôlé avant ' +
+      'restauration. Continuer ?',
+  )
+  if (!confirme) return
   dernierResultatSync.value = await syncStore.recupererDepuisGitHub()
   await projetsStore.chargerProjets()
 }
@@ -167,6 +186,11 @@ function nomClient(clientId: string | null): string | null {
       >
         {{ messageSync.texte }}
       </p>
+      <ul v-if="fichiersRefuses.length > 0" class="liste-refuses" role="alert">
+        <li v-for="refus in fichiersRefuses" :key="refus.chemin">
+          <code>{{ refus.chemin }}</code> — {{ refus.raison }}
+        </li>
+      </ul>
       <RouterLink v-if="messageSync?.type === 'conflit'" :to="{ name: 'resolution-conflit' }">
         Résoudre le conflit
       </RouterLink>
@@ -415,6 +439,13 @@ button {
 .message-sync--conflit,
 .message-sync--erreur {
   color: var(--vp-danger);
+}
+
+.liste-refuses {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--vp-danger);
+  overflow-wrap: anywhere;
 }
 
 .formulaire-projet {
