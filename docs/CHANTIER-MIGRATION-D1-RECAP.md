@@ -3784,3 +3784,30 @@ Drive frais. Correction de fond possible : faire transiter les appels
 GitHub/Drive par le Worker (le jeton ne quitte plus jamais le serveur) —
 chantier à décider avec l'utilisateur, non lancé.
 
+## 37. Bandeau « serveur injoignable » (25/09/2026, amélioration autorisée)
+
+**Constat** : 23 stores suivent le repli « jamais une exception non
+gérée » au chargement — en cas de panne réseau ou de Worker injoignable,
+ils remplacent les données par des **listes vides**, sans rien signaler.
+L'écran affiche alors un état vide trompeur, indiscernable de la réalité :
+p. ex. Impact Assessment affiche « Aucune méthode n'est configurée —
+saisissez les questions… », ce qui pousse à recréer une méthode qui existe.
+
+**Correctif (un seul point, pas 23 stores modifiés)** :
+- `AuthApiClient` : les 6 appels `fetch` dupliqués (délai, conversion des
+  pannes en `TimeoutAuthError`/`IndisponibleAuthError`, 5xx) sont
+  factorisés dans `envoyer()`, qui prévient un `observateurConnectivite`
+  optionnel (`true` dès que le Worker répond, même par un refus 4xx ;
+  `false` sur panne réseau, délai dépassé ou 5xx).
+- `useConnectiviteServeurStore` (nouveau) : `serveurInjoignable`, alimenté
+  par `useAuthStore.client()`.
+- `CoquilleApplication.vue` : bandeau d'alerte collant « Serveur
+  injoignable : les données affichées peuvent être incomplètes ou vides à
+  tort. N'enregistrez rien de nouveau avant le retour de la connexion. »
+  + « Réessayer » ; il disparaît dès qu'un appel aboutit.
+
+Tests : `AuthApiClient.test.ts` (séquence réseau KO / 503 / 403 / 200 →
+`[false, false, true, true]`), `CoquilleApplication.test.ts` (bandeau
+affiché puis retiré). Vérifié en navigateur réel : Worker arrêté en cours
+de session → bandeau affiché, aucune erreur console.
+

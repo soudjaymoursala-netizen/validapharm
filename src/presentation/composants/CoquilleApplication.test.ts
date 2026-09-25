@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { useConnectiviteServeurStore } from '../stores/useConnectiviteServeurStore'
 import CoquilleApplication from './CoquilleApplication.vue'
 
 function routeurDeTest() {
@@ -63,5 +64,22 @@ describe('CoquilleApplication — menu mobile (responsive)', () => {
 
     expect(wrapper.find('.sidebar').exists()).toBe(false)
     expect(wrapper.find('.coquille-application__bouton-menu').exists()).toBe(false)
+  })
+})
+
+describe('CoquilleApplication — serveur injoignable', () => {
+  test('bandeau affiché tant que le serveur est injoignable, retiré dès qu’il répond', async () => {
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(CoquilleApplication, { global: { plugins: [router] } })
+    const connectivite = useConnectiviteServeurStore()
+
+    expect(wrapper.find('.bandeau-serveur-injoignable').exists()).toBe(false)
+    connectivite.signaler(false)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.bandeau-serveur-injoignable').text()).toContain('Serveur injoignable')
+    connectivite.signaler(true)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.bandeau-serveur-injoignable').exists()).toBe(false)
   })
 })

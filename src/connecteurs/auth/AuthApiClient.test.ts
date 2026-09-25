@@ -119,6 +119,26 @@ describe('AuthApiClient — échecs de connectivité (jamais un résultat typé)
   })
 })
 
+describe('AuthApiClient — observateur de connectivité', () => {
+  test('prévient « injoignable » (réseau, 5xx) puis « joignable » dès qu’il répond, même par un refus 4xx', async () => {
+    const signaux: boolean[] = []
+    const api = new AuthApiClient('https://auth.exemple.workers.dev', undefined, (joignable) =>
+      signaux.push(joignable),
+    )
+
+    fetchMock.mockRejectedValueOnce(new Error('network down'))
+    await expect(api.verifierSante()).rejects.toBeInstanceOf(IndisponibleAuthError)
+    fetchMock.mockResolvedValueOnce(reponseMock({ erreur: 'panne' }, { status: 503 }))
+    await expect(api.verifierSante()).rejects.toBeInstanceOf(IndisponibleAuthError)
+    fetchMock.mockResolvedValueOnce(reponseMock({ erreur: 'non_autorise' }, { status: 403 }))
+    await api.verifierSante()
+    fetchMock.mockResolvedValueOnce(reponseMock({ ok: true }))
+    await api.verifierSante()
+
+    expect(signaux).toEqual([false, false, true, true])
+  })
+})
+
 describe('AuthApiClient — clients', () => {
   test('creerClient POST /clients avec le corps attendu', async () => {
     fetchMock.mockResolvedValueOnce(

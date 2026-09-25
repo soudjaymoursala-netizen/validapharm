@@ -14,8 +14,16 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BarreLaterale from './BarreLaterale.vue'
 import IconeSvg from './IconeSvg.vue'
+import { useConnectiviteServeurStore } from '../stores/useConnectiviteServeurStore'
 
 const route = useRoute()
+const connectivite = useConnectiviteServeurStore()
+
+// Recharge la page : chaque écran relance ses chargements, et le bandeau
+// disparaît de lui-même dès que le serveur répond à nouveau.
+function reessayer(): void {
+  window.location.reload()
+}
 const masquerSidebar = computed(() => route.name === 'connexion')
 
 // Menu mobile (responsive, ajouté) — état transitoire de navigation,
@@ -54,6 +62,11 @@ watch(
     />
     <BarreLaterale v-if="!masquerSidebar" :ouverte="menuMobileOuvert" />
     <div class="coquille-application__contenu">
+      <p v-if="connectivite.serveurInjoignable" class="bandeau-serveur-injoignable" role="alert">
+        Serveur injoignable : les données affichées peuvent être incomplètes ou vides à tort.
+        N'enregistrez rien de nouveau avant le retour de la connexion.
+        <button type="button" @click="reessayer">Réessayer</button>
+      </p>
       <RouterView />
     </div>
   </div>
@@ -68,6 +81,21 @@ watch(
 .coquille-application__contenu {
   flex: 1;
   min-width: 0;
+}
+
+.bandeau-serveur-injoignable {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background-color: var(--vp-danger-fond-leger);
+  color: var(--vp-danger);
+  border-bottom: 1px solid var(--vp-danger);
 }
 
 .coquille-application__bouton-menu {

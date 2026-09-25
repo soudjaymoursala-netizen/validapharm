@@ -1296,9 +1296,17 @@ const DELAI_MAX_PAR_DEFAUT_MS = 15_000
  * restent réservées aux échecs de connectivité réels.
  */
 export class AuthApiClient {
+  /**
+   * `observateurConnectivite` (optionnel) est prévenu à chaque appel :
+   * `true` si le Worker a répondu (même par un refus métier 4xx), `false`
+   * s'il est injoignable (réseau, délai dépassé, 5xx). Permet à l'interface
+   * de distinguer « liste vide » de « serveur injoignable » — jamais un
+   * état vide affiché comme s'il était la réalité.
+   */
   constructor(
     private readonly relayUrl: string,
     private readonly delaiMaxMs: number = DELAI_MAX_PAR_DEFAUT_MS,
+    private readonly observateurConnectivite?: (joignable: boolean) => void,
   ) {}
 
   // --- Vérification de connexion (« Tester la connexion », avant toute
@@ -2968,21 +2976,9 @@ export class AuthApiClient {
     jeton: string,
     id: string,
   ): Promise<{ ok: true; blob: Blob } | { ok: false; erreur: string }> {
-    const controleur = new AbortController()
-    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
-    let reponse: Response
-    try {
-      reponse = await fetch(`${this.relayUrl}/gabarits-export/${id}/contenu`, {
-        signal: controleur.signal,
-        headers: { Authorization: `Bearer ${jeton}` },
-      })
-    } catch (erreur) {
-      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
-      throw new IndisponibleAuthError()
-    } finally {
-      clearTimeout(minuteur)
-    }
-    if (reponse.status >= 500) throw new IndisponibleAuthError()
+    const reponse = await this.envoyer(`${this.relayUrl}/gabarits-export/${id}/contenu`, {
+      headers: { Authorization: `Bearer ${jeton}` },
+    })
     if (!reponse.ok) {
       const corps = await reponse.json().catch(() => null)
       const erreur =
@@ -3360,21 +3356,9 @@ export class AuthApiClient {
     jeton: string,
     id: string,
   ): Promise<{ ok: true; blob: Blob } | { ok: false; erreur: string }> {
-    const controleur = new AbortController()
-    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
-    let reponse: Response
-    try {
-      reponse = await fetch(`${this.relayUrl}/project-documents/${id}/contenu`, {
-        signal: controleur.signal,
-        headers: { Authorization: `Bearer ${jeton}` },
-      })
-    } catch (erreur) {
-      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
-      throw new IndisponibleAuthError()
-    } finally {
-      clearTimeout(minuteur)
-    }
-    if (reponse.status >= 500) throw new IndisponibleAuthError()
+    const reponse = await this.envoyer(`${this.relayUrl}/project-documents/${id}/contenu`, {
+      headers: { Authorization: `Bearer ${jeton}` },
+    })
     if (!reponse.ok) {
       const corps = await reponse.json().catch(() => null)
       const erreur =
@@ -3499,21 +3483,9 @@ export class AuthApiClient {
     jeton: string,
     id: string,
   ): Promise<{ ok: true; blob: Blob } | { ok: false; erreur: string }> {
-    const controleur = new AbortController()
-    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
-    let reponse: Response
-    try {
-      reponse = await fetch(`${this.relayUrl}/documents-normatifs/${id}/contenu`, {
-        signal: controleur.signal,
-        headers: { Authorization: `Bearer ${jeton}` },
-      })
-    } catch (erreur) {
-      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
-      throw new IndisponibleAuthError()
-    } finally {
-      clearTimeout(minuteur)
-    }
-    if (reponse.status >= 500) throw new IndisponibleAuthError()
+    const reponse = await this.envoyer(`${this.relayUrl}/documents-normatifs/${id}/contenu`, {
+      headers: { Authorization: `Bearer ${jeton}` },
+    })
     if (!reponse.ok) {
       const corps = await reponse.json().catch(() => null)
       const erreur =
@@ -3538,23 +3510,11 @@ export class AuthApiClient {
     contenu: Blob,
     mimeType: string,
   ): Promise<ResultatApi<{ document: DocumentNormatifWire }>> {
-    const controleur = new AbortController()
-    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
-    let reponse: Response
-    try {
-      reponse = await fetch(`${this.relayUrl}/documents-normatifs/${id}/contenu`, {
-        method: 'PUT',
-        signal: controleur.signal,
-        headers: { Authorization: `Bearer ${jeton}`, 'Content-Type': mimeType },
-        body: contenu,
-      })
-    } catch (erreur) {
-      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
-      throw new IndisponibleAuthError()
-    } finally {
-      clearTimeout(minuteur)
-    }
-    if (reponse.status >= 500) throw new IndisponibleAuthError()
+    const reponse = await this.envoyer(`${this.relayUrl}/documents-normatifs/${id}/contenu`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${jeton}`, 'Content-Type': mimeType },
+      body: contenu,
+    })
     const corps = await reponse.json().catch(() => null)
     if (!reponse.ok) {
       const erreur =
@@ -3568,34 +3528,46 @@ export class AuthApiClient {
 
   // --- Aide ---
 
+  /**
+   * Seul point d'appel réseau du client : délai maximal, conversion des
+   * pannes de connectivité en `TimeoutAuthError`/`IndisponibleAuthError`
+   * (5xx compris), et notification de `observateurConnectivite`.
+   */
+  private async envoyer(url: string, init: RequestInit): Promise<Response> {
+    const controleur = new AbortController()
+    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
+    let reponse: Response
+    try {
+      reponse = await fetch(url, { ...init, signal: controleur.signal })
+    } catch (erreur) {
+      this.observateurConnectivite?.(false)
+      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
+      throw new IndisponibleAuthError()
+    } finally {
+      clearTimeout(minuteur)
+    }
+    if (reponse.status >= 500) {
+      this.observateurConnectivite?.(false)
+      throw new IndisponibleAuthError()
+    }
+    this.observateurConnectivite?.(true)
+    return reponse
+  }
+
   private async requeteFormData<T>(
     methode: string,
     chemin: string,
     jeton: string,
     formData: FormData,
   ): Promise<ResultatApi<T>> {
-    const controleur = new AbortController()
-    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
-
-    let reponse: Response
-    try {
-      // Jamais de `Content-Type` explicite ici : le navigateur doit poser
-      // lui-même l'en-tête `multipart/form-data; boundary=...` — un
-      // `Content-Type` manuel casserait le découpage des parties.
-      reponse = await fetch(`${this.relayUrl}${chemin}`, {
-        method: methode,
-        signal: controleur.signal,
-        headers: { Authorization: `Bearer ${jeton}` },
-        body: formData,
-      })
-    } catch (erreur) {
-      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
-      throw new IndisponibleAuthError()
-    } finally {
-      clearTimeout(minuteur)
-    }
-
-    if (reponse.status >= 500) throw new IndisponibleAuthError()
+    // Jamais de `Content-Type` explicite ici : le navigateur doit poser
+    // lui-même l'en-tête `multipart/form-data; boundary=...` — un
+    // `Content-Type` manuel casserait le découpage des parties.
+    const reponse = await this.envoyer(`${this.relayUrl}${chemin}`, {
+      method: methode,
+      headers: { Authorization: `Bearer ${jeton}` },
+      body: formData,
+    })
 
     let corps: unknown
     try {
@@ -3622,28 +3594,14 @@ export class AuthApiClient {
     chemin: string,
     options: { jeton?: string; body?: unknown } = {},
   ): Promise<ResultatApi<T>> {
-    const controleur = new AbortController()
-    const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
-
-    let reponse: Response
-    try {
-      reponse = await fetch(`${this.relayUrl}${chemin}`, {
-        method: methode,
-        signal: controleur.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(options.jeton ? { Authorization: `Bearer ${options.jeton}` } : {}),
-        },
-        ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-      })
-    } catch (erreur) {
-      if (erreur instanceof Error && erreur.name === 'AbortError') throw new TimeoutAuthError()
-      throw new IndisponibleAuthError()
-    } finally {
-      clearTimeout(minuteur)
-    }
-
-    if (reponse.status >= 500) throw new IndisponibleAuthError()
+    const reponse = await this.envoyer(`${this.relayUrl}${chemin}`, {
+      method: methode,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.jeton ? { Authorization: `Bearer ${options.jeton}` } : {}),
+      },
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    })
 
     let corps: unknown
     try {
