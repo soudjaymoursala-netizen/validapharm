@@ -3748,10 +3748,39 @@ admin) ; `AdminUtilisateurs.test.ts` (refus expliqué, rôle inchangé) ;
 `connexionDrive.test.ts` (échec → copie locale conservée ; succès →
 migrée puis retirée).
 
-### 35.1 Question ouverte pour l'utilisateur
+### 35.1 Question ouverte pour l'utilisateur — **tranchée, voir §36**
 
 **Bibliothèque de normes** : `DELETE /documents-normatifs/:id` n'exige que
 l'authentification — tout compte connecté peut supprimer un document de la
 bibliothèque commune à l'organisation. Pas modifié sans décision :
 réserver la suppression aux admins (et/ou à la personne qui l'a importé) ?
+
+## 36. Bibliothèque de normes : suppression réservée aux admins (25/09/2026)
+
+Décision de l'utilisateur (réponse au §35.1) : « réserver les suppressions
+aux admins ». Il autorise aussi, pour la suite, les améliorations et
+corrections jugées utiles.
+
+- Worker : `DELETE /documents-normatifs/:id` passe par `exigerAdmin`
+  (403 `non_autorise` sinon). Renommer/réparer restent ouverts à tout
+  compte (non demandé).
+- Écran `BibliothequeNormes.vue` : bouton « Supprimer » affiché aux admins
+  seulement.
+- Test Worker : un utilisateur reçoit 403, le document reste listé.
+- `GUIDE-UTILISATEUR.md` : §0 « Comprendre l'outil » réécrit — il
+  décrivait encore l'ancienne architecture (données « dans le
+  navigateur », « GitHub source de vérité ») alors que D1 est la source de
+  vérité depuis le chantier de migration ; documents de projet décrits
+  comme « uniquement en local (IndexedDB) » alors qu'ils sont en D1+R2 ;
+  libellés de synchronisation GitHub et de résolution de conflit alignés.
+
+### 36.1 Risque connu signalé (non traité, décision d'architecture)
+
+`GET /parametres-installation/:cle` et `POST /drive/rafraichir-jeton` sont
+ouverts à **tout compte connecté** (choix documenté : le navigateur utilise
+directement ces jetons). Conséquence : tout utilisateur peut lire le **PAT
+GitHub de l'installation** (accès en écriture au dépôt) et obtenir un jeton
+Drive frais. Correction de fond possible : faire transiter les appels
+GitHub/Drive par le Worker (le jeton ne quitte plus jamais le serveur) —
+chantier à décider avec l'utilisateur, non lancé.
 

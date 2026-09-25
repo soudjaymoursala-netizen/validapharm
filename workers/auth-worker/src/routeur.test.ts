@@ -9033,6 +9033,32 @@ describe('routerRequete — documents normatifs (Bibliothèque de normes)', () =
     expect(liste.corps.documents).toEqual([])
   })
 
+  test('suppression réservée aux admins : un utilisateur reçoit 403, le document reste', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { corps } = await creerDocumentNormatif(ctx, admin.jeton)
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'consultant@pharmatech.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'N',
+        prenom: 'P',
+        role: 'utilisateur',
+      },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email: 'consultant@pharmatech.example', motDePasse: 'MotDePasse!1' },
+    })
+
+    const refus = await requete(ctx, 'DELETE', `/documents-normatifs/${corps.document.id}`, {
+      jeton: login.corps.jeton,
+    })
+    expect(refus.status).toBe(403)
+    const liste = await requete(ctx, 'GET', '/documents-normatifs', { jeton: admin.jeton })
+    expect(liste.corps.documents).toHaveLength(1)
+  })
+
   test('réparation du contenu binaire -> hasBinaryContent passe à true, contenu relu identique, métadonnées inchangées', async () => {
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)

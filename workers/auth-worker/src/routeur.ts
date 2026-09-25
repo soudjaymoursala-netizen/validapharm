@@ -9894,8 +9894,11 @@ async function gererSupprimerDocumentNormatif(
   entetes: Record<string, string>,
   id: string,
 ): Promise<Response> {
-  const utilisateur = await authentifier(request, ctx)
-  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+  // Bibliothèque commune à toute l'organisation : suppression réservée aux
+  // admins (décision utilisateur du 25/09/2026) — avant, tout compte
+  // connecté pouvait supprimer n'importe quel document normatif.
+  const utilisateur = await exigerAdmin(request, ctx, entetes)
+  if (utilisateur instanceof Response) return utilisateur
 
   await ctx.stockageBinaireRepo.supprimer(cleTexteDocument(id))
   await ctx.stockageBinaireRepo.supprimer(cleContenuDocument(id))

@@ -733,20 +733,25 @@ onMounted(async () => {
                 Télécharger
               </button>
               <button type="button" @click="ouvrirRenommage(document)">Renommer</button>
-              <template v-if="documentIdASupprimer === document.id">
-                <button
-                  type="button"
-                  class="bouton-danger"
-                  :disabled="enSuppression"
-                  @click="confirmerSuppression(document.id)"
-                >
-                  {{ enSuppression ? 'Suppression…' : 'Confirmer la suppression' }}
-                </button>
-                <button type="button" :disabled="enSuppression" @click="annulerSuppression">
-                  Annuler
+              <!-- Suppression réservée aux admins (le Worker l'impose aussi). -->
+              <template v-if="authStore.estAdmin">
+                <template v-if="documentIdASupprimer === document.id">
+                  <button
+                    type="button"
+                    class="bouton-danger"
+                    :disabled="enSuppression"
+                    @click="confirmerSuppression(document.id)"
+                  >
+                    {{ enSuppression ? 'Suppression…' : 'Confirmer la suppression' }}
+                  </button>
+                  <button type="button" :disabled="enSuppression" @click="annulerSuppression">
+                    Annuler
+                  </button>
+                </template>
+                <button v-else type="button" @click="demanderSuppression(document)">
+                  Supprimer
                 </button>
               </template>
-              <button v-else type="button" @click="demanderSuppression(document)">Supprimer</button>
             </div>
           </li>
         </ul>
