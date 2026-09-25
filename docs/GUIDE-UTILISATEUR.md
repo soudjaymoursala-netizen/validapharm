@@ -175,7 +175,15 @@ dépôt, un seul relais IA, un seul Worker d'authentification, jamais un par cli
 | Propriétaire (owner) | texte | oui | `ex. acme-corp` |
 | Dépôt | texte | oui | `ex. validapharm-data` |
 | Branche | texte | non (défaut `main`) | `main` |
-| Jeton d'accès personnel | mot de passe | oui | — |
+| Jeton d'accès personnel | mot de passe | oui à la première configuration, ensuite facultatif | `Jeton enregistré sur le serveur — laisser vide pour le conserver` (si un jeton existe déjà) |
+
+**Le jeton reste sur le serveur** (depuis le 25/09/2026) : il n'est jamais
+renvoyé au navigateur, même à un administrateur — le champ apparaît donc vide
+après enregistrement. Laisser le champ vide conserve le jeton existant (pour
+changer seulement le dépôt ou la branche) ; saisir un nouveau jeton le
+remplace. Tous les appels GitHub (synchronisation, récupération, miroir
+Drive, import de normes, test de connexion) passent par le serveur, qui
+n'autorise que les opérations nécessaires sur ce seul dépôt.
 
 Boutons : **« Effacer »** (vide tout et réinitialise), **« Enregistrer »** (sauve
 la connexion, affiche brièvement « ✓ Enregistré. »), **« Tester la connexion »**

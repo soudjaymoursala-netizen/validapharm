@@ -8,7 +8,7 @@ import {
   MIME_TYPES_GOOGLE_NATIFS,
   type FichierDrive,
 } from '../../connecteurs/drive/DriveReaderConnector'
-import { GitHubConnector, type EntreeArborescence } from '../../connecteurs/github/GitHubConnector'
+import type { EntreeArborescence } from '../../connecteurs/github/GitHubConnector'
 import { documentsNormatifsAMigrer } from '../../persistance/db'
 import type {
   CategorieDocumentNormatif,
@@ -226,12 +226,10 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
 
   /** Liste les fichiers du dépôt GitHub déjà configuré (`useConnexionGitHubStore`, Worker/D1), sous un préfixe de chemin donné. */
   async function listerFichiersGitHub(prefixeChemin: string): Promise<EntreeArborescence[]> {
-    const githubStore = useConnexionGitHubStore()
-    await githubStore.charger()
-    if (githubStore.connexion === null) {
+    const connecteur = await useConnexionGitHubStore().creerConnecteur()
+    if (connecteur === null) {
       throw new Error('Aucune connexion GitHub configurée (Configuration client).')
     }
-    const connecteur = new GitHubConnector(githubStore.connexion)
     const arborescence = await connecteur.chargerArborescence()
     return arborescence.filter((entree) => entree.chemin.startsWith(prefixeChemin))
   }
@@ -248,12 +246,10 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
         'Import GitHub limité aux fichiers texte (.md, .txt) dans ce chantier — utiliser le téléversement direct ou Google Drive pour un .docx/.pdf.',
       )
     }
-    const githubStore = useConnexionGitHubStore()
-    await githubStore.charger()
-    if (githubStore.connexion === null) {
+    const connecteur = await useConnexionGitHubStore().creerConnecteur()
+    if (connecteur === null) {
       throw new Error('Aucune connexion GitHub configurée (Configuration client).')
     }
-    const connecteur = new GitHubConnector(githubStore.connexion)
     const { contenu } = await connecteur.lire(chemin)
 
     return envoyerDocument({

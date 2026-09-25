@@ -12,9 +12,26 @@ export interface ConfigGitHubConnector {
   repo: string
   /** Branche protégée servant de source de vérité. */
   branche?: string
-  jeton: string
+  /** PAT GitHub — mode d'appel direct uniquement (jamais utilisé avec `relais`). */
+  jeton?: string
+  /**
+   * Mode relais (25/09/2026) : les appels passent par le Worker
+   * (`<url>/github/api/...`) avec la session de l'utilisateur ; le Worker
+   * ajoute lui-même le PAT, qui ne quitte jamais le serveur. Utilisé pour
+   * le dépôt de l'installation (synchronisation, miroir Drive, normes).
+   */
+  relais?: { url: string; jetonSession: string }
   /** Délai d'attente réseau en ms avant `TimeoutError` (défaut 15s). */
   delaiMaxMs?: number
+}
+
+/** Refus propres au relais du Worker (jamais des erreurs GitHub) — message explicite. */
+const MESSAGES_ERREUR_RELAIS: Record<string, string> = {
+  non_authentifie: 'Session expirée : reconnectez-vous pour accéder au dépôt GitHub.',
+  github_non_configure: "Le dépôt GitHub de l'installation n'est pas configuré.",
+  operation_github_non_autorisee:
+    "Opération GitHub refusée par le serveur (hors du périmètre autorisé pour le dépôt de l'installation).",
+  github_injoignable: 'GitHub est injoignable depuis le serveur — réessayez plus tard.',
 }
 
 export interface FichierLu {
@@ -185,18 +202,31 @@ export class GitHubConnector {
     const controleur = new AbortController()
     const minuteur = setTimeout(() => controleur.abort(), this.delaiMaxMs)
 
+    const relais = this.config.relais
     let reponse: Response
     try {
-      reponse = await fetch(`https://api.github.com${chemin}`, {
-        ...options,
-        signal: controleur.signal,
-        headers: {
-          Authorization: `Bearer ${this.config.jeton}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': VERSION_API,
-          ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
+      reponse = await fetch(
+        relais ? `${relais.url}/github/api${chemin}` : `https://api.github.com${chemin}`,
+        {
+          ...options,
+          signal: controleur.signal,
+          // En mode relais, seuls la session et le type de contenu sont
+          // envoyés : le Worker ajoute lui-même les en-têtes GitHub (un
+          // `X-GitHub-Api-Version` côté navigateur serait bloqué par CORS —
+          // trouvé en test navigateur réel).
+          headers: relais
+            ? {
+                Authorization: `Bearer ${relais.jetonSession}`,
+                ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
+              }
+            : {
+                Authorization: `Bearer ${this.config.jeton}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': VERSION_API,
+                ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
+              },
         },
-      })
+      )
     } catch (erreur) {
       if (erreur instanceof Error && erreur.name === 'AbortError') {
         throw new TimeoutError()
@@ -207,6 +237,19 @@ export class GitHubConnector {
     }
 
     if (reponse.ok) return reponse
+
+    if (relais) {
+      // Le Worker signale ses propres refus par `{ erreur }` ; les erreurs
+      // relayées de GitHub (`{ message }`) suivent le traitement ci-dessous.
+      const corps = (await reponse
+        .clone()
+        .json()
+        .catch(() => null)) as { erreur?: unknown } | null
+      const code = typeof corps?.erreur === 'string' ? corps.erreur : null
+      if (code !== null) {
+        throw new Error(MESSAGES_ERREUR_RELAIS[code] ?? `Relais GitHub : ${code}`)
+      }
+    }
 
     if (reponse.status === 401) throw new AuthentificationError()
     if (reponse.status === 404) throw new FichierIntrouvableError()

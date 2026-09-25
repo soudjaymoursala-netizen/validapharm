@@ -242,6 +242,9 @@ function entetesCors(corsOrigin: string): Record<string, string> {
     'Access-Control-Allow-Origin': corsOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    // Relais GitHub : le navigateur doit pouvoir lire l'état du quota
+    // pour distinguer « quota épuisé » d'une portée insuffisante (403).
+    'Access-Control-Expose-Headers': 'X-RateLimit-Remaining, X-RateLimit-Reset',
   }
 }
 
@@ -1743,6 +1746,11 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   }
   if (matchDocumentProjetId && request.method === 'DELETE') {
     return gererSupprimerDocumentProjet(request, ctx, entetes, matchDocumentProjetId[1] as string)
+  }
+
+  // --- Relais GitHub : le jeton du dépôt ne quitte jamais le serveur ---
+  if (chemin.startsWith('/github/api/')) {
+    return gererRelaisGitHub(request, ctx, entetes, chemin.slice('/github/api'.length), url.search)
   }
 
   // --- Paramètres d'installation (dépôt GitHub dédié, Relais IA, Drive normes) ---
@@ -9338,6 +9346,11 @@ async function gererObtenirParametreInstallation(
   // directement depuis le navigateur par n'importe quel compte de
   // l'organisation — exactement ce que chacun devait ressaisir
   // manuellement avant cette migration (stockage local par poste).
+  //
+  // **Exception `github` (25/09/2026)** : le PAT du dépôt n'est plus jamais
+  // renvoyé (même à un admin — écriture seule). Tous les appels GitHub
+  // passent par `gererRelaisGitHub`, qui l'ajoute côté serveur ; le
+  // navigateur ne reçoit que `jetonConfigure: 'oui' | 'non'`.
   const utilisateur = await authentifier(request, ctx)
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
   if (!estCleParametreInstallationValide(cle)) {
@@ -9345,6 +9358,19 @@ async function gererObtenirParametreInstallation(
   }
 
   const parametre = await ctx.parametresInstallationRepo.obtenir(cle)
+  if (parametre && cle === 'github') {
+    const { jeton, ...sansJeton } = parametre.valeur
+    return reponseJson(
+      {
+        parametre: {
+          ...parametre,
+          valeur: { ...sansJeton, jetonConfigure: jeton ? 'oui' : 'non' },
+        },
+      },
+      200,
+      entetes,
+    )
+  }
   return reponseJson({ parametre }, 200, entetes)
 }
 
@@ -9365,10 +9391,26 @@ async function gererEnregistrerParametreInstallation(
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
-  await ctx.parametresInstallationRepo.enregistrer(cle, corps.valeur, acteur.id)
+  let valeur = corps.valeur
+  if (cle === 'github') {
+    // Le PAT n'étant plus jamais renvoyé au navigateur, un enregistrement
+    // sans jeton conserve le jeton déjà en place (modifier owner/repo/
+    // branche sans ressaisir le PAT). `jetonConfigure` n'est qu'un
+    // indicateur d'affichage, jamais stocké.
+    const { jetonConfigure: _indicateur, ...saisie } = valeur
+    void _indicateur
+    valeur = saisie
+    if (!valeur.jeton) {
+      const existant = await ctx.parametresInstallationRepo.obtenir('github')
+      if (!existant?.valeur.jeton) return reponseJson({ erreur: 'jeton_obligatoire' }, 400, entetes)
+      valeur = { ...valeur, jeton: existant.valeur.jeton }
+    }
+  }
+
+  await ctx.parametresInstallationRepo.enregistrer(cle, valeur, acteur.id)
   await consignerAudit(ctx, acteur, 'modification_parametre_installation', 'parametre', cle, null)
-  const parametre = await ctx.parametresInstallationRepo.obtenir(cle)
-  return reponseJson({ parametre }, 200, entetes)
+  // Même masquage qu'à la lecture : le PAT n'est jamais renvoyé.
+  return gererObtenirParametreInstallation(request, ctx, entetes, cle)
 }
 
 async function gererEffacerParametreInstallation(
@@ -9386,6 +9428,125 @@ async function gererEffacerParametreInstallation(
   await ctx.parametresInstallationRepo.effacer(cle)
   await consignerAudit(ctx, acteur, 'suppression_parametre_installation', 'parametre', cle, null)
   return reponseJson({ ok: true }, 200, entetes)
+}
+
+// --- Relais GitHub (25/09/2026) ---
+//
+// Remplace l'appel direct du navigateur à api.github.com avec le PAT de
+// l'installation (lisible par tout compte connecté — risque §36.1 du
+// récapitulatif). Le navigateur appelle `/github/api/<chemin GitHub>` avec
+// sa session ; le Worker vérifie la session, n'autorise QUE les opérations
+// dont `GitHubConnector` a besoin, sur le SEUL dépôt configuré, puis ajoute
+// le jeton côté serveur. Le jeton ne quitte jamais le serveur et ne peut
+// plus servir à autre chose (autre dépôt, réglages, suppression…).
+
+const SEGMENT_SUR = /^[A-Za-z0-9._-]+$/
+
+/** Vrai si `suffixe` (après `/repos/<owner>/<repo>/`) est une opération autorisée pour `methode`. */
+function operationGitHubAutorisee(methode: string, suffixe: string, branche: string): boolean {
+  const refEncodee = encodeURIComponent(branche)
+  if (methode === 'GET') {
+    if (suffixe.startsWith('contents/')) {
+      const chemin = suffixe.slice('contents/'.length)
+      return (
+        chemin.length > 0 &&
+        chemin.split('/').every((segment) => segment !== '..' && segment !== '')
+      )
+    }
+    if (suffixe === `git/ref/heads/${branche}` || suffixe === `git/ref/heads/${refEncodee}`) {
+      return true
+    }
+    // Lecture d'un objet du dépôt configuré par son identifiant (SHA) :
+    // sans risque, seul le format de segment est contrôlé.
+    const matchTrees = suffixe.match(/^git\/trees\/(.+)$/)
+    if (matchTrees) return matchTrees[1] === branche || SEGMENT_SUR.test(matchTrees[1] ?? '')
+    const matchObjet = suffixe.match(/^git\/(blobs|commits)\/([^/]+)$/)
+    return matchObjet !== null && SEGMENT_SUR.test(matchObjet[2] ?? '')
+  }
+  if (methode === 'POST') {
+    return suffixe === 'git/blobs' || suffixe === 'git/trees' || suffixe === 'git/commits'
+  }
+  if (methode === 'PATCH') {
+    return suffixe === `git/refs/heads/${branche}` || suffixe === `git/refs/heads/${refEncodee}`
+  }
+  return false
+}
+
+async function gererRelaisGitHub(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  cheminGitHub: string,
+  recherche: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const parametre = await ctx.parametresInstallationRepo.obtenir('github')
+  const owner = parametre?.valeur.owner
+  const repo = parametre?.valeur.repo
+  const jeton = parametre?.valeur.jeton
+  const branche = parametre?.valeur.branche || 'main'
+  if (!owner || !repo || !jeton) {
+    return reponseJson({ erreur: 'github_non_configure' }, 404, entetes)
+  }
+
+  const prefixe = `/repos/${owner}/${repo}/`
+  if (
+    !SEGMENT_SUR.test(owner) ||
+    !SEGMENT_SUR.test(repo) ||
+    !cheminGitHub.startsWith(prefixe) ||
+    !operationGitHubAutorisee(request.method, cheminGitHub.slice(prefixe.length), branche)
+  ) {
+    return reponseJson({ erreur: 'operation_github_non_autorisee' }, 403, entetes)
+  }
+
+  let corps: string | undefined
+  if (request.method === 'POST' || request.method === 'PATCH') {
+    corps = await request.text()
+    if (request.method === 'PATCH') {
+      // Mise à jour de branche : jamais forcée (pas de réécriture
+      // d'historique possible via le relais).
+      let lu: { force?: unknown } | null
+      try {
+        lu = JSON.parse(corps) as { force?: unknown }
+      } catch {
+        lu = null
+      }
+      if (!lu || lu.force !== false) {
+        return reponseJson({ erreur: 'operation_github_non_autorisee' }, 403, entetes)
+      }
+    }
+  }
+
+  let reponse: Response
+  try {
+    reponse = await fetch(`https://api.github.com${cheminGitHub}${recherche}`, {
+      method: request.method,
+      headers: {
+        Authorization: `Bearer ${jeton}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'validapharm-auth-worker',
+        ...(corps !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(corps !== undefined ? { body: corps } : {}),
+    })
+  } catch {
+    return reponseJson({ erreur: 'github_injoignable' }, 502, entetes)
+  }
+
+  const entetesReponse: Record<string, string> = {
+    ...entetes,
+    'Content-Type': reponse.headers.get('Content-Type') ?? 'application/json',
+  }
+  for (const nom of ['X-RateLimit-Remaining', 'X-RateLimit-Reset']) {
+    const valeur = reponse.headers.get(nom)
+    if (valeur !== null) entetesReponse[nom] = valeur
+  }
+  // Statut de GitHub conservé tel quel : `GitHubConnector` en déduit les
+  // mêmes erreurs typées qu'en appel direct (401, 404, 409/422, 403 quota).
+  return new Response(await reponse.text(), { status: reponse.status, headers: entetesReponse })
 }
 
 // --- Handlers : OAuth Google (Drive normes) ---

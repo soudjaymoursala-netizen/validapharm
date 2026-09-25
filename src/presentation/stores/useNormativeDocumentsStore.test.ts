@@ -28,12 +28,12 @@ function encoderBase64Utf8(texte: string): string {
 }
 
 function reponseMock(corps: unknown, options: { status?: number } = {}): Response {
-  const status = options.status ?? 200
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => corps,
-  } as Response
+  // Vraie `Response` : les appels GitHub passent désormais par le relais du
+  // faux Worker, qui relit le corps (`text()`) et les en-têtes.
+  return new Response(JSON.stringify(corps), {
+    status: options.status ?? 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 // Le dépôt GitHub et la connexion Drive de lecture pour la bibliothèque de

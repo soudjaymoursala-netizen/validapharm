@@ -3774,7 +3774,7 @@ corrections jugées utiles.
   comme « uniquement en local (IndexedDB) » alors qu'ils sont en D1+R2 ;
   libellés de synchronisation GitHub et de résolution de conflit alignés.
 
-### 36.1 Risque connu signalé (non traité, décision d'architecture)
+### 36.1 Risque connu signalé — **traité pour GitHub, voir §38**
 
 `GET /parametres-installation/:cle` et `POST /drive/rafraichir-jeton` sont
 ouverts à **tout compte connecté** (choix documenté : le navigateur utilise
@@ -3810,4 +3810,67 @@ Tests : `AuthApiClient.test.ts` (séquence réseau KO / 503 / 403 / 200 →
 `[false, false, true, true]`), `CoquilleApplication.test.ts` (bandeau
 affiché puis retiré). Vérifié en navigateur réel : Worker arrêté en cours
 de session → bandeau affiché, aucune erreur console.
+
+## 38. Relais GitHub : le PAT ne quitte plus jamais le serveur (25/09/2026)
+
+Chantier lancé à la demande de l'utilisateur (« lance tous les chantiers
+que tu peux »), en réponse au risque §36.1.
+
+**Avant** : `GET /parametres-installation/github` renvoyait le PAT à tout
+compte connecté ; le navigateur appelait `api.github.com` directement avec.
+N'importe quel utilisateur pouvait donc récupérer un jeton en écriture sur
+le dépôt et l'utiliser hors de l'application.
+
+**Après** :
+- **Worker — `/github/api/<chemin GitHub>`** (`gererRelaisGitHub`) :
+  session exigée ; dépôt de l'installation uniquement
+  (`/repos/<owner>/<repo>/`) ; **liste blanche** des seules opérations
+  dont `GitHubConnector` a besoin — `GET contents/…` (sans `..`),
+  `GET git/ref/heads/<branche>`, `GET git/trees/<branche|sha>`,
+  `GET git/blobs|commits/<sha>`, `POST git/blobs|trees|commits`,
+  `PATCH git/refs/heads/<branche>` avec `force: false` obligatoire (jamais
+  de réécriture d'historique). Tout le reste → 403
+  `operation_github_non_autorisee`, GitHub jamais appelé. Le PAT, le
+  `User-Agent` (exigé par GitHub depuis un Worker) et les en-têtes d'API
+  sont ajoutés côté serveur ; statut et en-têtes de quota
+  (`X-RateLimit-*`, exposés en CORS) relayés tels quels.
+- **Worker — paramètre `github`** : le PAT n'est plus jamais renvoyé
+  (lecture comme réponse d'enregistrement) → `jetonConfigure: 'oui'|'non'`.
+  Enregistrer sans jeton conserve le jeton en place ; premier
+  enregistrement sans jeton → 400 `jeton_obligatoire`.
+- **`GitHubConnector`** : option `relais: { url, jetonSession }` ; en mode
+  relais, seuls `Authorization` (session) et `Content-Type` sont envoyés
+  (un `X-GitHub-Api-Version` côté navigateur était bloqué par CORS —
+  **trouvé en test navigateur réel**) ; les refus du Worker (`{ erreur }`)
+  donnent un message explicite, les erreurs GitHub relayées gardent les
+  mêmes erreurs typées qu'en direct (401, 404, 409/422, quota).
+- **`useConnexionGitHubStore.creerConnecteur()`** : seul moyen de
+  construire un connecteur pour le dépôt de l'installation, toujours en
+  mode relais — utilisé par synchronisation, récupération, miroir Drive,
+  import de normes et test de connexion. `ConnexionGitHub` ne contient
+  plus de jeton.
+- **`ConfigurationClient.vue`** : champ jeton vide après enregistrement,
+  facultatif si un jeton existe (placeholder explicite), rappel « le jeton
+  reste sur le serveur ».
+- Hors périmètre : l'adaptateur QMS `GitHubDocumentConnectorAdapter`
+  (dépôts/jetons propres à chaque client, mode direct inchangé).
+
+**Tests** : Worker (relais autorisé avec PAT ajouté côté serveur ; 401
+sans session ; 7 opérations hors liste blanche → 403 sans appel à GitHub ;
+dépôt non configuré → 404 ; PAT jamais renvoyé ; réenregistrement sans
+jeton conserve le PAT) ; `GitHubConnector` (mode relais, refus Worker,
+erreur GitHub relayée) ; stores de synchronisation, miroir Drive, normes et
+connexion GitHub passés par le relais du faux Worker.
+
+**Vérifié en navigateur réel** (Worker local jetable) : enregistrement
+d'un faux jeton → champ vide + placeholder après rechargement ; aucune
+réponse `/parametres-installation` ne contient le jeton ; « Tester la
+connexion » → un seul appel au relais, **zéro appel du navigateur vers
+api.github.com**, le Worker a réellement appelé GitHub qui a refusé le faux
+jeton → « Authentification refusée par l'API GitHub ».
+
+**Reste à traiter (même famille de risque)** : jetons du relais IA
+(`relais-ia`) et du relais OCR, et jeton Drive (`/drive/rafraichir-jeton`,
+connexions Drive par client) restent lisibles par le navigateur — même
+patron de relais applicable.
 

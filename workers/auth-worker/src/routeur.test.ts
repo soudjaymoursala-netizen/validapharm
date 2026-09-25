@@ -8809,11 +8809,42 @@ describe('routerRequete — paramètres d’installation (dépôt GitHub, Relais
       jeton: jetonUtilisateur,
     })
     expect(lecture.status).toBe(200)
+    // Le PAT GitHub n'est JAMAIS renvoyé (écriture seule) : tous les appels
+    // GitHub passent par le relais du Worker.
     expect(lecture.corps.parametre?.valeur).toEqual({
       owner: 'acme-corp',
       repo: 'validapharm-data',
       branche: 'main',
-      jeton: 'ghp_xxx',
+      jetonConfigure: 'oui',
+    })
+    expect(JSON.stringify(enregistrement.corps)).not.toContain('ghp_xxx')
+  })
+
+  test('github : réenregistrer sans jeton conserve le PAT déjà en place ; premier enregistrement sans jeton refusé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const sansJeton = await requete(ctx, 'PUT', '/parametres-installation/github', {
+      jeton: admin.jeton,
+      body: { valeur: { owner: 'acme-corp', repo: 'data', branche: 'main', jeton: '' } },
+    })
+    expect(sansJeton.status).toBe(400)
+    expect(sansJeton.corps.erreur).toBe('jeton_obligatoire')
+
+    await requete(ctx, 'PUT', '/parametres-installation/github', {
+      jeton: admin.jeton,
+      body: { valeur: { owner: 'acme-corp', repo: 'data', branche: 'main', jeton: 'ghp_secret' } },
+    })
+    const changementDeBranche = await requete(ctx, 'PUT', '/parametres-installation/github', {
+      jeton: admin.jeton,
+      body: { valeur: { owner: 'acme-corp', repo: 'data', branche: 'dev', jeton: '' } },
+    })
+    expect(changementDeBranche.status).toBe(200)
+    const stocke = await ctx.parametresInstallationRepo.obtenir('github')
+    expect(stocke?.valeur).toEqual({
+      owner: 'acme-corp',
+      repo: 'data',
+      branche: 'dev',
+      jeton: 'ghp_secret',
     })
   })
 
@@ -9815,5 +9846,101 @@ describe('routerRequete — protection réelle projets/sections/documents (déci
       jeton: admin.jeton,
     })
     expect(suppression.status).toBe(200)
+  })
+})
+
+describe('routerRequete — relais GitHub (le PAT ne quitte jamais le serveur)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function preparer() {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    await requete(ctx, 'PUT', '/parametres-installation/github', {
+      jeton: admin.jeton,
+      body: {
+        valeur: { owner: 'acme-corp', repo: 'data', branche: 'main', jeton: 'ghp_secret' },
+      },
+    })
+    const appels: { url: string; init: RequestInit | undefined }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        appels.push({ url, init })
+        return new Response(JSON.stringify({ object: { sha: 'a'.repeat(40) } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'X-RateLimit-Remaining': '4999' },
+        })
+      }),
+    )
+    return { ctx, admin, appels }
+  }
+
+  test('opération autorisée : relayée vers GitHub avec le PAT ajouté côté serveur', async () => {
+    const { ctx, admin, appels } = await preparer()
+    const reponse = await routerRequete(
+      new Request('https://relais.workers.dev/github/api/repos/acme-corp/data/git/ref/heads/main', {
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+      }),
+      ctx,
+    )
+    expect(reponse.status).toBe(200)
+    expect(reponse.headers.get('X-RateLimit-Remaining')).toBe('4999')
+    expect(appels).toHaveLength(1)
+    expect(appels[0]?.url).toBe('https://api.github.com/repos/acme-corp/data/git/ref/heads/main')
+    expect((appels[0]?.init?.headers as Record<string, string>).Authorization).toBe(
+      'Bearer ghp_secret',
+    )
+  })
+
+  test('sans session -> 401 ; GitHub jamais appelé', async () => {
+    const { ctx, appels } = await preparer()
+    const reponse = await routerRequete(
+      new Request('https://relais.workers.dev/github/api/repos/acme-corp/data/git/ref/heads/main'),
+      ctx,
+    )
+    expect(reponse.status).toBe(401)
+    expect(appels).toHaveLength(0)
+  })
+
+  test('toute opération hors liste blanche -> 403 ; GitHub jamais appelé', async () => {
+    const { ctx, admin, appels } = await preparer()
+    const interdits: [string, string, string?][] = [
+      ['GET', '/github/api/repos/autre-org/autre-repo/git/ref/heads/main'],
+      ['DELETE', '/github/api/repos/acme-corp/data'],
+      ['GET', '/github/api/repos/acme-corp/data/collaborators'],
+      ['PATCH', '/github/api/repos/acme-corp/data/git/refs/heads/main', '{"sha":"x","force":true}'],
+      ['PATCH', '/github/api/repos/acme-corp/data/git/refs/heads/autre-branche', '{"force":false}'],
+      ['POST', '/github/api/repos/acme-corp/data/hooks', '{}'],
+      ['GET', '/github/api/user/repos'],
+    ]
+    for (const [methode, chemin, corps] of interdits) {
+      const reponse = await routerRequete(
+        new Request(`https://relais.workers.dev${chemin}`, {
+          method: methode,
+          headers: { Authorization: `Bearer ${admin.jeton}` },
+          ...(corps ? { body: corps } : {}),
+        }),
+        ctx,
+      )
+      expect(reponse.status, `${methode} ${chemin}`).toBe(403)
+    }
+    expect(appels).toHaveLength(0)
+  })
+
+  test('dépôt non configuré -> 404 github_non_configure', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const reponse = await requete(
+      ctx,
+      'GET',
+      '/github/api/repos/acme-corp/data/git/ref/heads/main',
+      {
+        jeton: admin.jeton,
+      },
+    )
+    expect(reponse.status).toBe(404)
+    expect(reponse.corps.erreur).toBe('github_non_configure')
   })
 })

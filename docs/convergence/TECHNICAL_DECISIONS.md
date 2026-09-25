@@ -573,3 +573,15 @@
 - **Récupération GitHub sécurisée (demande utilisateur, 25/09/2026)**: chaque fichier du dépôt est contrôlé avant envoi (`logique-metier/securite/controleFichierRecupere.ts` : JSON, structure minimale, identifiant = nom du fichier), la réponse serveur est vérifiée, et tout fichier écarté est listé avec sa raison ; confirmation demandée avant écrasement ; une résolution de conflit refusée par le serveur n'envoie rien vers GitHub.
 - **Vérification**: 5 tests Worker dédiés (`routeur.test.ts`, « protection réelle projets/sections/documents ») + 1 test d'écran (`EditeurSection.lectureSeule.test.ts`).
 - **Reversibility**: Moyenne — les règles sont concentrées dans `peutVoirProjetServeur`/`peutModifierProjetServeur`/`droitsSection`/`documentProjetAccessible` (Worker).
+
+---
+
+### — Relais GitHub côté Worker : le PAT de l'installation ne quitte plus le serveur
+
+- **Statut**: **ACTÉE** (demande de l'utilisateur, 25/09/2026 : « lance tous les chantiers que tu peux », en réponse au risque signalé au §36.1 du récapitulatif).
+- **Context**: le PAT du dépôt GitHub de l'installation était lu par le navigateur (`GET /parametres-installation/github`, ouvert à tout compte) pour appeler `api.github.com` directement — tout utilisateur pouvait l'extraire et l'utiliser hors de l'application (écriture sur le dépôt, autres opérations).
+- **Décision**: route Worker `/github/api/*` qui relaie **uniquement** les opérations de `GitHubConnector` (liste blanche, dépôt configuré seul, `force: false` imposé sur la mise à jour de branche), le PAT étant ajouté côté serveur ; le paramètre `github` ne renvoie plus jamais le PAT (écriture seule). Le navigateur appelle le relais avec sa session.
+- **Alternatives écartées**: (1) GitHub App avec jetons courts par utilisateur — plus lourd (création d'app sur le compte GitHub de l'utilisateur, hors de portée sans son intervention) ; (2) déplacer toute la synchronisation côté Worker — refonte bien plus large pour le même gain de sécurité immédiat.
+- **Limite assumée**: un utilisateur connecté peut toujours, via le relais, écrire sur le dépôt de l'installation (c'est la fonction de synchronisation) ; il ne peut plus en revanche obtenir le jeton ni faire autre chose que les opérations listées.
+- **Reversibility**: Élevée — `GitHubConnector` garde son mode direct (utilisé par l'adaptateur QMS) ; revenir en arrière = reconstruire le connecteur sans `relais`.
+

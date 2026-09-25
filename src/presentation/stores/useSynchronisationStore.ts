@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { AuthApiClient } from '../../connecteurs/auth/AuthApiClient'
-import { GitHubConnector, type FichierAEcrire } from '../../connecteurs/github/GitHubConnector'
+import type { FichierAEcrire, GitHubConnector } from '../../connecteurs/github/GitHubConnector'
 import { ConflitShaError, FichierIntrouvableError } from '../../connecteurs/github/erreurs'
 import {
   appliquerResolutions,
@@ -109,10 +109,7 @@ export const useSynchronisationStore = defineStore('synchronisation', () => {
   }
 
   async function obtenirConnecteur(): Promise<GitHubConnector | null> {
-    const githubStore = useConnexionGitHubStore()
-    await githubStore.charger()
-    if (githubStore.connexion === null) return null
-    return new GitHubConnector(githubStore.connexion)
+    return useConnexionGitHubStore().creerConnecteur()
   }
 
   async function obtenirEtat(): Promise<{ shaBrancheConnue: string | null }> {
