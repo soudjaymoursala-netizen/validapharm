@@ -6,6 +6,7 @@ import {
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
+import { AuthApiClient } from '../../connecteurs/auth/AuthApiClient'
 import { useAuthStore } from './useAuthStore'
 import { useClientsStore } from './useClientsStore'
 
@@ -211,5 +212,31 @@ describe('useClientsStore (Worker/D1)', () => {
     )
     expect(resultat).toEqual({ ok: true })
     expect(await store.obtenirClient(client.id)).toBeUndefined()
+  })
+
+  test('une réponse de chargement arrivée après une création ne fait jamais disparaître le client créé', async () => {
+    // Reproduit la course constatée en CI : la liste demandée au montage de
+    // l'écran revient après la création d'un client, avec l'état d'avant.
+    const original = AuthApiClient.prototype.listerClients
+    let libererPremiereReponse: () => void = () => {}
+    const espion = vi
+      .spyOn(AuthApiClient.prototype, 'listerClients')
+      .mockImplementationOnce(function (this: AuthApiClient, jeton: string) {
+        const perimee = original.call(this, jeton)
+        return new Promise((resolve) => {
+          libererPremiereReponse = () => resolve(perimee)
+        })
+      })
+
+    const store = useClientsStore()
+    const chargement = store.chargerClients()
+    await vi.waitFor(() => expect(espion).toHaveBeenCalledTimes(1))
+    const creation = await store.creerClient({ name: 'Client créé pendant le chargement' })
+    expect('erreur' in creation).toBe(false)
+    libererPremiereReponse()
+    await chargement
+
+    expect(store.clients.map((c) => c.name)).toEqual(['Client créé pendant le chargement'])
+    espion.mockRestore()
   })
 })

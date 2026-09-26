@@ -4268,3 +4268,18 @@ le consultant) ; suppression d'un client avec données → 409 (« projets,
 exigences, tests ») ; compteurs de tentatives présents dans
 `tentatives_connexion` et blocage 429 ; Échap ferme la fenêtre de
 signature (corrigé pendant cette vérification).
+
+### 41.5 Correctif : liste des clients écrasée par une réponse tardive
+
+La CI de la PR #98 (documentation) a de nouveau échoué sur le test
+`GestionClients` « Worker injoignable pendant un archivage » — déjà
+instable sur #96 malgré l'attente bornée en temps. **Vraie cause, pas un
+aléa** : `useClientsStore.chargerClients` (lancé au montage de l'écran)
+remplaçait la liste par sa réponse même quand un client avait été créé,
+modifié ou archivé pendant le chargement ; si la réponse arrivait après la
+création, le client tout juste créé disparaissait de la liste (constat
+« réponse tardive qui écrase une plus récente » de l'audit d'intégrité
+front). Correctif : compteur de modifications locales ; une réponse
+obtenue avant une modification est ignorée et la liste relue (3 essais au
+plus). Test déterministe qui échoue sans le correctif
+(`clients.test.ts`).
