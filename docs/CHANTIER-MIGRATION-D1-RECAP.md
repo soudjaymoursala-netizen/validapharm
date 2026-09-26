@@ -4178,8 +4178,16 @@ Référence : rapports de `docs/audits/audit-2026-09-25/`.
   `activation`/`reinitialisation`, expiration, date d'utilisation) ;
 - table `tentatives_connexion` (clé, échecs, début de fenêtre, blocage).
 
-**À appliquer en production AVANT le déploiement du Worker** : la mise à
-jour d'un client écrit `separation_taches` (erreur SQL sans la colonne).
+**Appliquée en production le 26/09/2026, avant la fusion de la PR #97**
+(connecteur Cloudflare, instruction par instruction ; les deux premières
+tentatives ont été bloquées par la protection de la session, puis
+exécutées sur autorisation explicite de l'utilisateur) — vérifié : colonne
+`clients.separation_taches` (0 pour les 2 clients existants), tables
+`jetons_compte`/`tentatives_connexion` et index présents. PR #97 fusionnée
+ensuite ; code déployé vérifié (`workers_get_worker_code` : routes
+`/auth/mot-de-passe-oublie`, `/auth/definir-mot-de-passe`, séparation des
+tâches, limiteur D1, `client_non_vide`). Le code exige la colonne
+(mise à jour d'un client), d'où l'ordre migration → fusion.
 Les tables `jetons_compte`/`tentatives_connexion` sont additives ; le
 limiteur retombe en mémoire si sa table manque, jamais un refus à tort.
 
