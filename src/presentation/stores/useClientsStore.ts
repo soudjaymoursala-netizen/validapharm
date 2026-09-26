@@ -69,6 +69,8 @@ function trierParNom(clients: Client[]): Client[] {
  * autres entités (`Project`/`Section` restent archivage-only).
  */
 export const useClientsStore = defineStore('clients', () => {
+  /** Compteur des modifications locales de la liste — voir `chargerClients`. */
+  let mutationsLocales = 0
   const clients = ref<Client[]>([])
   const enChargement = ref(false)
 
@@ -100,15 +102,22 @@ export const useClientsStore = defineStore('clients', () => {
         clients.value = []
         return
       }
-      const resultat = await api.listerClients(authStore.jeton)
-      if (resultat.ok) {
-        clients.value = trierParNom(resultat.donnees.clients.map(wireVersClient))
-        return
+      // Une réponse tardive ne doit jamais écraser une modification locale
+      // plus récente (client créé, archivé… pendant le chargement) : dans
+      // ce cas la liste est relue, jamais remplacée par l'état périmé.
+      for (let essai = 0; essai < 3; essai++) {
+        const versionAuDepart = mutationsLocales
+        const resultat = await api.listerClients(authStore.jeton)
+        if (!resultat.ok) {
+          if (resultat.status === 401) await authStore.deconnecter()
+          // Autre échec (403, panne inattendue) : la liste déjà chargée reste affichée.
+          return
+        }
+        if (versionAuDepart === mutationsLocales) {
+          clients.value = trierParNom(resultat.donnees.clients.map(wireVersClient))
+          return
+        }
       }
-      if (resultat.status === 401) {
-        await authStore.deconnecter()
-      }
-      // Autre échec (403, panne inattendue) : la liste déjà chargée reste affichée.
     } catch {
       // Worker injoignable/délai dépassé (panne réseau transitoire) : idem, jamais d'effacement.
     } finally {
@@ -126,6 +135,7 @@ export const useClientsStore = defineStore('clients', () => {
 
     const client = wireVersClient(resultat.donnees.client)
     clients.value = trierParNom([...clients.value, client])
+    mutationsLocales += 1
     return client
   }
 
@@ -173,6 +183,7 @@ export const useClientsStore = defineStore('clients', () => {
 
     const client = wireVersClient(resultat.donnees.client)
     clients.value = trierParNom(clients.value.map((c) => (c.id === clientId ? client : c)))
+    mutationsLocales += 1
     return client
   }
 
@@ -190,6 +201,7 @@ export const useClientsStore = defineStore('clients', () => {
     if (!resultat.ok) return { erreur: resultat.erreur }
     const client = wireVersClient(resultat.donnees.client)
     clients.value = trierParNom(clients.value.map((c) => (c.id === clientId ? client : c)))
+    mutationsLocales += 1
     return client
   }
 
@@ -203,6 +215,7 @@ export const useClientsStore = defineStore('clients', () => {
 
     const client = wireVersClient(resultat.donnees.client)
     clients.value = clients.value.map((c) => (c.id === clientId ? client : c))
+    mutationsLocales += 1
     return client
   }
 
@@ -216,6 +229,7 @@ export const useClientsStore = defineStore('clients', () => {
 
     const client = wireVersClient(resultat.donnees.client)
     clients.value = clients.value.map((c) => (c.id === clientId ? client : c))
+    mutationsLocales += 1
     return client
   }
 
@@ -243,6 +257,7 @@ export const useClientsStore = defineStore('clients', () => {
     if (!resultat.ok) return { erreur: resultat.erreur }
 
     clients.value = clients.value.filter((c) => c.id !== clientId)
+    mutationsLocales += 1
     return { ok: true }
   }
 

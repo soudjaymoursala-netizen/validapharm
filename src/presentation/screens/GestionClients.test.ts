@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import {
@@ -82,22 +82,32 @@ async function attendreQue(condition: () => Promise<boolean> | boolean): Promise
 }
 
 let demonter: () => void
+// Pinia passée explicitement à l'écran et au store : une action d'un test
+// précédent qui se termine en retard réactive son propre Pinia
+// (`setActivePinia`) — l'écran monté ensuite ne doit jamais en dépendre.
+let pinia: Pinia
 
 beforeEach(async () => {
-  setActivePinia(createPinia())
+  pinia = createPinia()
+  setActivePinia(pinia)
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // Un chargement de la liste encore en vol (celui du montage, lent sous la
+  // charge de la CI) atteindrait sinon le faux Worker du test suivant avec
+  // un jeton inconnu : 401, déconnexion, et le test suivant démarrait sans
+  // session (« relais_non_configure » à la création).
+  await attendreQue(() => !useClientsStore(pinia).enChargement)
   demonter()
 })
 
 describe('GestionClients — archivage (§4.31 — vraie session)', () => {
   test('archive un client après double confirmation (nom retapé + vrai mot de passe), le client bascule dans les archives', async () => {
-    const clientsStore = useClientsStore()
-    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
+    const clientsStore = useClientsStore(pinia)
+    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest(), pinia] } })
     await flushPromises()
 
     await wrapper.find('header button').trigger('click')
@@ -147,8 +157,8 @@ describe('GestionClients — archivage (§4.31 — vraie session)', () => {
   })
 
   test('suppression définitive (admin) exige justification + vrai mot de passe, retire le client', async () => {
-    const clientsStore = useClientsStore()
-    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
+    const clientsStore = useClientsStore(pinia)
+    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest(), pinia] } })
     await flushPromises()
 
     await wrapper.find('header button').trigger('click')
@@ -184,10 +194,10 @@ describe('GestionClients — archivage (§4.31 — vraie session)', () => {
 
 describe('GestionClients — échecs serveur/réseau non silencieux', () => {
   test('un échec métier à la création laisse le formulaire ouvert, le brouillon intact, avec un message', async () => {
-    const clientsStore = useClientsStore()
+    const clientsStore = useClientsStore(pinia)
     clientsStore.creerClient = vi.fn().mockResolvedValue({ erreur: 'nom_deja_utilise' })
 
-    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
+    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest(), pinia] } })
     await flushPromises()
 
     await wrapper.find('header button').trigger('click')
@@ -206,8 +216,8 @@ describe('GestionClients — échecs serveur/réseau non silencieux', () => {
   })
 
   test('un Worker injoignable pendant un archivage affiche un message, ne déplace pas le client', async () => {
-    const clientsStore = useClientsStore()
-    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
+    const clientsStore = useClientsStore(pinia)
+    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest(), pinia] } })
     await flushPromises()
 
     await wrapper.find('header button').trigger('click')
@@ -233,8 +243,8 @@ describe('GestionClients — échecs serveur/réseau non silencieux', () => {
   })
 
   test('un conflit "déjà désarchivé entre-temps" affiche un message clair plutôt que de rester muet', async () => {
-    const clientsStore = useClientsStore()
-    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest()] } })
+    const clientsStore = useClientsStore(pinia)
+    const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest(), pinia] } })
     await flushPromises()
 
     await wrapper.find('header button').trigger('click')
