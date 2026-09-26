@@ -45,7 +45,11 @@ import { useProcedureStore } from '../stores/useProcedureStore'
 import { useClientActifStore } from '../stores/useClientActifStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
-import { useSectionsStore, type ResultatActionSection } from '../stores/useSectionsStore'
+import {
+  avisDuCycleCourant,
+  useSectionsStore,
+  type ResultatActionSection,
+} from '../stores/useSectionsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 
 const props = defineProps<{ projectId: string; sectionId: string }>()
@@ -68,12 +72,7 @@ const authStore = useAuthStore()
 // reste de toute façon le seul juge du droit d'écriture).
 const lectureSeule = computed(() =>
   section.value && projet.value
-    ? !peutModifierSection(
-        projet.value,
-        section.value,
-        identifiantActeurCourant(),
-        authStore.estAdmin,
-      )
+    ? !peutModifierSection(projet.value, identifiantActeurCourant(), authStore.estAdmin)
     : false,
 )
 // Un projet appartient à un client : la barre latérale doit proposer les
@@ -91,8 +90,59 @@ const contenu = ref('')
 const motifRejet = ref('')
 const motifForcage = ref('')
 const nouvelApprobateur = ref('')
-const nouvelAvisRelecteurId = ref('')
 const nouvelAvisRelecteurTexte = ref('')
+/** Refus du serveur ou saisie incomplète sur le workflow — toujours affiché, jamais un clic sans effet. */
+const erreurWorkflow = ref<string | null>(null)
+/** Indicateur de sauvegarde automatique (audit UX du 26/09/2026 : rien n'indiquait si le travail était enregistré). */
+const etatSauvegarde = ref<'inactif' | 'en_cours' | 'enregistre' | 'erreur'>('inactif')
+const heureSauvegarde = ref<string | null>(null)
+const erreurSauvegarde = ref<string | null>(null)
+
+async function sauvegarder(ecriture: () => Promise<void>): Promise<void> {
+  etatSauvegarde.value = 'en_cours'
+  try {
+    await ecriture()
+    etatSauvegarde.value = 'enregistre'
+    heureSauvegarde.value = new Date().toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
+    erreurSauvegarde.value = null
+  } catch (e) {
+    etatSauvegarde.value = 'erreur'
+    erreurSauvegarde.value = e instanceof Error ? e.message : "Échec de l'enregistrement."
+  }
+}
+
+/** Exécute une action de workflow, affiche son refus éventuel en clair, puis recharge. */
+async function actionWorkflow(action: () => Promise<void>): Promise<void> {
+  erreurWorkflow.value = null
+  try {
+    await action()
+  } catch (e) {
+    erreurWorkflow.value = e instanceof Error ? e.message : "L'action n'a pas pu être enregistrée."
+  }
+  await recharger()
+}
+
+const emailCourant = computed(() => authStore.utilisateur?.email ?? '')
+/** Seul l'approbateur désigné (ou un admin) peut approuver — même règle que le Worker. */
+const peutApprouver = computed(
+  () =>
+    authStore.estAdmin ||
+    (section.value?.workflow.approver_final ?? '').trim().toLowerCase() ===
+      emailCourant.value.toLowerCase(),
+)
+const avisCycleCourant = computed(
+  () => new Set(section.value ? avisDuCycleCourant(section.value) : []),
+)
+function dateLisible(iso: string): string {
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime())
+    ? iso
+    : date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+}
 const sectionCibleLienId = ref('')
 const procedureLienId = ref('')
 const noeudLienId = ref('')
@@ -339,7 +389,7 @@ watch(contenu, (valeur) => {
   if (rechargementEnCours) return
   if (minuteurSauvegarde) clearTimeout(minuteurSauvegarde)
   minuteurSauvegarde = setTimeout(() => {
-    void sectionsStore.mettreAJourValeurs(props.sectionId, { contenu: valeur })
+    void sauvegarder(() => sectionsStore.mettreAJourValeurs(props.sectionId, { contenu: valeur }))
   }, 400)
 })
 
@@ -348,7 +398,7 @@ async function majValeursGabarit(valeurs: Record<string, string | number | null>
   // RenduGabarit — jamais refusionné ici avec `section.value.values`, qui
   // pourrait être en retard d'un aller-retour de sauvegarde (course
   // trouvée en navigateur entre deux champs modifiés rapidement).
-  await sectionsStore.mettreAJourValeurs(props.sectionId, valeurs)
+  await sauvegarder(() => sectionsStore.mettreAJourValeurs(props.sectionId, valeurs))
   await recharger()
 }
 
@@ -356,7 +406,7 @@ async function majTableGabarit(
   cleTable: string,
   lignes: Array<Record<string, string | number | null>>,
 ): Promise<void> {
-  await sectionsStore.mettreAJourTable(props.sectionId, cleTable, lignes)
+  await sauvegarder(() => sectionsStore.mettreAJourTable(props.sectionId, cleTable, lignes))
   await recharger()
 }
 
@@ -542,39 +592,67 @@ const raisonTransitionBloquee = computed(() => {
 })
 
 async function engagerVerification(): Promise<void> {
-  dernierResultat.value = await sectionsStore.engagerVerification(props.sectionId)
-  if (dernierResultat.value.ok) motifForcage.value = ''
-  await recharger()
+  await actionWorkflow(async () => {
+    dernierResultat.value = await sectionsStore.engagerVerification(props.sectionId)
+    if (dernierResultat.value.ok) motifForcage.value = ''
+  })
+}
+
+const CONFIRMATION_APPROBATION =
+  "Approuver verrouille définitivement la section (statut « validée en interne ») : son contenu ne pourra plus être modifié. Confirmer l'approbation ?"
+
+function motifForcageSaisi(): boolean {
+  if (motifForcage.value.trim().length > 0) return true
+  erreurWorkflow.value = 'Saisissez le motif du forçage avant de forcer.'
+  return false
 }
 
 async function forcerEngagerVerification(): Promise<void> {
-  dernierResultat.value = await sectionsStore.engagerVerification(
-    props.sectionId,
-    motifForcage.value,
-  )
-  if (dernierResultat.value.ok) motifForcage.value = ''
-  await recharger()
+  if (!motifForcageSaisi()) return
+  await actionWorkflow(async () => {
+    dernierResultat.value = await sectionsStore.engagerVerification(
+      props.sectionId,
+      motifForcage.value,
+    )
+    if (dernierResultat.value.ok) motifForcage.value = ''
+  })
 }
 
 async function transmettreApprobation(): Promise<void> {
-  dernierResultat.value = await sectionsStore.transmettreApprobation(props.sectionId)
-  await recharger()
+  await actionWorkflow(async () => {
+    dernierResultat.value = await sectionsStore.transmettreApprobation(props.sectionId)
+  })
 }
 
 async function approuver(): Promise<void> {
-  dernierResultat.value = await sectionsStore.approuver(props.sectionId)
-  await recharger()
+  if (!window.confirm(CONFIRMATION_APPROBATION)) return
+  await actionWorkflow(async () => {
+    dernierResultat.value = await sectionsStore.approuver(props.sectionId)
+  })
 }
 
 async function forcerApprouver(): Promise<void> {
-  dernierResultat.value = await sectionsStore.approuver(props.sectionId, motifForcage.value)
-  if (dernierResultat.value.ok) motifForcage.value = ''
-  await recharger()
+  if (!motifForcageSaisi()) return
+  if (!window.confirm(CONFIRMATION_APPROBATION)) return
+  await actionWorkflow(async () => {
+    dernierResultat.value = await sectionsStore.approuver(props.sectionId, motifForcage.value)
+    if (dernierResultat.value.ok) motifForcage.value = ''
+  })
 }
 
 async function rejeter(): Promise<void> {
-  if (motifRejet.value.trim().length === 0) return
-  dernierResultat.value = await sectionsStore.rejeter(props.sectionId, motifRejet.value)
+  erreurWorkflow.value = null
+  if (motifRejet.value.trim().length === 0) {
+    erreurWorkflow.value = 'Saisissez un motif de rejet avant de rejeter.'
+    return
+  }
+  try {
+    dernierResultat.value = await sectionsStore.rejeter(props.sectionId, motifRejet.value)
+  } catch (e) {
+    erreurWorkflow.value = e instanceof Error ? e.message : "Le rejet n'a pas pu être enregistré."
+    await recharger()
+    return
+  }
   // Un rejet bloqué (garde-fou de transition) ne doit jamais effacer le
   // motif que l'utilisateur vient de saisir — bug réel trouvé le
   // 13/09/2026 : le champ était vidé même en cas d'échec, sans que rien
@@ -705,27 +783,27 @@ async function poserQuestionAssistant(): Promise<void> {
 }
 
 async function assignerApprobateur(): Promise<void> {
-  if (nouvelApprobateur.value.trim().length === 0) return
-  await sectionsStore.assignerApprobateurFinal(props.sectionId, nouvelApprobateur.value.trim())
-  nouvelApprobateur.value = ''
-  await recharger()
+  const email = nouvelApprobateur.value.trim()
+  if (!/^[^\s@]+@[^\s@]+$/.test(email)) {
+    erreurWorkflow.value = "Saisissez l'adresse e-mail du compte de l'approbateur final."
+    return
+  }
+  await actionWorkflow(async () => {
+    await sectionsStore.assignerApprobateurFinal(props.sectionId, email)
+    nouvelApprobateur.value = ''
+  })
 }
 
 async function ajouterAvisRelecteur(): Promise<void> {
-  if (
-    nouvelAvisRelecteurId.value.trim().length === 0 ||
-    nouvelAvisRelecteurTexte.value.trim().length === 0
-  ) {
+  const avis = nouvelAvisRelecteurTexte.value.trim()
+  if (avis.length === 0) {
+    erreurWorkflow.value = 'Saisissez votre avis avant de l’enregistrer.'
     return
   }
-  await sectionsStore.ajouterAvisRelecteur(
-    props.sectionId,
-    nouvelAvisRelecteurId.value.trim(),
-    nouvelAvisRelecteurTexte.value.trim(),
-  )
-  nouvelAvisRelecteurId.value = ''
-  nouvelAvisRelecteurTexte.value = ''
-  await recharger()
+  await actionWorkflow(async () => {
+    await sectionsStore.ajouterAvisRelecteur(props.sectionId, avis)
+    nouvelAvisRelecteurTexte.value = ''
+  })
 }
 </script>
 
@@ -741,6 +819,20 @@ async function ajouterAvisRelecteur(): Promise<void> {
     <p class="meta">
       {{ LIBELLES_GABARIT[section.template_type] }} — statut :
       <strong>{{ libelleStatut(section.status, section.language) }}</strong>
+    </p>
+
+    <p
+      v-if="etatSauvegarde !== 'inactif'"
+      class="etat-sauvegarde no-print"
+      :class="`etat-sauvegarde--${etatSauvegarde}`"
+      role="status"
+      aria-live="polite"
+    >
+      <template v-if="etatSauvegarde === 'en_cours'">Enregistrement…</template>
+      <template v-else-if="etatSauvegarde === 'enregistre'">
+        Enregistré à {{ heureSauvegarde }}
+      </template>
+      <template v-else>Non enregistré : {{ erreurSauvegarde }}</template>
     </p>
 
     <p v-if="lectureSeule" class="bandeau-lecture-seule no-print" role="status">
@@ -1059,38 +1151,52 @@ async function ajouterAvisRelecteur(): Promise<void> {
         </template>
       </section>
 
-      <section v-if="section.status !== 'valide_en_interne'" class="workflow no-print">
+      <section class="workflow no-print">
         <h2>Workflow</h2>
         <p>
           Approbateur final :
           <strong>{{ section.workflow.approver_final ?? 'non renseigné' }}</strong>
         </p>
-        <div class="ligne-formulaire">
+        <div
+          v-if="section.status !== 'valide_en_interne' && !lectureSeule"
+          class="ligne-formulaire"
+        >
           <label>
-            Identifiant approbateur final
-            <input v-model="nouvelApprobateur" type="text" placeholder="ex. qa-1" />
+            Adresse e-mail de l'approbateur final
+            <input
+              v-model="nouvelApprobateur"
+              type="email"
+              placeholder="ex. qualite@client.com"
+              autocomplete="off"
+            />
           </label>
-          <button type="button" @click="assignerApprobateur">Assigner</button>
+          <button type="button" @click="assignerApprobateur">Désigner</button>
+          <button type="button" @click="nouvelApprobateur = emailCourant">Moi-même</button>
         </div>
 
-        <p>Avis relecteurs : {{ section.workflow.reviewers.length }}</p>
+        <p>Avis de relecture : {{ section.workflow.reviewers.length }}</p>
         <ul v-if="section.workflow.reviewers.length > 0" class="liste-avis">
           <li v-for="(avis, index) in section.workflow.reviewers" :key="index">
             {{ avis.user_id }} — {{ avis.avis }}
+            <span class="date-avis">({{ dateLisible(avis.date) }})</span>
+            <span v-if="!avisCycleCourant.has(avis)" class="avis-perime">
+              — cycle rejeté, ne compte plus
+            </span>
           </li>
         </ul>
-        <div class="ligne-formulaire">
+        <div
+          v-if="section.status !== 'valide_en_interne' && !lectureSeule"
+          class="ligne-formulaire"
+        >
           <label>
-            Identifiant relecteur
-            <input v-model="nouvelAvisRelecteurId" type="text" placeholder="ex. revu-1" />
-          </label>
-          <label>
-            Avis
+            Votre avis (enregistré au nom de {{ emailCourant }})
             <input v-model="nouvelAvisRelecteurTexte" type="text" placeholder="ex. Favorable" />
           </label>
-          <button type="button" @click="ajouterAvisRelecteur">Ajouter l'avis</button>
+          <button type="button" @click="ajouterAvisRelecteur">Enregistrer mon avis</button>
         </div>
       </section>
+
+      <p v-if="erreurWorkflow" class="blocage no-print" role="alert">{{ erreurWorkflow }}</p>
 
       <div v-if="messagesBlocage.length > 0" class="blocage no-print" role="alert">
         <p v-for="message in messagesBlocage" :key="message">
@@ -1140,7 +1246,11 @@ async function ajouterAvisRelecteur(): Promise<void> {
         </template>
 
         <template v-else-if="section.status === 'en_approbation'">
-          <button type="button" @click="approuver">Approuver</button>
+          <button type="button" :disabled="!peutApprouver" @click="approuver">Approuver</button>
+          <p v-if="!peutApprouver" class="rappel">
+            Seul l'approbateur désigné ({{ section.workflow.approver_final ?? 'non renseigné' }}) ou
+            un administrateur peut approuver.
+          </p>
           <label>
             Motif de rejet
             <input v-model="motifRejet" type="text" />
@@ -1149,8 +1259,8 @@ async function ajouterAvisRelecteur(): Promise<void> {
         </template>
 
         <p v-else-if="section.status === 'valide_en_interne'" class="verrouille">
-          Section verrouillée (validée en interne — pas une signature électronique opposable).
-          Nouvelle révision : backlog.
+          Section verrouillée (validée en interne — pas une signature électronique opposable). Son
+          contenu ne peut plus être modifié ; les exports restent disponibles.
         </p>
       </div>
 
@@ -1229,6 +1339,23 @@ async function ajouterAvisRelecteur(): Promise<void> {
   margin: 0;
   padding: 0;
   min-width: 0;
+}
+
+.etat-sauvegarde {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--vp-texte-secondaire);
+}
+
+.etat-sauvegarde--erreur {
+  color: var(--vp-danger);
+  font-weight: 600;
+}
+
+.date-avis,
+.avis-perime {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.875rem;
 }
 
 .bandeau-lecture-seule {

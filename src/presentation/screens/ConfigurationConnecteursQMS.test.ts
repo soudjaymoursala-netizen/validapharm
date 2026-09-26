@@ -115,7 +115,10 @@ describe('ConfigurationConnecteursQMS', () => {
 
     await wrapper.find('input[type="text"]').setValue('Dossier réseau')
     await wrapper.find('select').setValue('dossier_reseau')
-    await flushPromises()
+    // Sous charge, le formulaire du type par défaut (GitHub : 3 champs) peut
+    // encore être affiché juste après le changement : attente bornée du
+    // formulaire « Dossier réseau » (nom + chemin).
+    await attendreQue(() => wrapper.findAll('input[type="text"]').length === 2)
     const inputsChemin = wrapper.findAll('input[type="text"]')
     expect(inputsChemin).toHaveLength(2)
     await inputsChemin[1]?.setValue('\\\\serveur\\partage')

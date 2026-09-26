@@ -92,6 +92,11 @@ afterEach(() => {
   demonter()
 })
 
+// La clôture (irréversible) demande désormais une confirmation explicite.
+beforeEach(() => {
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+})
+
 describe('ExecutionTests', () => {
   test('démarre une exécution, enregistre un résultat + une mesure, consigne une preuve, clôture avec verdict explicite', async () => {
     const testId = await creerTestApprouve()

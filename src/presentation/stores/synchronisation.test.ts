@@ -527,7 +527,10 @@ describe('useSynchronisationStore — confirmerResolutionConflits', () => {
     const fusionne = await obtenirProjetDeTest('p1')
     expect(fusionne?.name).toBe('Nom local')
     expect(fusionne?.context).toBe('contexte distant')
-    expect(fusionne?.audit_log.at(-1)?.action).toBe(
+    // Dernière entrée : la trace serveur de la restauration (admin) ;
+    // juste avant, le motif structuré de la résolution.
+    expect(fusionne?.audit_log.at(-1)?.action).toBe('restauration_github')
+    expect(fusionne?.audit_log.at(-2)?.action).toBe(
       'Résolution de conflit — name: version locale ; context: version distante',
     )
 

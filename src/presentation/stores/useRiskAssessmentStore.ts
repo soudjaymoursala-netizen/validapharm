@@ -329,7 +329,6 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
     const echelle = profilFige
       ? { min: profilFige.echelle_min, max: profilFige.echelle_max }
       : { min: 1, max: 5 }
-    const seuilAction = profilFige?.seuil_action ?? Infinity
     const resultatIPR = calculerIPR(
       input.severiteResiduelle,
       input.occurrenceResiduelle,
@@ -351,7 +350,12 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
         occurrenceResiduelle: input.occurrenceResiduelle,
         detectabiliteResiduelle: input.detectabiliteResiduelle,
         iprResiduel: resultatIPR.calcule ? resultatIPR.valeur : null,
-        verdictResiduel: evaluerVerdictRiskAssessment(resultatIPR, seuilAction),
+        // Profil figé introuvable : aucun seuil connu, donc aucun verdict —
+        // jamais « acceptable » par défaut (audit d'intégrité front, M4 :
+        // un seuil infini rendait toute ligne acceptable, IPR 125 compris).
+        verdictResiduel: profilFige
+          ? evaluerVerdictRiskAssessment(resultatIPR, profilFige.seuil_action)
+          : null,
       },
     )
     if (!resultat.ok) {

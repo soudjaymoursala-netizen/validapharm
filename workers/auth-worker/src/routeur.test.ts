@@ -43,6 +43,7 @@ import { SectionsRepoMemoire } from './repos/sectionsRepo'
 import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
 import { StructureSystemeRepoMemoire } from './repos/structureSystemeRepo'
 import { UtilisateursRepoMemoire } from './repos/utilisateursRepo'
+import { LimiteurConnexion } from './limiteurConnexion'
 import { routerRequete, type Contexte } from './routeur'
 
 const ORIGINE = 'https://validapharm.example'
@@ -1614,9 +1615,20 @@ describe('routerRequete — clients (D1 = source de vérité)', () => {
     expect(sansJustification.status).toBe(400)
     expect(sansJustification.corps.erreur).toBe('justification_obligatoire')
 
-    const suppression = await requete(ctx, 'DELETE', `/clients/${clientId}`, {
+    // Mot de passe vérifié par le serveur (audit du 25/09/2026, M6).
+    const sansMotDePasse = await requete(ctx, 'DELETE', `/clients/${clientId}`, {
       jeton: admin.jeton,
       body: { justification: 'Client fermé, RGPD, demande écrite du 04/09/2026' },
+    })
+    expect(sansMotDePasse.status).toBe(403)
+    expect(sansMotDePasse.corps.erreur).toBe('mot_de_passe_incorrect')
+
+    const suppression = await requete(ctx, 'DELETE', `/clients/${clientId}`, {
+      jeton: admin.jeton,
+      body: {
+        justification: 'Client fermé, RGPD, demande écrite du 04/09/2026',
+        motDePasse: 'CoffreFort!2026',
+      },
     })
     expect(suppression.status).toBe(200)
 
@@ -8324,11 +8336,20 @@ describe('routerRequete — Projects (Phase 3a du chantier de migration D1)', ()
       body: { projects: [projetLocal] },
     })
     expect(migration.status).toBe(201)
-    expect(migration.corps.projects).toEqual([projetLocal])
+    // Historique d'origine conservé, suivi d'une entrée serveur qui marque
+    // la migration (qui, quand, origine non vérifiée — audit du 25/09/2026).
+    const historiqueMigre = [
+      ...projetLocal.auditLog,
+      expect.objectContaining({
+        actor: 'admin@pharmatech.example',
+        action: "migration_locale (historique d'origine non vérifié)",
+      }),
+    ]
+    expect(migration.corps.projects).toEqual([{ ...projetLocal, auditLog: historiqueMigre }])
 
     const obtenir = await requete(ctx, 'GET', `/projects/${projetLocal.id}`, { jeton: admin.jeton })
     expect(obtenir.corps.projet.createdAt).toBe('2025-01-01T00:00:00.000Z')
-    expect(obtenir.corps.projet.auditLog).toEqual(projetLocal.auditLog)
+    expect(obtenir.corps.projet.auditLog).toEqual(historiqueMigre)
 
     const migrationRejouee = await requete(ctx, 'POST', '/projects/migration-locale', {
       jeton: admin.jeton,
@@ -8426,11 +8447,13 @@ describe('routerRequete — Sections (Phase 3b du chantier de migration D1)', ()
       body: sectionMinimale('s1', projectId),
     })
 
+    const creee = (await requete(ctx, 'GET', '/sections/s1', { jeton: admin.jeton })).corps.section
     const sectionModifiee = {
       ...sectionMinimale('id-different-ignoré', 'projet-different-ignoré'),
       status: 'en_verification',
+      workflow: { authors: ['admin@pharmatech.example'], reviewers: [], approverFinal: 'x@y.z' },
       auditLog: [
-        ...sectionMinimale('s1', projectId).auditLog,
+        ...creee.auditLog,
         {
           timestamp: '2026-01-02T00:00:00.000Z',
           actor: 'admin@pharmatech.example',
@@ -8505,14 +8528,30 @@ describe('routerRequete — Sections (Phase 3b du chantier de migration D1)', ()
       body: { sections: [sectionLocale] },
     })
     expect(migration.status).toBe(201)
-    expect(migration.corps.sections).toEqual([sectionLocale])
+    expect(migration.corps.sections).toEqual([
+      {
+        ...sectionLocale,
+        auditLog: [
+          ...sectionLocale.auditLog,
+          expect.objectContaining({
+            action: "migration_locale (historique d'origine non vérifié)",
+          }),
+        ],
+      },
+    ])
 
     const obtenir = await requete(ctx, 'GET', '/sections/s-locale', { jeton: admin.jeton })
     expect(obtenir.corps.section.createdAt).toBe('2025-01-01T00:00:00.000Z')
 
+    const migree = (await requete(ctx, 'GET', '/sections/s-locale', { jeton: admin.jeton })).corps
+      .section
     const remplacement = await requete(ctx, 'PUT', '/sections/s-locale', {
       jeton: admin.jeton,
-      body: { ...sectionLocale, status: 'en_verification' },
+      body: {
+        ...migree,
+        status: 'en_verification',
+        workflow: { ...migree.workflow, approverFinal: 'admin@pharmatech.example' },
+      },
     })
     expect(remplacement.status).toBe(200)
 
@@ -9740,7 +9779,9 @@ describe('routerRequete — protection réelle projets/sections/documents (déci
       jeton: c.jeton,
       body: section('s1', projectId, c.email),
     })
-    expect(ecrasement.status).toBe(404)
+    // Restauration réservée aux admins (audit du 25/09/2026) : refusée
+    // d'emblée, sans révéler si la section existe.
+    expect(ecrasement.status).toBe(403)
     expect((await ctx.sectionsRepo.obtenirSection('s1'))?.ownerId).toBe('a@pharmatech.example')
 
     const suppression = await requete(ctx, 'DELETE', `/project-documents/${documentId}`, {
@@ -9770,11 +9811,14 @@ describe('routerRequete — protection réelle projets/sections/documents (déci
       body: { ...projet, ownerId: b.email },
     })
     expect(appropriation.status).toBe(403)
-    const restaurationLegitime = await requete(ctx, 'PUT', `/projects/${projectId}/restauration`, {
+    // La restauration (synchronisation GitHub) est réservée aux admins
+    // depuis l'audit du 25/09/2026 : même une modification de contenu est
+    // refusée à un partagé en édition par cette voie.
+    const restauration = await requete(ctx, 'PUT', `/projects/${projectId}/restauration`, {
       jeton: b.jeton,
       body: { ...projet, context: 'Mis à jour par B' },
     })
-    expect(restaurationLegitime.status).toBe(200)
+    expect(restauration.status).toBe(403)
   })
 
   test('jamais un projet créé au nom d’un autre, ni rattaché à un client inaccessible', async () => {
@@ -10038,5 +10082,521 @@ describe('routerRequete — relais IA et secrets des paramètres (jamais renvoy�
       jeton: 'acces-court',
       refreshToken: 'refresh-google',
     })
+  })
+})
+
+describe('routerRequete — correctifs de l’audit de sécurité du 25/09/2026', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function compte(ctx: Contexte, adminJeton: string, email: string) {
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: adminJeton,
+      body: { email, motDePasse: 'MotDePasse!1', nom: 'N', prenom: 'P', role: 'utilisateur' },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email, motDePasse: 'MotDePasse!1' },
+    })
+    return { email, jeton: login.corps.jeton as string, id: login.corps.utilisateur.id }
+  }
+
+  function nouvelleSection(id: string, projectId: string): SectionJson {
+    return {
+      id,
+      projectId,
+      templateType: 'oq',
+      templateEngineVersion: '0.1.0',
+      ownerId: 'quelqu-un-d-autre@ex.com',
+      sharedWith: [],
+      language: 'fr',
+      status: 'brouillon_aide',
+      meta: { ref: '', titre: 'OQ', version: '0.1' },
+      workflow: { authors: ['x@ex.com'], reviewers: [], approverFinal: null },
+      signatures: {
+        redacteur: {},
+        verificateur: {},
+        approbateur: { userId: 'faux@ex.com', date: '2020-01-01' },
+      },
+      revisions: [],
+      values: {},
+      tables: {},
+      generationSource: { sourceDocumentId: null, generatedFields: [] },
+      procedureId: null,
+      assetNodeId: null,
+      auditLog: [
+        { timestamp: '2020-01-01T00:00:00.000Z', actor: 'faux@ex.com', action: 'création' },
+      ],
+      createdAt: '2020-01-01T00:00:00.000Z',
+      updatedAt: '2020-01-01T00:00:00.000Z',
+    }
+  }
+
+  /** Admin, un projet, et B partagé en édition dessus. */
+  async function preparerSection() {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const b = await compte(ctx, admin.jeton, 'b@pharmatech.example')
+    const projectId = (
+      await requete(ctx, 'POST', '/projects', { jeton: admin.jeton, body: { name: 'P' } })
+    ).corps.projet.id as string
+    await requete(ctx, 'POST', `/projects/${projectId}/partage`, {
+      jeton: admin.jeton,
+      body: { userId: b.email, accessLevel: 'édition' },
+    })
+    const creation = await requete(ctx, 'POST', '/sections', {
+      jeton: b.jeton,
+      body: nouvelleSection('s1', projectId),
+    })
+    return { ctx, admin, b, projectId, creation }
+  }
+
+  async function lire(ctx: Contexte, jeton: string, id = 's1'): Promise<SectionJson> {
+    return (await requete(ctx, 'GET', `/sections/${id}`, { jeton })).corps.section
+  }
+
+  test('C1 — création : propriétaire, historique, signatures et dates imposés par le serveur', async () => {
+    const { creation, b } = await preparerSection()
+    expect(creation.status).toBe(201)
+    const section = creation.corps.section
+    expect(section.ownerId).toBe(b.email)
+    expect(section.signatures.approbateur).toEqual({})
+    expect(section.auditLog).toHaveLength(1)
+    expect(section.auditLog[0]).toMatchObject({ actor: b.email, action: 'création' })
+    expect(section.auditLog[0]?.timestamp).not.toBe('2020-01-01T00:00:00.000Z')
+    expect(section.createdAt).not.toBe('2020-01-01T00:00:00.000Z')
+  })
+
+  test('C1 — création : jamais une section déjà vérifiée ou approuvée', async () => {
+    const { ctx, b, projectId } = await preparerSection()
+    const reponse = await requete(ctx, 'POST', '/sections', {
+      jeton: b.jeton,
+      body: { ...nouvelleSection('s2', projectId), status: 'valide_en_interne' },
+    })
+    expect(reponse.status).toBe(400)
+    expect(reponse.corps.erreur).toBe('statut_creation_invalide')
+  })
+
+  test('C1 — historique en ajout seul, nouvelles entrées attribuées à la personne connectée', async () => {
+    const { ctx, b } = await preparerSection()
+    const section = await lire(ctx, b.jeton)
+
+    const reecriture = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: {
+        ...section,
+        auditLog: [{ timestamp: '2020-01-01T00:00:00.000Z', actor: 'x', action: 'approbation' }],
+      },
+    })
+    expect(reecriture.status).toBe(409)
+    expect(reecriture.corps.erreur).toBe('historique_altere')
+
+    const ajout = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: {
+        ...section,
+        values: { a: 1 },
+        signatures: { ...section.signatures, approbateur: { userId: 'faux', date: '2020' } },
+        auditLog: [
+          ...section.auditLog,
+          {
+            timestamp: '2020-01-01T00:00:00.000Z',
+            actor: 'admin@pharmatech.example',
+            action: 'modification',
+          },
+        ],
+      },
+    })
+    expect(ajout.status).toBe(200)
+    const derniere = ajout.corps.section.auditLog.at(-1)
+    expect(derniere?.actor).toBe(b.email)
+    expect(derniere?.timestamp).not.toBe('2020-01-01T00:00:00.000Z')
+    expect(ajout.corps.section.signatures.approbateur).toEqual({})
+  })
+
+  test('C1 — écriture sans entrée d’historique : le serveur en ajoute une', async () => {
+    const { ctx, b } = await preparerSection()
+    const section = await lire(ctx, b.jeton)
+    const reponse = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...section, values: { a: 2 } },
+    })
+    expect(reponse.status).toBe(200)
+    expect(reponse.corps.section.auditLog).toHaveLength(2)
+    expect(reponse.corps.section.auditLog[1]).toMatchObject({
+      actor: b.email,
+      action: 'modification',
+    })
+  })
+
+  test('C4 — contrôle de version : une écriture basée sur une version périmée est refusée', async () => {
+    const { ctx, b } = await preparerSection()
+    const section = await lire(ctx, b.jeton)
+    const premiere = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...section, values: { a: 1 }, versionAttendue: section.updatedAt },
+    })
+    expect(premiere.status).toBe(200)
+    await new Promise((r) => setTimeout(r, 5))
+    const perimee = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...section, tables: { t: [] }, versionAttendue: section.updatedAt },
+    })
+    expect(perimee.status).toBe(409)
+    expect(perimee.corps.erreur).toBe('conflit_version')
+  })
+
+  async function amenerEnApprobation(ctx: Contexte, jeton: string, approbateur: string) {
+    let s = await lire(ctx, jeton)
+    const ecrire = async (changements: Partial<SectionJson>, action: string) => {
+      const reponse = await requete(ctx, 'PUT', '/sections/s1', {
+        jeton,
+        body: {
+          ...s,
+          ...changements,
+          auditLog: [...s.auditLog, { timestamp: 'x', actor: 'x', action }],
+        },
+      })
+      expect(reponse.status, action).toBe(200)
+      s = reponse.corps.section
+      return s
+    }
+    await ecrire({ workflow: { ...s.workflow, approverFinal: approbateur } }, 'modification')
+    await ecrire({ status: 'en_verification' }, 'changement_statut: engager_verification')
+    await ecrire(
+      {
+        workflow: {
+          ...s.workflow,
+          reviewers: [{ userId: 'quelqu-un@ex.com', avis: 'OK', date: '2020-01-01' }],
+        },
+      },
+      'avis',
+    )
+    await ecrire({ status: 'en_approbation' }, 'changement_statut: transmettre_approbation')
+    return s
+  }
+
+  test('C1/C2 — un avis de relecture est toujours celui de la personne connectée, à l’heure du serveur', async () => {
+    const { ctx, b } = await preparerSection()
+    const s = await amenerEnApprobation(ctx, b.jeton, b.email)
+    expect(s.workflow.reviewers[0]?.userId).toBe(b.email)
+    expect(s.workflow.reviewers[0]?.date).not.toBe('2020-01-01')
+  })
+
+  test('C1/C2 — transitions contrôlées : pas de saut de statut, gardes vérifiées', async () => {
+    const { ctx, b } = await preparerSection()
+    const s = await lire(ctx, b.jeton)
+    const saut = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...s, status: 'valide_en_interne' },
+    })
+    expect(saut.status).toBe(409)
+    expect(saut.corps.erreur).toBe('transition_invalide')
+    const sansRoles = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...s, status: 'en_verification' },
+    })
+    expect(sansRoles.corps.erreur).toBe('roles_manquants')
+  })
+
+  test('C2 — approbation réservée à l’approbateur désigné (ou un admin)', async () => {
+    const { ctx, admin, b } = await preparerSection()
+    const s = await amenerEnApprobation(ctx, b.jeton, admin.utilisateur.email)
+    const parB = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...s, status: 'valide_en_interne' },
+    })
+    expect(parB.status).toBe(403)
+    expect(parB.corps.erreur).toBe('approbateur_requis')
+    const parApprobateur = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: admin.jeton,
+      body: { ...s, status: 'valide_en_interne' },
+    })
+    expect(parApprobateur.status).toBe(200)
+  })
+
+  test('C2 — après un rejet, les avis du cycle précédent ne suffisent plus', async () => {
+    const { ctx, b } = await preparerSection()
+    const s = await amenerEnApprobation(ctx, b.jeton, b.email)
+    const sansMotif = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...s, status: 'brouillon_aide' },
+    })
+    expect(sansMotif.corps.erreur).toBe('motif_requis')
+    const rejet = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: {
+        ...s,
+        status: 'brouillon_aide',
+        auditLog: [...s.auditLog, { timestamp: 'x', actor: 'x', action: 'rejet : incomplet' }],
+      },
+    })
+    expect(rejet.status).toBe(200)
+    await new Promise((r) => setTimeout(r, 5))
+    let r = rejet.corps.section
+    r = (
+      await requete(ctx, 'PUT', '/sections/s1', {
+        jeton: b.jeton,
+        body: { ...r, status: 'en_verification' },
+      })
+    ).corps.section
+    const transmission = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...r, status: 'en_approbation' },
+    })
+    expect(transmission.status).toBe(409)
+    expect(transmission.corps.erreur).toBe('avis_manquant')
+  })
+
+  test('C1 — section validée verrouillée : seul l’historique (export) évolue', async () => {
+    const { ctx, b } = await preparerSection()
+    const s = await amenerEnApprobation(ctx, b.jeton, b.email)
+    const validee = (
+      await requete(ctx, 'PUT', '/sections/s1', {
+        jeton: b.jeton,
+        body: { ...s, status: 'valide_en_interne' },
+      })
+    ).corps.section
+    const modification = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...validee, values: { a: 'changé' } },
+    })
+    expect(modification.status).toBe(409)
+    expect(modification.corps.erreur).toBe('section_verrouillee')
+    const exportJournalise = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: {
+        ...validee,
+        auditLog: [...validee.auditLog, { timestamp: 'x', actor: 'x', action: 'export' }],
+      },
+    })
+    expect(exportJournalise.status).toBe(200)
+    expect(exportJournalise.corps.section.auditLog.at(-1)).toMatchObject({
+      actor: b.email,
+      action: 'export',
+    })
+  })
+
+  test('M2 — le partage de section ne donne aucun droit hors du projet, et suit la révocation', async () => {
+    const { ctx, admin, b, projectId } = await preparerSection()
+    const c = await compte(ctx, admin.jeton, 'c@pharmatech.example')
+    const s = await lire(ctx, b.jeton)
+    // B (partagé en édition) ne peut pas distribuer de droits…
+    const partage = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: b.jeton,
+      body: { ...s, sharedWith: [{ userId: c.email, accessLevel: 'édition' }] },
+    })
+    expect(partage.status).toBe(403)
+    // …et une section partagée par un admin à C, sans accès au projet, reste invisible pour C.
+    await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: admin.jeton,
+      body: { ...s, sharedWith: [{ userId: c.email, accessLevel: 'édition' }] },
+    })
+    expect((await requete(ctx, 'GET', '/sections/s1', { jeton: c.jeton })).status).toBe(404)
+    // Après retrait du partage du projet, B perd l'écriture et la lecture.
+    await requete(ctx, 'DELETE', `/projects/${projectId}/partage/${encodeURIComponent(b.email)}`, {
+      jeton: admin.jeton,
+    })
+    expect((await requete(ctx, 'GET', '/sections/s1', { jeton: b.jeton })).status).toBe(404)
+  })
+
+  test('C2 — migration locale client : historique marqué, `auditLog` non tableau refusé, appel consigné', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = (
+      await requete(ctx, 'POST', '/clients', { jeton: admin.jeton, body: { name: 'C' } })
+    ).corps.client.id as string
+    const empoisonne = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/structure-systeme/noeuds/migration-locale`,
+      { jeton: admin.jeton, body: { noeuds: [{ id: 'n1', auditLog: null }] } },
+    )
+    expect(empoisonne.status).toBe(400)
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(audit.corps.entrees.some((e) => e.action === 'migration_locale')).toBe(false)
+  })
+
+  test('C2/M3 — restauration réservée aux admins ; elle ne raccourcit jamais l’historique', async () => {
+    const { ctx, admin, b, projectId } = await preparerSection()
+    const s = await lire(ctx, b.jeton)
+    const parB = await requete(ctx, 'PUT', '/sections/s1/restauration', {
+      jeton: b.jeton,
+      body: s,
+    })
+    expect(parB.status).toBe(403)
+    const projet = (await requete(ctx, 'GET', `/projects/${projectId}`, { jeton: admin.jeton }))
+      .corps.projet
+    const raccourci = await requete(ctx, 'PUT', `/projects/${projectId}/restauration`, {
+      jeton: admin.jeton,
+      body: { ...projet, auditLog: [] },
+    })
+    expect(raccourci.status).toBe(200)
+    expect(raccourci.corps.projet.auditLog.slice(0, projet.auditLog.length)).toEqual(
+      projet.auditLog,
+    )
+    expect(raccourci.corps.projet.auditLog.at(-1)?.action).toBe('restauration_github')
+  })
+
+  test('M1 — document normatif : ni renommage ni remplacement par un tiers ; réparation seulement si vide', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const tiers = await compte(ctx, admin.jeton, 'tiers@pharmatech.example')
+    const creation = await creerDocumentNormatif(ctx, admin.jeton, {
+      contenu: {
+        octets: new Uint8Array([1, 2, 3]),
+        nomFichier: 'a.pdf',
+        typeMime: 'application/pdf',
+      },
+    })
+    const id = creation.corps.document.id
+    const renommage = await requete(ctx, 'PATCH', `/documents-normatifs/${id}`, {
+      jeton: tiers.jeton,
+      body: { titre: 'Falsifié' },
+    })
+    expect(renommage.status).toBe(403)
+    const remplacement = await routerRequete(
+      new Request(`https://relais.workers.dev/documents-normatifs/${id}/contenu`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${tiers.jeton}`, 'Content-Type': 'text/html' },
+        body: '<script>alert(1)</script>',
+      }),
+      ctx,
+    )
+    expect(remplacement.status).toBe(403)
+    const parAdmin = await routerRequete(
+      new Request(`https://relais.workers.dev/documents-normatifs/${id}/contenu`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+        body: 'autre',
+      }),
+      ctx,
+    )
+    expect(parAdmin.status).toBe(409)
+    const lecture = await routerRequete(
+      new Request(`https://relais.workers.dev/documents-normatifs/${id}/contenu`, {
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+      }),
+      ctx,
+    )
+    expect(lecture.headers.get('X-Content-Type-Options')).toBe('nosniff')
+  })
+
+  test('M3 — relais GitHub réservé aux admins, sans autre branche ni chemin encodé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const b = await compte(ctx, admin.jeton, 'b@pharmatech.example')
+    await requete(ctx, 'PUT', '/parametres-installation/github', {
+      jeton: admin.jeton,
+      body: { valeur: { owner: 'acme', repo: 'data', branche: 'main', jeton: 'ghp_x' } },
+    })
+    const appels: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        appels.push(url)
+        return new Response('{}', { status: 200 })
+      }),
+    )
+    const appeler = (jeton: string, chemin: string) =>
+      routerRequete(
+        new Request(`https://relais.workers.dev/github/api/repos/acme/data/${chemin}`, {
+          headers: { Authorization: `Bearer ${jeton}` },
+        }),
+        ctx,
+      )
+    expect((await appeler(b.jeton, 'contents/data/a.json?ref=main')).status).toBe(403)
+    expect((await appeler(admin.jeton, 'contents/data/a.json?ref=autre')).status).toBe(403)
+    expect((await appeler(admin.jeton, 'contents/..%2F..%2Fuser?ref=main')).status).toBe(403)
+    expect(appels).toHaveLength(0)
+    expect((await appeler(admin.jeton, 'contents/data/a%20b.json?ref=main')).status).toBe(200)
+  })
+
+  test('M4 — jeton Drive réservé aux admins', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const b = await compte(ctx, admin.jeton, 'b@pharmatech.example')
+    const reponse = await requete(ctx, 'POST', '/drive-oauth/rafraichir-jeton', { jeton: b.jeton })
+    expect(reponse.status).toBe(403)
+  })
+
+  test('M6 — l’identifiant d’audit renvoyé par authorize-action est celui réellement consigné', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const reponse = await requete(ctx, 'POST', '/audit/authorize-action', {
+      jeton: admin.jeton,
+      body: { action: 'test', targetType: 'client', targetId: 'c1', justification: 'j' },
+    })
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(audit.corps.entrees.some((e) => e.id === reponse.corps.auditId)).toBe(true)
+  })
+
+  test('M7 — connexion bloquée après 5 échecs, même pour le bon mot de passe', async () => {
+    const ctx = { ...nouveauContexte(), limiteurConnexion: new LimiteurConnexion() }
+    await bootstrapAdmin(ctx)
+    for (let i = 0; i < 5; i++) {
+      const echec = await requete(ctx, 'POST', '/auth/login', {
+        body: { email: 'admin@pharmatech.example', motDePasse: 'faux' },
+      })
+      expect(echec.status).toBe(401)
+    }
+    const bloque = await requete(ctx, 'POST', '/auth/login', {
+      body: { email: 'admin@pharmatech.example', motDePasse: 'CoffreFort!2026' },
+    })
+    expect(bloque.status).toBe(429)
+    expect(bloque.corps.erreur).toBe('trop_de_tentatives')
+  })
+
+  test('M7 — les échecs d’un compte ne bloquent pas les collègues de la même adresse IP', async () => {
+    const ctx = { ...nouveauContexte(), limiteurConnexion: new LimiteurConnexion() }
+    await bootstrapAdmin(ctx)
+    const depuisBureau = (email: string, motDePasse: string) =>
+      routerRequete(
+        new Request('https://relais.workers.dev/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.7' },
+          body: JSON.stringify({ email, motDePasse }),
+        }),
+        ctx,
+      )
+    for (let i = 0; i < 6; i++) await depuisBureau('collegue@pharmatech.example', 'faux')
+    const admin = await depuisBureau('admin@pharmatech.example', 'CoffreFort!2026')
+    expect(admin.status).toBe(200)
+  })
+
+  test('M8 — changer de mot de passe révoque les autres sessions ; la session courante reçoit un nouveau jeton', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const autreSession = (
+      await requete(ctx, 'POST', '/auth/login', {
+        body: { email: 'admin@pharmatech.example', motDePasse: 'CoffreFort!2026' },
+      })
+    ).corps.jeton
+    const changement = await requete(ctx, 'POST', '/auth/change-password', {
+      jeton: admin.jeton,
+      body: { motDePasseActuel: 'CoffreFort!2026', nouveauMotDePasse: 'NouveauCoffre!2026' },
+    })
+    expect(changement.status).toBe(200)
+    expect((await requete(ctx, 'GET', '/auth/me', { jeton: autreSession })).status).toBe(401)
+    expect((await requete(ctx, 'GET', '/auth/me', { jeton: admin.jeton })).status).toBe(401)
+    expect((await requete(ctx, 'GET', '/auth/me', { jeton: changement.corps.jeton })).status).toBe(
+      200,
+    )
+  })
+
+  test('m3 — exception imprévue : JSON 500 avec en-têtes CORS, jamais une page HTML', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    ctx.clientsRepo.listerVisiblesPar = () => Promise.reject(new Error('panne D1'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const reponse = await routerRequete(
+      new Request('https://relais.workers.dev/clients', {
+        headers: { Authorization: `Bearer ${admin.jeton}` },
+      }),
+      ctx,
+    )
+    expect(reponse.status).toBe(500)
+    expect(await reponse.json()).toEqual({ erreur: 'erreur_interne' })
+    expect(reponse.headers.get('Access-Control-Allow-Origin')).toBeTruthy()
   })
 })

@@ -75,7 +75,9 @@ const LIBELLES_TYPE_PREUVE: Record<TypeEvidence, string> = {
 }
 
 function formaterHorodatage(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : '—'
+  return iso
+    ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' })
+    : '—'
 }
 
 onMounted(async () => {
@@ -144,7 +146,10 @@ function cleEtape(executionId: string, testStepId: string): string {
 async function enregistrerResultat(executionId: string, testStepId: string): Promise<void> {
   const cle = cleEtape(executionId, testStepId)
   const resultat = resultatsBrouillon.value[cle]
-  if (!resultat) return
+  if (!resultat) {
+    erreurParExecution.value[executionId] = "Choisissez d'abord le résultat de l'étape."
+    return
+  }
   erreurParExecution.value[executionId] = ''
   const resultatMutation = await executionStore.enregistrerResultatEtape(
     props.clientId,
@@ -199,7 +204,10 @@ const descriptionEvenementBrouillon = ref<Record<string, string>>({})
 async function consignerEvenement(executionId: string): Promise<void> {
   const type = typeEvenementBrouillon.value[executionId] ?? 'commentaire'
   const description = descriptionEvenementBrouillon.value[executionId]?.trim()
-  if (!description) return
+  if (!description) {
+    erreurParExecution.value[executionId] = "Décrivez l'événement avant de le consigner."
+    return
+  }
   erreurParExecution.value[executionId] = ''
   const resultat = await executionStore.consignerEvenement(props.clientId, executionId, {
     type,
@@ -222,7 +230,10 @@ const referenceLocalisationBrouillon = ref<Record<string, string>>({})
 async function enregistrerPreuve(executionId: string): Promise<void> {
   const type = typePreuveBrouillon.value[executionId] ?? 'native'
   const titre = titrePreuveBrouillon.value[executionId]?.trim()
-  if (!titre) return
+  if (!titre) {
+    erreurParExecution.value[executionId] = 'Donnez un titre à la preuve avant de l’enregistrer.'
+    return
+  }
   erreurParExecution.value[executionId] = ''
   const resultat = await evidenceStore.enregistrerPreuve(props.clientId, executionId, {
     executionStepId: null,
@@ -261,7 +272,31 @@ const verdictBrouillon = ref<Record<string, VerdictExecution>>({})
 
 async function cloturer(executionId: string): Promise<void> {
   const verdict = verdictBrouillon.value[executionId]
-  if (!verdict) return
+  if (!verdict) {
+    erreurParExecution.value[executionId] = 'Choisissez le verdict avant de clôturer.'
+    return
+  }
+  // Clôture irréversible (audit UX du 26/09/2026) : confirmation explicite,
+  // et alerte si le verdict « Conforme » contredit ce qui a été consigné.
+  const alertes: string[] = []
+  const sansResultat = nombreEtapesSansResultat(executionId)
+  if (sansResultat > 0) alertes.push(`${sansResultat} étape(s) sans résultat`)
+  const nonConformes = executionStore
+    .etapesExecution(executionId)
+    .filter((e) => e.resultat === 'non_conforme').length
+  const deviations = executionStore
+    .evenementsExecution(executionId)
+    .filter((e) => e.type === 'deviation').length
+  if (verdict === 'conforme') {
+    if (nonConformes > 0) alertes.push(`${nonConformes} étape(s) non conforme(s)`)
+    if (deviations > 0) alertes.push(`${deviations} déviation(s) consignée(s)`)
+  }
+  const message =
+    `Clôturer avec le verdict « ${LIBELLES_VERDICT[verdict]} » ? L'exécution deviendra définitive (plus aucune modification possible).` +
+    (alertes.length > 0
+      ? `\n\nAttention : ${alertes.join(', ')}. Vérifiez que ce verdict est bien justifié.`
+      : '')
+  if (!window.confirm(message)) return
   erreurParExecution.value[executionId] = ''
   const resultat = await executionStore.cloturerExecution(props.clientId, executionId, verdict)
   if ('erreur' in resultat) {

@@ -136,6 +136,23 @@ function supprimerLigne(champ: DefinitionChamp, index: number): void {
   emit('maj-table', champ.field_key, lignesRestantes)
 }
 
+/**
+ * Brouillon de frappe (événement `input`, avant `change`) : conservé dans
+ * l'état local sans rien enregistrer. Sans lui, un nouveau rendu déclenché
+ * par la sauvegarde de la cellule précédente (retour du serveur) remettait
+ * la cellule en cours de saisie à son ancienne valeur — Vue réapplique
+ * toujours `value` — et effaçait les premiers caractères tapés (audit UX
+ * du 26/09/2026 : « Traçabilité des cycles » enregistré « ilité des cycles »).
+ */
+function brouillonCellule(cleTable: string, index: number, cleColonne: string, brut: string): void {
+  const ligne = tablesLocales[cleTable]?.[index]
+  if (ligne) ligne[cleColonne] = brut
+}
+
+function brouillonChamp(cleChamp: string, brut: string): void {
+  valeursLocales[cleChamp] = brut
+}
+
 function cleErreurCellule(cleTable: string, index: number, cleColonne: string): string {
   return `${cleTable}:${index}:${cleColonne}`
 }
@@ -207,6 +224,7 @@ function valeurCalculee(
                       <select
                         :value="ligne[colonne.field_key] ?? ''"
                         :disabled="verrouille"
+                        :aria-label="libelle(colonne.labels)"
                         @change="
                           (e: Event) =>
                             saisirCellule(
@@ -245,6 +263,17 @@ function valeurCalculee(
                               : 'text'
                         "
                         :disabled="verrouille"
+                        :aria-label="libelle(colonne.labels)"
+                        @input="
+                          (e: Event) =>
+                            colonne.type !== 'nombre' &&
+                            brouillonCellule(
+                              champ.field_key,
+                              index,
+                              colonne.field_key,
+                              (e.target as HTMLInputElement).value,
+                            )
+                        "
                         @change="
                           (e: Event) =>
                             saisirCellule(
@@ -287,6 +316,10 @@ function valeurCalculee(
               :value="valeurChamp(champ.field_key) ?? ''"
               :disabled="verrouille"
               rows="4"
+              @input="
+                (e: Event) =>
+                  brouillonChamp(champ.field_key, (e.target as HTMLTextAreaElement).value)
+              "
               @change="(e: Event) => saisirChamp(champ, (e.target as HTMLTextAreaElement).value)"
             />
             <select
@@ -305,6 +338,11 @@ function valeurCalculee(
               :value="valeurChamp(champ.field_key) ?? ''"
               :type="champ.type === 'nombre' ? 'number' : champ.type === 'date' ? 'date' : 'text'"
               :disabled="verrouille"
+              @input="
+                (e: Event) =>
+                  champ.type !== 'nombre' &&
+                  brouillonChamp(champ.field_key, (e.target as HTMLInputElement).value)
+              "
               @change="(e: Event) => saisirChamp(champ, (e.target as HTMLInputElement).value)"
             />
           </label>

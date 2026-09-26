@@ -4,9 +4,9 @@
  * `motDePasse.ts`/`verrouLocal.ts` — "ne pas installer une librairie
  * généraliste quand le besoin réel est étroit et vérifiable").
  *
- * Portée volontairement minimale : signature/expiration seulement, aucune
- * révocation immédiate (limite assumée) — expiration courte
- * (`DUREE_VALIDITE_SECONDES`) comme seule protection dans ce lot.
+ * Signature/expiration, plus une empreinte du mot de passe (`pv`) que le
+ * routeur compare à chaque requête : changer de mot de passe révoque
+ * toutes les sessions ouvertes avec l'ancien (audit du 25/09/2026, M8).
  */
 
 const DUREE_VALIDITE_SECONDES = 12 * 60 * 60 // 12h
@@ -15,6 +15,8 @@ export interface PayloadJwt {
   sub: string // id utilisateur
   email: string
   role: 'admin' | 'utilisateur'
+  /** Empreinte du mot de passe au moment de la connexion — un changement de mot de passe invalide les sessions ouvertes (audit du 25/09/2026, M8). */
+  pv?: string
   iat: number
   exp: number
 }

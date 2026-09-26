@@ -513,124 +513,136 @@ onMounted(async () => {
       <p v-if="erreurTeleversement" class="erreur" role="alert">{{ erreurTeleversement }}</p>
     </section>
 
-    <section class="bloc-import">
-      <h3>Depuis le dépôt GitHub dédié</h3>
-      <p class="rappel">
-        Utilise la connexion GitHub déjà configurée (Configuration client) — seuls les fichiers
-        <code>.md</code>/<code>.txt</code> sont importables ici, un fichier binaire lu par cette
-        voie serait corrompu.
-      </p>
-      <div class="formulaire-import">
-        <label>
-          Catégorie
-          <select v-model="categorieGitHub">
-            <option v-for="(libelle, valeur) in LIBELLES_CATEGORIE" :key="valeur" :value="valeur">
-              {{ libelle }}
-            </option>
-          </select>
-        </label>
-        <label>
-          Préfixe de chemin
-          <input v-model="prefixeGitHub" type="text" placeholder="ex. normes/" />
-        </label>
-        <button type="button" :disabled="enListeGitHub" @click="listerGitHub">
-          {{ enListeGitHub ? 'Chargement…' : 'Lister' }}
-        </button>
-      </div>
-      <p v-if="erreurGitHub" class="erreur" role="alert">{{ erreurGitHub }}</p>
-      <details v-if="fichiersGitHub.length > 0" class="liste-repliable">
-        <summary>{{ fichiersGitHub.length }} fichier(s) trouvé(s) — cliquer pour afficher</summary>
-        <ul class="liste-fichiers-externes">
-          <li v-for="entree in fichiersGitHub" :key="entree.sha">
-            <span>{{ entree.chemin }}</span>
-            <button type="button" @click="importerDepuisGitHub(entree.chemin)">Importer</button>
-          </li>
-        </ul>
-      </details>
-    </section>
-
-    <section class="bloc-import">
-      <h3>Depuis Google Drive</h3>
-      <p class="rappel">
-        Configuration dédiée à la bibliothèque de normes — distincte du miroir Drive par client.
-      </p>
-      <p v-if="messageOAuthDrive" class="test-succes">{{ messageOAuthDrive }}</p>
-
-      <div class="actions">
-        <button type="button" :disabled="enConnexionGoogleDrive" @click="connecterGoogleDrive">
-          {{ enConnexionGoogleDrive ? 'Redirection…' : 'Connecter avec Google' }}
-        </button>
-      </div>
-      <p class="rappel">
-        Recommandé — le jeton se renouvelle automatiquement, plus jamais besoin de le recopier à la
-        main. Nécessite qu'un identifiant OAuth Google ait été configuré pour cette installation
-        (Configuration client).
-      </p>
-
-      <details class="liste-repliable">
-        <summary>Configuration manuelle (jeton d'accès à recopier soi-même, valable 1h)</summary>
-        <form class="formulaire-import" @submit.prevent="enregistrerConnexionDrive">
+    <!-- Imports GitHub et Google Drive réservés aux admins (audit du
+         25/09/2026) : le dépôt de synchronisation contient les données de
+         tous les clients, et l'accès Drive porte sur tout le Drive connecté.
+         Le Worker l'impose aussi. -->
+    <template v-if="authStore.estAdmin">
+      <section class="bloc-import">
+        <h3>Depuis le dépôt GitHub dédié</h3>
+        <p class="rappel">
+          Utilise la connexion GitHub déjà configurée (Configuration client) — seuls les fichiers
+          <code>.md</code>/<code>.txt</code> sont importables ici, un fichier binaire lu par cette
+          voie serait corrompu.
+        </p>
+        <div class="formulaire-import">
           <label>
-            Identifiant du dossier Drive
-            <input v-model="brouillonDrive.dossierId" type="text" required />
+            Catégorie
+            <select v-model="categorieGitHub">
+              <option v-for="(libelle, valeur) in LIBELLES_CATEGORIE" :key="valeur" :value="valeur">
+                {{ libelle }}
+              </option>
+            </select>
           </label>
           <label>
-            Jeton d'accès
-            <input v-model="brouillonDrive.jeton" type="password" required autocomplete="off" />
+            Préfixe de chemin
+            <input v-model="prefixeGitHub" type="text" placeholder="ex. normes/" />
           </label>
-          <div class="actions">
-            <button type="submit">Enregistrer</button>
-            <button type="button" :disabled="testDriveEnCours" @click="testerConnexionDrive">
-              {{ testDriveEnCours ? 'Test en cours…' : 'Tester la connexion' }}
-            </button>
-          </div>
-        </form>
-      </details>
-      <p v-if="resultatTestDrive?.ok === true" class="test-succes">
-        Connexion réussie — {{ resultatTestDrive.nbFichiers }} fichier(s) trouvé(s).
-      </p>
-      <p v-else-if="resultatTestDrive?.ok === false" class="test-echec" role="alert">
-        Échec de connexion : {{ resultatTestDrive.message }}
-      </p>
+          <button type="button" :disabled="enListeGitHub" @click="listerGitHub">
+            {{ enListeGitHub ? 'Chargement…' : 'Lister' }}
+          </button>
+        </div>
+        <p v-if="erreurGitHub" class="erreur" role="alert">{{ erreurGitHub }}</p>
+        <details v-if="fichiersGitHub.length > 0" class="liste-repliable">
+          <summary>
+            {{ fichiersGitHub.length }} fichier(s) trouvé(s) — cliquer pour afficher
+          </summary>
+          <ul class="liste-fichiers-externes">
+            <li v-for="entree in fichiersGitHub" :key="entree.sha">
+              <span>{{ entree.chemin }}</span>
+              <button type="button" @click="importerDepuisGitHub(entree.chemin)">Importer</button>
+            </li>
+          </ul>
+        </details>
+      </section>
 
-      <div class="formulaire-import">
-        <label>
-          Catégorie
-          <select v-model="categorieDrive">
-            <option v-for="(libelle, valeur) in LIBELLES_CATEGORIE" :key="valeur" :value="valeur">
-              {{ libelle }}
-            </option>
-          </select>
-        </label>
-        <button type="button" :disabled="enListeDrive" @click="listerDrive">
-          {{ enListeDrive ? 'Chargement…' : 'Lister les fichiers' }}
-        </button>
-      </div>
-      <p v-if="erreurDrive" class="erreur" role="alert">{{ erreurDrive }}</p>
-      <div v-if="fichiersDrive.length > 0" class="actions">
-        <button type="button" :disabled="enImportDriveTout" @click="importerToutDrive">
-          {{ enImportDriveTout ? 'Import en cours…' : `Tout importer (${fichiersDrive.length})` }}
-        </button>
-      </div>
-      <p v-if="progressionDriveTout" class="rappel">
-        Import {{ progressionDriveTout.fait }} / {{ progressionDriveTout.total }}…
-      </p>
-      <details v-if="fichiersDrive.length > 0" class="liste-repliable">
-        <summary>{{ fichiersDrive.length }} fichier(s) trouvé(s) — cliquer pour afficher</summary>
-        <ul class="liste-fichiers-externes">
-          <li v-for="fichier in fichiersDrive" :key="fichier.id">
-            <span>{{ fichier.nom }}</span>
-            <button
-              type="button"
-              :disabled="enImportDriveTout"
-              @click="importerDepuisDrive(fichier)"
-            >
-              Importer
-            </button>
-          </li>
-        </ul>
-      </details>
-    </section>
+      <section class="bloc-import">
+        <h3>Depuis Google Drive</h3>
+        <p class="rappel">
+          Configuration dédiée à la bibliothèque de normes — distincte du miroir Drive par client.
+        </p>
+        <p v-if="messageOAuthDrive" class="test-succes">{{ messageOAuthDrive }}</p>
+
+        <div class="actions">
+          <button type="button" :disabled="enConnexionGoogleDrive" @click="connecterGoogleDrive">
+            {{ enConnexionGoogleDrive ? 'Redirection…' : 'Connecter avec Google' }}
+          </button>
+        </div>
+        <p class="rappel">
+          Recommandé — le jeton se renouvelle automatiquement, plus jamais besoin de le recopier à
+          la main. Nécessite qu'un identifiant OAuth Google ait été configuré pour cette
+          installation (Configuration client).
+        </p>
+
+        <details class="liste-repliable">
+          <summary>Configuration manuelle (jeton d'accès à recopier soi-même, valable 1h)</summary>
+          <form class="formulaire-import" @submit.prevent="enregistrerConnexionDrive">
+            <label>
+              Identifiant du dossier Drive
+              <input v-model="brouillonDrive.dossierId" type="text" required />
+            </label>
+            <label>
+              Jeton d'accès
+              <input v-model="brouillonDrive.jeton" type="password" required autocomplete="off" />
+            </label>
+            <div class="actions">
+              <button type="submit">Enregistrer</button>
+              <button type="button" :disabled="testDriveEnCours" @click="testerConnexionDrive">
+                {{ testDriveEnCours ? 'Test en cours…' : 'Tester la connexion' }}
+              </button>
+            </div>
+          </form>
+        </details>
+        <p v-if="resultatTestDrive?.ok === true" class="test-succes">
+          Connexion réussie — {{ resultatTestDrive.nbFichiers }} fichier(s) trouvé(s).
+        </p>
+        <p v-else-if="resultatTestDrive?.ok === false" class="test-echec" role="alert">
+          Échec de connexion : {{ resultatTestDrive.message }}
+        </p>
+
+        <div class="formulaire-import">
+          <label>
+            Catégorie
+            <select v-model="categorieDrive">
+              <option v-for="(libelle, valeur) in LIBELLES_CATEGORIE" :key="valeur" :value="valeur">
+                {{ libelle }}
+              </option>
+            </select>
+          </label>
+          <button type="button" :disabled="enListeDrive" @click="listerDrive">
+            {{ enListeDrive ? 'Chargement…' : 'Lister les fichiers' }}
+          </button>
+        </div>
+        <p v-if="erreurDrive" class="erreur" role="alert">{{ erreurDrive }}</p>
+        <div v-if="fichiersDrive.length > 0" class="actions">
+          <button type="button" :disabled="enImportDriveTout" @click="importerToutDrive">
+            {{ enImportDriveTout ? 'Import en cours…' : `Tout importer (${fichiersDrive.length})` }}
+          </button>
+        </div>
+        <p v-if="progressionDriveTout" class="rappel">
+          Import {{ progressionDriveTout.fait }} / {{ progressionDriveTout.total }}…
+        </p>
+        <details v-if="fichiersDrive.length > 0" class="liste-repliable">
+          <summary>{{ fichiersDrive.length }} fichier(s) trouvé(s) — cliquer pour afficher</summary>
+          <ul class="liste-fichiers-externes">
+            <li v-for="fichier in fichiersDrive" :key="fichier.id">
+              <span>{{ fichier.nom }}</span>
+              <button
+                type="button"
+                :disabled="enImportDriveTout"
+                @click="importerDepuisDrive(fichier)"
+              >
+                Importer
+              </button>
+            </li>
+          </ul>
+        </details>
+      </section>
+    </template>
+    <p v-else class="rappel">
+      Les imports depuis GitHub et Google Drive sont réservés aux administrateurs ; vous pouvez
+      téléverser un fichier ci-dessus.
+    </p>
 
     <section v-if="documentsADiagnostiquer.length > 0" class="bloc-import bloc-alerte">
       <h3>Vérification des fichiers importés depuis Drive</h3>
@@ -648,7 +660,10 @@ onMounted(async () => {
       <p v-if="erreurDiagnostic" class="erreur" role="alert">{{ erreurDiagnostic }}</p>
     </section>
 
-    <section v-if="documentsAReparer.length > 0" class="bloc-import bloc-alerte">
+    <section
+      v-if="authStore.estAdmin && documentsAReparer.length > 0"
+      class="bloc-import bloc-alerte"
+    >
       <h3>Fichiers d'origine manquants</h3>
       <p class="rappel">
         {{ documentsAReparer.length }} document(s) importé(s) depuis Google Drive n'ont jamais reçu
@@ -732,7 +747,13 @@ onMounted(async () => {
               >
                 Télécharger
               </button>
-              <button type="button" @click="ouvrirRenommage(document)">Renommer</button>
+              <button
+                v-if="authStore.estAdmin || document.uploaded_by === authStore.utilisateur?.id"
+                type="button"
+                @click="ouvrirRenommage(document)"
+              >
+                Renommer
+              </button>
               <!-- Suppression réservée aux admins (le Worker l'impose aussi). -->
               <template v-if="authStore.estAdmin">
                 <template v-if="documentIdASupprimer === document.id">

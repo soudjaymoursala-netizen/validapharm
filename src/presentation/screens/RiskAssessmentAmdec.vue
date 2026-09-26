@@ -84,19 +84,33 @@ const erreurCreation = ref<string | null>(null)
 
 async function creerEvaluation(): Promise<void> {
   erreurCreation.value = null
-  if (etapeProcessus.value.trim().length === 0 || modeDefaillance.value.trim().length === 0) return
-  const resultat = await riskStore.creerEvaluation(props.clientId, {
-    assetNodeId: assetNodeSelectionne.value || null,
-    parameterId: parameterSelectionne.value || null,
-    etapeProcessus: etapeProcessus.value.trim(),
-    modeDefaillance: modeDefaillance.value.trim(),
-    effetDefaillance: effetDefaillance.value.trim(),
-    causePotentielle: causePotentielle.value.trim(),
-    controleActuel: controleActuel.value.trim(),
-    severiteInitiale: severiteInitiale.value,
-    occurrenceInitiale: occurrenceInitiale.value,
-    detectabiliteInitiale: detectabiliteInitiale.value,
-  })
+  if (etapeProcessus.value.trim().length === 0 || modeDefaillance.value.trim().length === 0) {
+    erreurCreation.value = "L'étape du processus et le mode de défaillance sont obligatoires."
+    return
+  }
+  // Un champ numérique vidé vaut `''` avec `v-model.number` : les notes
+  // S/O/D initiales sont facultatives (guide §20), elles partent donc à
+  // `null` — jamais un 400 « corps invalide » sans message (audit UX).
+  const note = (valeur: number | string | null) =>
+    typeof valeur === 'number' && Number.isFinite(valeur) ? valeur : null
+  let resultat: Awaited<ReturnType<typeof riskStore.creerEvaluation>>
+  try {
+    resultat = await riskStore.creerEvaluation(props.clientId, {
+      assetNodeId: assetNodeSelectionne.value || null,
+      parameterId: parameterSelectionne.value || null,
+      etapeProcessus: etapeProcessus.value.trim(),
+      modeDefaillance: modeDefaillance.value.trim(),
+      effetDefaillance: effetDefaillance.value.trim(),
+      causePotentielle: causePotentielle.value.trim(),
+      controleActuel: controleActuel.value.trim(),
+      severiteInitiale: note(severiteInitiale.value),
+      occurrenceInitiale: note(occurrenceInitiale.value),
+      detectabiliteInitiale: note(detectabiliteInitiale.value),
+    })
+  } catch (e) {
+    erreurCreation.value = e instanceof Error ? e.message : "La ligne n'a pas pu être créée."
+    return
+  }
   if ('erreur' in resultat) {
     erreurCreation.value = 'Aucun profil de méthode configuré.'
     return
@@ -144,15 +158,27 @@ async function enregistrerAction(riskAssessmentId: string, methodProfileId: stri
     erreurAction.value = `Chaque note résiduelle doit être un entier entre ${profil.echelle_min} et ${profil.echelle_max} (échelle de la version du profil de cette ligne).`
     return
   }
-  const resultat = await riskStore.enregistrerActionResiduelle(props.clientId, riskAssessmentId, {
-    recommandation: recommandationBrouillon.value[riskAssessmentId]?.trim() || null,
-    responsable: responsableBrouillon.value[riskAssessmentId]?.trim() || null,
-    dateCible: null,
-    actionsMenees: null,
-    severiteResiduelle: severiteResiduelleBrouillon.value[riskAssessmentId] ?? null,
-    occurrenceResiduelle: occurrenceResiduelleBrouillon.value[riskAssessmentId] ?? null,
-    detectabiliteResiduelle: detectabiliteResiduelleBrouillon.value[riskAssessmentId] ?? null,
-  })
+  const note = (valeur: number | string | null | undefined) =>
+    typeof valeur === 'number' && Number.isFinite(valeur) ? valeur : null
+  // Date cible et actions menées ne sont pas saisies sur cet écran : on
+  // conserve celles déjà enregistrées, jamais une remise à zéro silencieuse
+  // (audit d'intégrité front, M11).
+  const existante = riskStore.evaluations.find((e) => e.id === riskAssessmentId)
+  let resultat: Awaited<ReturnType<typeof riskStore.enregistrerActionResiduelle>>
+  try {
+    resultat = await riskStore.enregistrerActionResiduelle(props.clientId, riskAssessmentId, {
+      recommandation: recommandationBrouillon.value[riskAssessmentId]?.trim() || null,
+      responsable: responsableBrouillon.value[riskAssessmentId]?.trim() || null,
+      dateCible: existante?.date_cible ?? null,
+      actionsMenees: existante?.actions_menees ?? null,
+      severiteResiduelle: note(severiteResiduelleBrouillon.value[riskAssessmentId]),
+      occurrenceResiduelle: note(occurrenceResiduelleBrouillon.value[riskAssessmentId]),
+      detectabiliteResiduelle: note(detectabiliteResiduelleBrouillon.value[riskAssessmentId]),
+    })
+  } catch (e) {
+    erreurAction.value = e instanceof Error ? e.message : "L'action n'a pas pu être enregistrée."
+    return
+  }
   if ('erreur' in resultat) {
     erreurAction.value =
       'Cette ligne AMDEC est introuvable — elle a peut-être été supprimée entre-temps.'

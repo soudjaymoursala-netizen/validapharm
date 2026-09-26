@@ -1284,6 +1284,21 @@ export type ResultatApi<T> =
 
 const DELAI_MAX_PAR_DEFAUT_MS = 15_000
 
+/** Code `erreur` du corps JSON, lu sur une copie (le corps reste lisible par l'appelant). */
+async function codeErreur(reponse: Response): Promise<unknown> {
+  try {
+    const corps = (await reponse.clone().json()) as { erreur?: unknown } | null
+    return corps?.erreur
+  } catch {
+    return undefined
+  }
+}
+
+function aUneSession(init: RequestInit): boolean {
+  const entetes = init.headers as Record<string, string> | undefined
+  return typeof entetes?.Authorization === 'string'
+}
+
 /**
  * Client du Worker d'authentification — mêmes principes que
  * `RelayProviderAdapter`/`OcrRelayAdapter` : n'expose que l'URL du relais,
@@ -1307,6 +1322,8 @@ export class AuthApiClient {
     private readonly relayUrl: string,
     private readonly delaiMaxMs: number = DELAI_MAX_PAR_DEFAUT_MS,
     private readonly observateurConnectivite?: (joignable: boolean) => void,
+    /** Prévenu quand le Worker refuse la session (401 `non_authentifie` sur un appel authentifié) : jeton expiré, compte désactivé ou mot de passe changé ailleurs. */
+    private readonly observateurSessionInvalide?: () => void,
   ) {}
 
   // --- Vérification de connexion (« Tester la connexion », avant toute
@@ -1340,7 +1357,7 @@ export class AuthApiClient {
     jeton: string,
     motDePasseActuel: string,
     nouveauMotDePasse: string,
-  ): Promise<ResultatApi<{ ok: true }>> {
+  ): Promise<ResultatApi<{ ok: true; jeton?: string }>> {
     return this.requete('POST', '/auth/change-password', {
       jeton,
       body: { motDePasseActuel, nouveauMotDePasse },
@@ -1428,12 +1445,17 @@ export class AuthApiClient {
     return this.requete('PATCH', `/clients/${id}`, { jeton, body: changements })
   }
 
+  /** `motDePasse` : ré-authentification vérifiée par le Worker (403 `mot_de_passe_incorrect`). */
   supprimerClientDefinitivement(
     jeton: string,
     id: string,
     justification: string,
+    motDePasse: string,
   ): Promise<ResultatApi<{ ok: true }>> {
-    return this.requete('DELETE', `/clients/${id}`, { jeton, body: { justification } })
+    return this.requete('DELETE', `/clients/${id}`, {
+      jeton,
+      body: { justification, motDePasse },
+    })
   }
 
   // --- Structure Système (référentiel d'actifs, D1 = source de vérité, Phase 1 du chantier de migration D1) ---
@@ -3285,10 +3307,11 @@ export class AuthApiClient {
     return this.requete('POST', '/sections', { jeton, body: section })
   }
 
+  /** `versionAttendue` : `updatedAt` de la version lue — 409 `conflit_version` si elle a été remplacée entre-temps. */
   remplacerSection(
     jeton: string,
     id: string,
-    section: SectionWire,
+    section: SectionWire & { versionAttendue?: string },
   ): Promise<ResultatApi<{ section: SectionWire }>> {
     return this.requete('PUT', `/sections/${id}`, { jeton, body: section })
   }
@@ -3547,10 +3570,18 @@ export class AuthApiClient {
       clearTimeout(minuteur)
     }
     if (reponse.status >= 500) {
-      this.observateurConnectivite?.(false)
-      throw new IndisponibleAuthError()
+      // Erreur interne signalée proprement par le Worker (JSON) : il est
+      // joignable, l'appelant reçoit un refus lisible — jamais le bandeau
+      // « serveur injoignable » à tort.
+      if ((await codeErreur(reponse)) !== 'erreur_interne') {
+        this.observateurConnectivite?.(false)
+        throw new IndisponibleAuthError()
+      }
     }
     this.observateurConnectivite?.(true)
+    if (reponse.status === 401 && this.observateurSessionInvalide && aUneSession(init)) {
+      if ((await codeErreur(reponse)) === 'non_authentifie') this.observateurSessionInvalide()
+    }
     return reponse
   }
 

@@ -290,10 +290,16 @@ textarea:focus-visible {
    `.lien-retour:focus-visible`, `.accueil__carte:focus-visible`), cette
    base ne comble que les boutons/liens oubliés — jamais un remplacement
    voulu. */
-button:focus-visible,
-a:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
+/* (26/09/2026, audit UX — WCAG 2.4.7) Le halo `--vp-marque-fond-leger`
+   seul offrait un contraste d'environ 1,1:1, et certaines règles locales
+   le rendaient transparent (barre latérale) : le focus clavier était
+   invisible. Un contour plein de la couleur de marque est désormais imposé
+   à tout élément focalisé au clavier, quelles que soient les règles
+   locales (`!important` délibéré : c'est un minimum d'accessibilité, pas
+   un choix de style). */
+:focus-visible {
+  outline: 2px solid var(--vp-marque) !important;
+  outline-offset: 2px;
 }
 
 /* Base par défaut des champs et boutons (Phase 41) : plusieurs écrans plus

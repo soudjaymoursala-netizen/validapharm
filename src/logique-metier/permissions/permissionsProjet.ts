@@ -1,4 +1,4 @@
-import type { Project, Section } from '../domaine/types'
+import type { Project } from '../domaine/types'
 
 /**
  * Droit d'écriture sur un projet, côté interface. **(25/09/2026, décision
@@ -39,22 +39,18 @@ export function peutVoirProjet(
 }
 
 /**
- * Droit d'écriture sur une section : celui de son projet (admin,
- * propriétaire, partagé en édition), ou le partage propre à la section.
- * Même règle que `droitsSection` côté Worker, qui l'applique réellement.
+ * Droit d'écriture sur une section : exactement celui de son projet (admin,
+ * propriétaire, partagé en édition). **(Audit du 25/09/2026)** Le partage
+ * propre à la section n'élargit plus jamais ces droits — même règle que
+ * `droitsSection` côté Worker, qui l'applique réellement.
  */
 export function peutModifierSection(
   project: Pick<Project, 'owner_id' | 'shared_with'> | undefined,
-  section: Pick<Section, 'owner_id' | 'shared_with'>,
   userId: string,
   estAdmin: boolean,
 ): boolean {
   if (estAdmin) return true
-  if (project && peutModifierProjet(project, userId)) return true
-  if (section.owner_id === userId) return true
-  return section.shared_with.some(
-    (partage) => partage.user_id === userId && partage.access_level === 'édition',
-  )
+  return project !== undefined && peutModifierProjet(project, userId)
 }
 
 /**

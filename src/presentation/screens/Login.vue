@@ -22,6 +22,8 @@ const erreur = ref<string | null>(null)
 
 const LIBELLES_ERREUR: Record<string, string> = {
   identifiants_invalides: 'Email ou mot de passe incorrect.',
+  trop_de_tentatives:
+    'Trop de tentatives de connexion échouées : réessayez dans 15 minutes ou contactez un administrateur.',
   relais_non_configure:
     "Worker d'authentification non configuré — voir « Configuration client » ci-dessous.",
   erreur_inconnue: 'Une erreur inattendue est survenue.',
@@ -88,6 +90,10 @@ async function seConnecter(): Promise<void> {
           Mot de passe
           <input v-model="motDePasse" type="password" required autocomplete="current-password" />
         </label>
+        <p v-if="route.query.expiree === '1' && !erreur" class="bandeau-info" role="status">
+          Votre session a expiré ou a été fermée (mot de passe changé, compte modifié) :
+          reconnectez-vous pour continuer.
+        </p>
         <p v-if="erreur" class="bandeau-erreur" role="alert">{{ erreur }}</p>
         <button type="submit" :disabled="enCours">
           {{ enCours ? 'Connexion…' : 'Se connecter' }}
@@ -212,6 +218,14 @@ h1 {
 .formulaire button:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.bandeau-info {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--vp-rayon-sm);
+  background: var(--vp-info-fond-leger);
+  color: var(--vp-texte-principal);
 }
 
 .bandeau-erreur {

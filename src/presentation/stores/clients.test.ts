@@ -204,7 +204,11 @@ describe('useClientsStore (Worker/D1)', () => {
     const client = await store.creerClient({ name: 'Client A' })
     if ('erreur' in client) throw client
 
-    const resultat = await store.supprimerDefinitivement(client.id, 'Test — nettoyage')
+    const resultat = await store.supprimerDefinitivement(
+      client.id,
+      'Test — nettoyage',
+      'CoffreFort!2026',
+    )
     expect(resultat).toEqual({ ok: true })
     expect(await store.obtenirClient(client.id)).toBeUndefined()
   })

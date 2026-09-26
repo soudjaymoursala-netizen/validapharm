@@ -221,9 +221,17 @@ function nouvelleEvaluation(): void {
           <ul class="liste-questions">
             <li v-for="question in methodeStore.profilActif.questions" :key="question.id">
               <p class="texte-question">{{ question.texte.fr }}</p>
-              <div class="reponses-question">
+              <!-- Figé une fois l'évaluation enregistrée : le verdict affiché
+                   doit toujours être celui enregistré (audit UX du 26/09/2026). -->
+              <div class="reponses-question" role="radiogroup" :aria-label="question.texte.fr">
                 <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet'] as const" :key="opt">
-                  <input v-model="reponses[question.id]" type="radio" :value="opt" />
+                  <input
+                    v-model="reponses[question.id]"
+                    type="radio"
+                    :name="`impact-${question.id}`"
+                    :value="opt"
+                    :disabled="evaluationEnregistree"
+                  />
                   {{ LIBELLES_REPONSE[opt] }}
                 </label>
               </div>

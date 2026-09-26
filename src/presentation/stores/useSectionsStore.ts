@@ -159,7 +159,55 @@ export function sectionDomaineVersWire(s: Section): SectionWire {
  * `permissionsProjet.ts`), même régime d'accès qu'avant (authentification
  * seule côté Worker).
  */
+/** Une autre écriture est passée entre la lecture et l'écriture de la section. */
+export class ConflitVersionSection extends Error {
+  constructor() {
+    super(
+      'La section a été modifiée entre-temps (autre onglet ou autre personne) — rechargez-la avant de réessayer.',
+    )
+  }
+}
+
+/** Libellé lisible d'un refus d'écriture de section renvoyé par le Worker — jamais un code brut à l'écran. */
+export function messageRefusEcritureSection(code: string): string {
+  const messages: Record<string, string> = {
+    non_autorise: "Modification refusée : vous n'avez qu'un accès en lecture à cette section.",
+    approbateur_requis:
+      "Seul l'approbateur désigné (ou un administrateur) peut approuver cette section.",
+    section_verrouillee:
+      'Section validée en interne : son contenu est verrouillé (une nouvelle révision est nécessaire).',
+    historique_altere:
+      "L'historique de la section a changé entre-temps — rechargez la section avant de réessayer.",
+    transition_invalide: "Ce changement de statut n'est pas permis depuis le statut actuel.",
+    roles_manquants: "Désignez d'abord l'approbateur final (et au moins un rédacteur).",
+    avis_manquant:
+      "Au moins un avis de relecture est requis depuis la dernière vérification (les avis d'un cycle rejeté ne comptent plus).",
+    motif_requis: 'Un motif est obligatoire pour rejeter la section.',
+    statut_creation_invalide:
+      'Une section ne peut pas être créée directement vérifiée ou approuvée.',
+  }
+  return messages[code] ?? `Échec de l'enregistrement de la section (${code}).`
+}
+
+/**
+ * Avis de relecture du cycle en cours — ceux donnés après le dernier rejet
+ * (entrée d'historique `rejet : …`). Même règle que `avisDuCycleCourant`
+ * côté Worker (`integriteSection.ts`).
+ */
+export function avisDuCycleCourant(section: Pick<Section, 'workflow' | 'audit_log'>) {
+  let dernierRejet: string | null = null
+  for (const entree of section.audit_log) {
+    if (entree.action.startsWith('rejet')) dernierRejet = entree.timestamp
+  }
+  return section.workflow.reviewers.filter((r) => dernierRejet === null || r.date > dernierRejet)
+}
+
 export const useSectionsStore = defineStore('sections', () => {
+  /** Identité de la personne connectée — le Worker l'impose de toute façon aux nouvelles entrées d'historique. */
+  function acteurCourant(): string {
+    return useAuthStore().utilisateur?.email ?? 'inconnu'
+  }
+
   const sectionsParProjet = ref<Record<string, Section[]>>({})
 
   /** Lève si le relais n'est pas configuré — `Section` exige désormais systématiquement le Worker/D1, même discipline que `useProjectsStore`. */
@@ -179,19 +227,42 @@ export const useSectionsStore = defineStore('sections', () => {
    * partagé en édition, ni admin. Avant, le résultat était ignoré et une
    * écriture refusée ressemblait à une sauvegarde réussie.
    */
-  async function ecrireSection(sectionMiseAJour: Section): Promise<void> {
+  async function ecrireSection(sectionMiseAJour: Section, base: Section): Promise<void> {
     const { api, jeton } = await obtenirApiSection()
-    const resultat = await api.remplacerSection(
-      jeton,
-      sectionMiseAJour.id,
-      sectionDomaineVersWire(sectionMiseAJour),
-    )
+    const resultat = await api.remplacerSection(jeton, sectionMiseAJour.id, {
+      ...sectionDomaineVersWire(sectionMiseAJour),
+      // Contrôle de version optimiste : le Worker refuse (409) une écriture
+      // fondée sur une version déjà remplacée entre-temps.
+      versionAttendue: base.updated_at,
+    })
     if (resultat.ok) return
-    throw new Error(
-      resultat.erreur === 'non_autorise'
-        ? "Modification refusée : vous n'avez qu'un accès en lecture à cette section."
-        : `Échec de l'enregistrement de la section : ${resultat.erreur}`,
-    )
+    if (resultat.erreur === 'conflit_version') throw new ConflitVersionSection()
+    throw new Error(messageRefusEcritureSection(resultat.erreur))
+  }
+
+  /**
+   * Lecture → transformation → écriture, rejouée (3 essais) si une autre
+   * écriture est passée entre-temps : deux sauvegardes proches (valeurs et
+   * tableau, deux onglets) ne s'écrasent plus en silence (audit du
+   * 25/09/2026). `transformer` renvoie `null` pour ne rien écrire.
+   */
+  async function modifierSection(
+    sectionId: string,
+    transformer: (section: Section, maintenant: string) => Section | null,
+  ): Promise<void> {
+    for (let essai = 1; ; essai++) {
+      const section = await chargerSection(sectionId)
+      const miseAJour = transformer(section, new Date().toISOString())
+      if (!miseAJour) return
+      try {
+        await ecrireSection(miseAJour, section)
+      } catch (erreur) {
+        if (erreur instanceof ConflitVersionSection && essai < 3) continue
+        throw erreur
+      }
+      await chargerSectionsDuProjet(section.project_id)
+      return
+    }
   }
 
   /** `null` si le relais n'est pas configuré — appels au Worker liés au projet (`Project.sections[]`/`documents[]`) alors silencieusement ignorés, même dégradation gracieuse que le reste de l'application. */
@@ -420,7 +491,7 @@ export const useSectionsStore = defineStore('sections', () => {
         },
       ],
     }
-    await ecrireSection(sectionMiseAJour)
+    await ecrireSection(sectionMiseAJour, section)
     await chargerSectionsDuProjet(section.project_id)
 
     return {
@@ -458,12 +529,31 @@ export const useSectionsStore = defineStore('sections', () => {
     actor: string,
   ): Promise<Section> {
     const maintenant = new Date().toISOString()
+    // Une section importée repart toujours en brouillon, sans avis ni
+    // signature : une vérification ou une approbation faite ailleurs ne
+    // vaut pas ici (audit du 25/09/2026). L'historique d'origine reste
+    // visible, suivi de l'entrée `import` attribuée par le Worker.
+    const statutImport =
+      donnees.status === 'propose_par_ia_non_valide' ? donnees.status : 'brouillon_aide'
     const section: Section = {
       ...donnees,
       id: crypto.randomUUID(),
       project_id: projectId,
+      status: statutImport,
+      workflow: { ...donnees.workflow, reviewers: [] },
+      signatures: { redacteur: {}, verificateur: {}, approbateur: {} },
       updated_at: maintenant,
-      audit_log: [...donnees.audit_log, { timestamp: maintenant, actor, action: 'import' }],
+      audit_log: [
+        ...donnees.audit_log,
+        {
+          timestamp: maintenant,
+          actor,
+          action:
+            statutImport === donnees.status
+              ? 'import'
+              : `import (statut d'origine « ${donnees.status} » ramené à brouillon)`,
+        },
+      ],
     }
     const { api, jeton } = await obtenirApiSection()
     const resultat = await api.creerSection(jeton, sectionDomaineVersWire(section))
@@ -490,21 +580,17 @@ export const useSectionsStore = defineStore('sections', () => {
    * l'usage principal), contrairement à `mettreAJourValeurs`.
    */
   async function journaliserExport(sectionId: string, force: boolean): Promise<void> {
-    const section = await chargerSection(sectionId)
-    const maintenant = new Date().toISOString()
-    const sectionMiseAJour: Section = {
+    await modifierSection(sectionId, (section, maintenant) => ({
       ...section,
       audit_log: [
         ...section.audit_log,
         {
           timestamp: maintenant,
-          actor: section.owner_id,
+          actor: acteurCourant(),
           action: force ? 'export_force' : 'export',
         },
       ],
-    }
-    await ecrireSection(sectionMiseAJour)
-    await chargerSectionsDuProjet(section.project_id)
+    }))
   }
 
   /**
@@ -519,21 +605,17 @@ export const useSectionsStore = defineStore('sections', () => {
     sectionId: string,
     description: string,
   ): Promise<void> {
-    const section = await chargerSection(sectionId)
-    const maintenant = new Date().toISOString()
-    const sectionMiseAJour: Section = {
+    await modifierSection(sectionId, (section, maintenant) => ({
       ...section,
       audit_log: [
         ...section.audit_log,
         {
           timestamp: maintenant,
-          actor: section.owner_id,
+          actor: acteurCourant(),
           action: `contexte_assemble : ${description}`,
         },
       ],
-    }
-    await ecrireSection(sectionMiseAJour)
-    await chargerSectionsDuProjet(section.project_id)
+    }))
   }
 
   /**
@@ -544,27 +626,19 @@ export const useSectionsStore = defineStore('sections', () => {
    * fonctionnalité ou hors du parcours assisté. `null` retire le lien.
    */
   async function lierProcedure(sectionId: string, procedureId: string | null): Promise<void> {
-    const section = await chargerSection(sectionId)
-    if (section.status === 'valide_en_interne') return
-    const sectionMiseAJour: Section = {
-      ...section,
-      procedure_id: procedureId,
-      updated_at: new Date().toISOString(),
-    }
-    await ecrireSection(sectionMiseAJour)
-    await chargerSectionsDuProjet(section.project_id)
+    await modifierSection(sectionId, (section, maintenant) =>
+      section.status === 'valide_en_interne'
+        ? null
+        : { ...section, procedure_id: procedureId, updated_at: maintenant },
+    )
   }
 
   async function lierAssetNode(sectionId: string, assetNodeId: string | null): Promise<void> {
-    const section = await chargerSection(sectionId)
-    if (section.status === 'valide_en_interne') return
-    const sectionMiseAJour: Section = {
-      ...section,
-      asset_node_id: assetNodeId,
-      updated_at: new Date().toISOString(),
-    }
-    await ecrireSection(sectionMiseAJour)
-    await chargerSectionsDuProjet(section.project_id)
+    await modifierSection(sectionId, (section, maintenant) =>
+      section.status === 'valide_en_interne'
+        ? null
+        : { ...section, asset_node_id: assetNodeId, updated_at: maintenant },
+    )
   }
 
   /**
@@ -581,20 +655,19 @@ export const useSectionsStore = defineStore('sections', () => {
    * par appel (donc par sauvegarde debounced), jamais par frappe.
    */
   async function mettreAJourValeurs(sectionId: string, values: Section['values']): Promise<void> {
-    const section = await chargerSection(sectionId)
-    if (section.status === 'valide_en_interne') return
-    const maintenant = new Date().toISOString()
-    const sectionMiseAJour: Section = {
-      ...section,
-      values,
-      updated_at: maintenant,
-      audit_log: [
-        ...section.audit_log,
-        { timestamp: maintenant, actor: section.owner_id, action: 'modification' },
-      ],
-    }
-    await ecrireSection(sectionMiseAJour)
-    await chargerSectionsDuProjet(section.project_id)
+    await modifierSection(sectionId, (section, maintenant) =>
+      section.status === 'valide_en_interne'
+        ? null
+        : {
+            ...section,
+            values,
+            updated_at: maintenant,
+            audit_log: [
+              ...section.audit_log,
+              { timestamp: maintenant, actor: acteurCourant(), action: 'modification' },
+            ],
+          },
+    )
   }
 
   /**
@@ -608,20 +681,19 @@ export const useSectionsStore = defineStore('sections', () => {
     cleTable: string,
     lignes: Section['tables'][string],
   ): Promise<void> {
-    const section = await chargerSection(sectionId)
-    if (section.status === 'valide_en_interne') return
-    const maintenant = new Date().toISOString()
-    const sectionMiseAJour: Section = {
-      ...section,
-      tables: { ...section.tables, [cleTable]: lignes },
-      updated_at: maintenant,
-      audit_log: [
-        ...section.audit_log,
-        { timestamp: maintenant, actor: section.owner_id, action: 'modification' },
-      ],
-    }
-    await ecrireSection(sectionMiseAJour)
-    await chargerSectionsDuProjet(section.project_id)
+    await modifierSection(sectionId, (section, maintenant) =>
+      section.status === 'valide_en_interne'
+        ? null
+        : {
+            ...section,
+            tables: { ...section.tables, [cleTable]: lignes },
+            updated_at: maintenant,
+            audit_log: [
+              ...section.audit_log,
+              { timestamp: maintenant, actor: acteurCourant(), action: 'modification' },
+            ],
+          },
+    )
   }
 
   /**
@@ -630,40 +702,52 @@ export const useSectionsStore = defineStore('sections', () => {
    * `appliquerTransition`).
    */
   async function assignerApprobateurFinal(sectionId: string, userId: string): Promise<void> {
-    const section = await chargerSection(sectionId)
-    if (section.status === 'valide_en_interne') return
-    const sectionMiseAJour: Section = {
-      ...section,
-      workflow: { ...section.workflow, approver_final: userId },
-      updated_at: new Date().toISOString(),
-    }
-    await ecrireSection(sectionMiseAJour)
-    await chargerSectionsDuProjet(section.project_id)
+    await modifierSection(sectionId, (section, maintenant) =>
+      section.status === 'valide_en_interne'
+        ? null
+        : {
+            ...section,
+            workflow: { ...section.workflow, approver_final: userId.trim() },
+            updated_at: maintenant,
+            audit_log: [
+              ...section.audit_log,
+              {
+                timestamp: maintenant,
+                actor: acteurCourant(),
+                action: `designation_approbateur : ${userId.trim()}`,
+              },
+            ],
+          },
+    )
   }
 
   /**
-   * Ajoute l'avis d'un relecteur ("plusieurs relecteurs,
-   * chacun pouvant émettre un avis distinct"). Requis avant de pouvoir
-   * transmettre la section à l'approbation.
+   * Ajoute l'avis de la personne connectée ("plusieurs relecteurs, chacun
+   * pouvant émettre un avis distinct"). Requis avant de pouvoir transmettre
+   * la section à l'approbation. **(Audit du 25/09/2026)** Un avis n'est plus
+   * jamais saisi au nom d'un autre : le Worker l'attribue au compte connecté,
+   * à l'heure du serveur.
    */
-  async function ajouterAvisRelecteur(
-    sectionId: string,
-    userId: string,
-    avis: string,
-  ): Promise<void> {
-    const section = await chargerSection(sectionId)
-    if (section.status === 'valide_en_interne') return
-    const maintenant = new Date().toISOString()
-    const sectionMiseAJour: Section = {
-      ...section,
-      workflow: {
-        ...section.workflow,
-        reviewers: [...section.workflow.reviewers, { user_id: userId, avis, date: maintenant }],
-      },
-      updated_at: maintenant,
-    }
-    await ecrireSection(sectionMiseAJour)
-    await chargerSectionsDuProjet(section.project_id)
+  async function ajouterAvisRelecteur(sectionId: string, avis: string): Promise<void> {
+    await modifierSection(sectionId, (section, maintenant) =>
+      section.status === 'valide_en_interne'
+        ? null
+        : {
+            ...section,
+            workflow: {
+              ...section.workflow,
+              reviewers: [
+                ...section.workflow.reviewers,
+                { user_id: acteurCourant(), avis, date: maintenant },
+              ],
+            },
+            updated_at: maintenant,
+            audit_log: [
+              ...section.audit_log,
+              { timestamp: maintenant, actor: acteurCourant(), action: 'avis_relecteur' },
+            ],
+          },
+    )
   }
 
   async function engagerVerification(
@@ -813,7 +897,7 @@ export const useSectionsStore = defineStore('sections', () => {
       updated_at: maintenant,
       audit_log: [
         ...section.audit_log,
-        { timestamp: maintenant, actor: section.owner_id, action: descriptionAudit },
+        { timestamp: maintenant, actor: acteurCourant(), action: descriptionAudit },
       ],
       revisions:
         motifRevision !== undefined
@@ -822,13 +906,13 @@ export const useSectionsStore = defineStore('sections', () => {
               {
                 version: section.meta.version,
                 date: maintenant,
-                auteur: section.owner_id,
+                auteur: acteurCourant(),
                 motif: motifRevision,
               },
             ]
           : section.revisions,
     }
-    await ecrireSection(sectionMiseAJour)
+    await ecrireSection(sectionMiseAJour, section)
     await chargerSectionsDuProjet(section.project_id)
     return { ok: true }
   }
@@ -845,7 +929,10 @@ export const useSectionsStore = defineStore('sections', () => {
       statutActuel: section.status,
       auteursRenseignes: section.workflow.authors.length > 0,
       approbateurFinalRenseigne: section.workflow.approver_final !== null,
-      auMoinsUnAvisRelecteur: section.workflow.reviewers.length > 0,
+      // Seuls les avis donnés depuis le dernier rejet comptent (même règle
+      // que le Worker) : un cycle rejeté ne se retransmet pas sur ses
+      // anciens avis.
+      auMoinsUnAvisRelecteur: avisDuCycleCourant(section).length > 0,
       motifRejet,
     }
   }

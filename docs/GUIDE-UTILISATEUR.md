@@ -277,9 +277,20 @@ appareil. » avec un lien **« Configurer »** vers « Configuration client »
 Bouton **« Se connecter »** (libellé « Connexion… » pendant l'appel). Messages
 d'erreur possibles :
 - « Email ou mot de passe incorrect. »
+- « Trop de tentatives de connexion échouées : réessayez dans 15 minutes ou
+  contactez un administrateur. » (depuis le 26/09/2026 : après 5 échecs
+  sur un même compte, la connexion à ce compte est bloquée 15 minutes ; un
+  collègue qui se trompe ne bloque jamais les autres comptes du bureau)
 - « Worker d'authentification non configuré — voir « Configuration client »
   ci-dessous. »
 - « Une erreur inattendue est survenue. »
+
+**Session expirée ou fermée** : si votre session n'est plus valide (durée
+dépassée, compte désactivé, **mot de passe changé** sur un autre poste — ce
+qui ferme toutes les autres sessions), l'application vous ramène ici avec le
+message « Votre session a expiré ou a été fermée (mot de passe changé,
+compte modifié) : reconnectez-vous pour continuer. » Changer votre mot de
+passe depuis « Mon profil » ne vous déconnecte pas vous-même.
 
 Rappel affiché : « Aucune inscription libre — un administrateur crée votre
 compte (« Gestion des comptes »). »
@@ -494,7 +505,9 @@ supprimé quoi, quand, pourquoi). » Erreurs possibles : « Le nom saisi ne
 correspond pas. », « La justification est obligatoire pour une suppression
 définitive. », « Mot de passe incorrect. » Bouton final **« Supprimer
 définitivement »** (libellé « Vérification… » pendant l'appel) ou
-**« Annuler »**.
+**« Annuler »**. Le mot de passe est **revérifié par le serveur** au moment
+de la suppression (depuis le 26/09/2026) : une session laissée ouverte ne
+suffit jamais à supprimer un client.
 
 ---
 
@@ -507,7 +520,14 @@ En-tête : nombre de projets actifs, boutons « Clients », « Configuration »,
 **« Nouveau projet »**.
 
 ### Synchronisation GitHub
-Deux boutons toujours visibles :
+**Réservée aux administrateurs** (depuis le 26/09/2026) : le dépôt GitHub
+contient les données de **tous** les clients de l'installation ; le bloc
+n'apparaît que pour un compte admin, et le serveur refuse le relais GitHub à
+tout autre compte. Pour la même raison, l'import de normes depuis GitHub ou
+Google Drive ([§29](#29-bibliothèque-de-normes)) et la sauvegarde miroir Drive
+([§9](#9-miroir-google-drive-sauvegarde-manuelle)) sont réservés aux admins.
+
+Deux boutons :
 - **« Synchroniser vers GitHub »** (devient « Synchronisation… ») : pousse une
   copie des projets et sections du serveur vers le dépôt (sauvegarde
   secondaire).
@@ -729,9 +749,36 @@ Actions disponibles selon le statut courant :
 - **En vérification** : « Transmettre à l'approbation » ou « Rejeter » (motif de
   rejet obligatoire).
 - **En approbation** : « Approuver » ou « Rejeter » (motif obligatoire).
+  « Approuver » demande une **confirmation** (le verrouillage est
+  définitif) et n'est actif que pour **l'approbateur désigné** ou un
+  administrateur ; sinon le bouton est grisé avec le rappel « Seul
+  l'approbateur désigné (…) ou un administrateur peut approuver. »
 - **Validé en interne** : plus aucune action de cycle ; message affiché :
   « Section verrouillée (validée en interne — pas une signature électronique
-  opposable). Nouvelle révision : backlog. »
+  opposable). Son contenu ne peut plus être modifié ; les exports restent
+  disponibles. » Le bloc Workflow reste affiché en lecture (approbateur,
+  avis et leurs dates).
+
+**Règles garanties par le serveur** (depuis le 26/09/2026, audit de
+sécurité) — l'écran les reflète, mais c'est le serveur qui les impose :
+- l'**historique** d'une section (journal, révisions, avis) ne peut
+  **qu'être complété**, jamais réécrit ; chaque nouvelle entrée est
+  attribuée **au compte connecté, à l'heure du serveur** ;
+- les **changements de statut** suivent strictement le tableau ci-dessus
+  (aucun saut, gardes vérifiées) ;
+- après un **rejet**, les avis du cycle rejeté **ne comptent plus** : il
+  faut un nouvel avis pour retransmettre à l'approbation (les anciens
+  restent visibles, marqués « cycle rejeté, ne compte plus ») ;
+- une section **validée en interne** est verrouillée côté serveur ;
+- une section ne peut pas être **créée ou importée** déjà vérifiée ou
+  approuvée : un import JSON repart en brouillon, sans avis ni signature,
+  avec son historique d'origine suivi d'une entrée « import » ;
+- deux enregistrements simultanés (deux onglets, deux personnes) ne
+  s'écrasent plus en silence : le second est rejoué sur la version à jour.
+
+**Indicateur d'enregistrement** : sous le titre, « Enregistrement… » puis
+« Enregistré à HH:MM:SS » après chaque sauvegarde automatique, ou « Non
+enregistré : … » avec la raison en cas d'échec.
 
 ### 7.3 Garde-fous de finalisation (blocages)
 Certaines transitions sont bloquées tant que des conditions ne sont pas
@@ -811,11 +858,19 @@ s'active. Cette checklist n'est **jamais mémorisée** : recharger la page force
 une relecture complète.
 
 ### 7.7 Workflow (rédacteur, relecteurs, approbateur)
-Visible tant que la section n'est pas verrouillée.
-- **« Identifiant approbateur final »** (texte) + bouton « Assigner ».
-- **« Identifiant relecteur »** + **« Avis »** (deux champs texte) + bouton
-  « Ajouter l'avis ». Compteur « Avis relecteurs : N » et liste des avis déjà
-  saisis.
+Toujours visible ; les champs de saisie disparaissent une fois la section
+verrouillée ou pour un lecteur.
+- **« Adresse e-mail de l'approbateur final »** + boutons « Désigner » et
+  « Moi-même » (remplit votre propre adresse). L'adresse doit être celle du
+  **compte** de l'approbateur : c'est ce compte (ou un admin) qui pourra
+  approuver. La désignation est tracée dans l'historique.
+- **« Votre avis (enregistré au nom de <votre e-mail>) »** + bouton
+  « Enregistrer mon avis ». Un avis est **toujours** celui de la personne
+  connectée — il n'est plus possible de saisir un avis au nom d'un autre.
+  Compteur « Avis de relecture : N » ; chaque avis affiche son auteur et sa
+  date.
+- Tout refus (motif manquant, approbateur non habilité, section modifiée
+  entre-temps…) s'affiche en clair sous le bloc, jamais un clic sans effet.
 
 ### 7.8 Export
 - **« Exporter en JSON »**, **« Exporter en Word (.doc) »**, **« Imprimer /
@@ -1273,7 +1328,10 @@ affiché est **« À compléter — réponse « Inconnu » à lever »**, jamais
 critique » par défaut ; l'évaluation peut être enregistrée ainsi, puis refaite
 une fois l'inconnu levé (un « oui » suffit toujours, même s'il reste des
 « inconnu »). Bouton « Enregistrer cette évaluation » ; confirmation :
-« Évaluation enregistrée. »
+« Évaluation enregistrée. » Depuis le 26/09/2026, les réponses sont alors
+**figées** (le verdict affiché reste celui enregistré) ; le bouton
+**« Nouvelle évaluation »** repart d'un questionnaire vierge. Même règle
+sur l'écran Impact Assessment ([§17](#17-impact-assessment)).
 
 ### Évaluation de la complexité et conclusion
 Une fois un verdict obtenu (pas d'étape complexité pour une évaluation « à
@@ -1385,14 +1443,18 @@ défaillance, Cause potentielle, Contrôle actuel, Nœud Structure Système
 optionnel, Paramètre optionnel ([§19](#19-paramètres-critiques-cppcqa)), puis
 Sévérité/Occurrence/Détectabilité **initiales** (nombres, facultatifs). L'IPR
 initial (S×O×D) et un verdict (« Acceptable » / « Action requise ») sont
-calculés automatiquement.
+calculés automatiquement. Laisser les notes vides est désormais accepté
+(26/09/2026 : auparavant la création échouait sans message) ; tout refus
+s'affiche sous le formulaire.
 
 ### Action résiduelle
 Tant que l'IPR résiduel n'est pas renseigné, chaque ligne propose un
 mini-formulaire : Recommandation, Responsable, S/O/D résiduelles. Une fois
 enregistré, l'IPR résiduel et son verdict s'affichent en remplacement du
 formulaire (cycle « évaluation initiale → action → évaluation résiduelle »,
-sans re-saisie possible ensuite depuis cet écran).
+sans re-saisie possible ensuite depuis cet écran). Si la version du profil
+de méthode de la ligne est introuvable, **aucun verdict résiduel** n'est
+affiché (jamais « Acceptable » par défaut).
 
 ---
 
@@ -1448,7 +1510,13 @@ Chaîne en cinq étapes, chacune avec son propre formulaire :
   écart** — bouton « Clôturer l'exécution ». Après clôture, plus aucun
   résultat/mesure ne peut être ajouté (« Ce test est déjà clôturé »). Une fois
   terminée, une exécution affiche : « {titre} — verdict : {verdict}
-  (clôturée le {date}) ».
+  (clôturée le {date}) ». Depuis le 26/09/2026, la clôture demande une
+  **confirmation** (« L'exécution deviendra définitive »), avec une
+  **alerte** si le verdict « Conforme » contredit ce qui a été consigné
+  (étape non conforme, déviation, étape sans résultat). Toute action
+  incomplète (résultat non choisi, preuve sans titre, événement sans
+  description, clôture sans verdict) affiche un message au lieu de ne rien
+  faire. Les horodatages sont au format français.
 
 ---
 
@@ -1674,6 +1742,9 @@ alimentable, par trois voies, chacune avec sa **Catégorie** (ISO / EudraLex /
 PIC/S / ASTM / ISPE / GMP / CQV / CSV / Autre) :
 - **Ajouter des documents** : téléversement direct, fichier(s) `.docx`,
   `.pdf`, `.txt` ou `.md` (plusieurs à la fois).
+- *(Imports GitHub et Google Drive, réparation des contenus manquants :
+  réservés aux administrateurs depuis le 26/09/2026. Renommer un document :
+  son auteur ou un administrateur.)*
 - **Depuis le dépôt GitHub dédié** (celui configuré en [§1.1](#11-dépôt-github-dédié)) :
   Préfixe de chemin (`ex. normes/`) + bouton « Lister » (seuls les fichiers
   `.md`/`.txt` sont importables par cette voie — un fichier binaire lu ainsi

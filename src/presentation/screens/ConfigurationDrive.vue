@@ -5,6 +5,7 @@
 // déclenchement automatique par heuristique de fin de session reste
 // backlog (voir useMiroirDriveStore.ts).
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import {
   useConnexionDriveStore,
@@ -17,6 +18,7 @@ const props = defineProps<{ clientId: string }>()
 const clientsStore = useClientsStore()
 const connexionStore = useConnexionDriveStore()
 const miroirStore = useMiroirDriveStore()
+const authStore = useAuthStore()
 
 const nomClient = ref<string | null>(null)
 const brouillon = reactive({ dossierId: '', jeton: '' })
@@ -139,7 +141,14 @@ async function sauvegarderMaintenant(): Promise<void> {
         Toute modification faite manuellement dans ce dossier Drive sera perdue à la prochaine
         sauvegarde.
       </p>
+      <!-- Le miroir lit l'état depuis le dépôt GitHub, dont le relais est
+           réservé aux admins (audit du 25/09/2026). -->
+      <p v-if="!authStore.estAdmin" class="rappel">
+        La sauvegarde miroir est lancée par un administrateur (elle lit le dépôt GitHub commun à
+        toute l'installation).
+      </p>
       <button
+        v-else
         type="button"
         :disabled="!connexionStore.connexion || miroirStore.miroirEnCours"
         @click="sauvegarderMaintenant"

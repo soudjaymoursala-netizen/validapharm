@@ -10,7 +10,7 @@ import { ref } from 'vue'
 import { useAuthStore } from '../stores/useAuthStore'
 
 const props = defineProps<{ nom: string }>()
-const emit = defineEmits<{ confirme: [justification: string]; annule: [] }>()
+const emit = defineEmits<{ confirme: [justification: string, motDePasse: string]; annule: [] }>()
 
 const authStore = useAuthStore()
 const nomSaisi = ref('')
@@ -39,7 +39,10 @@ async function confirmer(): Promise<void> {
   } finally {
     verificationEnCours.value = false
   }
-  emit('confirme', justification.value.trim())
+  // Le mot de passe accompagne aussi la suppression elle-même : le Worker
+  // le revérifie (audit du 25/09/2026, M6) — la vérification ci-dessus ne
+  // sert qu'à un retour immédiat dans la modale.
+  emit('confirme', justification.value.trim(), motDePasseSaisi.value)
 }
 </script>
 
