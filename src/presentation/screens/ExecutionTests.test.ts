@@ -30,7 +30,10 @@ function routeurDeTest() {
 }
 
 async function attendreQue(condition: () => Promise<boolean> | boolean): Promise<void> {
-  for (let tentative = 0; tentative < 50; tentative++) {
+  // Attente bornée dans le temps (3 s), jamais en nombre de tours : sous la
+  // charge de la suite complète en CI, quelques centaines de ms ne suffisaient pas.
+  const echeanceAttente = Date.now() + 3000
+  for (let tentative = 0; Date.now() < echeanceAttente; tentative++) {
     await flushPromises()
     if (await condition()) return
     await new Promise((resolve) => setTimeout(resolve, 5))
@@ -90,6 +93,11 @@ beforeEach(async () => {
 
 afterEach(() => {
   demonter()
+})
+
+// La clôture (irréversible) demande désormais une confirmation explicite.
+beforeEach(() => {
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
 describe('ExecutionTests', () => {

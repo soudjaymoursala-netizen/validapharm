@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, toRaw } from 'vue'
 import { AuthApiClient, type UtilisateurWire } from '../../connecteurs/auth/AuthApiClient'
 import { db } from '../../persistance/db'
 import { useClientActifStore } from './useClientActifStore'
@@ -31,7 +31,29 @@ export const useAuthStore = defineStore('auth', () => {
     const relayUrl = connexionStore.connexion?.relayUrl
     if (!relayUrl) return null
     const connectivite = useConnectiviteServeurStore()
-    return new AuthApiClient(relayUrl, undefined, (joignable) => connectivite.signaler(joignable))
+    return new AuthApiClient(
+      relayUrl,
+      undefined,
+      (joignable) => connectivite.signaler(joignable),
+      () => void sessionInvalide(),
+    )
+  }
+
+  /**
+   * Session refusée par le Worker (expirée, compte désactivé, mot de passe
+   * changé ailleurs) : déconnexion puis retour à « Se connecter » avec une
+   * explication — jamais des écrans vides sans raison (audit du 25/09/2026).
+   */
+  async function sessionInvalide(): Promise<void> {
+    if (!jeton.value) return
+    await deconnecter()
+    const { router } = await import('../router')
+    const actuelle = router.currentRoute.value
+    if (actuelle.name === 'connexion') return
+    await router.push({
+      name: 'connexion',
+      query: { expiree: '1', redirect: actuelle.fullPath },
+    })
   }
 
   /** Relit la session persistée (IndexedDB) — appelé au démarrage de l'application. */
@@ -112,6 +134,16 @@ export const useAuthStore = defineStore('auth', () => {
     if (!api) return { ok: false, erreur: 'relais_non_configure' }
     const resultat = await api.changerMotDePasse(jeton.value, motDePasseActuel, nouveauMotDePasse)
     if (!resultat.ok) return { ok: false, erreur: resultat.erreur }
+    // Le changement révoque toutes les sessions ouvertes avec l'ancien mot
+    // de passe ; celle-ci continue avec le nouveau jeton renvoyé.
+    if (resultat.donnees.jeton && utilisateur.value) {
+      jeton.value = resultat.donnees.jeton
+      await db.sessionAuthentification.put({
+        id: IDENTIFIANT_SESSION_UNIQUE,
+        jeton: resultat.donnees.jeton,
+        utilisateur: toRaw(utilisateur.value),
+      })
+    }
     return { ok: true }
   }
 

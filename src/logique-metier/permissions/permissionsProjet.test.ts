@@ -89,17 +89,17 @@ describe('peutModifierSection', () => {
     owner_id: 'alice@ex.com',
     shared_with: [{ user_id: 'bob@ex.com', access_level: 'édition' as const }],
   }
-  const section = { owner_id: 'alice@ex.com', shared_with: [] }
 
   test('partagé en édition sur le projet -> peut modifier la section', () => {
-    expect(peutModifierSection(projet, section, 'bob@ex.com', false)).toBe(true)
+    expect(peutModifierSection(projet, 'bob@ex.com', false)).toBe(true)
   })
 
   test('simple lecteur -> ne peut pas', () => {
-    expect(peutModifierSection(projet, section, 'carol@ex.com', false)).toBe(false)
+    expect(peutModifierSection(projet, 'carol@ex.com', false)).toBe(false)
   })
 
-  test('admin -> peut toujours', () => {
-    expect(peutModifierSection(undefined, section, 'root@ex.com', true)).toBe(true)
+  test('projet inconnu -> seul un admin peut modifier (le partage de section n’élargit rien)', () => {
+    expect(peutModifierSection(undefined, 'alice@ex.com', false)).toBe(false)
+    expect(peutModifierSection(undefined, 'root@ex.com', true)).toBe(true)
   })
 })

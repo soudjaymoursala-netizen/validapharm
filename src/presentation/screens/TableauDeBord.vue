@@ -5,6 +5,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { Langue } from '../../logique-metier/domaine/types'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useProjectsStore, type NouveauProjetInput } from '../stores/useProjectsStore'
 import {
@@ -17,6 +18,7 @@ import IconeSvg from '../composants/IconeSvg.vue'
 const projetsStore = useProjectsStore()
 const clientsStore = useClientsStore()
 const syncStore = useSynchronisationStore()
+const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const formulaireOuvert = ref(false)
@@ -158,7 +160,10 @@ function nomClient(clientId: string | null): string | null {
       </div>
     </header>
 
-    <section class="carte synchronisation">
+    <!-- Synchronisation GitHub réservée aux admins (audit du 25/09/2026) :
+         le dépôt contient les données de tous les clients ; le Worker
+         refuse le relais à tout autre compte. -->
+    <section v-if="authStore.estAdmin" class="carte synchronisation">
       <div class="actions-sync">
         <button
           type="button"

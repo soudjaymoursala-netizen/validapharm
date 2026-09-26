@@ -139,3 +139,58 @@ describe('RenduGabarit — colonne de type liste dans un tableau dynamique', () 
     expect(lignes[0]?.conforme).toBe('non')
   })
 })
+
+describe('RenduGabarit — saisie en cours préservée (audit UX du 26/09/2026)', () => {
+  const definitionTexte: DefinitionGabarit = {
+    ...definitionAvecColonneListe,
+    sections: [
+      {
+        section_key: 'exigences',
+        labels: { fr: 'Exigences', en: 'Requirements', de: 'Anforderungen' },
+        required_link_type: null,
+        fields: [
+          {
+            field_key: 'exigences',
+            labels: { fr: 'Exigences', en: 'Requirements', de: 'Anforderungen' },
+            type: 'tableau_dynamique',
+            required: false,
+            colonnes: [
+              {
+                field_key: 'ref',
+                labels: { fr: 'Référence', en: 'Reference', de: 'Referenz' },
+                type: 'texte_court',
+                required: false,
+              },
+              {
+                field_key: 'description',
+                labels: { fr: 'Description', en: 'Description', de: 'Beschreibung' },
+                type: 'texte_court',
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+
+  test('le retour de la sauvegarde de la cellule précédente n’efface pas la frappe en cours', async () => {
+    const wrapper = mount(RenduGabarit, {
+      props: {
+        definition: definitionTexte,
+        values: {},
+        tables: { exigences: [{ ref: null, description: null }] },
+        langue: 'fr',
+        verrouille: false,
+      },
+    })
+    const [ref, description] = wrapper.findAll('tbody input')
+    await ref?.setValue('URS-002')
+    await ref?.trigger('change')
+    // L'utilisateur tape déjà dans la cellule suivante…
+    await description?.setValue('Traçab')
+    // …quand la sauvegarde de la première revient (nouveau rendu du parent).
+    await wrapper.setProps({ tables: { exigences: [{ ref: 'URS-002', description: null }] } })
+    expect((wrapper.findAll('tbody input')[1]?.element as HTMLInputElement).value).toBe('Traçab')
+  })
+})

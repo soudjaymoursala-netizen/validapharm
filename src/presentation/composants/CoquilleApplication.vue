@@ -25,6 +25,15 @@ function reessayer(): void {
   window.location.reload()
 }
 const masquerSidebar = computed(() => route.name === 'connexion')
+/**
+ * Clé de l'écran affiché : change avec le nom de route ET ses paramètres
+ * (jamais la requête). Sans elle, passer du même outil d'un client A à
+ * celui d'un client B réutilisait le composant déjà monté, qui ne charge
+ * qu'au montage : l'écran montrait encore les données de A sous l'adresse
+ * de B, et une évaluation pouvait être enregistrée dans B avec la méthode
+ * de A (audit d'intégrité front du 25/09/2026, C5).
+ */
+const cleEcran = computed(() => `${String(route.name)}:${JSON.stringify(route.params)}`)
 
 // Menu mobile (responsive, ajouté) — état transitoire de navigation,
 // jamais une donnée métier ni persistée (même discipline que
@@ -67,7 +76,7 @@ watch(
         N'enregistrez rien de nouveau avant le retour de la connexion.
         <button type="button" @click="reessayer">Réessayer</button>
       </p>
-      <RouterView />
+      <RouterView :key="cleEcran" />
     </div>
   </div>
 </template>

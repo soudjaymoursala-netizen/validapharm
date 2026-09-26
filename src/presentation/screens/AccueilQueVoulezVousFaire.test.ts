@@ -64,7 +64,10 @@ function routeurDeTest() {
 
 /** `onMounted` enchaîne plusieurs `await` (chargement projets/clients, puis 2 comptages Dexie) — un seul `flushPromises()` peut résoudre trop tôt, d'où ce sondage court. */
 async function attendreQue(condition: () => boolean): Promise<void> {
-  for (let tentative = 0; tentative < 50; tentative++) {
+  // Attente bornée dans le temps (3 s), jamais en nombre de tours : sous la
+  // charge de la suite complète en CI, quelques centaines de ms ne suffisaient pas.
+  const echeanceAttente = Date.now() + 3000
+  for (let tentative = 0; Date.now() < echeanceAttente; tentative++) {
     await flushPromises()
     if (condition()) return
     await new Promise((resolve) => setTimeout(resolve, 5))

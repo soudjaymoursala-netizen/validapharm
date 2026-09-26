@@ -3925,3 +3925,232 @@ courte durée (1h) renvoyé par `/drive/rafraichir-jeton` et les connexions
 Drive par client — le lecteur/miroir Drive tourne dans le navigateur ; un
 relais Drive serait le prochain pas si nécessaire.
 
+
+## 40. Audit complet de l'outil + corrections (25-26/09/2026)
+
+**Demande** : « Ensuite fait un audit complet de l'outil, je veux des
+corrections et des améliorations. Ensuite déploie tes meilleurs agents
+spécialisé en UX/UI pour faire leur travaille découvrir ce qu'il faut
+améliorer ou corriger » ; fusion autorisée une fois fini (« Tu peux
+fusionner une fois fini tu as mon accord »).
+
+### 40.1 Déroulé
+
+Six audits menés par des agents spécialisés, contre un environnement local
+jetable (Worker `wrangler dev --local` + D1 locale, front Vite, comptes de
+test ; jamais la production) :
+
+| Audit | Rapport complet |
+|---|---|
+| Sécurité du Worker (routes, droits, ALCOA+, relais, sessions) | `docs/audits/audit-2026-09-25/securite-worker.md` |
+| Intégrité des données côté front (GxP/ALCOA+, courses, verdicts) | `docs/audits/audit-2026-09-25/integrite-front.md` |
+| UX/UI entrée, navigation, administration | `docs/audits/audit-2026-09-25/ux-entree-navigation.md` |
+| UX/UI projets et rédaction de livrables | `docs/audits/audit-2026-09-25/ux-projets-redaction.md` |
+| UX/UI évaluations (ACFC, Impact, CSV, AMDEC, structure) | `docs/audits/audit-2026-09-25/ux-evaluations.md` |
+| UX/UI exécution, qualité, missions, intégrations | `docs/audits/audit-2026-09-25/ux-execution-qualite.md` |
+
+Les chemins de captures cités dans ces rapports pointent vers le
+répertoire temporaire de la session (non conservé) ; les scripts de preuve
+n'ont pas été versionnés.
+
+### 40.2 Corrigé dans ce lot
+
+**Serveur (Worker)** — détail et justification dans
+`docs/convergence/TECHNICAL_DECISIONS.md` (entrée « Audit du
+25-26/09/2026 ») :
+- **Sections** (`integriteSection.ts`, nouveau) : historique en ajout seul
+  (409 `historique_altere`), nouvelles entrées attribuées au compte
+  connecté et à l'heure du serveur (auparavant `section.owner_id` et
+  l'heure du poste), signatures jamais écrites par `PUT`, transitions de
+  statut contrôlées avec leurs gardes, approbation réservée à
+  l'approbateur désigné ou à un admin (403 `approbateur_requis`), avis d'un
+  cycle rejeté ignorés (dernier `rejet …` de l'historique), section
+  validée verrouillée (409 `section_verrouillee`), création seulement en
+  `brouillon_aide`/`propose_par_ia_non_valide` (400
+  `statut_creation_invalide`), propriétaire = créateur, partage à la
+  création seulement pour qui gère le partage du projet, contrôle de
+  version optimiste (`versionAttendue` → 409 `conflit_version`). Audit
+  sécurité C1/M2, intégrité front C1-C4.
+- **Droits d'une section = droits de son projet** (`droitsSection`), plus
+  jamais élargis par `ownerId`/`sharedWith` de la section ; la liste
+  `GET /sections` suit la même règle.
+- **Restauration** projet/section réservée aux admins, historique jamais
+  raccourci (`historiqueRestaure`), entrée `restauration_github` +
+  journal central. **Migrations locales** (`/clients/:id/*/migration-locale`,
+  `/projects/…`, `/sections/…`) : entrée serveur « migration_locale
+  (historique d'origine non vérifié) », `auditLog` non tableau refusé
+  (il empoisonnait le nœud : 500 permanent), appel consigné. Audit C2.
+- **Documents normatifs** : renommer/réparer réservés à l'auteur de
+  l'import ou à un admin ; réparation seulement si le contenu est
+  réellement absent (409 `contenu_deja_present`), type d'origine imposé ;
+  `X-Content-Type-Options: nosniff` sur tous les téléchargements
+  binaires. Audit M1.
+- **Relais GitHub réservé aux admins** ; `?ref=` limité à la branche
+  configurée (ou `?recursive=1`) ; segments encodés `..`/`%2F` refusés.
+  Audit M3 (+ B1). **Jeton Drive** (`/drive-oauth/rafraichir-jeton`)
+  réservé aux admins. Audit M4.
+- **Suppression définitive d'un client** : mot de passe revérifié par le
+  serveur (403 `mot_de_passe_incorrect`) ; `authorize-action` renvoie
+  l'identifiant réellement consigné. Audit M6.
+- **Connexion** : limitation des tentatives (`limiteurConnexion.ts` :
+  5 échecs par compte, 30 par IP, blocage 15 min, en mémoire de
+  l'isolat — **constaté en réel** qu'un seuil unique par IP bloquait tout
+  le poste après 5 échecs sur un autre compte, d'où les deux seuils),
+  aussi sur `verify-password` ; PBKDF2 factice pour un compte inconnu ou
+  désactivé (plus d'énumération par le temps de réponse). Audit M7.
+- **Sessions** : empreinte du mot de passe (`pv`) dans le JWT, comparée à
+  chaque requête — changer de mot de passe ferme les autres sessions ;
+  `change-password` renvoie un nouveau jeton pour la session courante.
+  Les jetons émis avant ce déploiement sont refusés : **chaque utilisateur
+  devra se reconnecter une fois**. Audit M8.
+- **Mineurs** : gabarit d'un autre client plus jamais renvoyé par la
+  migration (409 `id_conflit`, m1) ; `sharedWith` d'un client validé
+  (tableau de chaînes, sans doublon, ≤ 200) et relu de façon tolérante
+  par `D1ClientsRepo` (m2) ; filet global JSON 500 `erreur_interne` avec
+  CORS (m3) ; suppression d'un document de projet inexistant → 404 sans
+  écriture d'audit (a2).
+
+**Front** :
+- `useSectionsStore` : `modifierSection` (lecture → transformation →
+  écriture rejouée sur conflit de version), messages lisibles pour chaque
+  refus serveur (`messageRefusEcritureSection`), acteur = compte connecté,
+  `avisDuCycleCourant` (même règle que le Worker), import JSON ramené en
+  brouillon sans avis ni signature.
+- `EditeurSection.vue` : indicateur « Enregistrement… / Enregistré à … /
+  Non enregistré : … » ; approbateur désigné par **adresse e-mail** (bouton
+  « Moi-même ») ; avis toujours au nom du compte connecté ; « Approuver »
+  confirmé et réservé à l'approbateur désigné/admin ; motif manquant
+  (rejet, forçage) signalé ; refus serveur affichés ; bloc Workflow
+  visible (lecture) après validation.
+- `RenduGabarit.vue` : **perte de caractères dans les tableaux dynamiques
+  corrigée** (constat bloquant UX : « Traçabilité des cycles » enregistré
+  « ilité des cycles ») — la frappe en cours est gardée dans l'état local
+  (`input`) ; un rendu déclenché par la sauvegarde de la cellule
+  précédente ne l'efface plus. Test de non-régression qui échoue sans le
+  correctif ; vérifié en navigateur réel. Libellés accessibles des
+  cellules.
+- `permissionsProjet.peutModifierSection(projet, userId, estAdmin)` aligné
+  sur le Worker.
+- **Session invalide** (401 `non_authentifie` sur un appel authentifié) :
+  `AuthApiClient` prévient `useAuthStore.sessionInvalide()` → déconnexion
+  et retour à « Se connecter » avec explication (auparavant : listes vides
+  sans raison, intégrité front M3). Erreur interne JSON du Worker : plus
+  présentée comme « serveur injoignable ».
+- Suppression définitive : le mot de passe de la modale est transmis au
+  serveur.
+- Synchronisation GitHub (tableau de bord), imports GitHub/Drive et
+  réparation des normes, sauvegarde miroir Drive : **réservés aux
+  admins** à l'écran (explication pour les autres). Renommer une norme :
+  auteur ou admin.
+- `CoquilleApplication.vue` : `RouterView` clé sur nom de route +
+  paramètres — passer du même outil d'un client A à un client B remonte
+  l'écran (auparavant : données de A sous l'adresse de B, évaluation
+  enregistrée dans B avec la méthode de A — intégrité front C5).
+- Page « Page introuvable » pour toute adresse inconnue (auparavant écran
+  blanc).
+- Focus clavier visible partout (`tokens.css` : contour 2px couleur de
+  marque, `!important` délibéré — WCAG 2.4.7 ; vérifié en réel).
+- Exécution de tests : clôture confirmée avec **alerte d'incohérence**
+  (verdict « Conforme » malgré étape non conforme, déviation ou étape sans
+  résultat — constat bloquant UX) ; actions incomplètes signalées au lieu
+  d'être ignorées ; horodatages en français.
+- AMDEC : notes S/O/D vides acceptées (auparavant 400 + exception non
+  gérée, constat bloquant UX) ; erreurs affichées ; date cible et actions
+  menées conservées lors de l'action résiduelle (intégrité M11) ; **plus
+  de verdict résiduel deviné** si le profil figé est introuvable
+  (intégrité M4 : seuil `Infinity` ⇒ « acceptable » avec IPR 125).
+- Impact et ACFC : questionnaire **figé après enregistrement** (le verdict
+  affiché reste celui enregistré), « Nouvelle évaluation » ajoutée à
+  l'ACFC, vrais groupes radio nommés, libellés « Oui/Non/Inconnu/Sans
+  objet » à l'ACFC (codes bruts auparavant).
+
+**Tests** : Worker 383 (+22 : un par correctif de sécurité, dont les
+deux seuils de limitation, plus l'horodatage strictement croissant — la
+CI a révélé que deux écritures dans la même milliseconde gardaient le
+même `updatedAt`, rendant le contrôle de version aveugle : le serveur
+avance désormais d'une milliseconde au besoin) ; 32 fichiers de tests
+front passés d'une attente bornée en nombre de tours (≈ 250 ms,
+insuffisante sous la charge de la CI) à une attente bornée en temps
+(3 s) ; front mis à jour pour les nouvelles règles
+(approbateur, avis, import, restauration, suppression, questionnaires
+figés, confirmation de clôture) + non-régression de la perte de frappe.
+
+**Vérifié en réel** (Worker + front locaux) : création d'une section
+« validée » refusée ; propriétaire, signatures et acteur imposés ;
+réécriture d'historique 409 ; saut de statut refusé ; relais GitHub,
+jeton Drive et restauration refusés au consultant (403) ; 5 échecs de
+connexion → 429 ; `sharedWith` chaîne → 400 ; frappe rapide dans un
+tableau intacte après rechargement ; indicateur d'enregistrement ;
+approbateur « Moi-même » ; avis attribué au compte connecté ; page 404 ;
+focus visible ; jeton invalide → retour à la connexion avec message.
+
+### 40.3 Décisions attendues de l'utilisateur
+
+1. **Signature électronique et séparation des tâches** (audit sécurité M5
+   et C1, intégrité front C2) : aujourd'hui l'approbation d'une section
+   est réservée à l'approbateur désigné, mais **sans ressaisie du mot de
+   passe** et sans interdire que l'auteur s'approuve lui-même ;
+   l'approbation d'un test et la clôture d'une exécution n'exigent ni mot
+   de passe ni personne distincte. Exiger mot de passe + personne
+   distincte est conforme à l'esprit 21 CFR 11 mais **bloquerait un
+   consultant qui travaille seul**. À trancher : (a) mot de passe à
+   l'approbation/clôture seulement, (b) + séparation auteur/approbateur,
+   (c) laisser tel quel (libellé « pas une signature électronique
+   opposable » déjà affiché).
+2. **Mot de passe initial envoyé en clair par e-mail** (m5) : le remplacer
+   par un lien d'activation à usage unique ? (demande un écran et une
+   route d'activation).
+3. **Mot de passe oublié** (UX entrée #3) : aucun parcours aujourd'hui ;
+   un admin peut-il réinitialiser le mot de passe d'un compte (écran
+   « Gestion des comptes ») ?
+4. **Suppression définitive d'un client** (sécurité B2) : elle ne supprime
+   que la ligne `clients` ; toutes les données métier restent stockées,
+   orphelines et inaccessibles. Rétention GxP voulue, ou suppression en
+   cascade / refus tant que des données existent ?
+5. **Limitation des tentatives persistée** : la version actuelle est en
+   mémoire (par isolat Cloudflare). Une version D1 demanderait une
+   migration de schéma appliquée en production avant le déploiement.
+
+### 40.4 Reste à faire (constats non traités dans ce lot, par priorité)
+
+Référence : rapports de `docs/audits/audit-2026-09-25/`.
+- **Intégrité** : le Worker n'effectue pas de recalcul des verdicts ACFC/Impact/AMDEC
+  envoyés par le navigateur ni de vérification du profil/de la version (intégrité M5) ;
+  couverture de test vers un test inexistant ou d'un autre client
+  acceptée (M6, readiness « prêt » à tort) ; numéros de version de méthode
+  calculés côté client (doublons « v1 », M7) ; qualification IA sans
+  attribution ni historique (M8) ; connecteurs QMS supprimés sans
+  confirmation ni trace (M9) ; seuil d'action AMDEC non borné (M10) ;
+  clés étrangères du corps non vérifiées (sécurité m6) ; corps/listes non
+  bornés (m4 : 40 Mo acceptés, `extractedText` dans les listes) ; quota
+  du relais IA (a1) ; jeton bootstrap comparé en temps non constant (a3) ;
+  état OAuth unique sans PKCE (a4).
+- **Robustesse front** : ~60 gestionnaires sans `try/catch` et pas de
+  gestionnaire d'erreur global (intégrité M1) ; double soumission
+  (M2 : deux évaluations créées sur deux clics) ; 119 codes serveur bruts
+  encore affichés à divers endroits (m3) ; états vides trompeurs quand le
+  serveur est injoignable (« créez le premier… » alors que rien n'a pu
+  être chargé — UX entrée #2).
+- **UX projets/rédaction** : contenu modifiable pendant vérification/
+  approbation ; exports Word/CSV avec codes internes, noms de fichiers en
+  UUID, `.doc` en HTML, CSV sans BOM ni `;` ; tableau tronqué à 1400 px ;
+  éditeur noyé sous les panneaux IA ; garde-fou IQ sans action pour lier
+  la section manquante ; « Créer cette section » actif pour un lecteur.
+- **UX évaluations** : conclusion ACFC jamais enregistrée ; « 404 »
+  présenté comme « aucune méthode configurée » ; Dossier vivant sans AMDEC
+  ni retard de requalification ; nouvelle version de méthode repartant
+  d'un formulaire vide ; AMDEC sans rappel d'échelle/seuil ; Structure
+  Système en liste plate.
+- **UX exécution/qualité** : résultat d'étape définitif au premier clic ;
+  mesure en texte libre ; preuves sans fichier (référence GitHub seule) ;
+  déviation d'exécution absente du journal d'anomalies ; statut
+  d'anomalie modifiable sans motif ; missions clôturables avec activités
+  ouvertes et prérequis non respectés ; fiche mission qui déborde à
+  375 px ; listes sans nom accessible.
+- **UX entrée/administration** : actions sur les comptes sans
+  confirmation ni retour ; tiroir mobile (liens masqués focusables, Échap) ;
+  lien d'évitement, titre d'onglet, focus après navigation ; doublons de
+  clients ; client inexistant affiché comme réel ; modales sans gestion du
+  focus ; recherche qui ignore les projets ; épinglage invisible au
+  clavier ; libellés « Configuration » incohérents ; contrastes limites en
+  thème sombre ; pluriels « (s) » et notes internes visibles.

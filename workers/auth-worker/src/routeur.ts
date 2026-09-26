@@ -130,6 +130,7 @@ import type {
   RiskAssessmentRepo,
 } from './repos/riskAssessmentRepo'
 import type { SectionEnregistree, SectionsRepo } from './repos/sectionsRepo'
+import { egalJson, preparerCreationSection, preparerRemplacementSection } from './integriteSection'
 import type { StockageBinaireRepo } from './repos/stockageBinaireRepo'
 import type {
   CouvertureEnregistree,
@@ -147,6 +148,7 @@ import type {
   StructureSystemeRepo,
 } from './repos/structureSystemeRepo'
 import type { UtilisateursRepo } from './repos/utilisateursRepo'
+import type { LimiteurConnexion } from './limiteurConnexion'
 import type { ClientEnregistre, EntreeAudit, Role, UtilisateurEnregistre } from './types'
 import { versUtilisateurPublic } from './types'
 
@@ -189,6 +191,8 @@ function masquerSecretsParametre(
 }
 
 export interface Contexte {
+  /** Limitation des tentatives de mot de passe — absente : aucune limitation (tests). */
+  limiteurConnexion?: LimiteurConnexion
   utilisateursRepo: UtilisateursRepo
   clientsRepo: ClientsRepo
   parametresInstallationRepo: ParametresInstallationRepo
@@ -391,7 +395,56 @@ async function authentifier(
   if (!payload) return null
   const utilisateur = await ctx.utilisateursRepo.parId(payload.sub)
   if (!utilisateur || utilisateur.statut !== 'actif') return null
+  // Session ouverte avec un ancien mot de passe (ou avant cette règle) :
+  // révoquée (audit du 25/09/2026, M8).
+  if (payload.pv !== (await empreinteMotDePasse(utilisateur))) return null
   return utilisateur
+}
+
+async function empreinteMotDePasse(utilisateur: UtilisateurEnregistre): Promise<string> {
+  const octets = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(utilisateur.motDePasseHash)),
+  )
+  return Array.from(octets.slice(0, 8))
+    .map((o) => o.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function signerJetonSession(ctx: Contexte, utilisateur: UtilisateurEnregistre) {
+  return signerJwt(
+    {
+      sub: utilisateur.id,
+      email: utilisateur.email,
+      role: utilisateur.role,
+      pv: await empreinteMotDePasse(utilisateur),
+    },
+    ctx.secretJwt,
+  )
+}
+
+/** Sel fixe du calcul factice (compte inconnu) — seul le temps de calcul compte. */
+const SEL_FACTICE = '00000000000000000000000000000000'
+
+/**
+ * Vérifie un mot de passe en temps constant du point de vue de l'appelant
+ * (audit du 25/09/2026, M7) : un compte inconnu ou désactivé coûte le même
+ * calcul PBKDF2 qu'un compte réel — le temps de réponse ne révèle plus
+ * l'existence d'un compte (9,6 ms contre 54,6 ms auparavant).
+ */
+async function verifierMotDePasseCompte(
+  utilisateur: UtilisateurEnregistre | null,
+  motDePasse: string,
+): Promise<boolean> {
+  if (!utilisateur || utilisateur.statut !== 'actif') {
+    await hacherMotDePasse(motDePasse, SEL_FACTICE)
+    return false
+  }
+  return verifierMotDePasse(motDePasse, utilisateur.motDePasseSel, utilisateur.motDePasseHash)
+}
+
+function clesLimitation(request: Request, email: string): string[] {
+  const ip = request.headers.get('CF-Connecting-IP')
+  return [`email:${email.trim().toLowerCase()}`, ...(ip ? [`ip:${ip}`] : [])]
 }
 
 async function consignerAudit(
@@ -401,7 +454,7 @@ async function consignerAudit(
   targetType: string,
   targetId: string,
   justification: string | null,
-): Promise<void> {
+): Promise<string> {
   const entree: EntreeAudit = {
     id: genererId(),
     acteurUserId: acteur.id,
@@ -413,6 +466,7 @@ async function consignerAudit(
     timestamp: horodatage(),
   }
   await ctx.auditRepo.consigner(entree)
+  return entree.id
 }
 
 /**
@@ -423,6 +477,96 @@ async function consignerAudit(
  * `UtilisateursRepoMemoire`/`ClientsRepoMemoire`/`AuditRepoMemoire`.
  */
 export async function routerRequete(request: Request, ctx: Contexte): Promise<Response> {
+  // Filet global (audit du 25/09/2026, m3) : une exception imprévue renvoie
+  // un JSON 500 avec les en-têtes CORS — jamais une page HTML que le
+  // navigateur masque derrière une « erreur réseau » trompeuse.
+  try {
+    const migration = await preparerMigrationLocaleClient(request, ctx)
+    if (migration instanceof Response) return migration
+    const reponse = await routerRequeteInterne(migration.request, ctx)
+    if (migration.utilisateur && reponse.status < 300) {
+      await consignerAudit(
+        ctx,
+        migration.utilisateur,
+        'migration_locale',
+        'client',
+        migration.clientId,
+        migration.chemin,
+      )
+    }
+    return reponse
+  } catch (erreur) {
+    console.error('Erreur interne du Worker', erreur)
+    return reponseJson({ erreur: 'erreur_interne' }, 500, entetesCors(ctx.corsOrigin))
+  }
+}
+
+/**
+ * Routes `POST /clients/:id/<domaine>/migration-locale` (filets de
+ * sécurité de migration IndexedDB → D1) : elles acceptent des
+ * enregistrements complets, historique compris (audit du 25/09/2026, C2).
+ * Sans les fermer — des données locales peuvent encore attendre d'être
+ * migrées —, chaque enregistrement migré porte désormais une entrée
+ * d'historique ajoutée par le serveur (qui, quand, origine non vérifiée),
+ * un `auditLog` qui n'est pas un tableau est refusé (il empoisonnait
+ * ensuite toute modification, 500 permanent), et l'appel est consigné dans
+ * le journal central.
+ */
+async function preparerMigrationLocaleClient(
+  request: Request,
+  ctx: Contexte,
+): Promise<
+  | Response
+  | {
+      request: Request
+      utilisateur: UtilisateurEnregistre | null
+      clientId: string
+      chemin: string
+    }
+> {
+  const chemin = new URL(request.url).pathname
+  const correspondance = chemin.match(/^\/clients\/([^/]+)\/.+\/migration-locale$/)
+  if (request.method !== 'POST' || !correspondance) {
+    return { request, utilisateur: null, clientId: '', chemin }
+  }
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return { request, utilisateur: null, clientId: '', chemin }
+
+  const entetes = entetesCors(ctx.corsOrigin)
+  const corps = (request.headers.get('Content-Type') ?? '').includes('application/json')
+    ? await lireCorpsJson<Record<string, unknown>>(request.clone())
+    : null
+  // Corps non JSON (gabarit .docx en multipart…) : transmis tel quel, seul
+  // l'appel est consigné.
+  if (!corps || typeof corps !== 'object')
+    return { request, utilisateur, clientId: correspondance[1] as string, chemin }
+  const entree = {
+    timestamp: horodatage(),
+    actor: utilisateur.email,
+    action: "migration_locale (historique d'origine non vérifié)",
+  }
+  for (const valeur of Object.values(corps)) {
+    if (!Array.isArray(valeur)) continue
+    for (const element of valeur as unknown[]) {
+      if (!element || typeof element !== 'object' || !('auditLog' in element)) continue
+      const enregistrement = element as { auditLog: unknown }
+      if (!Array.isArray(enregistrement.auditLog)) {
+        return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+      }
+      enregistrement.auditLog = [...(enregistrement.auditLog as unknown[]), entree]
+    }
+  }
+  const headers = new Headers(request.headers)
+  headers.delete('Content-Length')
+  return {
+    request: new Request(request.url, { method: 'POST', headers, body: JSON.stringify(corps) }),
+    utilisateur,
+    clientId: correspondance[1] as string,
+    chemin,
+  }
+}
+
+async function routerRequeteInterne(request: Request, ctx: Contexte): Promise<Response> {
   const entetes = entetesCors(ctx.corsOrigin)
 
   if (request.method === 'OPTIONS') {
@@ -1921,10 +2065,7 @@ async function gererBootstrapAdmin(
   await ctx.utilisateursRepo.creer(utilisateur)
   await consignerAudit(ctx, utilisateur, 'bootstrap_admin', 'user', utilisateur.id, null)
 
-  const jeton = await signerJwt(
-    { sub: utilisateur.id, email: utilisateur.email, role: utilisateur.role },
-    ctx.secretJwt,
-  )
+  const jeton = await signerJetonSession(ctx, utilisateur)
   return reponseJson({ jeton, utilisateur: versUtilisateurPublic(utilisateur) }, 201, entetes)
 }
 
@@ -1938,26 +2079,23 @@ async function gererLogin(
     return reponseJson({ erreur: 'identifiants_invalides' }, 400, entetes)
   }
 
+  const cles = clesLimitation(request, corps.email)
+  if (ctx.limiteurConnexion?.estBloque(cles)) {
+    return reponseJson({ erreur: 'trop_de_tentatives' }, 429, entetes)
+  }
+
   const utilisateur = await ctx.utilisateursRepo.parEmail(corps.email)
   // Message générique volontaire (email inconnu vs mot de passe incorrect
   // vs compte désactivé) — jamais confirmer l'existence d'un compte à un
-  // appelant non authentifié.
-  if (!utilisateur || utilisateur.statut !== 'actif') {
+  // appelant non authentifié, ni par le message ni par le temps de réponse.
+  const motDePasseValide = await verifierMotDePasseCompte(utilisateur, corps.motDePasse)
+  if (!utilisateur || !motDePasseValide) {
+    ctx.limiteurConnexion?.enregistrerEchec(cles)
     return reponseJson({ erreur: 'identifiants_invalides' }, 401, entetes)
   }
-  const motDePasseValide = await verifierMotDePasse(
-    corps.motDePasse,
-    utilisateur.motDePasseSel,
-    utilisateur.motDePasseHash,
-  )
-  if (!motDePasseValide) {
-    return reponseJson({ erreur: 'identifiants_invalides' }, 401, entetes)
-  }
+  ctx.limiteurConnexion?.enregistrerSucces(cles)
 
-  const jeton = await signerJwt(
-    { sub: utilisateur.id, email: utilisateur.email, role: utilisateur.role },
-    ctx.secretJwt,
-  )
+  const jeton = await signerJetonSession(ctx, utilisateur)
   return reponseJson({ jeton, utilisateur: versUtilisateurPublic(utilisateur) }, 200, entetes)
 }
 
@@ -2017,7 +2155,10 @@ async function gererChangerMotDePasse(
     updatedAt: horodatage(),
   })
   await consignerAudit(ctx, utilisateur, 'changement_mot_de_passe', 'user', utilisateur.id, null)
-  return reponseJson({ ok: true }, 200, entetes)
+  // Les autres sessions (ancien mot de passe) sont révoquées ; celle-ci
+  // reçoit un nouveau jeton pour continuer sans se reconnecter.
+  const jeton = await signerJetonSession(ctx, { ...utilisateur, motDePasseHash: hash })
+  return reponseJson({ ok: true, jeton }, 200, entetes)
 }
 
 async function gererVerifierMotDePasse(
@@ -2031,11 +2172,19 @@ async function gererVerifierMotDePasse(
   const corps = await lireCorpsJson<{ motDePasse?: string }>(request)
   if (!corps?.motDePasse) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
 
+  // Même limitation que la connexion : jamais un oracle de mot de passe
+  // illimité pour qui détient une session volée.
+  const cles = [`verif:${utilisateur.id}`]
+  if (ctx.limiteurConnexion?.estBloque(cles)) {
+    return reponseJson({ erreur: 'trop_de_tentatives' }, 429, entetes)
+  }
   const valide = await verifierMotDePasse(
     corps.motDePasse,
     utilisateur.motDePasseSel,
     utilisateur.motDePasseHash,
   )
+  if (valide) ctx.limiteurConnexion?.enregistrerSucces(cles)
+  else ctx.limiteurConnexion?.enregistrerEchec(cles)
   return reponseJson({ valide }, 200, entetes)
 }
 
@@ -2205,8 +2354,9 @@ async function gererAutoriserAction(
     return reponseJson({ erreur: 'justification_obligatoire' }, 400, entetes)
   }
 
-  const id = genererId()
-  await consignerAudit(
+  // L'identifiant renvoyé est bien celui de l'entrée consignée (il était
+  // auparavant généré à part, donc introuvable dans le journal).
+  const auditId = await consignerAudit(
     ctx,
     acteur,
     corps.action,
@@ -2214,7 +2364,7 @@ async function gererAutoriserAction(
     corps.targetId,
     corps.justification.trim(),
   )
-  return reponseJson({ authorized: true, auditId: id }, 200, entetes)
+  return reponseJson({ authorized: true, auditId }, 200, entetes)
 }
 
 // --- Handlers : clients ---
@@ -2313,6 +2463,18 @@ async function gererModifierClient(
     sharedWith?: string[]
   }>(request)
   if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  // Types vérifiés (audit du 25/09/2026, m2/m3) : un `sharedWith` qui n'est
+  // pas une liste d'identifiants rendait `GET /clients` en erreur 500 chez
+  // les personnes concernées, et une chaîne donnait accès par sous-chaîne.
+  if (
+    (corps.name !== undefined && typeof corps.name !== 'string') ||
+    (corps.sharedWith !== undefined &&
+      (!Array.isArray(corps.sharedWith) ||
+        corps.sharedWith.length > 200 ||
+        !corps.sharedWith.every((u) => typeof u === 'string' && u.length > 0)))
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   // Un changement de statut explicite doit être cohérent avec l'état
   // actuel — jamais un archivage silencieux d'un client déjà archivé
@@ -2341,7 +2503,7 @@ async function gererModifierClient(
     // s'accorder l'accès à d'autres).
     ...(corps.sharedWith !== undefined &&
     (utilisateur.role === 'admin' || client.createdByUserId === utilisateur.id)
-      ? { sharedWith: corps.sharedWith }
+      ? { sharedWith: [...new Set(corps.sharedWith)] }
       : {}),
     updatedAt: horodatage(),
   })
@@ -2362,9 +2524,18 @@ async function gererSupprimerClientDefinitivement(
   const acteur = await exigerAdmin(request, ctx, entetes)
   if (acteur instanceof Response) return acteur
 
-  const corps = await lireCorpsJson<{ justification?: string }>(request)
+  const corps = await lireCorpsJson<{ justification?: string; motDePasse?: string }>(request)
   if (!corps?.justification || corps.justification.trim().length === 0) {
     return reponseJson({ erreur: 'justification_obligatoire' }, 400, entetes)
+  }
+  // Ré-authentification vérifiée par le serveur (audit du 25/09/2026, M6) :
+  // avant, seule la modale la demandait — une session laissée ouverte ou un
+  // jeton volé suffisait à supprimer définitivement un client.
+  if (
+    !corps.motDePasse ||
+    !(await verifierMotDePasse(corps.motDePasse, acteur.motDePasseSel, acteur.motDePasseHash))
+  ) {
+    return reponseJson({ erreur: 'mot_de_passe_incorrect' }, 403, entetes)
   }
 
   const client = await ctx.clientsRepo.parId(id)
@@ -7530,6 +7701,8 @@ async function gererMigrerGabaritExportClientLocal(
 
   const existant = await ctx.gabaritExportClientRepo.parId(id)
   if (existant) {
+    // Jamais le gabarit d'un autre client (audit du 25/09/2026, m1).
+    if (existant.clientId !== clientId) return reponseJson({ erreur: 'id_conflit' }, 409, entetes)
     return reponseJson({ gabarit: assemblerGabaritExportClient(existant) }, 201, entetes)
   }
 
@@ -7571,6 +7744,7 @@ async function gererObtenirContenuGabaritExportClient(
       ...entetes,
       'Content-Type': contenu.typeContenu,
       'Content-Disposition': `attachment; filename="${gabarit.nom.replace(/"/g, '')}.docx"`,
+      'X-Content-Type-Options': 'nosniff',
     },
   })
 }
@@ -8090,28 +8264,29 @@ async function listerProjetsVisibles(
 }
 
 /**
- * Droits sur une section : ceux de son projet (lecture si le projet est
- * visible, écriture s'il est modifiable), plus le partage propre à la
- * section (`ownerId`/`sharedWith`, déjà modélisés). Une section dont le
- * projet n'existe pas n'est accessible qu'à un admin ou à son propriétaire.
+ * Droits sur une section : exactement ceux de son projet (lecture si le
+ * projet est visible, écriture s'il est modifiable, partage réservé au
+ * créateur du projet ou à un admin). **(Audit du 25/09/2026, M2)** Le
+ * partage propre à la section (`ownerId`/`sharedWith`) n'élargit plus
+ * jamais ces droits : il permettait à un simple partagé en édition de
+ * distribuer l'accès à des tiers sans accès au projet, et conservait
+ * l'accès d'une personne retirée du partage du projet. Une section dont
+ * le projet n'existe pas n'est accessible qu'à un admin.
  */
 async function droitsSection(
   ctx: Contexte,
-  section: Pick<SectionEnregistree, 'projectId' | 'ownerId' | 'sharedWith'>,
+  section: Pick<SectionEnregistree, 'projectId'>,
   utilisateur: UtilisateurEnregistre,
 ): Promise<{ voir: boolean; modifier: boolean; gererPartage: boolean }> {
   if (utilisateur.role === 'admin') return { voir: true, modifier: true, gererPartage: true }
-  const proprietaire = section.ownerId === utilisateur.email
-  const partage = (section.sharedWith ?? []).find((p) => p.userId === utilisateur.email)
   const projet = await ctx.projectsRepo.obtenirProjet(section.projectId)
-  const voirProjet = projet !== null && (await peutVoirProjetServeur(ctx, projet, utilisateur))
-  const modifierProjet = projet !== null && peutModifierProjetServeur(projet, utilisateur)
+  if (!projet || !(await peutVoirProjetServeur(ctx, projet, utilisateur))) {
+    return { voir: false, modifier: false, gererPartage: false }
+  }
   return {
-    voir: voirProjet || proprietaire || partage !== undefined,
-    modifier: modifierProjet || proprietaire || partage?.accessLevel === 'édition',
-    // Créateur de la section, créateur du projet ou admin — jamais un
-    // simple partagé en édition (décision du 25/09/2026).
-    gererPartage: proprietaire || (projet !== null && peutGererPartageProjet(projet, utilisateur)),
+    voir: true,
+    modifier: peutModifierProjetServeur(projet, utilisateur),
+    gererPartage: peutGererPartageProjet(projet, utilisateur),
   }
 }
 
@@ -8242,20 +8417,46 @@ async function gererRestaurerProjet(
   const utilisateur = await authentifier(request, ctx)
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
+  // Réservée aux admins (audit du 25/09/2026, C2/M3) : elle écrase le
+  // projet, et un partagé en édition pouvait ainsi réécrire son historique.
+  if (utilisateur.role !== 'admin') return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+
   const corps = await lireCorpsJson<ProjectEnregistre>(request)
-  if (!corps?.name) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (!corps?.name || !Array.isArray(corps.auditLog)) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
 
   const existant = await ctx.projectsRepo.obtenirProjet(id)
   const refus = await refusEcritureProjetComplet(ctx, utilisateur, existant, corps)
   if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
 
-  const projetAEcrire: ProjectEnregistre = { ...corps, id }
+  const maintenant = horodatage()
+  const projetAEcrire: ProjectEnregistre = {
+    ...corps,
+    id,
+    auditLog: [
+      ...historiqueRestaure(existant?.auditLog ?? [], corps.auditLog),
+      { timestamp: maintenant, actor: utilisateur.email, action: 'restauration_github' },
+    ],
+  }
   if (existant) {
     await ctx.projectsRepo.remplacerProjet(projetAEcrire)
   } else {
     await ctx.projectsRepo.creerProjet(projetAEcrire)
   }
+  await consignerAudit(ctx, utilisateur, 'restauration_github', 'project', id, null)
   return reponseJson({ projet: projetAEcrire }, 200, entetes)
+}
+
+/**
+ * Historique après restauration : celui fourni s'il prolonge l'existant,
+ * sinon l'existant — une restauration ne raccourcit ni ne réécrit jamais
+ * un historique déjà enregistré côté serveur.
+ */
+function historiqueRestaure<T>(existant: T[], fourni: T[]): T[] {
+  const prolonge =
+    fourni.length >= existant.length && existant.every((e, i) => egalJson(e, fourni[i]))
+  return prolonge ? fourni : existant
 }
 
 /**
@@ -8390,8 +8591,21 @@ async function gererMigrerProjetsLocaux(
     }
     const refus = await refusEcritureProjetComplet(ctx, utilisateur, null, p)
     if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
-    await ctx.projectsRepo.creerProjet(p)
-    projects.push(p)
+    if (!Array.isArray(p.auditLog)) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    const migre: ProjectEnregistre = {
+      ...p,
+      auditLog: [
+        ...p.auditLog,
+        {
+          timestamp: horodatage(),
+          actor: utilisateur.email,
+          action: "migration_locale (historique d'origine non vérifié)",
+        },
+      ],
+    }
+    await ctx.projectsRepo.creerProjet(migre)
+    await consignerAudit(ctx, utilisateur, 'migration_locale', 'project', p.id, null)
+    projects.push(migre)
   }
 
   return reponseJson({ projects }, 201, entetes)
@@ -8854,15 +9068,7 @@ async function gererListerToutesLesSections(
     ctx.sectionsRepo.listerToutes(),
     idsProjetsVisibles(ctx, utilisateur),
   ])
-  const sections =
-    visibles === null
-      ? toutes
-      : toutes.filter(
-          (s) =>
-            visibles.has(s.projectId) ||
-            s.ownerId === utilisateur.email ||
-            (s.sharedWith ?? []).some((p) => p.userId === utilisateur.email),
-        )
+  const sections = visibles === null ? toutes : toutes.filter((s) => visibles.has(s.projectId))
   return reponseJson({ sections }, 200, entetes)
 }
 
@@ -8909,9 +9115,20 @@ async function gererCreerSection(
   }
   const refus = await refusEcritureSection(ctx, utilisateur, corps.projectId)
   if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
+  if (await ctx.sectionsRepo.obtenirSection(corps.id)) {
+    return reponseJson({ erreur: 'id_conflit' }, 409, entetes)
+  }
 
-  await ctx.sectionsRepo.creerSection(corps)
-  return reponseJson({ section: corps }, 201, entetes)
+  const projet = await ctx.projectsRepo.obtenirProjet(corps.projectId)
+  const preparation = preparerCreationSection(
+    corps,
+    utilisateur,
+    horodatage(),
+    projet !== null && peutGererPartageProjet(projet, utilisateur),
+  )
+  if (!preparation.ok) return reponseJson({ erreur: preparation.erreur }, 400, entetes)
+  await ctx.sectionsRepo.creerSection(preparation.section)
+  return reponseJson({ section: preparation.section }, 201, entetes)
 }
 
 /**
@@ -8948,15 +9165,27 @@ async function gererRemplacerSection(
   if (!droits.voir) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   if (!droits.modifier) return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
 
-  const corps = await lireCorpsJson<SectionEnregistree>(request)
-  if (!corps?.templateType) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const recu = await lireCorpsJson<SectionEnregistree & { versionAttendue?: string }>(request)
+  if (!recu?.templateType || !recu.workflow) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const { versionAttendue, ...corps } = recu
+  // Contrôle de version optimiste (audit d'intégrité front, C4) : deux
+  // sauvegardes simultanées ne s'écrasent plus en silence.
+  if (typeof versionAttendue === 'string' && versionAttendue !== existante.updatedAt) {
+    return reponseJson({ erreur: 'conflit_version' }, 409, entetes)
+  }
   if (partageModifie(existante, corps) && !droits.gererPartage) {
     return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
   }
 
-  const section: SectionEnregistree = { ...corps, id, projectId: existante.projectId }
-  await ctx.sectionsRepo.remplacerSection(section)
-  return reponseJson({ section }, 200, entetes)
+  const preparation = preparerRemplacementSection(existante, corps, utilisateur, horodatage())
+  if (!preparation.ok) {
+    const statut = preparation.erreur === 'approbateur_requis' ? 403 : 409
+    return reponseJson({ erreur: preparation.erreur }, statut, entetes)
+  }
+  await ctx.sectionsRepo.remplacerSection(preparation.section)
+  return reponseJson({ section: preparation.section }, 200, entetes)
 }
 
 /**
@@ -8996,8 +9225,28 @@ async function gererMigrerSectionsLocales(
     }
     const refus = await refusEcritureSection(ctx, utilisateur, s.projectId)
     if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
-    await ctx.sectionsRepo.creerSection(s)
-    sections.push(s)
+    if (!Array.isArray(s.auditLog) || !Array.isArray(s.revisions)) {
+      return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    }
+    // Historique local conservé (jamais fabriqué), mais explicitement marqué
+    // comme importé sans vérification, par qui et quand (audit du 25/09/2026,
+    // C2) ; les signatures et le partage ne se migrent jamais.
+    const migree: SectionEnregistree = {
+      ...s,
+      sharedWith: [],
+      signatures: { redacteur: {}, verificateur: {}, approbateur: {} },
+      auditLog: [
+        ...s.auditLog,
+        {
+          timestamp: horodatage(),
+          actor: utilisateur.email,
+          action: "migration_locale (historique d'origine non vérifié)",
+        },
+      ],
+    }
+    await ctx.sectionsRepo.creerSection(migree)
+    await consignerAudit(ctx, utilisateur, 'migration_locale', 'section', s.id, null)
+    sections.push(migree)
   }
 
   return reponseJson({ sections }, 201, entetes)
@@ -9021,13 +9270,25 @@ async function gererRestaurerSection(
   const utilisateur = await authentifier(request, ctx)
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
+  // Restauration depuis la synchronisation GitHub : réservée aux admins
+  // (audit du 25/09/2026, C2/M3) — elle écrase l'enregistrement, historique
+  // compris, et n'est donc jamais ouverte à un simple partagé en édition.
+  if (utilisateur.role !== 'admin') return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+
   const corps = await lireCorpsJson<SectionEnregistree>(request)
-  if (!corps?.projectId || !corps.templateType) {
+  if (!corps?.projectId || !corps.templateType || !Array.isArray(corps.auditLog)) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
 
-  const section: SectionEnregistree = { ...corps, id }
   const existante = await ctx.sectionsRepo.obtenirSection(id)
+  const section: SectionEnregistree = {
+    ...corps,
+    id,
+    auditLog: [
+      ...historiqueRestaure(existante?.auditLog ?? [], corps.auditLog),
+      { timestamp: horodatage(), actor: utilisateur.email, action: 'restauration_github' },
+    ],
+  }
   if (existante) {
     const droits = await droitsSection(ctx, existante, utilisateur)
     if (!droits.voir) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
@@ -9047,6 +9308,7 @@ async function gererRestaurerSection(
   } else {
     await ctx.sectionsRepo.creerSection(section)
   }
+  await consignerAudit(ctx, utilisateur, 'restauration_github', 'section', id, null)
   return reponseJson({ section }, 200, entetes)
 }
 
@@ -9331,6 +9593,8 @@ async function gererObtenirContenuDocumentProjet(
       ...entetes,
       'Content-Type': contenu.typeContenu,
       'Content-Disposition': `attachment; filename="${document.filename.replace(/"/g, '')}"`,
+      // Jamais interprété par le navigateur (audit du 25/09/2026, M1).
+      'X-Content-Type-Options': 'nosniff',
     },
   })
 }
@@ -9345,13 +9609,13 @@ async function gererSupprimerDocumentProjet(
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
   const document = await ctx.projectDocumentsRepo.parId(id)
-  if (document) {
-    if (!(await documentProjetAccessible(ctx, utilisateur, document, 'voir'))) {
-      return reponseJson({ erreur: 'introuvable' }, 404, entetes)
-    }
-    if (!(await documentProjetAccessible(ctx, utilisateur, document, 'modifier'))) {
-      return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
-    }
+  // Document inexistant : rien à supprimer ni à consigner (audit du
+  // 25/09/2026, a2) — jamais une entrée d'audit pour une action fictive.
+  if (!document || !(await documentProjetAccessible(ctx, utilisateur, document, 'voir'))) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  if (!(await documentProjetAccessible(ctx, utilisateur, document, 'modifier'))) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
   }
 
   await ctx.stockageBinaireRepo.supprimer(cleTexteDocumentProjet(id))
@@ -9504,6 +9768,23 @@ function operationGitHubAutorisee(methode: string, suffixe: string, branche: str
   return false
 }
 
+/**
+ * Chaque segment du chemin, une fois décodé, reste un segment simple :
+ * jamais `.`/`..` ni un séparateur encodé (`%2F`, `%5C`) qui sortirait de
+ * `/repos/<owner>/<repo>/` côté GitHub.
+ */
+function segmentsGitHubSurs(chemin: string): boolean {
+  return chemin.split('/').every((segment) => {
+    let decode: string
+    try {
+      decode = decodeURIComponent(segment)
+    } catch {
+      return false
+    }
+    return decode !== '.' && decode !== '..' && !decode.includes('/') && !decode.includes('\\')
+  })
+}
+
 async function gererRelaisGitHub(
   request: Request,
   ctx: Contexte,
@@ -9511,8 +9792,12 @@ async function gererRelaisGitHub(
   cheminGitHub: string,
   recherche: string,
 ): Promise<Response> {
-  const utilisateur = await authentifier(request, ctx)
-  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+  // Réservé aux admins (audit du 25/09/2026, M3) : le dépôt de
+  // synchronisation contient les données de TOUS les clients — un compte
+  // ordinaire pouvait, via ce relais, lire et pousser dans tout le dépôt
+  // en contournant le cloisonnement client/projet.
+  const utilisateur = await exigerAdmin(request, ctx, entetes)
+  if (utilisateur instanceof Response) return utilisateur
 
   const parametre = await ctx.parametresInstallationRepo.obtenir('github')
   const owner = parametre?.valeur.owner
@@ -9524,7 +9809,14 @@ async function gererRelaisGitHub(
   }
 
   const prefixe = `/repos/${owner}/${repo}/`
+  // Seules les requêtes émises par `GitHubConnector` : `?ref=<branche
+  // configurée>` ou `?recursive=1` — jamais une autre branche ni un commit
+  // arbitraire. Aucun segment encodé (`%2F`, `%2e`…) dans le chemin.
+  const rechercheAutorisee =
+    recherche === '' || recherche === `?ref=${branche}` || recherche === '?recursive=1'
   if (
+    !rechercheAutorisee ||
+    !segmentsGitHubSurs(cheminGitHub) ||
     !SEGMENT_SUR.test(owner) ||
     !SEGMENT_SUR.test(repo) ||
     !cheminGitHub.startsWith(prefixe) ||
@@ -9780,8 +10072,11 @@ async function gererRafraichirJetonDrive(
   ctx: Contexte,
   entetes: Record<string, string>,
 ): Promise<Response> {
-  const utilisateur = await authentifier(request, ctx)
-  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+  // Réservé aux admins (audit du 25/09/2026, M4) : le jeton porte sur tout
+  // le Google Drive du compte connecté (portée `drive.readonly`), pas
+  // seulement sur le dossier des normes — jamais distribué à tout compte.
+  const utilisateur = await exigerAdmin(request, ctx, entetes)
+  if (utilisateur instanceof Response) return utilisateur
   if (!ctx.googleOAuthClientId || !ctx.googleOAuthClientSecret) {
     return reponseJson({ erreur: 'oauth_google_non_configure' }, 501, entetes)
   }
@@ -10037,6 +10332,7 @@ async function gererObtenirContenuDocumentNormatif(
       ...entetes,
       'Content-Type': contenu.typeContenu,
       'Content-Disposition': `attachment; filename="${document.filename.replace(/"/g, '')}"`,
+      'X-Content-Type-Options': 'nosniff',
     },
   })
 }
@@ -10062,6 +10358,15 @@ async function gererRepararContenuDocumentNormatif(
 
   const document = await ctx.documentsNormatifsRepo.parId(id)
   if (!document) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  // Réparation seulement (audit du 25/09/2026, M1) : par l'auteur de
+  // l'import ou un admin, et uniquement si le contenu est réellement absent
+  // — jamais un remplacement silencieux d'un document existant.
+  if (!peutGererDocumentNormatif(document, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
+  if (((await ctx.stockageBinaireRepo.taille(cleContenuDocument(id))) ?? 0) > 0) {
+    return reponseJson({ erreur: 'contenu_deja_present' }, 409, entetes)
+  }
 
   const contenu = await request.arrayBuffer()
   // Même garde qu'à la création (#35) : jamais annoncer un contenu
@@ -10070,8 +10375,8 @@ async function gererRepararContenuDocumentNormatif(
     return reponseJson({ erreur: 'contenu_vide' }, 400, entetes)
   }
 
-  const typeContenu = request.headers.get('Content-Type') ?? document.mimeType
-  await ctx.stockageBinaireRepo.enregistrer(cleContenuDocument(id), contenu, typeContenu)
+  // Type d'origine du document, jamais celui annoncé par l'appelant.
+  await ctx.stockageBinaireRepo.enregistrer(cleContenuDocument(id), contenu, document.mimeType)
   await ctx.documentsNormatifsRepo.marquerContenuDisponible(id)
   await consignerAudit(
     ctx,
@@ -10089,6 +10394,14 @@ async function gererRepararContenuDocumentNormatif(
   )
 }
 
+/** Renommer ou réparer un document normatif : son auteur (import) ou un admin. */
+function peutGererDocumentNormatif(
+  document: DocumentNormatifEnregistre,
+  utilisateur: UtilisateurEnregistre,
+): boolean {
+  return utilisateur.role === 'admin' || document.uploadedBy === utilisateur.id
+}
+
 async function gererRenommerDocumentNormatif(
   request: Request,
   ctx: Contexte,
@@ -10100,6 +10413,9 @@ async function gererRenommerDocumentNormatif(
 
   const document = await ctx.documentsNormatifsRepo.parId(id)
   if (!document) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  if (!peutGererDocumentNormatif(document, utilisateur)) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
 
   const corps = await lireCorpsJson<{ titre?: string }>(request)
   if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)

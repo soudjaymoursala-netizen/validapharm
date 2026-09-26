@@ -46,6 +46,8 @@ const LIBELLES_ERREUR: Record<string, string> = {
   deja_actif: 'Ce client a déjà été désarchivé entre-temps (probablement depuis un autre onglet).',
   non_autorise: "Vous n'avez pas les droits nécessaires pour cette action.",
   introuvable: "Ce client n'existe plus (probablement supprimé entre-temps).",
+  mot_de_passe_incorrect: 'Mot de passe incorrect : la suppression définitive a été refusée.',
+  corps_invalide: 'Les informations envoyées sont incomplètes ou invalides.',
 }
 
 function libelleErreur(e: unknown): string {
@@ -107,11 +109,18 @@ async function desarchiver(client: Client): Promise<void> {
   }
 }
 
-async function confirmerSuppressionDefinitive(justification: string): Promise<void> {
+async function confirmerSuppressionDefinitive(
+  justification: string,
+  motDePasse: string,
+): Promise<void> {
   if (!clientASupprimer.value) return
   erreurAction.value = null
   try {
-    const resultat = await store.supprimerDefinitivement(clientASupprimer.value.id, justification)
+    const resultat = await store.supprimerDefinitivement(
+      clientASupprimer.value.id,
+      justification,
+      motDePasse,
+    )
     if ('erreur' in resultat) erreurAction.value = libelleErreur(resultat)
   } catch (e) {
     erreurAction.value = libelleErreur(e)

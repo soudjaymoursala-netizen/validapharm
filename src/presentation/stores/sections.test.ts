@@ -198,9 +198,10 @@ describe('useSectionsStore — mettreAJourValeurs', () => {
   test('une section verrouillée ne journalise pas non plus de tentative refusée', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
     await seedSection({ ...section, status: 'valide_en_interne' })
+    const avant = (await obtenirSectionDeTest(section.id))?.audit_log.length
     await sections.mettreAJourValeurs(section.id, { contenu: 'tentative' })
     const sectionEnBase = await obtenirSectionDeTest(section.id)
-    expect(sectionEnBase?.audit_log).toHaveLength(1)
+    expect(sectionEnBase?.audit_log).toHaveLength(avant ?? -1)
   })
 })
 
@@ -238,26 +239,26 @@ describe('useSectionsStore — mettreAJourTable (tableau_dynamique)', () => {
 describe('useSectionsStore — workflow (approbateur, avis relecteur)', () => {
   test('assignerApprobateurFinal renseigne workflow.approver_final', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await sections.assignerApprobateurFinal(section.id, 'qa-1')
+    await sections.assignerApprobateurFinal(section.id, 'qa@client.example')
     const sectionEnBase = await obtenirSectionDeTest(section.id)
-    expect(sectionEnBase?.workflow.approver_final).toBe('qa-1')
+    expect(sectionEnBase?.workflow.approver_final).toBe('qa@client.example')
   })
 
-  test('ajouterAvisRelecteur ajoute une entrée à workflow.reviewers', async () => {
+  test('ajouterAvisRelecteur ajoute l’avis de la personne connectée (jamais au nom d’un autre)', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await sections.ajouterAvisRelecteur(section.id, 'revu-1', 'Favorable')
+    await sections.ajouterAvisRelecteur(section.id, 'Favorable')
     const sectionEnBase = await obtenirSectionDeTest(section.id)
     expect(sectionEnBase?.workflow.reviewers).toEqual([
-      expect.objectContaining({ user_id: 'revu-1', avis: 'Favorable' }),
+      expect.objectContaining({ user_id: 'admin@pharmatech.example', avis: 'Favorable' }),
     ])
   })
 
   test('le parcours complet via le workflow (sans injection directe en base) atteint valide_en_interne', async () => {
     const { sections, section } = await creerProjetEtSection('contexte_procede')
-    await sections.assignerApprobateurFinal(section.id, 'qa-1')
+    await sections.assignerApprobateurFinal(section.id, 'admin@pharmatech.example')
     expect(await sections.engagerVerification(section.id)).toEqual({ ok: true })
 
-    await sections.ajouterAvisRelecteur(section.id, 'revu-1', 'Favorable')
+    await sections.ajouterAvisRelecteur(section.id, 'Favorable')
     expect(await sections.transmettreApprobation(section.id)).toEqual({ ok: true })
 
     expect(await sections.approuver(section.id)).toEqual({ ok: true })
@@ -456,7 +457,12 @@ describe('useSectionsStore — importerSection', () => {
     // Historique importé préservé + entrée "import" ajoutée (jamais "création", qui masquerait l'origine).
     expect(sectionEnBase?.audit_log).toHaveLength(2)
     expect(sectionEnBase?.audit_log[0]?.action).toBe('création')
-    expect(sectionEnBase?.audit_log[1]).toMatchObject({ actor: 'u-local', action: 'import' })
+    // Entrée « import » attribuée par le Worker à la personne connectée,
+    // jamais à l'identité passée par le navigateur.
+    expect(sectionEnBase?.audit_log[1]).toMatchObject({
+      actor: 'admin@pharmatech.example',
+      action: 'import',
+    })
 
     const projetEnBase = await projets.obtenirProjet(projet.id)
     expect(projetEnBase?.sections).toContain(importee.id)
@@ -548,7 +554,7 @@ describe('useSectionsStore — genererBrouillonIA (§4.1bis)', () => {
     // fusionnée avec une future validation utilisateur.
     expect(sectionEnBase?.revisions.at(-1)).toMatchObject({
       motif: 'génération assistée',
-      auteur: 'système (Fournisseur test)',
+      auteur: 'système (Fournisseur test) — déclenché par admin@pharmatech.example',
     })
 
     const projetEnBase = await projets.obtenirProjet(projet.id)

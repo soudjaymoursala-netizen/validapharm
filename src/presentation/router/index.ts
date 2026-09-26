@@ -234,6 +234,13 @@ export const router = createRouter({
       component: () => import('../screens/JournalAnomalies.vue'),
       props: true,
     },
+    {
+      // Adresse inconnue : une page explicite plutôt qu'un écran blanc
+      // (audit UX du 25/09/2026).
+      path: '/:cheminInconnu(.*)*',
+      name: 'page-introuvable',
+      component: () => import('../screens/PageIntrouvable.vue'),
+    },
   ],
 })
 

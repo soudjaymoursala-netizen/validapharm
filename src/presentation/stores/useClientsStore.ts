@@ -210,6 +210,7 @@ export const useClientsStore = defineStore('clients', () => {
   async function supprimerDefinitivement(
     clientId: string,
     justification: string,
+    motDePasse: string,
   ): Promise<{ ok: true } | ErreurClient> {
     const authStore = useAuthStore()
     const api = await authStore.client()
@@ -219,6 +220,7 @@ export const useClientsStore = defineStore('clients', () => {
       authStore.jeton,
       clientId,
       justification,
+      motDePasse,
     )
     if (!resultat.ok) return { erreur: resultat.erreur }
 

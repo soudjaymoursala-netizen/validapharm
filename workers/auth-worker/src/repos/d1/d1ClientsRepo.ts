@@ -17,6 +17,16 @@ interface LigneClient {
   updated_at: string
 }
 
+/** Toujours une liste de chaînes — une valeur stockée d'une autre forme ne fait jamais échouer la lecture. */
+function lirePartage(brut: string): string[] {
+  try {
+    const valeur: unknown = JSON.parse(brut)
+    return Array.isArray(valeur) ? valeur.filter((v): v is string => typeof v === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 function ligneVersClient(ligne: LigneClient): ClientEnregistre {
   return {
     id: ligne.id,
@@ -28,7 +38,7 @@ function ligneVersClient(ligne: LigneClient): ClientEnregistre {
     archivedAt: ligne.archived_at,
     archivedBy: ligne.archived_by,
     createdByUserId: ligne.created_by_user_id,
-    sharedWith: JSON.parse(ligne.shared_with) as string[],
+    sharedWith: lirePartage(ligne.shared_with),
     createdAt: ligne.created_at,
     updatedAt: ligne.updated_at,
   }

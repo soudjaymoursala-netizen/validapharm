@@ -26,7 +26,10 @@ function routeurDeTest() {
 }
 
 async function attendreQue(condition: () => Promise<boolean> | boolean): Promise<void> {
-  for (let tentative = 0; tentative < 50; tentative++) {
+  // Attente bornée dans le temps (3 s), jamais en nombre de tours : sous la
+  // charge de la suite complète en CI, quelques centaines de ms ne suffisaient pas.
+  const echeanceAttente = Date.now() + 3000
+  for (let tentative = 0; Date.now() < echeanceAttente; tentative++) {
     await flushPromises()
     if (await condition()) return
     await new Promise((resolve) => setTimeout(resolve, 5))
@@ -205,8 +208,19 @@ describe('ImpactAssessment', () => {
     const evals = await ctx.impactAssessmentRepo.listerEvaluations(CLIENT_ID)
     expect(evals[0]?.verdict).toBeNull()
 
-    // Un « Oui » suffit : l'inconnu restant n'empêche plus de conclure.
-    await questions[0]?.find('input[value="oui"]').setValue(true)
+    // Une fois enregistrée, l'évaluation est figée : le verdict affiché
+    // reste celui enregistré (audit UX du 26/09/2026).
+    expect(questions[0]?.find('input[value="oui"]').attributes('disabled')).toBeDefined()
+
+    // Nouvelle évaluation : un « Oui » suffit, l'inconnu restant
+    // n'empêche plus de conclure.
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Nouvelle évaluation')
+      ?.trigger('click')
+    const questionsNouvelles = wrapper.findAll('.liste-questions li')
+    await questionsNouvelles[0]?.find('input[value="oui"]').setValue(true)
+    await questionsNouvelles[1]?.find('input[value="inconnu"]').setValue(true)
     await flushPromises()
     expect(wrapper.find('.resultat-partiel').text()).toContain('Direct Impact')
   })

@@ -158,15 +158,23 @@ describe('AuthApiClient — clients', () => {
     })
   })
 
-  test('supprimerClientDefinitivement DELETE /clients/:id avec la justification', async () => {
+  test('supprimerClientDefinitivement DELETE /clients/:id avec la justification et le mot de passe', async () => {
     fetchMock.mockResolvedValueOnce(reponseMock({ ok: true }))
-    const resultat = await client().supprimerClientDefinitivement('jwt-xyz', 'c1', 'Nettoyage test')
+    const resultat = await client().supprimerClientDefinitivement(
+      'jwt-xyz',
+      'c1',
+      'Nettoyage test',
+      'MotDePasse!1',
+    )
     expect(resultat).toEqual({ ok: true, donnees: { ok: true } })
 
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('https://auth.exemple.workers.dev/clients/c1')
     expect(options.method).toBe('DELETE')
-    expect(JSON.parse(options.body as string)).toEqual({ justification: 'Nettoyage test' })
+    expect(JSON.parse(options.body as string)).toEqual({
+      justification: 'Nettoyage test',
+      motDePasse: 'MotDePasse!1',
+    })
   })
 })
 

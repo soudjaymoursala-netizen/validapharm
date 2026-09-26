@@ -111,6 +111,12 @@ const nomElement = ref('')
 const assetNodeIdSelectionne = ref('')
 const reponses = reactive<Record<string, ReponseQuestionACFC>>({})
 const evaluationEnregistree = ref(false)
+const LIBELLES_REPONSE: Record<ReponseQuestionACFC, string> = {
+  oui: 'Oui',
+  non: 'Non',
+  inconnu: 'Inconnu',
+  sans_objet: 'Sans objet',
+}
 const erreurEvaluation = ref<string | null>(null)
 
 const complet = computed(() =>
@@ -142,6 +148,14 @@ async function enregistrerEvaluation(): Promise<void> {
     return
   }
   evaluationEnregistree.value = true
+}
+
+function nouvelleEvaluation(): void {
+  nomElement.value = ''
+  assetNodeIdSelectionne.value = ''
+  for (const cle of Object.keys(reponses)) Reflect.deleteProperty(reponses, cle)
+  complexite.value = null
+  evaluationEnregistree.value = false
 }
 
 // --- Complexité + conclusion (inchangé dans son principe) ---
@@ -252,10 +266,18 @@ const conclusion = computed(() =>
           <ul class="liste-questions">
             <li v-for="question in methodeStore.profilActif.questions" :key="question.id">
               <p class="texte-question">{{ question.texte.fr }}</p>
-              <div class="reponses-question">
-                <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet']" :key="opt">
-                  <input v-model="reponses[question.id]" type="radio" :value="opt" />
-                  {{ opt }}
+              <!-- Figé une fois l'évaluation enregistrée : le verdict affiché
+                   doit toujours être celui enregistré (audit UX du 26/09/2026). -->
+              <div class="reponses-question" role="radiogroup" :aria-label="question.texte.fr">
+                <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet'] as const" :key="opt">
+                  <input
+                    v-model="reponses[question.id]"
+                    type="radio"
+                    :name="`acfc-${question.id}`"
+                    :value="opt"
+                    :disabled="evaluationEnregistree"
+                  />
+                  {{ LIBELLES_REPONSE[opt] }}
                 </label>
               </div>
             </li>
@@ -279,6 +301,9 @@ const conclusion = computed(() =>
           <p v-if="evaluationEnregistree" class="confirmation" role="status">
             Évaluation enregistrée.
           </p>
+          <button v-if="evaluationEnregistree" type="button" @click="nouvelleEvaluation">
+            Nouvelle évaluation
+          </button>
           <p v-if="erreurEvaluation" class="bandeau-erreur" role="alert">{{ erreurEvaluation }}</p>
         </section>
 
