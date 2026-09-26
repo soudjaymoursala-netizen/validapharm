@@ -172,9 +172,14 @@ describe('ExecutionTests', () => {
     const zoneCloture = wrapper.find('.carte-execution').findAll('.ligne-formulaire').at(-1)
     await zoneCloture?.find('select').setValue('conforme')
     await zoneCloture?.find('button').trigger('click')
+    // Clôture signée (décision du 26/09/2026) : fenêtre de signature.
+    await attendreQue(() => wrapper.find('.fond-modale input[type="password"]').exists())
+    await wrapper.find('.fond-modale input[type="password"]').setValue('CoffreFort!2026')
+    await wrapper.find('.fond-modale form').trigger('submit.prevent')
     await attendreQue(
       async () => (await ctx.executionRepo.listerExecutions(CLIENT_ID))[0]?.statut === 'terminee',
     )
+    expect(wrapper.find('.fond-modale').exists()).toBe(false)
 
     const executionCloturee = (await ctx.executionRepo.listerExecutions(CLIENT_ID))[0]
     expect(executionCloturee?.verdict).toBe('conforme')
@@ -250,6 +255,10 @@ describe('ExecutionTests — mutations non vérifiées', () => {
       .mockResolvedValue({ erreur: 'execution_deja_cloturee' })
 
     await zoneCloture?.find('button').trigger('click')
+    // Clôture signée (décision du 26/09/2026) : fenêtre de signature.
+    await attendreQue(() => wrapper.find('.fond-modale input[type="password"]').exists())
+    await wrapper.find('.fond-modale input[type="password"]').setValue('CoffreFort!2026')
+    await wrapper.find('.fond-modale form').trigger('submit.prevent')
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
 
     expect(wrapper.find('.bandeau-erreur').text()).toContain('déjà clôturée')

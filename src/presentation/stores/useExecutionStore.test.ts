@@ -70,7 +70,7 @@ async function creerTestApprouve(clientId: string) {
     ],
   })
   if ('erreur' in test) throw new Error('unreachable')
-  await definition.approuverTest(clientId, test.id)
+  await definition.approuverTest(clientId, test.id, 'CoffreFort!2026')
   return test
 }
 
@@ -114,7 +114,12 @@ describe('useExecutionStore — cycle nominal', () => {
     })
     expect(store.etapesExecution(execution.id)).toHaveLength(2)
 
-    const cloturee = await store.cloturerExecution('client-1', execution.id, 'non_conforme')
+    const cloturee = await store.cloturerExecution(
+      'client-1',
+      execution.id,
+      'non_conforme',
+      'CoffreFort!2026',
+    )
     if ('erreur' in cloturee) throw new Error('unreachable')
     expect(cloturee.statut).toBe('terminee')
     expect(cloturee.verdict).toBe('non_conforme')
@@ -185,7 +190,7 @@ describe('useExecutionStore — garde-fous', () => {
       assetNodeId: null,
     })
     if ('erreur' in execution) throw new Error('unreachable')
-    await store.cloturerExecution('client-1', execution.id, 'conforme')
+    await store.cloturerExecution('client-1', execution.id, 'conforme', 'CoffreFort!2026')
 
     const etape = test.etapes[0]
     if (!etape) throw new Error('unreachable')
@@ -204,7 +209,12 @@ describe('useExecutionStore — garde-fous', () => {
     })
     expect(evenement).toEqual({ erreur: 'execution_deja_cloturee' })
 
-    const secondeCloture = await store.cloturerExecution('client-1', execution.id, 'non_conforme')
+    const secondeCloture = await store.cloturerExecution(
+      'client-1',
+      execution.id,
+      'non_conforme',
+      'CoffreFort!2026',
+    )
     expect(secondeCloture).toEqual({ erreur: 'execution_deja_cloturee' })
   })
 

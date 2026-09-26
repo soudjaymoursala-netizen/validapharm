@@ -45,6 +45,7 @@ import { SectionsRepoMemoire } from '../../workers/auth-worker/src/repos/section
 import { StockageBinaireRepoMemoire } from '../../workers/auth-worker/src/repos/stockageBinaireRepo'
 import { StructureSystemeRepoMemoire } from '../../workers/auth-worker/src/repos/structureSystemeRepo'
 import { UtilisateursRepoMemoire } from '../../workers/auth-worker/src/repos/utilisateursRepo'
+import { JetonsCompteRepoMemoire } from '../../workers/auth-worker/src/repos/jetonsCompteRepo'
 import { routerRequete, type Contexte } from '../../workers/auth-worker/src/routeur'
 import { db } from '../persistance/db'
 import { useAuthStore } from '../presentation/stores/useAuthStore'
@@ -63,6 +64,7 @@ const SECRET_JWT_TEST = 'secret-jwt-test'
  */
 export function installerFauxWorkerAuth(): { ctx: Contexte; demonter: () => void } {
   const ctx: Contexte = {
+    jetonsCompteRepo: new JetonsCompteRepoMemoire(),
     utilisateursRepo: new UtilisateursRepoMemoire(),
     clientsRepo: new ClientsRepoMemoire(),
     parametresInstallationRepo: new ParametresInstallationRepoMemoire(),

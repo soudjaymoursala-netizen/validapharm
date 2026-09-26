@@ -98,6 +98,9 @@ async function seConnecter(): Promise<void> {
         <button type="submit" :disabled="enCours">
           {{ enCours ? 'Connexion…' : 'Se connecter' }}
         </button>
+        <RouterLink :to="{ name: 'mot-de-passe-oublie' }" class="lien-oubli">
+          Mot de passe oublié ?
+        </RouterLink>
       </form>
 
       <p class="rappel">
@@ -108,6 +111,12 @@ async function seConnecter(): Promise<void> {
 </template>
 
 <style scoped>
+.lien-oubli {
+  align-self: flex-start;
+  color: var(--vp-marque);
+  font-size: 0.875rem;
+}
+
 .connexion {
   min-height: 100vh;
   display: flex;
@@ -218,14 +227,6 @@ h1 {
 .formulaire button:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.bandeau-info {
-  margin: 0;
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--vp-rayon-sm);
-  background: var(--vp-info-fond-leger);
-  color: var(--vp-texte-principal);
 }
 
 .bandeau-erreur {

@@ -263,9 +263,10 @@ describe('useTestDefinitionStore — garde-fous du cycle de vie', () => {
     })
     if ('erreur' in test) throw new Error('unreachable')
 
-    const approuve = await store.approuverTest('client-1', test.id)
-    expect(approuve?.statut).toBe('approuve')
-    expect(approuve?.audit_log).toHaveLength(2)
+    const approuve = await store.approuverTest('client-1', test.id, 'CoffreFort!2026')
+    if ('erreur' in approuve) throw new Error(`approbation refusée : ${approuve.erreur}`)
+    expect(approuve.statut).toBe('approuve')
+    expect(approuve.audit_log).toHaveLength(2)
   })
 })
 

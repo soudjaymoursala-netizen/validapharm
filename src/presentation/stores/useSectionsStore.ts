@@ -25,6 +25,7 @@ import {
   type RaisonBlocageTransition,
 } from '../../logique-metier/machine-etats/transitionSection'
 import { sectionsAMigrer } from '../../persistance/db'
+import { messageRefusSignature } from '../i18n/libellesSignature'
 import { useAuthStore } from './useAuthStore'
 import { documentProjetWireVersDomaine } from './useProjectDocumentsStore'
 
@@ -186,7 +187,11 @@ export function messageRefusEcritureSection(code: string): string {
     statut_creation_invalide:
       'Une section ne peut pas être créée directement vérifiée ou approuvée.',
   }
-  return messages[code] ?? `Échec de l'enregistrement de la section (${code}).`
+  return (
+    messages[code] ??
+    messageRefusSignature(code) ??
+    `Échec de l'enregistrement de la section (${code}).`
+  )
 }
 
 /**
@@ -227,13 +232,19 @@ export const useSectionsStore = defineStore('sections', () => {
    * partagé en édition, ni admin. Avant, le résultat était ignoré et une
    * écriture refusée ressemblait à une sauvegarde réussie.
    */
-  async function ecrireSection(sectionMiseAJour: Section, base: Section): Promise<void> {
+  async function ecrireSection(
+    sectionMiseAJour: Section,
+    base: Section,
+    motDePasse?: string,
+  ): Promise<void> {
     const { api, jeton } = await obtenirApiSection()
     const resultat = await api.remplacerSection(jeton, sectionMiseAJour.id, {
       ...sectionDomaineVersWire(sectionMiseAJour),
       // Contrôle de version optimiste : le Worker refuse (409) une écriture
       // fondée sur une version déjà remplacée entre-temps.
       versionAttendue: base.updated_at,
+      // Signature de l'approbation finale, vérifiée par le Worker.
+      ...(motDePasse !== undefined ? { motDePasse } : {}),
     })
     if (resultat.ok) return
     if (resultat.erreur === 'conflit_version') throw new ConflitVersionSection()
@@ -766,8 +777,10 @@ export const useSectionsStore = defineStore('sections', () => {
     return appliquerTransitionSimple(sectionId, 'transmettre_approbation')
   }
 
+  /** Approbation finale, signée par le mot de passe de la personne connectée (vérifié par le Worker). */
   async function approuver(
     sectionId: string,
+    motDePasse: string,
     forcerMotif?: string,
   ): Promise<ResultatActionSection> {
     return transitionAvecGardeFinalisation(
@@ -775,6 +788,7 @@ export const useSectionsStore = defineStore('sections', () => {
       'cloture_valide_en_interne',
       'approuver',
       forcerMotif,
+      motDePasse,
     )
   }
 
@@ -819,6 +833,7 @@ export const useSectionsStore = defineStore('sections', () => {
     pointDeControle: 'entree_en_verification' | 'cloture_valide_en_interne',
     action: 'engager_verification' | 'approuver',
     forcerMotif: string | undefined,
+    motDePasse?: string,
   ): Promise<ResultatActionSection> {
     const section = await chargerSection(sectionId)
     const apiProjetGarde = await obtenirApiProjet()
@@ -878,7 +893,7 @@ export const useSectionsStore = defineStore('sections', () => {
       motifForcage !== undefined
         ? `changement_statut: ${action} (forcé — ${blocages.join(',')} : ${motifForcage})`
         : `changement_statut: ${action}`
-    return finaliserTransition(section, resultat, descriptionAction)
+    return finaliserTransition(section, resultat, descriptionAction, undefined, motDePasse)
   }
 
   async function finaliserTransition(
@@ -886,6 +901,7 @@ export const useSectionsStore = defineStore('sections', () => {
     resultat: ReturnType<typeof appliquerTransition>,
     descriptionAudit: string,
     motifRevision?: string,
+    motDePasse?: string,
   ): Promise<ResultatActionSection> {
     if (!resultat.autorisee) {
       return { ok: false, raisonTransition: resultat.raison }
@@ -912,7 +928,7 @@ export const useSectionsStore = defineStore('sections', () => {
             ]
           : section.revisions,
     }
-    await ecrireSection(sectionMiseAJour, section)
+    await ecrireSection(sectionMiseAJour, section, motDePasse)
     await chargerSectionsDuProjet(section.project_id)
     return { ok: true }
   }

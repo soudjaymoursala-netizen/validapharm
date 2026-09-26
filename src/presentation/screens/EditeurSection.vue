@@ -45,6 +45,7 @@ import { useProcedureStore } from '../stores/useProcedureStore'
 import { useClientActifStore } from '../stores/useClientActifStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
+import ModaleSignature from '../composants/ModaleSignature.vue'
 import {
   avisDuCycleCourant,
   useSectionsStore,
@@ -598,9 +599,6 @@ async function engagerVerification(): Promise<void> {
   })
 }
 
-const CONFIRMATION_APPROBATION =
-  "Approuver verrouille définitivement la section (statut « validée en interne ») : son contenu ne pourra plus être modifié. Confirmer l'approbation ?"
-
 function motifForcageSaisi(): boolean {
   if (motifForcage.value.trim().length > 0) return true
   erreurWorkflow.value = 'Saisissez le motif du forçage avant de forcer.'
@@ -624,20 +622,44 @@ async function transmettreApprobation(): Promise<void> {
   })
 }
 
-async function approuver(): Promise<void> {
-  if (!window.confirm(CONFIRMATION_APPROBATION)) return
-  await actionWorkflow(async () => {
-    dernierResultat.value = await sectionsStore.approuver(props.sectionId)
-  })
+// Approbation signée (décision du 26/09/2026) : fenêtre de signature, mot de
+// passe vérifié par le serveur ; elle remplace la simple confirmation.
+const signatureSection = ref<{ forcer: boolean; erreur: string | null; enCours: boolean } | null>(
+  null,
+)
+
+function approuver(): void {
+  erreurWorkflow.value = null
+  signatureSection.value = { forcer: false, erreur: null, enCours: false }
 }
 
-async function forcerApprouver(): Promise<void> {
+function forcerApprouver(): void {
   if (!motifForcageSaisi()) return
-  if (!window.confirm(CONFIRMATION_APPROBATION)) return
-  await actionWorkflow(async () => {
-    dernierResultat.value = await sectionsStore.approuver(props.sectionId, motifForcage.value)
+  erreurWorkflow.value = null
+  signatureSection.value = { forcer: true, erreur: null, enCours: false }
+}
+
+async function signerApprobation(motDePasse: string): Promise<void> {
+  const demande = signatureSection.value
+  if (!demande) return
+  demande.enCours = true
+  demande.erreur = null
+  try {
+    dernierResultat.value = await sectionsStore.approuver(
+      props.sectionId,
+      motDePasse,
+      demande.forcer ? motifForcage.value : undefined,
+    )
     if (dernierResultat.value.ok) motifForcage.value = ''
-  })
+    signatureSection.value = null
+    await recharger()
+  } catch (e) {
+    // Refus du serveur (mot de passe, séparation des tâches, approbateur…) :
+    // affiché dans la fenêtre, qui reste ouverte pour corriger.
+    demande.erreur = e instanceof Error ? e.message : "L'approbation n'a pas pu être enregistrée."
+  } finally {
+    demande.enCours = false
+  }
 }
 
 async function rejeter(): Promise<void> {
@@ -1328,6 +1350,16 @@ async function ajouterAvisRelecteur(): Promise<void> {
         </div>
       </section>
     </fieldset>
+    <ModaleSignature
+      v-if="signatureSection && section"
+      titre="Approuver la section"
+      :signification="`En signant, vous approuvez « ${section.meta.titre} » : la section passe « validée en interne » et son contenu est verrouillé définitivement. L'approbation est tracée à votre nom.`"
+      libelle-bouton="Signer et approuver"
+      :erreur="signatureSection.erreur"
+      :en-cours="signatureSection.enCours"
+      @confirme="signerApprobation"
+      @annule="signatureSection = null"
+    />
   </main>
   <p v-else-if="chargementInitial">Chargement…</p>
   <p v-else>Section introuvable.</p>

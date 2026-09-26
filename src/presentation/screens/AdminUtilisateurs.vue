@@ -20,7 +20,6 @@ const erreurAction = ref<string | null>(null)
 const formulaireOuvert = ref(false)
 const brouillon = reactive({
   email: '',
-  motDePasse: '',
   nom: '',
   prenom: '',
   role: 'utilisateur' as 'admin' | 'utilisateur',
@@ -32,6 +31,7 @@ const LIBELLES_ERREUR: Record<string, string> = {
   mot_de_passe_trop_court: 'Le mot de passe doit contenir au moins 8 caractères.',
   nom_obligatoire: 'Le nom est obligatoire.',
   prenom_obligatoire: 'Le prénom est obligatoire.',
+  compte_desactive: 'Ce compte est désactivé : réactivez-le avant de lui envoyer un lien.',
   dernier_admin:
     "Impossible : c'est le dernier administrateur actif. Nommez d'abord un autre administrateur, sinon plus personne ne pourrait administrer l'application.",
 }
@@ -56,9 +56,10 @@ async function creerUtilisateur(): Promise<void> {
   const api = await authStore.client()
   if (!api || !authStore.jeton) return
 
+  // Aucun mot de passe saisi par l'admin (décision du 26/09/2026) : la
+  // personne choisit le sien via le lien d'activation.
   const resultat = await api.creerUtilisateur(authStore.jeton, {
     email: brouillon.email.trim(),
-    motDePasse: brouillon.motDePasse,
     nom: brouillon.nom.trim(),
     prenom: brouillon.prenom.trim(),
     role: brouillon.role,
@@ -67,9 +68,15 @@ async function creerUtilisateur(): Promise<void> {
     erreur.value = LIBELLES_ERREUR[resultat.erreur] ?? 'Erreur inattendue.'
     return
   }
+  lienEmis.value = {
+    titre: `Compte créé pour ${resultat.donnees.utilisateur.email}`,
+    email: resultat.donnees.utilisateur.email,
+    emailEnvoye: resultat.donnees.emailEnvoye,
+    lien: resultat.donnees.lienActivation,
+    validite: '24 heures',
+  }
   formulaireOuvert.value = false
   brouillon.email = ''
-  brouillon.motDePasse = ''
   brouillon.nom = ''
   brouillon.prenom = ''
   brouillon.role = 'utilisateur'
@@ -94,11 +101,80 @@ async function modifier(
 }
 
 async function basculerRole(u: UtilisateurWire): Promise<void> {
+  if (
+    u.role === 'admin' &&
+    !window.confirm(`Retirer les droits d'administrateur à ${u.prenom} ${u.nom} ?`)
+  ) {
+    return
+  }
   await modifier(u, { role: u.role === 'admin' ? 'utilisateur' : 'admin' })
 }
 
 async function basculerStatut(u: UtilisateurWire): Promise<void> {
+  if (
+    u.statut === 'actif' &&
+    !window.confirm(
+      `Désactiver le compte de ${u.prenom} ${u.nom} ? Ses sessions sont fermées immédiatement.`,
+    )
+  ) {
+    return
+  }
   await modifier(u, { statut: u.statut === 'actif' ? 'desactive' : 'actif' })
+}
+
+const LIBELLES_ROLE: Record<UtilisateurWire['role'], string> = {
+  admin: 'Administrateur',
+  utilisateur: 'Utilisateur',
+}
+const LIBELLES_STATUT: Record<UtilisateurWire['statut'], string> = {
+  actif: 'Actif',
+  desactive: 'Désactivé',
+}
+
+/** Lien d'activation ou de réinitialisation qui vient d'être émis — affiché pour être transmis si l'e-mail n'a pas pu partir. */
+const lienEmis = ref<{
+  titre: string
+  email: string
+  emailEnvoye: boolean
+  lien: string
+  validite: string
+} | null>(null)
+const lienCopie = ref(false)
+
+async function reinitialiserMotDePasse(u: UtilisateurWire): Promise<void> {
+  if (
+    !window.confirm(
+      `Envoyer à ${u.email} un lien pour choisir un nouveau mot de passe ? Son mot de passe actuel reste valable jusqu'à l'utilisation du lien.`,
+    )
+  ) {
+    return
+  }
+  const api = await authStore.client()
+  if (!api || !authStore.jeton) return
+  erreurAction.value = null
+  const resultat = await api.reinitialiserMotDePasseUtilisateur(authStore.jeton, u.id)
+  if (!resultat.ok) {
+    erreurAction.value = LIBELLES_ERREUR[resultat.erreur] ?? 'Erreur inattendue.'
+    return
+  }
+  lienEmis.value = {
+    titre: `Lien de réinitialisation pour ${u.email}`,
+    email: u.email,
+    emailEnvoye: resultat.donnees.emailEnvoye,
+    lien: resultat.donnees.lienReinitialisation,
+    validite: '2 heures',
+  }
+}
+
+async function copierLien(): Promise<void> {
+  if (!lienEmis.value) return
+  try {
+    await navigator.clipboard.writeText(lienEmis.value.lien)
+    lienCopie.value = true
+    setTimeout(() => (lienCopie.value = false), 2000)
+  } catch {
+    lienCopie.value = false
+  }
 }
 </script>
 
@@ -129,10 +205,10 @@ async function basculerStatut(u: UtilisateurWire): Promise<void> {
         Email
         <input v-model="brouillon.email" type="email" required />
       </label>
-      <label>
-        Mot de passe initial
-        <input v-model="brouillon.motDePasse" type="password" required minlength="8" />
-      </label>
+      <p class="rappel">
+        Aucun mot de passe à saisir : la personne reçoit un lien d'activation (valable 24 heures)
+        pour choisir le sien.
+      </p>
       <label>
         Rôle
         <select v-model="brouillon.role">
@@ -147,6 +223,26 @@ async function basculerStatut(u: UtilisateurWire): Promise<void> {
       </div>
     </form>
 
+    <section v-if="lienEmis" class="lien-emis" role="status">
+      <h2>{{ lienEmis.titre }}</h2>
+      <p v-if="lienEmis.emailEnvoye">
+        Un e-mail contenant ce lien a été envoyé à {{ lienEmis.email }}.
+      </p>
+      <p v-else class="avertissement">
+        L'e-mail n'a pas pu être envoyé : transmettez ce lien à {{ lienEmis.email }} par un autre
+        moyen (messagerie interne…).
+      </p>
+      <p class="rappel">
+        Valable {{ lienEmis.validite }}, utilisable une seule fois. Ne le partagez qu'avec son
+        destinataire.
+      </p>
+      <div class="ligne-lien">
+        <input :value="lienEmis.lien" type="text" readonly aria-label="Lien à transmettre" />
+        <button type="button" @click="copierLien">{{ lienCopie ? 'Copié' : 'Copier' }}</button>
+        <button type="button" @click="lienEmis = null">Fermer</button>
+      </div>
+    </section>
+
     <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
     <p v-if="enChargement" class="etat-vide">Chargement…</p>
     <ul v-else class="liste-comptes">
@@ -155,9 +251,12 @@ async function basculerStatut(u: UtilisateurWire): Promise<void> {
           <span class="nom">{{ u.prenom }} {{ u.nom }}</span>
           <span class="email">{{ u.email }}</span>
         </div>
-        <span class="badge" :class="`badge--${u.role}`">{{ u.role }}</span>
-        <span class="badge" :class="`badge--${u.statut}`">{{ u.statut }}</span>
+        <span class="badge" :class="`badge--${u.role}`">{{ LIBELLES_ROLE[u.role] }}</span>
+        <span class="badge" :class="`badge--${u.statut}`">{{ LIBELLES_STATUT[u.statut] }}</span>
         <div class="actions-compte">
+          <button v-if="u.statut === 'actif'" type="button" @click="reinitialiserMotDePasse(u)">
+            Réinitialiser le mot de passe
+          </button>
           <button type="button" @click="basculerRole(u)">
             {{ u.role === 'admin' ? 'Rétrograder' : 'Promouvoir admin' }}
           </button>
@@ -171,6 +270,41 @@ async function basculerStatut(u: UtilisateurWire): Promise<void> {
 </template>
 
 <style scoped>
+.lien-emis {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  background: var(--vp-fond-carte);
+}
+
+.lien-emis h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.lien-emis p {
+  margin: 0;
+}
+
+.lien-emis .avertissement {
+  color: var(--vp-attention);
+  font-weight: var(--vp-poids-semibold);
+}
+
+.ligne-lien {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ligne-lien input {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
 .admin-utilisateurs {
   padding: 2rem;
   font-family: var(--vp-police);

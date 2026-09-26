@@ -295,6 +295,25 @@ passe depuis « Mon profil » ne vous déconnecte pas vous-même.
 Rappel affiché : « Aucune inscription libre — un administrateur crée votre
 compte (« Gestion des comptes »). »
 
+**Mot de passe oublié** (depuis le 26/09/2026) : le lien **« Mot de passe
+oublié ? »** sous le bouton de connexion ouvre un écran où saisir son email ;
+bouton **« Recevoir un lien »**. La réponse est toujours la même, que
+l'adresse corresponde à un compte ou non : « Si un compte actif correspond à
+…, un e-mail vient de lui être envoyé avec un lien pour choisir un nouveau
+mot de passe (valable 2 heures). » Quelques demandes seulement par adresse
+(ensuite : « Trop de demandes pour cette adresse : réessayez dans 15
+minutes. »). Un administrateur peut aussi envoyer ce lien (§2.2).
+
+**Définir mon mot de passe** : un lien d'activation (nouveau compte) ou de
+réinitialisation ouvre l'écran « Activer mon compte » / « Nouveau mot de
+passe » : il affiche le serveur concerné, puis demande le mot de passe (8
+caractères minimum) et sa confirmation → **« Enregistrer mon mot de
+passe »**. Le lien fonctionne même sur un poste où l'application n'a jamais
+été configurée (il porte l'adresse du serveur) ; il ne sert **qu'une fois**
+(ensuite : « Ce lien n'est plus valable (déjà utilisé ou expiré)… »).
+Définir un nouveau mot de passe ferme toutes les sessions ouvertes avec
+l'ancien.
+
 Une fois connecté, vous êtes redirigé vers la page initialement demandée (ou
 l'accueil). Toute route de l'application, sauf cet écran et « Configuration
 client », vous ramène ici tant qu'aucune session valide n'existe.
@@ -314,23 +333,28 @@ Bouton **« Nouveau compte »** → formulaire :
 | Prénom | texte | oui | — |
 | Nom | texte | oui | — |
 | Email | email | oui | — |
-| Mot de passe initial | mot de passe | oui | minimum 8 caractères |
 | Rôle | liste (Utilisateur / Admin) | — | défaut Utilisateur |
 
 Boutons **« Annuler »** / **« Créer le compte »**. Erreurs possibles : « Cet
 email est déjà utilisé par un autre compte. », « Adresse email invalide. »,
-« Le mot de passe doit contenir au moins 8 caractères. », « Le nom est
-obligatoire. », « Le prénom est obligatoire. »
+« Le nom est obligatoire. », « Le prénom est obligatoire. »
 
-À la création, un email est envoyé automatiquement à la personne avec
-l'adresse de connexion, son email et le mot de passe initial saisi
-ci-dessus. Si l'envoi échoue (ex. service d'email non configuré), le compte
-est tout de même créé — communiquez alors les identifiants vous-même.
+**Aucun mot de passe à saisir** (depuis le 26/09/2026) : la personne reçoit
+par e-mail un **lien d'activation** (valable 24 heures, utilisable une seule
+fois) pour choisir elle-même son mot de passe — plus jamais de mot de passe
+envoyé en clair. Après la création, un encadré « Compte créé pour … »
+affiche ce lien avec un bouton **« Copier »** : si l'e-mail n'a pas pu partir
+(« L'e-mail n'a pas pu être envoyé : transmettez ce lien … par un autre
+moyen »), transmettez-le vous-même, uniquement à la personne concernée.
 
 Chaque compte listé affiche son nom, son email, un badge de rôle
-(admin/utilisateur) et un badge de statut (actif/desactive), avec deux
-actions : **« Promouvoir admin » / « Rétrograder »** et **« Désactiver » /
-« Réactiver »**. Le premier compte admin de l'installation est créé en dehors
+(**Administrateur** / **Utilisateur**) et un badge de statut (**Actif** /
+**Désactivé**), avec les actions : **« Réinitialiser le mot de passe »**
+(compte actif : envoie un lien de réinitialisation valable 2 heures, affiché
+aussi dans l'encadré ; le mot de passe actuel reste valable jusqu'à son
+utilisation ; tracé dans le journal d'audit), **« Promouvoir admin » /
+« Rétrograder »** et **« Désactiver » / « Réactiver »**. Rétrograder un
+administrateur et désactiver un compte demandent une confirmation. Le premier compte admin de l'installation est créé en dehors
 de cette interface (`/auth/bootstrap-admin`, possible uniquement tant qu'aucun
 compte n'existe).
 
@@ -458,6 +482,15 @@ ligne par ligne. La Fiche client expose :
   (Structure Système), **Process**, **Procédures**, **Templates & Formulaires**,
   **Projets** (Tableau de bord filtré sur ce client).
 - Un aperçu **« Projets récents »** (jusqu'à 5) si ce client a déjà des projets.
+- Un encadré **« Règle de signature »** (depuis le 26/09/2026) : rappelle
+  qu'approuver une section ou un test, et clôturer une exécution, demandent
+  toujours la **ressaisie du mot de passe**, et propose la case **«
+  Séparation des tâches »** — l'auteur d'une section ou d'un test ne peut
+  alors pas l'approuver lui-même, et la personne qui a exécuté un test ne
+  peut pas clôturer son exécution. Désactivée par défaut (un consultant qui
+  travaille seul reste autonome) ; modifiable par le créateur du client ou un
+  administrateur, chaque changement est tracé. Les autres personnes voient
+  simplement « Séparation des tâches : activée / désactivée ».
 
 Les outils plus spécialisés (Suivi de périodicité, Missions, les Assessments,
 Exigences et tests, Exécution de tests, Ingestion documentaire, Plans de
@@ -507,7 +540,11 @@ définitive. », « Mot de passe incorrect. » Bouton final **« Supprimer
 définitivement »** (libellé « Vérification… » pendant l'appel) ou
 **« Annuler »**. Le mot de passe est **revérifié par le serveur** au moment
 de la suppression (depuis le 26/09/2026) : une session laissée ouverte ne
-suffit jamais à supprimer un client.
+suffit jamais à supprimer un client. **Seul un client sans aucune donnée**
+peut être supprimé : s'il a encore des projets, évaluations, tests,
+exécutions, procédures… la suppression est refusée (« Suppression refusée :
+ce client a encore des données … Il reste archivé, ses données sont
+conservées. ») — jamais de données laissées orphelines.
 
 ---
 
@@ -749,9 +786,11 @@ Actions disponibles selon le statut courant :
 - **En vérification** : « Transmettre à l'approbation » ou « Rejeter » (motif de
   rejet obligatoire).
 - **En approbation** : « Approuver » ou « Rejeter » (motif obligatoire).
-  « Approuver » demande une **confirmation** (le verrouillage est
-  définitif) et n'est actif que pour **l'approbateur désigné** ou un
-  administrateur ; sinon le bouton est grisé avec le rappel « Seul
+  « Approuver » ouvre une **fenêtre de signature** (ressaisie du mot de
+  passe, vérifiée par le serveur ; le verrouillage est définitif) et n'est
+  actif que pour **l'approbateur désigné** ou un administrateur — si la
+  séparation des tâches est activée pour le client, le propriétaire ou un
+  rédacteur de la section ne peut pas l'approuver lui-même ; sinon le bouton est grisé avec le rappel « Seul
   l'approbateur désigné (…) ou un administrateur peut approuver. »
 - **Validé en interne** : plus aucune action de cycle ; message affiché :
   « Section verrouillée (validée en interne — pas une signature électronique
@@ -1480,7 +1519,10 @@ Chaîne en cinq étapes, chacune avec son propre formulaire :
    test. »). Titre obligatoire + au moins une étape (Action + Résultat
    attendu, ligne « Étapes » avec bouton **« Retirer »** par étape et **«
    + Ajouter une étape »**). Bouton « Approuver » pour passer de « Brouillon »
-   à « Approuvé ».
+   à « Approuvé » : il ouvre une **fenêtre de signature** (mot de passe,
+   vérifié par le serveur ; si la séparation des tâches est activée pour le
+   client, l'auteur du test ne peut pas l'approuver lui-même — voir la
+   Fiche client, [§4](#4-gérer-les-clients)).
 5. **Couverture** : déclaration explicite qu'un test **approuvé** couvre une
    exigence donnée — jamais automatique.
 
@@ -1510,8 +1552,10 @@ Chaîne en cinq étapes, chacune avec son propre formulaire :
   écart** — bouton « Clôturer l'exécution ». Après clôture, plus aucun
   résultat/mesure ne peut être ajouté (« Ce test est déjà clôturé »). Une fois
   terminée, une exécution affiche : « {titre} — verdict : {verdict}
-  (clôturée le {date}) ». Depuis le 26/09/2026, la clôture demande une
-  **confirmation** (« L'exécution deviendra définitive »), avec une
+  (clôturée le {date}) ». Depuis le 26/09/2026, la clôture ouvre une
+  **fenêtre de signature** (mot de passe vérifié par le serveur ; si la
+  séparation des tâches est activée pour le client, la personne qui a
+  exécuté le test ne peut pas clôturer elle-même), avec une
   **alerte** si le verdict « Conforme » contredit ce qui a été consigné
   (étape non conforme, déviation, étape sans résultat). Toute action
   incomplète (résultat non choisi, preuve sans titre, événement sans

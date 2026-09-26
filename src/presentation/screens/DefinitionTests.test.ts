@@ -133,6 +133,10 @@ describe('DefinitionTests', () => {
 
     // Approuver
     await wrapper.find('.liste-tests button').trigger('click')
+    // Approbation signée (décision du 26/09/2026) : fenêtre de signature.
+    await attendreQue(() => wrapper.find('.fond-modale input[type="password"]').exists())
+    await wrapper.find('.fond-modale input[type="password"]').setValue('CoffreFort!2026')
+    await wrapper.find('.fond-modale form').trigger('submit.prevent')
     await attendreQue(
       async () => (await ctx.testDefinitionRepo.listerTests(CLIENT_ID))[0]?.statut === 'approuve',
     )
@@ -302,12 +306,17 @@ describe('DefinitionTests — mutations de statut non vérifiées', () => {
     // avant ce correctif, le clic sur "Approuver" échouait en silence
     // total, sans le moindre message.
     const testStore = useTestDefinitionStore()
-    testStore.approuverTest = vi.fn().mockResolvedValue(null)
+    testStore.approuverTest = vi.fn().mockResolvedValue({ erreur: 'introuvable' })
 
     await wrapper.find('.liste-tests button').trigger('click')
-    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+    // Approbation signée (décision du 26/09/2026) : fenêtre de signature.
+    await attendreQue(() => wrapper.find('.fond-modale input[type="password"]').exists())
+    await wrapper.find('.fond-modale input[type="password"]').setValue('CoffreFort!2026')
+    await wrapper.find('.fond-modale form').trigger('submit.prevent')
+    // Le refus s'affiche dans la fenêtre de signature, qui reste ouverte.
+    await attendreQue(() => wrapper.find('.fond-modale .erreur').exists())
 
-    expect(wrapper.find('.bandeau-erreur').text()).toContain('Impossible d’approuver ce test')
+    expect(wrapper.find('.fond-modale .erreur').text()).toContain('Impossible d’approuver ce test')
     expect((await ctx.testDefinitionRepo.listerTests(CLIENT_ID))[0]?.statut).toBe('brouillon')
   })
 })

@@ -13,6 +13,8 @@ interface LigneClient {
   archived_by: string | null
   created_by_user_id: string
   shared_with: string
+  /** Absente tant que la migration 0029 n'est pas appliquée. */
+  separation_taches?: number
   created_at: string
   updated_at: string
 }
@@ -39,6 +41,7 @@ function ligneVersClient(ligne: LigneClient): ClientEnregistre {
     archivedBy: ligne.archived_by,
     createdByUserId: ligne.created_by_user_id,
     sharedWith: lirePartage(ligne.shared_with),
+    separationTaches: ligne.separation_taches === 1,
     createdAt: ligne.created_at,
     updatedAt: ligne.updated_at,
   }
@@ -113,7 +116,8 @@ export class D1ClientsRepo implements ClientsRepo {
     await this.db
       .prepare(
         `UPDATE clients SET name = ?, adresse = ?, secteur = ?, details = ?, statut = ?,
-           archived_at = ?, archived_by = ?, shared_with = ?, updated_at = ?
+           archived_at = ?, archived_by = ?, shared_with = ?, separation_taches = ?,
+           updated_at = ?
          WHERE id = ?`,
       )
       .bind(
@@ -125,6 +129,7 @@ export class D1ClientsRepo implements ClientsRepo {
         misAJour.archivedAt,
         misAJour.archivedBy,
         JSON.stringify(misAJour.sharedWith),
+        misAJour.separationTaches ? 1 : 0,
         misAJour.updatedAt,
         id,
       )

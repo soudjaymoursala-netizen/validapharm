@@ -261,7 +261,7 @@ describe('useSectionsStore — workflow (approbateur, avis relecteur)', () => {
     await sections.ajouterAvisRelecteur(section.id, 'Favorable')
     expect(await sections.transmettreApprobation(section.id)).toEqual({ ok: true })
 
-    expect(await sections.approuver(section.id)).toEqual({ ok: true })
+    expect(await sections.approuver(section.id, 'CoffreFort!2026')).toEqual({ ok: true })
     const sectionFinale = await obtenirSectionDeTest(section.id)
     expect(sectionFinale?.status).toBe('valide_en_interne')
   })
@@ -367,7 +367,7 @@ describe("useSectionsStore — cycle complet jusqu'à valide_en_interne", () => 
 
     expect(await sections.engagerVerification(section.id)).toEqual({ ok: true })
     expect(await sections.transmettreApprobation(section.id)).toEqual({ ok: true })
-    expect(await sections.approuver(section.id)).toEqual({ ok: true })
+    expect(await sections.approuver(section.id, 'CoffreFort!2026')).toEqual({ ok: true })
 
     const sectionFinale = await obtenirSectionDeTest(section.id)
     expect(sectionFinale?.status).toBe('valide_en_interne')

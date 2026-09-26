@@ -149,6 +149,7 @@ import type {
 } from './repos/structureSystemeRepo'
 import type { UtilisateursRepo } from './repos/utilisateursRepo'
 import type { LimiteurConnexion } from './limiteurConnexion'
+import type { JetonsCompteRepo, TypeJetonCompte } from './repos/jetonsCompteRepo'
 import type { ClientEnregistre, EntreeAudit, Role, UtilisateurEnregistre } from './types'
 import { versUtilisateurPublic } from './types'
 
@@ -191,6 +192,8 @@ function masquerSecretsParametre(
 }
 
 export interface Contexte {
+  /** Liens d'activation et de réinitialisation de mot de passe (usage unique). */
+  jetonsCompteRepo: JetonsCompteRepo
   /** Limitation des tentatives de mot de passe — absente : aucune limitation (tests). */
   limiteurConnexion?: LimiteurConnexion
   utilisateursRepo: UtilisateursRepo
@@ -592,6 +595,14 @@ async function routerRequeteInterne(request: Request, ctx: Contexte): Promise<Re
   if (chemin === '/auth/login' && request.method === 'POST') {
     return gererLogin(request, ctx, entetes)
   }
+  // Liens de compte (décisions du 26/09/2026) : sans session, le jeton du
+  // lien fait foi.
+  if (chemin === '/auth/definir-mot-de-passe' && request.method === 'POST') {
+    return gererDefinirMotDePasse(request, ctx, entetes)
+  }
+  if (chemin === '/auth/mot-de-passe-oublie' && request.method === 'POST') {
+    return gererMotDePasseOublie(request, ctx, entetes)
+  }
 
   // --- Authentifiées ---
   if (chemin === '/auth/me' && request.method === 'GET') {
@@ -615,6 +626,12 @@ async function routerRequeteInterne(request: Request, ctx: Contexte): Promise<Re
   }
   if (chemin === '/admin/utilisateurs' && request.method === 'POST') {
     return gererCreerUtilisateur(request, ctx, entetes)
+  }
+  const matchReinitialisation = chemin.match(
+    /^\/admin\/utilisateurs\/([^/]+)\/reinitialiser-mot-de-passe$/,
+  )
+  if (matchReinitialisation && request.method === 'POST') {
+    return gererReinitialiserMotDePasse(request, ctx, entetes, matchReinitialisation[1] as string)
   }
   const matchUtilisateurId = chemin.match(/^\/admin\/utilisateurs\/([^/]+)$/)
   if (matchUtilisateurId && request.method === 'PATCH') {
@@ -2080,7 +2097,7 @@ async function gererLogin(
   }
 
   const cles = clesLimitation(request, corps.email)
-  if (ctx.limiteurConnexion?.estBloque(cles)) {
+  if (await ctx.limiteurConnexion?.estBloque(cles)) {
     return reponseJson({ erreur: 'trop_de_tentatives' }, 429, entetes)
   }
 
@@ -2090,10 +2107,10 @@ async function gererLogin(
   // appelant non authentifié, ni par le message ni par le temps de réponse.
   const motDePasseValide = await verifierMotDePasseCompte(utilisateur, corps.motDePasse)
   if (!utilisateur || !motDePasseValide) {
-    ctx.limiteurConnexion?.enregistrerEchec(cles)
+    await ctx.limiteurConnexion?.enregistrerEchec(cles)
     return reponseJson({ erreur: 'identifiants_invalides' }, 401, entetes)
   }
-  ctx.limiteurConnexion?.enregistrerSucces(cles)
+  await ctx.limiteurConnexion?.enregistrerSucces(cles)
 
   const jeton = await signerJetonSession(ctx, utilisateur)
   return reponseJson({ jeton, utilisateur: versUtilisateurPublic(utilisateur) }, 200, entetes)
@@ -2175,7 +2192,7 @@ async function gererVerifierMotDePasse(
   // Même limitation que la connexion : jamais un oracle de mot de passe
   // illimité pour qui détient une session volée.
   const cles = [`verif:${utilisateur.id}`]
-  if (ctx.limiteurConnexion?.estBloque(cles)) {
+  if (await ctx.limiteurConnexion?.estBloque(cles)) {
     return reponseJson({ erreur: 'trop_de_tentatives' }, 429, entetes)
   }
   const valide = await verifierMotDePasse(
@@ -2183,9 +2200,211 @@ async function gererVerifierMotDePasse(
     utilisateur.motDePasseSel,
     utilisateur.motDePasseHash,
   )
-  if (valide) ctx.limiteurConnexion?.enregistrerSucces(cles)
-  else ctx.limiteurConnexion?.enregistrerEchec(cles)
+  if (valide) await ctx.limiteurConnexion?.enregistrerSucces(cles)
+  else await ctx.limiteurConnexion?.enregistrerEchec(cles)
   return reponseJson({ valide }, 200, entetes)
+}
+
+// --- Liens de compte : activation et réinitialisation (décisions du 26/09/2026) ---
+
+const DUREE_LIEN_ACTIVATION_HEURES = 24
+const DUREE_LIEN_REINITIALISATION_HEURES = 2
+
+/** 32 octets aléatoires en base64url — jamais devinable. */
+function genererJetonAleatoire(): string {
+  const octets = crypto.getRandomValues(new Uint8Array(32))
+  let binaire = ''
+  for (const o of octets) binaire += String.fromCharCode(o)
+  return btoa(binaire).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function empreinteJeton(jeton: string): Promise<string> {
+  const octets = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(jeton)),
+  )
+  return Array.from(octets)
+    .map((o) => o.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/**
+ * Crée un lien à usage unique (le précédent éventuel est invalidé) et
+ * renvoie son URL : page « Définir mon mot de passe » de l'application,
+ * avec l'adresse de ce Worker (`serveur`) pour qu'elle fonctionne même sur
+ * un poste où l'application n'a jamais été configurée.
+ */
+async function emettreLienCompte(
+  ctx: Contexte,
+  request: Request,
+  utilisateur: UtilisateurEnregistre,
+  type: TypeJetonCompte,
+  createur: UtilisateurEnregistre | null,
+): Promise<string> {
+  const maintenant = new Date()
+  const jeton = genererJetonAleatoire()
+  const heures =
+    type === 'activation' ? DUREE_LIEN_ACTIVATION_HEURES : DUREE_LIEN_REINITIALISATION_HEURES
+  await ctx.jetonsCompteRepo.invaliderPourUtilisateur(utilisateur.id, maintenant.toISOString())
+  await ctx.jetonsCompteRepo.creer({
+    empreinte: await empreinteJeton(jeton),
+    userId: utilisateur.id,
+    type,
+    expireAt: new Date(maintenant.getTime() + heures * 3600 * 1000).toISOString(),
+    utiliseAt: null,
+    createdAt: maintenant.toISOString(),
+    createdBy: createur?.id ?? null,
+  })
+  const parametres = new URLSearchParams({
+    jeton,
+    serveur: new URL(request.url).origin,
+    type,
+  })
+  return `${ctx.urlApplication.replace(/\/+$/, '')}/definir-mot-de-passe?${parametres.toString()}`
+}
+
+/**
+ * `POST /auth/definir-mot-de-passe {jeton, motDePasse}` — active un compte
+ * ou réinitialise son mot de passe. Le lien ne sert qu'une fois ; toutes
+ * les sessions ouvertes avec l'ancien mot de passe sont fermées (empreinte
+ * `pv` du JWT).
+ */
+async function gererDefinirMotDePasse(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const corps = await lireCorpsJson<{ jeton?: unknown; motDePasse?: unknown }>(request)
+  if (typeof corps?.jeton !== 'string' || typeof corps.motDePasse !== 'string') {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  if (corps.motDePasse.length < LONGUEUR_MIN_MOT_DE_PASSE) {
+    return reponseJson({ erreur: 'mot_de_passe_trop_court' }, 400, entetes)
+  }
+  const maintenant = horodatage()
+  const lien = await ctx.jetonsCompteRepo.parEmpreinte(await empreinteJeton(corps.jeton))
+  const utilisateur = lien ? await ctx.utilisateursRepo.parId(lien.userId) : null
+  if (
+    !lien ||
+    lien.utiliseAt !== null ||
+    lien.expireAt <= maintenant ||
+    !utilisateur ||
+    utilisateur.statut !== 'actif'
+  ) {
+    return reponseJson({ erreur: 'lien_invalide' }, 400, entetes)
+  }
+
+  const sel = genererSel()
+  await ctx.utilisateursRepo.mettreAJour(utilisateur.id, {
+    motDePasseHash: await hacherMotDePasse(corps.motDePasse, sel),
+    motDePasseSel: sel,
+    updatedAt: maintenant,
+  })
+  await ctx.jetonsCompteRepo.invaliderPourUtilisateur(utilisateur.id, maintenant)
+  await ctx.limiteurConnexion?.enregistrerSucces([`email:${utilisateur.email.toLowerCase()}`])
+  await consignerAudit(
+    ctx,
+    utilisateur,
+    lien.type === 'activation' ? 'activation_compte' : 'reinitialisation_mot_de_passe',
+    'user',
+    utilisateur.id,
+    null,
+  )
+  return reponseJson({ ok: true, email: utilisateur.email }, 200, entetes)
+}
+
+/**
+ * `POST /auth/mot-de-passe-oublie {email}` — toujours la même réponse,
+ * que le compte existe ou non (jamais une énumération des comptes) ; un
+ * lien de réinitialisation part seulement vers un compte actif existant.
+ * Limité à quelques demandes par adresse.
+ */
+async function gererMotDePasseOublie(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+): Promise<Response> {
+  const corps = await lireCorpsJson<{ email?: unknown }>(request)
+  if (typeof corps?.email !== 'string' || !REGEX_EMAIL.test(corps.email.trim())) {
+    return reponseJson({ erreur: 'email_invalide' }, 400, entetes)
+  }
+  const email = corps.email.trim()
+  const cles = [`oubli:${email.toLowerCase()}`]
+  if (await ctx.limiteurConnexion?.estBloque(cles)) {
+    return reponseJson({ erreur: 'trop_de_tentatives' }, 429, entetes)
+  }
+  // Chaque demande compte : au-delà du seuil, l'adresse ne reçoit plus
+  // rien pendant la durée de blocage (jamais un envoi d'e-mails en rafale).
+  await ctx.limiteurConnexion?.enregistrerEchec(cles)
+
+  const utilisateur = await ctx.utilisateursRepo.parEmail(email)
+  if (utilisateur && utilisateur.statut === 'actif') {
+    const lien = await emettreLienCompte(ctx, request, utilisateur, 'reinitialisation', null)
+    await ctx.envoyeurEmail.envoyer({
+      destinataire: utilisateur.email,
+      sujet: 'Réinitialisation de votre mot de passe ValidaPharm',
+      texte: [
+        `Bonjour ${utilisateur.prenom},`,
+        '',
+        'Une réinitialisation de votre mot de passe ValidaPharm a été demandée.',
+        `Choisissez un nouveau mot de passe avec ce lien (valable ${DUREE_LIEN_REINITIALISATION_HEURES} heures, utilisable une seule fois) :`,
+        lien,
+        '',
+        "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : votre mot de passe actuel reste valable.",
+      ].join('\n'),
+    })
+    await consignerAudit(
+      ctx,
+      utilisateur,
+      'demande_reinitialisation_mot_de_passe',
+      'user',
+      utilisateur.id,
+      null,
+    )
+  }
+  return reponseJson({ ok: true }, 200, entetes)
+}
+
+/**
+ * `POST /admin/utilisateurs/:id/reinitialiser-mot-de-passe` — un admin
+ * envoie un lien de réinitialisation à un compte (le mot de passe actuel
+ * reste valable jusqu'à son utilisation). Le lien est aussi rendu à
+ * l'admin, pour le cas où l'e-mail ne peut pas partir.
+ */
+async function gererReinitialiserMotDePasse(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const acteur = await exigerAdmin(request, ctx, entetes)
+  if (acteur instanceof Response) return acteur
+  const utilisateur = await ctx.utilisateursRepo.parId(id)
+  if (!utilisateur) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  if (utilisateur.statut !== 'actif') {
+    return reponseJson({ erreur: 'compte_desactive' }, 409, entetes)
+  }
+
+  const lien = await emettreLienCompte(ctx, request, utilisateur, 'reinitialisation', acteur)
+  const resultatEmail = await ctx.envoyeurEmail.envoyer({
+    destinataire: utilisateur.email,
+    sujet: 'Réinitialisation de votre mot de passe ValidaPharm',
+    texte: [
+      `Bonjour ${utilisateur.prenom},`,
+      '',
+      `${acteur.prenom} ${acteur.nom} a demandé la réinitialisation de votre mot de passe ValidaPharm.`,
+      `Choisissez un nouveau mot de passe avec ce lien (valable ${DUREE_LIEN_REINITIALISATION_HEURES} heures, utilisable une seule fois) :`,
+      lien,
+    ].join('\n'),
+  })
+  await consignerAudit(
+    ctx,
+    acteur,
+    'envoi_lien_reinitialisation_mot_de_passe',
+    'user',
+    utilisateur.id,
+    null,
+  )
+  return reponseJson({ emailEnvoye: resultatEmail.ok, lienReinitialisation: lien }, 200, entetes)
 }
 
 // --- Handlers : administration des comptes ---
@@ -2221,7 +2440,10 @@ async function gererCreerUtilisateur(
   if (corps.role !== 'admin' && corps.role !== 'utilisateur') {
     return reponseJson({ erreur: 'role_invalide' }, 400, entetes)
   }
-  const erreurValidation = validerNouveauCompte(corps)
+  // Mot de passe facultatif (décision du 26/09/2026) : sans lui, le compte
+  // n'est utilisable qu'après activation par le lien reçu — plus jamais de
+  // mot de passe envoyé en clair par e-mail.
+  const erreurValidation = validerNouveauCompte(corps, false)
   if (erreurValidation) return reponseJson({ erreur: erreurValidation }, 400, entetes)
 
   if (await ctx.utilisateursRepo.parEmail(corps.email as string)) {
@@ -2230,7 +2452,7 @@ async function gererCreerUtilisateur(
 
   const maintenant = horodatage()
   const sel = genererSel()
-  const hash = await hacherMotDePasse(corps.motDePasse as string, sel)
+  const hash = await hacherMotDePasse(corps.motDePasse || genererJetonAleatoire(), sel)
   const nouvelUtilisateur: UtilisateurEnregistre = {
     id: genererId(),
     email: (corps.email as string).trim(),
@@ -2247,6 +2469,7 @@ async function gererCreerUtilisateur(
   await ctx.utilisateursRepo.creer(nouvelUtilisateur)
   await consignerAudit(ctx, acteur, 'creation_utilisateur', 'user', nouvelUtilisateur.id, null)
 
+  const lien = await emettreLienCompte(ctx, request, nouvelUtilisateur, 'activation', acteur)
   const resultatEmail = await ctx.envoyeurEmail.envoyer({
     destinataire: nouvelUtilisateur.email,
     sujet: 'Votre compte ValidaPharm a été créé',
@@ -2254,17 +2477,22 @@ async function gererCreerUtilisateur(
       `Bonjour ${nouvelUtilisateur.prenom},`,
       '',
       `Un compte ValidaPharm vient d'être créé pour vous par ${acteur.prenom} ${acteur.nom}.`,
-      '',
-      `Adresse de connexion : ${ctx.urlApplication}`,
       `Identifiant : ${nouvelUtilisateur.email}`,
-      `Mot de passe initial : ${corps.motDePasse as string}`,
       '',
-      'Nous vous recommandons de changer ce mot de passe dès votre première connexion.',
+      'Pour activer votre compte, choisissez votre mot de passe avec ce lien (valable',
+      `${DUREE_LIEN_ACTIVATION_HEURES} heures, utilisable une seule fois) :`,
+      lien,
     ].join('\n'),
   })
 
+  // Le lien est aussi rendu à l'admin : l'envoi d'e-mails peut être limité
+  // (domaine d'envoi non vérifié) — il le transmet alors par un autre canal.
   return reponseJson(
-    { utilisateur: versUtilisateurPublic(nouvelUtilisateur), emailEnvoye: resultatEmail.ok },
+    {
+      utilisateur: versUtilisateurPublic(nouvelUtilisateur),
+      emailEnvoye: resultatEmail.ok,
+      lienActivation: lien,
+    },
     201,
     entetes,
   )
@@ -2461,8 +2689,18 @@ async function gererModifierClient(
     details?: string | null
     statut?: ClientEnregistre['statut']
     sharedWith?: string[]
+    separationTaches?: boolean
   }>(request)
   if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  if (corps.separationTaches !== undefined && typeof corps.separationTaches !== 'boolean') {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const gereReglages = utilisateur.role === 'admin' || client.createdByUserId === utilisateur.id
+  // Règle de signature du client : même garde que le partage (créateur ou
+  // admin), jamais un simple partagé.
+  if (corps.separationTaches !== undefined && !gereReglages) {
+    return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
+  }
   // Types vérifiés (audit du 25/09/2026, m2/m3) : un `sharedWith` qui n'est
   // pas une liste d'identifiants rendait `GET /clients` en erreur 500 chez
   // les personnes concernées, et une chaîne donnait accès par sous-chaîne.
@@ -2505,14 +2743,64 @@ async function gererModifierClient(
     (utilisateur.role === 'admin' || client.createdByUserId === utilisateur.id)
       ? { sharedWith: [...new Set(corps.sharedWith)] }
       : {}),
+    ...(corps.separationTaches !== undefined ? { separationTaches: corps.separationTaches } : {}),
     updatedAt: horodatage(),
   })
   if (!misAJour) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
 
   if (archivage) await consignerAudit(ctx, utilisateur, 'archivage_client', 'client', id, null)
+  if (
+    corps.separationTaches !== undefined &&
+    corps.separationTaches !== (client.separationTaches === true)
+  ) {
+    await consignerAudit(
+      ctx,
+      utilisateur,
+      corps.separationTaches ? 'separation_taches_activee' : 'separation_taches_desactivee',
+      'client',
+      id,
+      null,
+    )
+  }
   if (desarchivage)
     await consignerAudit(ctx, utilisateur, 'desarchivage_client', 'client', id, null)
   return reponseJson({ client: misAJour }, 200, entetes)
+}
+
+/**
+ * Catégories de données encore rattachées à un client (libellés lisibles),
+ * vide si le client peut être supprimé sans laisser d'orphelins.
+ */
+async function donneesDuClient(ctx: Contexte, clientId: string): Promise<string[]> {
+  const verifications: [string, () => Promise<unknown[]>][] = [
+    ['projets', () => ctx.projectsRepo.listerParClient(clientId)],
+    ['structure système', () => ctx.structureSystemeRepo.listerNoeuds(clientId)],
+    ['évaluations ACFC', () => ctx.acfcRepo.listerEvaluations(clientId)],
+    ['méthodes ACFC', () => ctx.acfcRepo.listerProfils(clientId)],
+    ['évaluations Impact', () => ctx.impactAssessmentRepo.listerEvaluations(clientId)],
+    ['méthodes Impact', () => ctx.impactAssessmentRepo.listerProfils(clientId)],
+    ['évaluations CSV', () => ctx.csvAssessmentRepo.listerEvaluations(clientId)],
+    ['analyses de risques', () => ctx.riskAssessmentRepo.listerEvaluations(clientId)],
+    ['méthodes AMDEC', () => ctx.riskAssessmentRepo.listerProfils(clientId)],
+    ['paramètres', () => ctx.parametersRepo.listerParametres(clientId)],
+    ['process', () => ctx.processContextRepo.listerProcesses(clientId)],
+    ['événements qualité', () => ctx.qualityEventRepo.listerEvenements(clientId)],
+    ['exigences', () => ctx.testDefinitionRepo.listerRequirements(clientId)],
+    ['tests', () => ctx.testDefinitionRepo.listerTests(clientId)],
+    ['exécutions', () => ctx.executionRepo.listerExecutions(clientId)],
+    ['preuves', () => ctx.evidenceRepo.listerEvidences(clientId)],
+    ['missions', () => ctx.missionRepo.listerMissions(clientId)],
+    ['procédures', () => ctx.procedureRepo.listerProcedures(clientId)],
+    ['plans de livrables', () => ctx.contentPlanRepo.listerContentPlans(clientId)],
+    ['gabarits d’export', () => ctx.gabaritExportClientRepo.listerParClient(clientId)],
+    ['sources documentaires', () => ctx.knowledgeEngineRepo.listerSources(clientId)],
+    ['connecteurs', () => ctx.integrationRepo.listerConnectors(clientId)],
+  ]
+  const presentes: string[] = []
+  for (const [libelle, lister] of verifications) {
+    if ((await lister()).length > 0) presentes.push(libelle)
+  }
+  return presentes
 }
 
 async function gererSupprimerClientDefinitivement(
@@ -2540,6 +2828,12 @@ async function gererSupprimerClientDefinitivement(
 
   const client = await ctx.clientsRepo.parId(id)
   if (!client) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  // Jamais de données orphelines (décision du 26/09/2026) : un client qui a
+  // encore des données reste archivé ; seul un client vide se supprime.
+  const donnees = await donneesDuClient(ctx, id)
+  if (donnees.length > 0) {
+    return reponseJson({ erreur: 'client_non_vide', donnees }, 409, entetes)
+  }
 
   await ctx.clientsRepo.supprimerDefinitivement(id)
   await consignerAudit(
@@ -4729,6 +5023,37 @@ async function gererCreerTest(
   return reponseJson({ test }, 201, entetes)
 }
 
+/**
+ * Signature d'un geste d'approbation ou de clôture (décision du
+ * 26/09/2026) : ressaisie du mot de passe, vérifiée ici, jamais seulement
+ * dans le navigateur. Même limitation des essais que `verify-password`.
+ */
+async function refusSignature(
+  ctx: Contexte,
+  acteur: UtilisateurEnregistre,
+  motDePasse: unknown,
+): Promise<{ erreur: string; statut: number } | null> {
+  if (typeof motDePasse !== 'string' || motDePasse.length === 0) {
+    return { erreur: 'mot_de_passe_requis', statut: 403 }
+  }
+  const cles = [`verif:${acteur.id}`]
+  if (await ctx.limiteurConnexion?.estBloque(cles)) {
+    return { erreur: 'trop_de_tentatives', statut: 429 }
+  }
+  if (!(await verifierMotDePasse(motDePasse, acteur.motDePasseSel, acteur.motDePasseHash))) {
+    await ctx.limiteurConnexion?.enregistrerEchec(cles)
+    return { erreur: 'mot_de_passe_incorrect', statut: 403 }
+  }
+  await ctx.limiteurConnexion?.enregistrerSucces(cles)
+  return null
+}
+
+/** Séparation des tâches activée pour ce client (réglage de la fiche client, désactivé par défaut). */
+async function separationTachesActive(ctx: Contexte, clientId: string | null): Promise<boolean> {
+  if (!clientId) return false
+  return (await ctx.clientsRepo.parId(clientId))?.separationTaches === true
+}
+
 async function gererApprouverTest(
   request: Request,
   ctx: Contexte,
@@ -4742,6 +5067,15 @@ async function gererApprouverTest(
   const existant = await ctx.testDefinitionRepo.testParId(testId)
   if (!existant || existant.clientId !== clientId) {
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const corps = await lireCorpsJson<{ motDePasse?: unknown }>(request)
+  const refus = await refusSignature(ctx, acteur, corps?.motDePasse)
+  if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
+  if (
+    (await separationTachesActive(ctx, clientId)) &&
+    existant.auditLog[0]?.actor === acteur.email
+  ) {
+    return reponseJson({ erreur: 'separation_taches' }, 403, entetes)
   }
 
   const maintenant = horodatage()
@@ -5109,9 +5443,14 @@ async function gererCloturerExecution(
     return reponseJson({ erreur: 'execution_deja_cloturee' }, 400, entetes)
   }
 
-  const corps = await lireCorpsJson<SaisieClotureExecution>(request)
+  const corps = await lireCorpsJson<SaisieClotureExecution & { motDePasse?: unknown }>(request)
   if (!corps?.verdict || !(VERDICTS_EXECUTION as readonly string[]).includes(corps.verdict)) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const refus = await refusSignature(ctx, acteur, corps.motDePasse)
+  if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
+  if ((await separationTachesActive(ctx, clientId)) && existante.executant === acteur.email) {
+    return reponseJson({ erreur: 'separation_taches' }, 403, entetes)
   }
 
   const maintenant = horodatage()
@@ -9165,11 +9504,13 @@ async function gererRemplacerSection(
   if (!droits.voir) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   if (!droits.modifier) return reponseJson({ erreur: 'non_autorise' }, 403, entetes)
 
-  const recu = await lireCorpsJson<SectionEnregistree & { versionAttendue?: string }>(request)
+  const recu = await lireCorpsJson<
+    SectionEnregistree & { versionAttendue?: string; motDePasse?: unknown }
+  >(request)
   if (!recu?.templateType || !recu.workflow) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
-  const { versionAttendue, ...corps } = recu
+  const { versionAttendue, motDePasse, ...corps } = recu
   // Contrôle de version optimiste (audit d'intégrité front, C4) : deux
   // sauvegardes simultanées ne s'écrasent plus en silence.
   if (typeof versionAttendue === 'string' && versionAttendue !== existante.updatedAt) {
@@ -9184,6 +9525,20 @@ async function gererRemplacerSection(
     const statut = preparation.erreur === 'approbateur_requis' ? 403 : 409
     return reponseJson({ erreur: preparation.erreur }, statut, entetes)
   }
+  // Approbation finale (transition déjà vérifiée ci-dessus) : signée par mot de passe ; auteur exclu si la
+  // séparation des tâches est activée pour le client (décision du 26/09/2026).
+  if (corps.status === 'valide_en_interne' && existante.status !== 'valide_en_interne') {
+    const refus = await refusSignature(ctx, utilisateur, motDePasse)
+    if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
+    const projet = await ctx.projectsRepo.obtenirProjet(existante.projectId)
+    const estAuteur =
+      existante.ownerId === utilisateur.email ||
+      existante.workflow.authors.includes(utilisateur.email)
+    if (estAuteur && (await separationTachesActive(ctx, projet?.clientId ?? null))) {
+      return reponseJson({ erreur: 'separation_taches' }, 403, entetes)
+    }
+  }
+
   await ctx.sectionsRepo.remplacerSection(preparation.section)
   return reponseJson({ section: preparation.section }, 200, entetes)
 }
@@ -10496,14 +10851,21 @@ async function exigerAdmin(
   return utilisateur
 }
 
-function validerNouveauCompte(corps: {
-  email?: string
-  motDePasse?: string
-  nom?: string
-  prenom?: string
-}): string | null {
+function validerNouveauCompte(
+  corps: {
+    email?: string
+    motDePasse?: string
+    nom?: string
+    prenom?: string
+  },
+  motDePasseObligatoire = true,
+): string | null {
   if (!corps.email || !REGEX_EMAIL.test(corps.email.trim())) return 'email_invalide'
-  if (!corps.motDePasse || corps.motDePasse.length < LONGUEUR_MIN_MOT_DE_PASSE) {
+  const motDePasseFourni = corps.motDePasse !== undefined && corps.motDePasse !== ''
+  if (
+    (motDePasseObligatoire || motDePasseFourni) &&
+    (!corps.motDePasse || corps.motDePasse.length < LONGUEUR_MIN_MOT_DE_PASSE)
+  ) {
     return 'mot_de_passe_trop_court'
   }
   if (!corps.nom || corps.nom.trim().length === 0) return 'nom_obligatoire'

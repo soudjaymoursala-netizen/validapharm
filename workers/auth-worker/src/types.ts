@@ -57,6 +57,8 @@ export interface ClientEnregistre {
   archivedBy: string | null
   createdByUserId: string
   sharedWith: string[]
+  /** Séparation des tâches (décision du 26/09/2026) : l'approbateur/la personne qui clôture doit différer de l'auteur. Absent = désactivée. */
+  separationTaches?: boolean
   createdAt: string
   updatedAt: string
 }

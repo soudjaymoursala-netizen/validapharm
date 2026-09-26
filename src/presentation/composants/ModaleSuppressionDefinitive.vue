@@ -51,9 +51,10 @@ async function confirmer(): Promise<void> {
     <div class="modale">
       <h2>Suppression définitive</h2>
       <p class="bandeau-erreur" role="alert">
-        Action <strong>irréversible</strong> — « {{ nom }} » et toutes ses données seront
-        définitivement supprimés, jamais restaurables. Tracée dans le journal d'audit (qui vous a
-        supprimé quoi, quand, pourquoi).
+        Action <strong>irréversible</strong> — « {{ nom }} » sera définitivement supprimé, jamais
+        restaurable. Seul un client <strong>sans aucune donnée</strong> peut l'être : s'il en a
+        encore, la suppression est refusée et il reste archivé. Tracée dans le journal d'audit (qui,
+        quand, pourquoi).
       </p>
       <form class="formulaire" @submit.prevent="confirmer">
         <label>

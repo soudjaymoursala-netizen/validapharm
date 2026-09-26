@@ -21,6 +21,8 @@ export interface ClientWire {
   archivedBy: string | null
   createdByUserId: string
   sharedWith: string[]
+  /** Séparation des tâches (décision du 26/09/2026) — absente = désactivée. */
+  separationTaches?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -1378,13 +1380,39 @@ export class AuthApiClient {
     jeton: string,
     saisie: {
       email: string
-      motDePasse: string
+      /** Facultatif : sans lui, le compte s'active par le lien d'activation. */
+      motDePasse?: string
       nom: string
       prenom: string
       role: 'admin' | 'utilisateur'
     },
-  ): Promise<ResultatApi<{ utilisateur: UtilisateurWire }>> {
+  ): Promise<
+    ResultatApi<{ utilisateur: UtilisateurWire; emailEnvoye: boolean; lienActivation: string }>
+  > {
     return this.requete('POST', '/admin/utilisateurs', { jeton, body: saisie })
+  }
+
+  /** Envoie un lien de réinitialisation au compte (admin) ; le lien est aussi rendu. */
+  reinitialiserMotDePasseUtilisateur(
+    jeton: string,
+    id: string,
+  ): Promise<ResultatApi<{ emailEnvoye: boolean; lienReinitialisation: string }>> {
+    return this.requete('POST', `/admin/utilisateurs/${id}/reinitialiser-mot-de-passe`, { jeton })
+  }
+
+  /** Sans session : définit le mot de passe à partir du jeton d'un lien d'activation/réinitialisation. */
+  definirMotDePasse(
+    jetonLien: string,
+    motDePasse: string,
+  ): Promise<ResultatApi<{ ok: true; email: string }>> {
+    return this.requete('POST', '/auth/definir-mot-de-passe', {
+      body: { jeton: jetonLien, motDePasse },
+    })
+  }
+
+  /** Sans session : demande un lien de réinitialisation (réponse identique que le compte existe ou non). */
+  demanderReinitialisationMotDePasse(email: string): Promise<ResultatApi<{ ok: true }>> {
+    return this.requete('POST', '/auth/mot-de-passe-oublie', { body: { email } })
   }
 
   modifierUtilisateur(
@@ -1440,6 +1468,7 @@ export class AuthApiClient {
       details: string | null
       statut: ClientWire['statut']
       sharedWith: string[]
+      separationTaches: boolean
     }>,
   ): Promise<ResultatApi<{ client: ClientWire }>> {
     return this.requete('PATCH', `/clients/${id}`, { jeton, body: changements })
@@ -2106,13 +2135,16 @@ export class AuthApiClient {
     })
   }
 
+  /** Approbation signée : `motDePasse` vérifié par le Worker (décision du 26/09/2026). */
   approuverTest(
     jeton: string,
     clientId: string,
     testId: string,
+    motDePasse: string,
   ): Promise<ResultatApi<{ test: TestWire }>> {
     return this.requete('PATCH', `/clients/${clientId}/test-definition/tests/${testId}/approuver`, {
       jeton,
+      body: { motDePasse },
     })
   }
 
@@ -2218,10 +2250,11 @@ export class AuthApiClient {
     clientId: string,
     executionId: string,
     verdict: string,
+    motDePasse: string,
   ): Promise<ResultatApi<{ execution: ExecutionWire }>> {
     return this.requete('PATCH', `/clients/${clientId}/executions/${executionId}/cloturer`, {
       jeton,
-      body: { verdict },
+      body: { verdict, motDePasse },
     })
   }
 
@@ -3307,11 +3340,11 @@ export class AuthApiClient {
     return this.requete('POST', '/sections', { jeton, body: section })
   }
 
-  /** `versionAttendue` : `updatedAt` de la version lue — 409 `conflit_version` si elle a été remplacée entre-temps. */
+  /** `versionAttendue` : `updatedAt` de la version lue — 409 `conflit_version` si elle a été remplacée entre-temps. `motDePasse` : signature de l'approbation finale. */
   remplacerSection(
     jeton: string,
     id: string,
-    section: SectionWire & { versionAttendue?: string },
+    section: SectionWire & { versionAttendue?: string; motDePasse?: string },
   ): Promise<ResultatApi<{ section: SectionWire }>> {
     return this.requete('PUT', `/sections/${id}`, { jeton, body: section })
   }

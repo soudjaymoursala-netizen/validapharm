@@ -11,6 +11,7 @@
 // contextuel »), la barre latérale reste le Mode 2 (« expert »).
 import { computed, onMounted, ref, watch } from 'vue'
 import type { SecteurClient } from '../../logique-metier/domaine/types'
+import { useAuthStore } from '../stores/useAuthStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
 import IconeSvg, { type NomIcone } from '../composants/IconeSvg.vue'
@@ -52,6 +53,31 @@ const LIBELLES_SECTEUR: Record<SecteurClient, string> = {
 }
 
 const clientCourant = computed(() => clientsStore.clients.find((c) => c.id === props.clientId))
+
+// Règle de signature (décision utilisateur du 26/09/2026) : modifiable par
+// le créateur du client ou un admin — même garde que le Worker.
+const authStore = useAuthStore()
+const peutReglerSignature = computed(
+  () =>
+    authStore.estAdmin ||
+    (clientCourant.value?.created_by_user_id ?? null) === (authStore.utilisateur?.id ?? ''),
+)
+const erreurSignature = ref<string | null>(null)
+const enregistrementSignature = ref(false)
+
+async function basculerSeparationTaches(evenement: Event): Promise<void> {
+  const active = (evenement.target as HTMLInputElement).checked
+  erreurSignature.value = null
+  enregistrementSignature.value = true
+  try {
+    const resultat = await clientsStore.definirSeparationTaches(props.clientId, active)
+    if ('erreur' in resultat) erreurSignature.value = libelleErreur(resultat)
+  } catch (e) {
+    erreurSignature.value = libelleErreur(e)
+  } finally {
+    enregistrementSignature.value = false
+  }
+}
 
 function reinitialiserBrouillon(): void {
   const client = clientCourant.value
@@ -217,6 +243,30 @@ const projetsDuClient = computed(() =>
       </template>
     </dl>
 
+    <section class="carte regle-signature" aria-labelledby="titre-regle-signature">
+      <h2 id="titre-regle-signature" class="carte__titre-discret">Règle de signature</h2>
+      <p>
+        Approuver une section ou un test, et clôturer une exécution, demandent toujours la ressaisie
+        du mot de passe.
+      </p>
+      <label v-if="peutReglerSignature" class="case">
+        <input
+          type="checkbox"
+          :checked="clientCourant?.separation_taches === true"
+          :disabled="enregistrementSignature"
+          @change="basculerSeparationTaches"
+        />
+        Séparation des tâches : l'auteur d'une section ou d'un test ne peut pas l'approuver
+        lui-même, et la personne qui a exécuté un test ne peut pas clôturer son exécution.
+      </label>
+      <p v-else>
+        Séparation des tâches :
+        <strong>{{ clientCourant?.separation_taches ? 'activée' : 'désactivée' }}</strong>
+        (réglée par le créateur du client ou un administrateur).
+      </p>
+      <p v-if="erreurSignature" class="bandeau-erreur" role="alert">{{ erreurSignature }}</p>
+    </section>
+
     <section class="branches">
       <RouterLink
         v-for="branche in branches"
@@ -247,6 +297,26 @@ const projetsDuClient = computed(() =>
 </template>
 
 <style scoped>
+.regle-signature {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.regle-signature p {
+  margin: 0;
+}
+
+.regle-signature .case {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.regle-signature .case input {
+  margin-top: 0.2rem;
+}
+
 .fiche-client {
   padding: 2.5rem;
   max-width: 60rem;

@@ -48,6 +48,8 @@ const LIBELLES_ERREUR: Record<string, string> = {
   introuvable: "Ce client n'existe plus (probablement supprimé entre-temps).",
   mot_de_passe_incorrect: 'Mot de passe incorrect : la suppression définitive a été refusée.',
   corps_invalide: 'Les informations envoyées sont incomplètes ou invalides.',
+  client_non_vide:
+    'Suppression refusée : ce client a encore des données (projets, évaluations, tests…). Il reste archivé, ses données sont conservées.',
 }
 
 function libelleErreur(e: unknown): string {

@@ -19,6 +19,11 @@ function routeurDeTest() {
     routes: [
       { path: '/', name: 'accueil', component: { template: '<div />' } },
       { path: '/connexion', name: 'connexion', component: Login },
+      {
+        path: '/mot-de-passe-oublie',
+        name: 'mot-de-passe-oublie',
+        component: { template: '<div />' },
+      },
       { path: '/configuration', name: 'configuration-client', component: { template: '<div />' } },
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
     ],
