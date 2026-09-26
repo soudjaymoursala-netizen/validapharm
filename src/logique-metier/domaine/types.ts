@@ -318,6 +318,12 @@ export interface Client {
   created_by_user_id: string | null
   /** Ids d'utilisateurs réels avec qui ce client est partagé (lecture+écriture). */
   shared_with: string[]
+  /**
+   * Séparation des tâches (décision utilisateur du 26/09/2026) : l'auteur
+   * d'une section ou d'un test ne l'approuve pas lui-même, l'exécutant ne
+   * clôture pas son exécution. Désactivée par défaut ; appliquée par le Worker.
+   */
+  separation_taches?: boolean
 }
 
 /**

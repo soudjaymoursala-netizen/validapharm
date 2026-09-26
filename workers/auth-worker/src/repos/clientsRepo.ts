@@ -29,6 +29,7 @@ export interface ClientsRepo {
         | 'archivedAt'
         | 'archivedBy'
         | 'sharedWith'
+        | 'separationTaches'
         | 'updatedAt'
       >
     >,

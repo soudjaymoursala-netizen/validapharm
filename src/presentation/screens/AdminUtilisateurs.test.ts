@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
@@ -48,14 +48,22 @@ describe('AdminUtilisateurs — gestion des comptes', () => {
 
     await wrapper.find('header button').trigger('click')
     await wrapper.find('input[type="email"]').setValue('employe@pharmatech.example')
-    await wrapper.find('input[type="password"]').setValue('MotDePasse!1')
+    // Plus de mot de passe saisi par l'admin : lien d'activation (26/09/2026).
+    expect(wrapper.find('input[type="password"]').exists()).toBe(false)
     const champsTexte = wrapper.findAll('input[type="text"]')
     await champsTexte[0]?.setValue('Alice')
     await champsTexte[1]?.setValue('Dupont')
     await wrapper.find('form').trigger('submit.prevent')
 
-    await attendreQue(() => wrapper.text().includes('employe@pharmatech.example'))
-    expect(wrapper.text()).toContain('Alice Dupont')
+    // L'adresse apparaît d'abord dans le panneau du lien d'activation : on
+    // attend la ligne du compte dans la liste rechargée.
+    await attendreQue(() => {
+      const liste = wrapper.find('.liste-comptes')
+      return liste.exists() && liste.text().includes('Alice Dupont')
+    })
+    const lien = wrapper.find('.lien-emis input').element as HTMLInputElement
+    expect(lien.value).toContain('/definir-mot-de-passe?')
+    expect(lien.value).toContain('type=activation')
   })
 
   test('promouvoir un utilisateur admin, puis le désactiver', async () => {
@@ -87,20 +95,28 @@ describe('AdminUtilisateurs — gestion des comptes', () => {
       return ligne
     }
 
-    await ligneEmployeOuEchec().find('.actions-compte button').trigger('click')
+    await ligneEmployeOuEchec()
+      .findAll('.actions-compte button')
+      .find((b) => b.text() === 'Promouvoir admin')
+      ?.trigger('click')
     await attendreQue(() => ligneEmploye()?.find('.badge--admin').exists() ?? false)
-    expect(ligneEmployeOuEchec().text()).toContain('admin')
+    expect(ligneEmployeOuEchec().text()).toContain('Administrateur')
 
-    const boutonDesactiver = ligneEmployeOuEchec().findAll('.actions-compte button')[1]
+    // Désactivation confirmée (fenêtre de confirmation).
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const boutonDesactiver = ligneEmployeOuEchec()
+      .findAll('.actions-compte button')
+      .find((b) => b.text() === 'Désactiver')
     await boutonDesactiver?.trigger('click')
     await attendreQue(() => ligneEmploye()?.find('.badge--desactive').exists() ?? false)
-    expect(ligneEmployeOuEchec().text()).toContain('desactive')
+    expect(ligneEmployeOuEchec().text()).toContain('Désactivé')
   })
 
   test('le dernier admin actif ne peut pas se rétrograder : refus expliqué, rôle inchangé', async () => {
     const wrapper = mount(AdminUtilisateurs, { global: { stubs: { RouterLink: true } } })
     await attendreQue(() => wrapper.text().includes('admin@pharmatech.example'))
 
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const rétrograder = wrapper.findAll('button').find((b) => b.text() === 'Rétrograder')
     await rétrograder?.trigger('click')
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())

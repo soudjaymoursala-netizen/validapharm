@@ -24,7 +24,8 @@ const connectivite = useConnectiviteServeurStore()
 function reessayer(): void {
   window.location.reload()
 }
-const masquerSidebar = computed(() => route.name === 'connexion')
+const ROUTES_SANS_BARRE = new Set(['connexion', 'definir-mot-de-passe', 'mot-de-passe-oublie'])
+const masquerSidebar = computed(() => ROUTES_SANS_BARRE.has(String(route.name)))
 /**
  * Clé de l'écran affiché : change avec le nom de route ET ses paramètres
  * (jamais la requête). Sans elle, passer du même outil d'un client A à

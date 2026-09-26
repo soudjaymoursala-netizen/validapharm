@@ -43,7 +43,8 @@ import { SectionsRepoMemoire } from './repos/sectionsRepo'
 import { StockageBinaireRepoMemoire } from './repos/stockageBinaireRepo'
 import { StructureSystemeRepoMemoire } from './repos/structureSystemeRepo'
 import { UtilisateursRepoMemoire } from './repos/utilisateursRepo'
-import { LimiteurConnexion } from './limiteurConnexion'
+import { D1LimiteurConnexion, LimiteurConnexionMemoire } from './limiteurConnexion'
+import { JetonsCompteRepoMemoire } from './repos/jetonsCompteRepo'
 import { routerRequete, type Contexte } from './routeur'
 
 const ORIGINE = 'https://validapharm.example'
@@ -55,6 +56,7 @@ const GOOGLE_OAUTH_CLIENT_SECRET = 'secret-oauth-test'
 
 function nouveauContexte(options: { sansOAuthGoogle?: boolean } = {}): Contexte {
   return {
+    jetonsCompteRepo: new JetonsCompteRepoMemoire(),
     utilisateursRepo: new UtilisateursRepoMemoire(),
     clientsRepo: new ClientsRepoMemoire(),
     parametresInstallationRepo: new ParametresInstallationRepoMemoire(),
@@ -117,6 +119,7 @@ interface ClientJson {
   archivedBy: string | null
   details: string | null
   secteur: string | null
+  separationTaches?: boolean
 }
 
 interface EntreeAuditJson {
@@ -137,6 +140,10 @@ interface CorpsReponse {
   erreur: string
   /** Réponse relayée du relais IA (`/relais-ia`). */
   texte: string
+  lienActivation: string
+  donnees: string[]
+  lienReinitialisation: string
+  email: string
   jeton: string
   ok: boolean
   valide: boolean
@@ -1359,8 +1366,12 @@ describe('routerRequete — administration des comptes (admin uniquement)', () =
     expect(corps.emailEnvoye).toBe(true)
     expect(envoyeur.envoyes).toHaveLength(1)
     expect(envoyeur.envoyes[0]?.destinataire).toBe('employe@pharmatech.example')
-    expect(envoyeur.envoyes[0]?.texte).toContain('MotDePasse!1')
-    expect(envoyeur.envoyes[0]?.texte).toContain(URL_APPLICATION)
+    // Jamais le mot de passe en clair (décision du 26/09/2026) : un lien
+    // d'activation vers l'application, aussi rendu à l'admin.
+    expect(envoyeur.envoyes[0]?.texte).not.toContain('MotDePasse!1')
+    expect(envoyeur.envoyes[0]?.texte).toContain(`${URL_APPLICATION}/definir-mot-de-passe?`)
+    expect(corps.lienActivation).toContain('jeton=')
+    expect(envoyeur.envoyes[0]?.texte).toContain(corps.lienActivation)
   })
 
   test('un utilisateur non-admin ne peut pas créer de compte (403)', async () => {
@@ -3803,7 +3814,7 @@ describe('routerRequete — Requirement/TestObjective/TestCandidate/Test/Couvert
       ctx,
       'PATCH',
       `/clients/${clientId}/test-definition/tests/${creation.corps.test.id}/approuver`,
-      { jeton: admin.jeton },
+      { jeton: admin.jeton, body: { motDePasse: 'CoffreFort!2026' } },
     )
     expect(approbation.status).toBe(200)
     expect(approbation.corps.test.statut).toBe('approuve')
@@ -3968,7 +3979,7 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
       ctx,
       'PATCH',
       `/clients/${clientId}/test-definition/tests/${test.corps.test.id}/approuver`,
-      { jeton },
+      { jeton, body: { motDePasse: 'CoffreFort!2026' } },
     )
     return test.corps.test
   }
@@ -4221,7 +4232,7 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
       ctx,
       'PATCH',
       `/clients/${clientId}/executions/${demarrage.corps.execution.id}/cloturer`,
-      { jeton: admin.jeton, body: { verdict: 'conforme' } },
+      { jeton: admin.jeton, body: { verdict: 'conforme', motDePasse: 'CoffreFort!2026' } },
     )
     expect(cloture.status).toBe(200)
     expect(cloture.corps.execution.statut).toBe('terminee')
@@ -4232,7 +4243,7 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
       ctx,
       'PATCH',
       `/clients/${clientId}/executions/${demarrage.corps.execution.id}/cloturer`,
-      { jeton: admin.jeton, body: { verdict: 'non_conforme' } },
+      { jeton: admin.jeton, body: { verdict: 'non_conforme', motDePasse: 'CoffreFort!2026' } },
     )
     expect(recloture.status).toBe(400)
     expect(recloture.corps.erreur).toBe('execution_deja_cloturee')
@@ -4279,7 +4290,7 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
       ctx,
       'PATCH',
       `/clients/${clientId}/executions/${executionId}/cloturer`,
-      { jeton: admin.jeton, body: { verdict: 'banane' } },
+      { jeton: admin.jeton, body: { verdict: 'banane', motDePasse: 'CoffreFort!2026' } },
     )
     expect(cloture.status).toBe(400)
     expect(cloture.corps.erreur).toBe('corps_invalide')
@@ -4288,7 +4299,10 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
       ctx,
       'PATCH',
       `/clients/${clientId}/executions/${executionId}/cloturer`,
-      { jeton: admin.jeton, body: { verdict: 'conforme_avec_ecart' } },
+      {
+        jeton: admin.jeton,
+        body: { verdict: 'conforme_avec_ecart', motDePasse: 'CoffreFort!2026' },
+      },
     )
     expect(encoreOuverte.status).toBe(200)
   })
@@ -4403,7 +4417,7 @@ describe('routerRequete — Evidence/EvidenceLocation/ProvenanceLink (Target Arc
       ctx,
       'PATCH',
       `/clients/${clientId}/test-definition/tests/${test.corps.test.id}/approuver`,
-      { jeton },
+      { jeton, body: { motDePasse: 'CoffreFort!2026' } },
     )
     const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
       jeton,
@@ -4481,7 +4495,7 @@ describe('routerRequete — Evidence/EvidenceLocation/ProvenanceLink (Target Arc
     const { executionId } = await creerExecutionEnCoursDeTest(ctx, admin.jeton, clientId)
     await requete(ctx, 'PATCH', `/clients/${clientId}/executions/${executionId}/cloturer`, {
       jeton: admin.jeton,
-      body: { verdict: 'conforme' },
+      body: { verdict: 'conforme', motDePasse: 'CoffreFort!2026' },
     })
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
@@ -5092,7 +5106,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
       ctx,
       'PATCH',
       `/clients/${clientId}/test-definition/tests/${test.corps.test.id}/approuver`,
-      { jeton },
+      { jeton, body: { motDePasse: 'CoffreFort!2026' } },
     )
     await requete(ctx, 'POST', `/clients/${clientId}/test-definition/couvertures`, {
       jeton,
@@ -5116,7 +5130,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
       ctx,
       'PATCH',
       `/clients/${clientId}/executions/${demarrage.corps.execution.id}/cloturer`,
-      { jeton, body: { verdict: 'conforme' } },
+      { jeton, body: { verdict: 'conforme', motDePasse: 'CoffreFort!2026' } },
     )
     return { testId: test.corps.test.id }
   }
@@ -5153,7 +5167,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
       ctx,
       'PATCH',
       `/clients/${clientId}/executions/${demarrage.corps.execution.id}/cloturer`,
-      { jeton, body: { verdict } },
+      { jeton, body: { verdict, motDePasse: 'CoffreFort!2026' } },
     )
   }
 
@@ -10308,11 +10322,23 @@ describe('routerRequete — correctifs de l’audit de sécurité du 25/09/2026'
     })
     expect(parB.status).toBe(403)
     expect(parB.corps.erreur).toBe('approbateur_requis')
-    const parApprobateur = await requete(ctx, 'PUT', '/sections/s1', {
+    // Approbation signée : mot de passe exigé et vérifié (décision du 26/09/2026).
+    const sansMotDePasse = await requete(ctx, 'PUT', '/sections/s1', {
       jeton: admin.jeton,
       body: { ...s, status: 'valide_en_interne' },
     })
+    expect(sansMotDePasse.corps.erreur).toBe('mot_de_passe_requis')
+    const mauvaisMotDePasse = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: admin.jeton,
+      body: { ...s, status: 'valide_en_interne', motDePasse: 'faux' },
+    })
+    expect(mauvaisMotDePasse.corps.erreur).toBe('mot_de_passe_incorrect')
+    const parApprobateur = await requete(ctx, 'PUT', '/sections/s1', {
+      jeton: admin.jeton,
+      body: { ...s, status: 'valide_en_interne', motDePasse: 'CoffreFort!2026' },
+    })
     expect(parApprobateur.status).toBe(200)
+    expect(JSON.stringify(parApprobateur.corps.section)).not.toContain('CoffreFort')
   })
 
   test('C2 — après un rejet, les avis du cycle précédent ne suffisent plus', async () => {
@@ -10354,7 +10380,7 @@ describe('routerRequete — correctifs de l’audit de sécurité du 25/09/2026'
     const validee = (
       await requete(ctx, 'PUT', '/sections/s1', {
         jeton: b.jeton,
-        body: { ...s, status: 'valide_en_interne' },
+        body: { ...s, status: 'valide_en_interne', motDePasse: 'MotDePasse!1' },
       })
     ).corps.section
     const modification = await requete(ctx, 'PUT', '/sections/s1', {
@@ -10532,7 +10558,7 @@ describe('routerRequete — correctifs de l’audit de sécurité du 25/09/2026'
   })
 
   test('M7 — connexion bloquée après 5 échecs, même pour le bon mot de passe', async () => {
-    const ctx = { ...nouveauContexte(), limiteurConnexion: new LimiteurConnexion() }
+    const ctx = { ...nouveauContexte(), limiteurConnexion: new LimiteurConnexionMemoire() }
     await bootstrapAdmin(ctx)
     for (let i = 0; i < 5; i++) {
       const echec = await requete(ctx, 'POST', '/auth/login', {
@@ -10548,7 +10574,7 @@ describe('routerRequete — correctifs de l’audit de sécurité du 25/09/2026'
   })
 
   test('M7 — les échecs d’un compte ne bloquent pas les collègues de la même adresse IP', async () => {
-    const ctx = { ...nouveauContexte(), limiteurConnexion: new LimiteurConnexion() }
+    const ctx = { ...nouveauContexte(), limiteurConnexion: new LimiteurConnexionMemoire() }
     await bootstrapAdmin(ctx)
     const depuisBureau = (email: string, motDePasse: string) =>
       routerRequete(
@@ -10598,5 +10624,345 @@ describe('routerRequete — correctifs de l’audit de sécurité du 25/09/2026'
     expect(reponse.status).toBe(500)
     expect(await reponse.json()).toEqual({ erreur: 'erreur_interne' })
     expect(reponse.headers.get('Access-Control-Allow-Origin')).toBeTruthy()
+  })
+})
+
+describe('routerRequete — décisions du 26/09/2026 (comptes, signature, suppression)', () => {
+  function jetonDuLien(lien: string): string {
+    return new URL(lien).searchParams.get('jeton') ?? ''
+  }
+
+  async function creerCompte(ctx: Contexte, adminJeton: string, email: string) {
+    return requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: adminJeton,
+      body: { email, nom: 'N', prenom: 'P', role: 'utilisateur' },
+    })
+  }
+
+  test('création sans mot de passe : le compte s’active par le lien, une seule fois', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const creation = await creerCompte(ctx, admin.jeton, 'nouveau@pharmatech.example')
+    expect(creation.status).toBe(201)
+    const lien = new URL(creation.corps.lienActivation)
+    expect(lien.searchParams.get('serveur')).toBe('https://relais.workers.dev')
+    expect(lien.searchParams.get('type')).toBe('activation')
+
+    const trop = await requete(ctx, 'POST', '/auth/definir-mot-de-passe', {
+      body: { jeton: jetonDuLien(creation.corps.lienActivation), motDePasse: 'court' },
+    })
+    expect(trop.corps.erreur).toBe('mot_de_passe_trop_court')
+    const activation = await requete(ctx, 'POST', '/auth/definir-mot-de-passe', {
+      body: { jeton: jetonDuLien(creation.corps.lienActivation), motDePasse: 'MonChoix!2026' },
+    })
+    expect(activation.status).toBe(200)
+    expect(activation.corps.email).toBe('nouveau@pharmatech.example')
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email: 'nouveau@pharmatech.example', motDePasse: 'MonChoix!2026' },
+    })
+    expect(login.status).toBe(200)
+
+    const reutilisation = await requete(ctx, 'POST', '/auth/definir-mot-de-passe', {
+      body: { jeton: jetonDuLien(creation.corps.lienActivation), motDePasse: 'Autre!20260' },
+    })
+    expect(reutilisation.corps.erreur).toBe('lien_invalide')
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(audit.corps.entrees.some((e) => e.action === 'activation_compte')).toBe(true)
+  })
+
+  test('lien expiré ou inventé : refusé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const creation = await creerCompte(ctx, admin.jeton, 'x@pharmatech.example')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.now() + 25 * 3600 * 1000)
+    try {
+      const expire = await requete(ctx, 'POST', '/auth/definir-mot-de-passe', {
+        body: { jeton: jetonDuLien(creation.corps.lienActivation), motDePasse: 'MonChoix!2026' },
+      })
+      expect(expire.corps.erreur).toBe('lien_invalide')
+    } finally {
+      vi.useRealTimers()
+    }
+    const invente = await requete(ctx, 'POST', '/auth/definir-mot-de-passe', {
+      body: { jeton: 'n-importe-quoi', motDePasse: 'MonChoix!2026' },
+    })
+    expect(invente.corps.erreur).toBe('lien_invalide')
+  })
+
+  test('mot de passe oublié : même réponse que le compte existe ou non ; le lien remplace l’ancien mot de passe et ferme les sessions', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const envoyeur = ctx.envoyeurEmail as EnvoyeurEmailMemoire
+    const inconnu = await requete(ctx, 'POST', '/auth/mot-de-passe-oublie', {
+      body: { email: 'personne@pharmatech.example' },
+    })
+    expect(inconnu).toEqual({ status: 200, corps: { ok: true } })
+    expect(envoyeur.envoyes).toHaveLength(0)
+
+    const connu = await requete(ctx, 'POST', '/auth/mot-de-passe-oublie', {
+      body: { email: 'admin@pharmatech.example' },
+    })
+    expect(connu).toEqual({ status: 200, corps: { ok: true } })
+    expect(envoyeur.envoyes).toHaveLength(1)
+    const lien = /https:\/\/\S+/.exec(envoyeur.envoyes[0]?.texte ?? '')?.[0] ?? ''
+    expect(new URL(lien).searchParams.get('type')).toBe('reinitialisation')
+
+    const reinit = await requete(ctx, 'POST', '/auth/definir-mot-de-passe', {
+      body: { jeton: jetonDuLien(lien), motDePasse: 'Nouveau!Coffre1' },
+    })
+    expect(reinit.status).toBe(200)
+    expect((await requete(ctx, 'GET', '/auth/me', { jeton: admin.jeton })).status).toBe(401)
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email: 'admin@pharmatech.example', motDePasse: 'Nouveau!Coffre1' },
+    })
+    expect(login.status).toBe(200)
+  })
+
+  test('mot de passe oublié : demandes limitées par adresse', async () => {
+    const ctx = { ...nouveauContexte(), limiteurConnexion: new LimiteurConnexionMemoire() }
+    await bootstrapAdmin(ctx)
+    const statuts: number[] = []
+    for (let i = 0; i < 6; i++) {
+      statuts.push(
+        (
+          await requete(ctx, 'POST', '/auth/mot-de-passe-oublie', {
+            body: { email: 'admin@pharmatech.example' },
+          })
+        ).status,
+      )
+    }
+    expect(statuts.at(-1)).toBe(429)
+  })
+
+  test('réinitialisation par un admin : lien envoyé et rendu à l’admin, tracée ; refusée à un non-admin', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const creation = await creerCompte(ctx, admin.jeton, 'y@pharmatech.example')
+    const id = creation.corps.utilisateur.id
+    const reinit = await requete(
+      ctx,
+      'POST',
+      `/admin/utilisateurs/${id}/reinitialiser-mot-de-passe`,
+      {
+        jeton: admin.jeton,
+      },
+    )
+    expect(reinit.status).toBe(200)
+    expect(reinit.corps.lienReinitialisation).toContain('type=reinitialisation')
+    // Le lien d'activation précédent n'est plus valable.
+    const ancien = await requete(ctx, 'POST', '/auth/definir-mot-de-passe', {
+      body: { jeton: jetonDuLien(creation.corps.lienActivation), motDePasse: 'MonChoix!2026' },
+    })
+    expect(ancien.corps.erreur).toBe('lien_invalide')
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(
+      audit.corps.entrees.some((e) => e.action === 'envoi_lien_reinitialisation_mot_de_passe'),
+    ).toBe(true)
+
+    await requete(ctx, 'POST', '/auth/definir-mot-de-passe', {
+      body: { jeton: jetonDuLien(reinit.corps.lienReinitialisation), motDePasse: 'MonChoix!2026' },
+    })
+    const y = (
+      await requete(ctx, 'POST', '/auth/login', {
+        body: { email: 'y@pharmatech.example', motDePasse: 'MonChoix!2026' },
+      })
+    ).corps.jeton
+    const parNonAdmin = await requete(
+      ctx,
+      'POST',
+      `/admin/utilisateurs/${admin.utilisateur.id}/reinitialiser-mot-de-passe`,
+      { jeton: y },
+    )
+    expect(parNonAdmin.status).toBe(403)
+  })
+
+  async function preparerClientTests(separation: boolean) {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = (
+      await requete(ctx, 'POST', '/clients', { jeton: admin.jeton, body: { name: 'C' } })
+    ).corps.client.id as string
+    if (separation) {
+      const reglage = await requete(ctx, 'PATCH', `/clients/${clientId}`, {
+        jeton: admin.jeton,
+        body: { separationTaches: true },
+      })
+      expect(reglage.corps.client.separationTaches).toBe(true)
+    }
+    const base = `/clients/${clientId}/test-definition`
+    const req = await requete(ctx, 'POST', `${base}/requirements`, {
+      jeton: admin.jeton,
+      body: { reference: 'URS-1', titre: 'Débit', description: 'x' },
+    })
+    const objectif = await requete(ctx, 'POST', `${base}/test-objectives`, {
+      jeton: admin.jeton,
+      body: { requirementId: req.corps.requirement.id, titre: 'Objectif', description: 'x' },
+    })
+    const candidat = await requete(ctx, 'POST', `${base}/test-candidates`, {
+      jeton: admin.jeton,
+      body: { testObjectiveId: objectif.corps.testObjective.id, titre: 'C', description: 'x' },
+    })
+    await requete(
+      ctx,
+      'PATCH',
+      `${base}/test-candidates/${candidat.corps.testCandidate.id}/statut`,
+      {
+        jeton: admin.jeton,
+        body: { statut: 'accepte' },
+      },
+    )
+    const test = await requete(ctx, 'POST', `${base}/tests`, {
+      jeton: admin.jeton,
+      body: {
+        testCandidateId: candidat.corps.testCandidate.id,
+        titre: 'Test',
+        description: 'x',
+        etapes: [{ ordre: 1, action: 'A', resultatAttendu: 'B' }],
+      },
+    })
+    return { ctx, admin, clientId, base, testId: test.corps.test.id as string }
+  }
+
+  test('séparation désactivée (par défaut) : l’auteur approuve son test avec son mot de passe', async () => {
+    const { ctx, admin, base, testId } = await preparerClientTests(false)
+    const sans = await requete(ctx, 'PATCH', `${base}/tests/${testId}/approuver`, {
+      jeton: admin.jeton,
+    })
+    expect(sans.corps.erreur).toBe('mot_de_passe_requis')
+    const avec = await requete(ctx, 'PATCH', `${base}/tests/${testId}/approuver`, {
+      jeton: admin.jeton,
+      body: { motDePasse: 'CoffreFort!2026' },
+    })
+    expect(avec.status).toBe(200)
+  })
+
+  test('séparation activée : l’auteur d’un test ne l’approuve pas, l’exécutant ne clôture pas', async () => {
+    const { ctx, admin, clientId, base, testId } = await preparerClientTests(true)
+    const auteur = await requete(ctx, 'PATCH', `${base}/tests/${testId}/approuver`, {
+      jeton: admin.jeton,
+      body: { motDePasse: 'CoffreFort!2026' },
+    })
+    expect(auteur.status).toBe(403)
+    expect(auteur.corps.erreur).toBe('separation_taches')
+
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'qa@pharmatech.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'Q',
+        prenom: 'A',
+        role: 'admin',
+      },
+    })
+    const qa = (
+      await requete(ctx, 'POST', '/auth/login', {
+        body: { email: 'qa@pharmatech.example', motDePasse: 'MotDePasse!1' },
+      })
+    ).corps.jeton
+    const parQa = await requete(ctx, 'PATCH', `${base}/tests/${testId}/approuver`, {
+      jeton: qa,
+      body: { motDePasse: 'MotDePasse!1' },
+    })
+    expect(parQa.status).toBe(200)
+
+    const execution = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton: admin.jeton,
+      body: { testId },
+    })
+    const id = execution.corps.execution.id
+    const parExecutant = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/executions/${id}/cloturer`,
+      {
+        jeton: admin.jeton,
+        body: { verdict: 'conforme', motDePasse: 'CoffreFort!2026' },
+      },
+    )
+    expect(parExecutant.corps.erreur).toBe('separation_taches')
+    const parQaCloture = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/executions/${id}/cloturer`,
+      {
+        jeton: qa,
+        body: { verdict: 'conforme', motDePasse: 'MotDePasse!1' },
+      },
+    )
+    expect(parQaCloture.status).toBe(200)
+  })
+
+  test('réglage de séparation : créateur du client ou admin seulement, tracé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    await requete(ctx, 'POST', '/admin/utilisateurs', {
+      jeton: admin.jeton,
+      body: {
+        email: 'b@pharmatech.example',
+        motDePasse: 'MotDePasse!1',
+        nom: 'B',
+        prenom: 'B',
+        role: 'utilisateur',
+      },
+    })
+    const login = await requete(ctx, 'POST', '/auth/login', {
+      body: { email: 'b@pharmatech.example', motDePasse: 'MotDePasse!1' },
+    })
+    const clientId = (
+      await requete(ctx, 'POST', '/clients', { jeton: admin.jeton, body: { name: 'C' } })
+    ).corps.client.id as string
+    await requete(ctx, 'PATCH', `/clients/${clientId}`, {
+      jeton: admin.jeton,
+      body: { sharedWith: [login.corps.utilisateur.id] },
+    })
+    const parPartage = await requete(ctx, 'PATCH', `/clients/${clientId}`, {
+      jeton: login.corps.jeton,
+      body: { separationTaches: true },
+    })
+    expect(parPartage.status).toBe(403)
+    await requete(ctx, 'PATCH', `/clients/${clientId}`, {
+      jeton: admin.jeton,
+      body: { separationTaches: true },
+    })
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(audit.corps.entrees.some((e) => e.action === 'separation_taches_activee')).toBe(true)
+  })
+
+  test('suppression définitive refusée tant que le client a des données', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const clientId = (
+      await requete(ctx, 'POST', '/clients', { jeton: admin.jeton, body: { name: 'C' } })
+    ).corps.client.id as string
+    await requete(ctx, 'POST', '/projects', {
+      jeton: admin.jeton,
+      body: { name: 'P', clientId },
+    })
+    const corps = { justification: 'Nettoyage', motDePasse: 'CoffreFort!2026' }
+    const refus = await requete(ctx, 'DELETE', `/clients/${clientId}`, {
+      jeton: admin.jeton,
+      body: corps,
+    })
+    expect(refus.status).toBe(409)
+    expect(refus.corps.erreur).toBe('client_non_vide')
+    expect(refus.corps.donnees).toEqual(['projets'])
+    expect((await ctx.clientsRepo.parId(clientId))?.name).toBe('C')
+  })
+
+  test('limiteur persistant : sans table D1 disponible, repli en mémoire (jamais un refus à tort)', async () => {
+    const dbEnPanne = {
+      prepare: () => {
+        throw new Error('no such table: tentatives_connexion')
+      },
+      batch: () => Promise.reject(new Error('panne')),
+    }
+    const limiteur = new D1LimiteurConnexion(dbEnPanne)
+    expect(await limiteur.estBloque(['email:a'])).toBe(false)
+    for (let i = 0; i < 5; i++) await limiteur.enregistrerEchec(['email:a'])
+    expect(await limiteur.estBloque(['email:a'])).toBe(true)
+    await limiteur.enregistrerSucces(['email:a'])
+    expect(await limiteur.estBloque(['email:a'])).toBe(false)
   })
 })

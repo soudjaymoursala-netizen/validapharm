@@ -21,6 +21,7 @@ import {
   executionStepsAMigrer,
   measurementsAMigrer,
 } from '../../persistance/db'
+import { messageRefusSignature } from '../i18n/libellesSignature'
 import { useAuthStore } from './useAuthStore'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
 
@@ -392,17 +393,19 @@ export const useExecutionStore = defineStore('execution', () => {
     clientId: string,
     executionId: string,
     verdict: VerdictExecution,
-  ): Promise<Execution | ErreurEcritureExecution> {
+    motDePasse: string,
+  ): Promise<Execution | ErreurEcritureExecution | { erreur: string }> {
     const existante = executions.value.find((e) => e.id === executionId)
     if (!existante || existante.client_id !== clientId) return { erreur: 'execution_introuvable' }
     if (existante.statut === 'terminee') return { erreur: 'execution_deja_cloturee' }
 
     const { api, jeton } = await obtenirApi()
-    const resultat = await api.cloturerExecution(jeton, clientId, executionId, verdict)
+    const resultat = await api.cloturerExecution(jeton, clientId, executionId, verdict, motDePasse)
     if (!resultat.ok) {
       if (
         resultat.erreur === 'execution_introuvable' ||
-        resultat.erreur === 'execution_deja_cloturee'
+        resultat.erreur === 'execution_deja_cloturee' ||
+        messageRefusSignature(resultat.erreur) !== null
       ) {
         return { erreur: resultat.erreur }
       }

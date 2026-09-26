@@ -4086,6 +4086,8 @@ focus visible ; jeton invalide → retour à la connexion avec message.
 
 ### 40.3 Décisions attendues de l'utilisateur
 
+> **Tranchées le 26/09/2026 et mises en œuvre : voir §41.**
+
 1. **Signature électronique et séparation des tâches** (audit sécurité M5
    et C1, intégrité front C2) : aujourd'hui l'approbation d'une section
    est réservée à l'approbateur désigné, mais **sans ressaisie du mot de
@@ -4154,3 +4156,107 @@ Référence : rapports de `docs/audits/audit-2026-09-25/`.
   focus ; recherche qui ignore les projets ; épinglage invisible au
   clavier ; libellés « Configuration » incohérents ; contrastes limites en
   thème sombre ; pluriels « (s) » et notes internes visibles.
+
+## 41. Décisions utilisateur du 26/09/2026 : comptes, signature, suppression (mis en œuvre)
+
+**Demande** : « Pose moi des questions pour les décisions », puis réponses
+(questionnaire) :
+
+| Question (§40.3) | Réponse de l'utilisateur |
+|---|---|
+| Signature électronique | **Configurable par client** : mot de passe toujours ; séparation auteur/approbateur activable client par client |
+| Création d'un compte | **Lien d'activation** (usage unique, 24 h) |
+| Mot de passe oublié | **Les deux** : libre-service sur l'écran de connexion + réinitialisation par un admin |
+| Suppression définitive d'un client | **Refuser si données** |
+| Limitation des tentatives | **Persister en D1** |
+| Mise en œuvre | « Oui, tout implémenter » (nouvelle PR, fusion une fois la CI verte) |
+
+### 41.1 Migration D1 `0029_securite_comptes.sql`
+
+- `clients.separation_taches INTEGER NOT NULL DEFAULT 0` ;
+- table `jetons_compte` (empreinte SHA-256 du jeton, type
+  `activation`/`reinitialisation`, expiration, date d'utilisation) ;
+- table `tentatives_connexion` (clé, échecs, début de fenêtre, blocage).
+
+**À appliquer en production AVANT le déploiement du Worker** : la mise à
+jour d'un client écrit `separation_taches` (erreur SQL sans la colonne).
+Les tables `jetons_compte`/`tentatives_connexion` sont additives ; le
+limiteur retombe en mémoire si sa table manque, jamais un refus à tort.
+
+### 41.2 Serveur
+
+- **Signature** (`refusSignature`) : `motDePasse` exigé et vérifié pour
+  l'approbation finale d'une section (`PUT /sections/:id` vers
+  `valide_en_interne`, après validation de la transition), l'approbation
+  d'un test (`PATCH …/tests/:id/approuver`) et la clôture d'une exécution
+  (`PATCH …/executions/:id/cloturer`) — refus `mot_de_passe_requis`,
+  `mot_de_passe_incorrect` (403), `trop_de_tentatives` (429, même compteur
+  que `verify-password`). Le mot de passe n'est jamais stocké.
+- **Séparation des tâches** (`separationTachesActive`, réglage
+  `separationTaches` de `PATCH /clients/:id`, créateur ou admin seulement,
+  tracé `separation_taches_activee/desactivee`) : si active, 403
+  `separation_taches` quand le propriétaire ou un rédacteur approuve sa
+  section, quand l'auteur d'un test (première entrée d'historique)
+  l'approuve, quand l'exécutant clôture son exécution.
+- **Liens de compte** : `POST /admin/utilisateurs` sans `motDePasse` (encore
+  accepté s'il est fourni, pour les tests et les scripts) → jeton aléatoire
+  (32 octets), seule son empreinte stockée ; e-mail avec le lien
+  `<APP_URL>/definir-mot-de-passe?jeton=…&serveur=<origine du Worker>&type=activation`
+  (24 h), lien aussi rendu à l'admin (`lienActivation`) car l'envoi d'e-mails
+  est limité tant que le domaine Resend n'est pas vérifié.
+  `POST /auth/definir-mot-de-passe` (sans session) : lien valide, non
+  utilisé, non expiré, compte actif → nouveau mot de passe, tous les liens
+  du compte invalidés, sessions fermées (empreinte `pv`), audit
+  `activation_compte`/`reinitialisation_mot_de_passe`.
+  `POST /auth/mot-de-passe-oublie` : réponse identique que le compte existe
+  ou non, lien de 2 h pour un compte actif, demandes limitées par adresse
+  (`oubli:<email>`). `POST /admin/utilisateurs/:id/reinitialiser-mot-de-passe`
+  (admin) : lien envoyé et rendu (`lienReinitialisation`), audit.
+- **Suppression définitive** : 409 `client_non_vide` avec la liste des
+  catégories encore présentes (`donneesDuClient` : projets, structure,
+  évaluations, méthodes, paramètres, process, événements qualité,
+  exigences, tests, exécutions, preuves, missions, procédures, plans,
+  gabarits, sources documentaires, connecteurs).
+- **Limiteur persistant** (`D1LimiteurConnexion`) : même règles qu'au §40
+  (5 échecs par compte, 30 par IP, blocage 15 min), stockées en D1 ;
+  `LimiteurConnexionMemoire` sert de repli et aux tests.
+
+### 41.3 Front
+
+- `ModaleSignature.vue` (nouveau) : titre, signification, avertissement
+  éventuel, mot de passe, refus affichés dans la fenêtre (`libellesSignature.ts`),
+  Échap ferme où que soit le focus ; utilisée pour approuver une section
+  (remplace la confirmation du §40), approuver un test, clôturer une
+  exécution (l'alerte d'incohérence de verdict y est reprise).
+- `MotDePasseOublie.vue` et `DefinirMotDePasse.vue` (nouveaux, routes sans
+  session, sans barre latérale) ; lien « Mot de passe oublié ? » sur la
+  connexion ; la page d'activation mémorise le serveur sur un poste vierge.
+- `AdminUtilisateurs.vue` : plus de mot de passe à la création, encadré du
+  lien (copier, e-mail envoyé ou non), bouton « Réinitialiser le mot de
+  passe », libellés Administrateur/Utilisateur/Actif/Désactivé,
+  confirmations de rétrogradation et de désactivation.
+- `FicheClient.vue` : encadré « Règle de signature » (case « Séparation des
+  tâches » pour le créateur/admin, lecture seule sinon).
+- `GestionClients.vue` / modale de suppression : message `client_non_vide`,
+  texte de la modale mis à jour.
+
+### 41.4 Vérification
+
+Tests : Worker 393 (+10 : activation à usage unique, lien expiré/inventé,
+mot de passe oublié sans énumération et sessions fermées, demandes
+limitées, réinitialisation admin, signature et séparation désactivée/
+activée, réglage réservé et tracé, suppression refusée, repli du
+limiteur) ; front : écran d'activation de bout en bout, fenêtres de
+signature dans les tests d'écran, gestion des comptes.
+
+**Vérifié en réel** (Worker + D1 locale migrée en 0029, navigateur) :
+création sans mot de passe → encadré du lien (e-mail non parti en local) →
+activation sur un navigateur vierge → connexion ; lien réutilisé refusé ;
+« Mot de passe oublié » ; réinitialisation par l'admin ; séparation cochée
+dans la Fiche client et conservée ; l'auteur (admin) ne peut pas approuver
+son test (message dans la fenêtre), mauvais mot de passe refusé, le
+consultant l'approuve (historique : création par l'admin, approbation par
+le consultant) ; suppression d'un client avec données → 409 (« projets,
+exigences, tests ») ; compteurs de tentatives présents dans
+`tentatives_connexion` et blocage 429 ; Échap ferme la fenêtre de
+signature (corrigé pendant cette vérification).

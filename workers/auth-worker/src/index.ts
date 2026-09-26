@@ -1,5 +1,5 @@
 import type { D1Database } from './d1Types'
-import { LimiteurConnexion } from './limiteurConnexion'
+import { D1LimiteurConnexion } from './limiteurConnexion'
 import { ResendEnvoyeurEmail } from './notifications/resendEnvoyeurEmail'
 import { D1AcfcRepo } from './repos/d1/d1AcfcRepo'
 import { D1AiChatSessionLogRepo } from './repos/d1/d1AiChatSessionLogRepo'
@@ -15,6 +15,7 @@ import { D1EtatMiroirDriveRepo } from './repos/d1/d1EtatMiroirDriveRepo'
 import { D1EvidenceRepo } from './repos/d1/d1EvidenceRepo'
 import { D1ExecutionRepo } from './repos/d1/d1ExecutionRepo'
 import { D1GabaritExportClientRepo } from './repos/d1/d1GabaritExportClientRepo'
+import { D1JetonsCompteRepo } from './repos/d1/d1JetonsCompteRepo'
 import { D1ImpactAssessmentRepo } from './repos/d1/d1ImpactAssessmentRepo'
 import { D1IntegrationRepo } from './repos/d1/d1IntegrationRepo'
 import { D1KnowledgeEngineRepo } from './repos/d1/d1KnowledgeEngineRepo'
@@ -60,9 +61,6 @@ export interface Env {
   GOOGLE_OAUTH_CLIENT_SECRET: string
 }
 
-/** Partagé par toutes les requêtes servies par cet isolat (voir `limiteurConnexion.ts`). */
-const limiteurConnexion = new LimiteurConnexion()
-
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     return routerRequete(request, {
@@ -106,7 +104,8 @@ export default {
       urlApplication: env.APP_URL,
       googleOAuthClientId: env.GOOGLE_OAUTH_CLIENT_ID,
       googleOAuthClientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET,
-      limiteurConnexion,
+      limiteurConnexion: new D1LimiteurConnexion(env.DB),
+      jetonsCompteRepo: new D1JetonsCompteRepo(env.DB),
     })
   },
 }

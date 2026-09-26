@@ -6,6 +6,8 @@
 // store existaient depuis le 25/08/2026 sans jamais avoir d'écran, rendant
 // impossible de transformer une exigence URS en scénario de test formel.
 import { computed, onMounted, ref } from 'vue'
+import ModaleSignature from '../composants/ModaleSignature.vue'
+import { messageRefusSignature } from '../i18n/libellesSignature'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import { useTestDefinitionStore } from '../stores/useTestDefinitionStore'
@@ -208,12 +210,39 @@ async function creerTest(): Promise<void> {
   etapesBrouillon.value = [{ action: '', resultatAttendu: '' }]
 }
 
-async function approuverTest(testId: string): Promise<void> {
+// Approbation signée (décision du 26/09/2026) : mot de passe saisi dans la
+// fenêtre de signature, vérifié par le serveur.
+const signatureApprobation = ref<{
+  testId: string
+  titre: string
+  erreur: string | null
+  enCours: boolean
+} | null>(null)
+
+function approuverTest(testId: string): void {
   erreurAction.value = null
-  const resultat = await testStore.approuverTest(props.clientId, testId)
-  if (!resultat) {
-    erreurAction.value =
-      'Impossible d’approuver ce test — il a peut-être été modifié ou supprimé entre-temps.'
+  const test = testStore.tests.find((t) => t.id === testId)
+  signatureApprobation.value = { testId, titre: test?.titre ?? '', erreur: null, enCours: false }
+}
+
+async function signerApprobation(motDePasse: string): Promise<void> {
+  const demande = signatureApprobation.value
+  if (!demande) return
+  demande.enCours = true
+  demande.erreur = null
+  try {
+    const resultat = await testStore.approuverTest(props.clientId, demande.testId, motDePasse)
+    if ('erreur' in resultat) {
+      demande.erreur =
+        messageRefusSignature(resultat.erreur) ??
+        'Impossible d’approuver ce test — il a peut-être été modifié ou supprimé entre-temps.'
+      return
+    }
+    signatureApprobation.value = null
+  } catch (e) {
+    demande.erreur = e instanceof Error ? e.message : 'L’approbation n’a pas pu être enregistrée.'
+  } finally {
+    demande.enCours = false
   }
 }
 
@@ -457,6 +486,16 @@ async function declarerCouverture(): Promise<void> {
         <p v-else>Aucune couverture déclarée.</p>
       </section>
     </template>
+    <ModaleSignature
+      v-if="signatureApprobation"
+      titre="Approuver le test"
+      :signification="`En signant, vous approuvez le test « ${signatureApprobation.titre} » : il devient exécutable et ne peut plus être modifié. L'approbation est tracée à votre nom.`"
+      libelle-bouton="Signer et approuver"
+      :erreur="signatureApprobation.erreur"
+      :en-cours="signatureApprobation.enCours"
+      @confirme="signerApprobation"
+      @annule="signatureApprobation = null"
+    />
   </main>
 </template>
 

@@ -37,6 +37,7 @@ function wireVersClient(w: ClientWire): Client {
     created_at: w.createdAt,
     created_by_user_id: w.createdByUserId,
     shared_with: w.sharedWith,
+    separation_taches: w.separationTaches === true,
   }
 }
 
@@ -175,6 +176,23 @@ export const useClientsStore = defineStore('clients', () => {
     return client
   }
 
+  /** Règle de signature du client — réservée à son créateur ou à un admin (appliquée par le Worker, tracée). */
+  async function definirSeparationTaches(
+    clientId: string,
+    active: boolean,
+  ): Promise<Client | ErreurClient> {
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) return { erreur: 'relais_non_configure' }
+    const resultat = await api.modifierClient(authStore.jeton, clientId, {
+      separationTaches: active,
+    })
+    if (!resultat.ok) return { erreur: resultat.erreur }
+    const client = wireVersClient(resultat.donnees.client)
+    clients.value = trierParNom(clients.value.map((c) => (c.id === clientId ? client : c)))
+    return client
+  }
+
   async function archiverClient(clientId: string): Promise<Client | ErreurClient> {
     const authStore = useAuthStore()
     const api = await authStore.client()
@@ -239,6 +257,7 @@ export const useClientsStore = defineStore('clients', () => {
     modifierClient,
     archiverClient,
     desarchiverClient,
+    definirSeparationTaches,
     supprimerDefinitivement,
   }
 })

@@ -8,6 +8,8 @@
 // directement dans le tableau libre du gabarit, sans piste de preuve
 // dédiée ni garde-fou d'immutabilité post-clôture.
 import { computed, onMounted, ref } from 'vue'
+import ModaleSignature from '../composants/ModaleSignature.vue'
+import { messageRefusSignature } from '../i18n/libellesSignature'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useEvidenceStore } from '../stores/useEvidenceStore'
 import { useExecutionStore } from '../stores/useExecutionStore'
@@ -291,16 +293,54 @@ async function cloturer(executionId: string): Promise<void> {
     if (nonConformes > 0) alertes.push(`${nonConformes} étape(s) non conforme(s)`)
     if (deviations > 0) alertes.push(`${deviations} déviation(s) consignée(s)`)
   }
-  const message =
-    `Clôturer avec le verdict « ${LIBELLES_VERDICT[verdict]} » ? L'exécution deviendra définitive (plus aucune modification possible).` +
-    (alertes.length > 0
-      ? `\n\nAttention : ${alertes.join(', ')}. Vérifiez que ce verdict est bien justifié.`
-      : '')
-  if (!window.confirm(message)) return
+  // Clôture signée (décision du 26/09/2026) : le mot de passe est saisi
+  // dans la fenêtre de signature et vérifié par le serveur.
   erreurParExecution.value[executionId] = ''
-  const resultat = await executionStore.cloturerExecution(props.clientId, executionId, verdict)
-  if ('erreur' in resultat) {
-    erreurParExecution.value[executionId] = libelleErreurExecution(resultat.erreur)
+  signatureCloture.value = {
+    executionId,
+    verdict,
+    avertissement:
+      alertes.length > 0
+        ? `Attention : ${alertes.join(', ')}. Vérifiez que ce verdict est bien justifié.`
+        : null,
+    erreur: null,
+    enCours: false,
+  }
+}
+
+const signatureCloture = ref<{
+  executionId: string
+  verdict: VerdictExecution
+  avertissement: string | null
+  erreur: string | null
+  enCours: boolean
+} | null>(null)
+
+async function signerCloture(motDePasse: string): Promise<void> {
+  const demande = signatureCloture.value
+  if (!demande) return
+  demande.enCours = true
+  demande.erreur = null
+  try {
+    const resultat = await executionStore.cloturerExecution(
+      props.clientId,
+      demande.executionId,
+      demande.verdict,
+      motDePasse,
+    )
+    if ('erreur' in resultat) {
+      const refusSignature = messageRefusSignature(resultat.erreur)
+      if (refusSignature) {
+        demande.erreur = refusSignature
+        return
+      }
+      erreurParExecution.value[demande.executionId] = libelleErreurExecution(resultat.erreur)
+    }
+    signatureCloture.value = null
+  } catch (e) {
+    demande.erreur = e instanceof Error ? e.message : 'La clôture n’a pas pu être enregistrée.'
+  } finally {
+    demande.enCours = false
   }
 }
 </script>
@@ -559,6 +599,17 @@ async function cloturer(executionId: string): Promise<void> {
         </template>
       </details>
     </section>
+    <ModaleSignature
+      v-if="signatureCloture"
+      titre="Clôturer l'exécution"
+      :signification="`En signant, vous clôturez cette exécution avec le verdict « ${LIBELLES_VERDICT[signatureCloture.verdict]} ». Elle deviendra définitive : plus aucun résultat, mesure ou preuve ne pourra y être ajouté.`"
+      libelle-bouton="Signer et clôturer"
+      :avertissement="signatureCloture.avertissement"
+      :erreur="signatureCloture.erreur"
+      :en-cours="signatureCloture.enCours"
+      @confirme="signerCloture"
+      @annule="signatureCloture = null"
+    />
   </main>
 </template>
 

@@ -29,6 +29,18 @@ export const router = createRouter({
       component: () => import('../screens/Login.vue'),
     },
     {
+      // Liens d'activation / de réinitialisation (décisions du
+      // 26/09/2026) : accessibles sans session, comme « Se connecter ».
+      path: '/definir-mot-de-passe',
+      name: 'definir-mot-de-passe',
+      component: () => import('../screens/DefinirMotDePasse.vue'),
+    },
+    {
+      path: '/mot-de-passe-oublie',
+      name: 'mot-de-passe-oublie',
+      component: () => import('../screens/MotDePasseOublie.vue'),
+    },
+    {
       path: '/admin/utilisateurs',
       name: 'admin-utilisateurs',
       component: () => import('../screens/AdminUtilisateurs.vue'),
@@ -266,7 +278,12 @@ router.afterEach((to) => {
  * — chicken-and-egg documenté dans le README de `workers/auth-worker`).
  * `/admin/utilisateurs` est en plus réservée au rôle admin.
  */
-const ROUTES_SANS_GARDE = new Set(['connexion', 'configuration-client'])
+const ROUTES_SANS_GARDE = new Set([
+  'connexion',
+  'configuration-client',
+  'definir-mot-de-passe',
+  'mot-de-passe-oublie',
+])
 
 router.beforeEach(async (to) => {
   if (typeof to.name === 'string' && ROUTES_SANS_GARDE.has(to.name)) return true

@@ -68,7 +68,7 @@ async function creerExecutionEnCours(clientId: string) {
     etapes: [{ action: 'Vérifier le point A', resultatAttendu: 'Conforme' }],
   })
   if ('erreur' in test) throw new Error('unreachable')
-  await definition.approuverTest(clientId, test.id)
+  await definition.approuverTest(clientId, test.id, 'CoffreFort!2026')
   await definition.declarerCouverture(clientId, requirement.id, test.id)
 
   const execution = useExecutionStore()
@@ -148,7 +148,7 @@ describe('useEvidenceStore — garde-fous', () => {
   test("une Execution clôturée n'accepte plus aucune nouvelle Evidence", async () => {
     const { execution } = await creerExecutionEnCours('client-1')
     const executionStore = useExecutionStore()
-    await executionStore.cloturerExecution('client-1', execution.id, 'conforme')
+    await executionStore.cloturerExecution('client-1', execution.id, 'conforme', 'CoffreFort!2026')
 
     const store = useEvidenceStore()
     const resultat = await store.enregistrerPreuve('client-1', execution.id, {

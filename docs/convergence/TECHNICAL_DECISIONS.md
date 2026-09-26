@@ -600,3 +600,10 @@
   - Filet global : toute exception imprévue renvoie un JSON 500 avec CORS.
 - **Alternatives écartées**: (1) vraie signature électronique par rôle (route dédiée avec mot de passe, hash du contenu signé, séparation rédacteur/approbateur) — plus lourd et touche au modèle de conformité : **décision utilisateur requise** (voir récapitulatif §40) ; (2) limitation des tentatives persistée en D1 — demande une migration de schéma appliquée en production avant déploiement ; l'isolat en mémoire freine déjà les rafales sans ce risque ; (3) fermer purement les routes de migration — des données locales pourraient encore attendre d'être migrées.
 - **Reversibility**: Moyenne — les règles serveur sont isolées dans `integriteSection.ts` et `limiteurConnexion.ts` ; les anciens jetons de session (sans `pv`) sont refusés après déploiement (reconnexion unique de chaque utilisateur).
+
+### — Signature par mot de passe, séparation des tâches par client, liens de compte, suppression protégée (26/09/2026)
+
+- **Statut**: **ACTÉE** (réponses de l'utilisateur au questionnaire du 26/09/2026, récapitulatif §41).
+- **Décision**: mot de passe revérifié par le serveur pour approuver une section ou un test et clôturer une exécution ; séparation auteur/approbateur (et exécutant/clôture) activable par client, désactivée par défaut ; comptes activés par un lien à usage unique (24 h) — plus de mot de passe en clair par e-mail ; mot de passe oublié en libre-service (réponse identique que le compte existe ou non) et réinitialisation par un admin ; suppression définitive refusée tant que le client a des données ; limitation des tentatives persistée en D1 (migration 0029).
+- **Alternatives écartées**: séparation imposée à tous les clients (bloquerait un consultant seul) ; mot de passe provisoire à changer à la première connexion (le mot de passe circulerait encore en clair) ; suppression en cascade (perte de données réglementaires irréversible).
+- **Reversibility**: Moyenne — la séparation se désactive client par client ; les tables de la migration 0029 sont additives.

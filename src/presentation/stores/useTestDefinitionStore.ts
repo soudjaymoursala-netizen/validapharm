@@ -564,10 +564,19 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     return test
   }
 
-  async function approuverTest(clientId: string, testId: string): Promise<Test | null> {
+  /**
+   * Approbation signée (mot de passe vérifié par le Worker) — renvoie le
+   * code du refus (`mot_de_passe_incorrect`, `separation_taches`…) plutôt
+   * qu'un simple échec muet.
+   */
+  async function approuverTest(
+    clientId: string,
+    testId: string,
+    motDePasse: string,
+  ): Promise<Test | { erreur: string }> {
     const { api, jeton } = await obtenirApi()
-    const resultat = await api.approuverTest(jeton, clientId, testId)
-    if (!resultat.ok) return null
+    const resultat = await api.approuverTest(jeton, clientId, testId, motDePasse)
+    if (!resultat.ok) return { erreur: resultat.erreur }
     const test = testWireVersDomaine(resultat.donnees.test)
     tests.value = tests.value.map((t) => (t.id === testId ? test : t))
     return test
