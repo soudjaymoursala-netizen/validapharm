@@ -4283,3 +4283,23 @@ front). Correctif : compteur de modifications locales ; une réponse
 obtenue avant une modification est ignorée et la liste relue (3 essais au
 plus). Test déterministe qui échoue sans le correctif
 (`clients.test.ts`).
+
+**Seconde cause, propre aux tests** (même test, CI suivante) : le
+chargement de la liste lancé au montage d'un test pouvait encore être en
+vol à la fin de ce test. Il atteignait alors le faux Worker du test suivant
+avec un jeton inconnu → 401 → `deconnecter()` de l'ancien store, ce qui
+réactive l'ancien Pinia (`setActivePinia` à chaque appel d'action) pendant
+le `beforeEach` suivant : la session de test était ouverte dans l'ancien
+Pinia, le nouveau test démarrait sans session (« relais_non_configure » à
+la création). Reproduit en lançant 8 exécutions simultanées du fichier
+(≈ 1 sur 3 en échec), plus aucun échec sur 32 après correctif :
+`afterEach` attend la fin de tout chargement en vol avant de démonter le
+faux Worker, et chaque test passe explicitement son Pinia à l'écran et au
+store. Aucun test désactivé ni assoupli.
+
+À noter (non corrigé ici, hors périmètre) : dans l'application, une requête
+partie avec un ancien jeton et refusée (401) après une reconnexion déconnecte
+la nouvelle session (`sessionInvalide` ne compare pas le jeton refusé au
+jeton courant). Cas rare (se déconnecter puis se reconnecter pendant qu'un
+chargement est en cours) ; correctif simple : transmettre le jeton utilisé
+à `observateurSessionInvalide` et ignorer le refus s'il ne correspond plus.
