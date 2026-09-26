@@ -4064,8 +4064,14 @@ n'ont pas été versionnés.
   l'ACFC, vrais groupes radio nommés, libellés « Oui/Non/Inconnu/Sans
   objet » à l'ACFC (codes bruts auparavant).
 
-**Tests** : Worker 382 (+21 : un par correctif de sécurité, dont les
-deux seuils de limitation) ; front mis à jour pour les nouvelles règles
+**Tests** : Worker 383 (+22 : un par correctif de sécurité, dont les
+deux seuils de limitation, plus l'horodatage strictement croissant — la
+CI a révélé que deux écritures dans la même milliseconde gardaient le
+même `updatedAt`, rendant le contrôle de version aveugle : le serveur
+avance désormais d'une milliseconde au besoin) ; 32 fichiers de tests
+front passés d'une attente bornée en nombre de tours (≈ 250 ms,
+insuffisante sous la charge de la CI) à une attente bornée en temps
+(3 s) ; front mis à jour pour les nouvelles règles
 (approbateur, avis, import, restauration, suppression, questionnaires
 figés, confirmation de clôture) + non-régression de la perte de frappe.
 

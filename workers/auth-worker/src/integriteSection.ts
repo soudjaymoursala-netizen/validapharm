@@ -156,12 +156,26 @@ export function preparerCreationSection(
  * avec les règles d'intégrité ci-dessus. L'appelant a déjà vérifié le
  * droit d'écriture et le droit de partage.
  */
+/**
+ * Horodatage strictement postérieur à la version remplacée : deux écritures
+ * dans la même milliseconde garderaient sinon le même `updatedAt`, et le
+ * contrôle de version optimiste (`versionAttendue`) ne distinguerait plus
+ * la seconde de la première.
+ */
+function horodatageSuivant(precedent: string, maintenant: string): string {
+  const t = Date.parse(precedent)
+  return Number.isFinite(t) && Date.parse(maintenant) <= t
+    ? new Date(t + 1).toISOString()
+    : maintenant
+}
+
 export function preparerRemplacementSection(
   existante: SectionEnregistree,
   corps: SectionEnregistree,
   acteur: Acteur,
-  maintenant: string,
+  horodatageServeur: string,
 ): ResultatIntegriteSection {
+  const maintenant = horodatageSuivant(existante.updatedAt, horodatageServeur)
   const auditPropose = tableau(corps.auditLog)
   const revisionsProposees = tableau(corps.revisions)
   const avisProposes = tableau(corps.workflow?.reviewers)
