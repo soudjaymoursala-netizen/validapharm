@@ -246,7 +246,6 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
     }
   }
 
-
   async function creerNouvelleVersion(
     clientId: string,
     input: NouveauProfilRiskAssessmentInput,

@@ -84,10 +84,10 @@ export function calculerIpr(
   detectabilite: number | null,
   echelle: { min: number; max: number },
 ): number | null {
-  const notes = [severite, occurrence, detectabilite]
-  if (notes.some((n) => n === null)) return null
-  if (notes.some((n) => !Number.isInteger(n) || n! < echelle.min || n! > echelle.max)) return null
-  return severite! * occurrence! * detectabilite!
+  if (severite === null || occurrence === null || detectabilite === null) return null
+  const horsEchelle = (n: number) => !Number.isInteger(n) || n < echelle.min || n > echelle.max
+  if (horsEchelle(severite) || horsEchelle(occurrence) || horsEchelle(detectabilite)) return null
+  return severite * occurrence * detectabilite
 }
 
 export function verdictRisque(

@@ -198,7 +198,6 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
     }
   }
 
-
   async function creerNouvelleVersion(
     clientId: string,
     input: NouveauProfilInput,

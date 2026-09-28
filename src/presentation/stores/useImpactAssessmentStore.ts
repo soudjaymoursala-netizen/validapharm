@@ -201,7 +201,6 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
     }
   }
 
-
   async function creerNouvelleVersion(
     clientId: string,
     input: NouveauProfilImpactInput,
