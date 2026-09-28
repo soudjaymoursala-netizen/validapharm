@@ -14,6 +14,7 @@ import {
   type ResultatSynchronisation,
 } from '../stores/useSynchronisationStore'
 import IconeSvg from '../composants/IconeSvg.vue'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const projetsStore = useProjectsStore()
 const clientsStore = useClientsStore()
@@ -21,6 +22,20 @@ const syncStore = useSynchronisationStore()
 const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 const formulaireOuvert = ref(false)
 const afficherArchives = ref(false)
 const afficherSuspendus = ref(false)
@@ -96,7 +111,11 @@ watch(
   { immediate: true },
 )
 
-async function creerProjet(): Promise<void> {
+async function creerProjet(...args: Parameters<typeof creerProjetSansGarde>): Promise<void> {
+  await envoyer(() => creerProjetSansGarde(...args))
+}
+
+async function creerProjetSansGarde(): Promise<void> {
   if (brouillon.name.trim().length === 0) return
   const projet = await projetsStore.creerProjet({ ...brouillon })
   formulaireOuvert.value = false
@@ -107,7 +126,11 @@ async function creerProjet(): Promise<void> {
   await router.push({ name: 'fiche-projet', params: { projectId: projet.id } })
 }
 
-async function synchroniser(): Promise<void> {
+async function synchroniser(...args: Parameters<typeof synchroniserSansGarde>): Promise<void> {
+  await envoyer(() => synchroniserSansGarde(...args))
+}
+
+async function synchroniserSansGarde(): Promise<void> {
   dernierResultatSync.value = await syncStore.synchroniser()
 }
 
@@ -118,7 +141,13 @@ const fichiersRefuses = computed(() =>
     : [],
 )
 
-async function recupererDepuisGitHub(): Promise<void> {
+async function recupererDepuisGitHub(
+  ...args: Parameters<typeof recupererDepuisGitHubSansGarde>
+): Promise<void> {
+  await envoyer(() => recupererDepuisGitHubSansGarde(...args))
+}
+
+async function recupererDepuisGitHubSansGarde(): Promise<void> {
   // Sécurité : écrasement délibéré des données du serveur par la version
   // GitHub — jamais sans confirmation explicite.
   const confirme = window.confirm(
@@ -142,6 +171,7 @@ function nomClient(clientId: string | null): string | null {
     <header>
       <div>
         <h1>Tableau de bord</h1>
+        <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
         <p class="sous-titre">{{ projetsActifsAffiches.length }} projet(s) actif(s)</p>
       </div>
       <div class="actions-entete">
@@ -153,7 +183,17 @@ function nomClient(clientId: string | null): string | null {
           <IconeSvg nom="engrenage" :taille="15" />
           Configuration
         </RouterLink>
-        <button type="button" class="bouton-principal" @click="formulaireOuvert = true">
+        <button
+          type="button"
+          class="bouton-principal"
+          :disabled="projetsStore.chargementEchoue"
+          :title="
+            projetsStore.chargementEchoue
+              ? 'Projets non chargés : rechargez la page avant de créer'
+              : undefined
+          "
+          @click="formulaireOuvert = true"
+        >
           <IconeSvg nom="plus" :taille="15" />
           Nouveau projet
         </button>
@@ -238,12 +278,18 @@ function nomClient(clientId: string | null): string | null {
         <button type="button" class="bouton-secondaire" @click="formulaireOuvert = false">
           Annuler
         </button>
-        <button type="submit" class="bouton-principal">Créer le projet</button>
+        <button type="submit" :disabled="envoiEnCours" class="bouton-principal">
+          Créer le projet
+        </button>
       </div>
     </form>
 
+    <p v-if="projetsStore.chargementEchoue" class="bandeau-erreur" role="alert">
+      Impossible de charger les projets (serveur injoignable ou session expirée). Les compteurs et
+      la liste ci-dessous ne sont pas fiables ; rechargez la page avant de créer un projet.
+    </p>
     <div
-      v-if="!projetsStore.enChargement && projetsActifsAffiches.length === 0"
+      v-else-if="!projetsStore.enChargement && projetsActifsAffiches.length === 0"
       class="carte etat-vide"
     >
       <IconeSvg nom="dossier" :taille="28" />

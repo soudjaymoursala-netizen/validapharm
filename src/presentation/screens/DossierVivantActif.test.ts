@@ -189,7 +189,7 @@ describe('DossierVivantActif', () => {
     )
 
     expect(wrapper.text()).toContain('Qualifié')
-    expect(wrapper.text()).toContain('2027-01-01')
+    expect(wrapper.text()).toContain('01/01/2027')
     expect(wrapper.text()).toContain('PLC autoclave')
     expect(wrapper.text()).toContain('Traçabilité incomplète de la requalification')
     expect(wrapper.text()).toContain("Constat d'audit")

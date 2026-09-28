@@ -9,6 +9,7 @@ import {
 import { organizationsAMigrer, workspacesAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
 import { useClientsStore } from './useClientsStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface NouveauWorkspaceSiteInput {
   nom: string
@@ -82,7 +83,9 @@ export const useOrganizationStore = defineStore('organization', () => {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.migrerClientVersOrganisation(jeton, clientId)
     if (!resultat.ok)
-      throw new Error(`Échec de la migration de l'organisation : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration de l'organisation : ${libelleErreurServeur(resultat.erreur)}`,
+      )
 
     // Le Workspace racine local n'est jamais recréé : la route de
     // migration en fabrique déjà un, idempotent — son contenu (type
@@ -171,7 +174,7 @@ export const useOrganizationStore = defineStore('organization', () => {
     const resultat = await api.migrerClientVersOrganisation(jeton, clientId)
     if (!resultat.ok) {
       if (resultat.erreur === 'introuvable') return { erreur: 'client_introuvable' }
-      throw new Error(`Échec de la migration : ${resultat.erreur}`)
+      throw new Error(`Échec de la migration : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const organization = organizationWireVersDomaine(resultat.donnees.organization)
     const workspaceRacine = workspaceWireVersDomaine(resultat.donnees.workspaceRacine)
@@ -210,7 +213,7 @@ export const useOrganizationStore = defineStore('organization', () => {
         return { erreur: 'organization_introuvable' }
       }
       if (resultat.erreur === 'parent_introuvable') return { erreur: 'parent_introuvable' }
-      throw new Error(`Échec de la création du site : ${resultat.erreur}`)
+      throw new Error(`Échec de la création du site : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const site = workspaceWireVersDomaine(resultat.donnees.workspace)
     workspaces.value = [...workspaces.value, site]

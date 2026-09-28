@@ -23,6 +23,7 @@ import {
   manufacturingContextsAMigrer,
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function processWireVersDomaine(wire: ProcessWire): Process {
   return {
@@ -252,7 +253,9 @@ export const useProcessContextStore = defineStore('processContext', () => {
       manufacturingContexts: manufacturingContextsDuClient.map(manufacturingContextDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Process/FonctionActif : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration Process/FonctionActif : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const p of processesDuClient) {
       const index = processesAMigrer.indexOf(p)
@@ -327,7 +330,7 @@ export const useProcessContextStore = defineStore('processContext', () => {
       sourceId: input.sourceId ?? null,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création du process : ${resultat.erreur}`)
+      throw new Error(`Échec de la création du process : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const process = processWireVersDomaine(resultat.donnees.process)
     processes.value = [...processes.value, process]
@@ -344,7 +347,9 @@ export const useProcessContextStore = defineStore('processContext', () => {
       description: input.description,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création de la fonction : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création de la fonction : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const fonction = fonctionWireVersDomaine(resultat.donnees.fonction)
     fonctions.value = [...fonctions.value, fonction]
@@ -374,7 +379,9 @@ export const useProcessContextStore = defineStore('processContext', () => {
       assetNodeId,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de l'association fonction/nœud d'actif : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'association fonction/nœud d'actif : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const association = associationFonctionAssetNodeWireVersDomaine(
       resultat.donnees.associationFonctionAssetNode,
@@ -399,7 +406,9 @@ export const useProcessContextStore = defineStore('processContext', () => {
       processId,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de l'association fonction/process : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'association fonction/process : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const association = associationFonctionProcessWireVersDomaine(
       resultat.donnees.associationFonctionProcess,
@@ -429,7 +438,9 @@ export const useProcessContextStore = defineStore('processContext', () => {
       configuration: input.configuration,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création du contexte de fabrication : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création du contexte de fabrication : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const contexte = manufacturingContextWireVersDomaine(resultat.donnees.manufacturingContext)
     manufacturingContexts.value = [...manufacturingContexts.value, contexte]

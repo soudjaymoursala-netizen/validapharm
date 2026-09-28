@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { AuthApiClient } from '../../connecteurs/auth/AuthApiClient'
 import { db, type EnregistrementConnexionAuthentification } from '../../persistance/db'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface SaisieConnexionAuthentification {
   relayUrl: string
@@ -57,7 +58,9 @@ export const useConnexionAuthentificationStore = defineStore('connexionAuthentif
     try {
       const api = new AuthApiClient(connexion.value.relayUrl)
       const resultat = await api.verifierSante()
-      if (!resultat.ok) return { ok: false, message: `Échec (${resultat.erreur}).` }
+      if (!resultat.ok) {
+        return { ok: false, message: `Échec : ${libelleErreurServeur(resultat.erreur)}.` }
+      }
       return { ok: true }
     } catch (erreur) {
       return { ok: false, message: erreur instanceof Error ? erreur.message : 'Erreur inconnue.' }

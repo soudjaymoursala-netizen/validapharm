@@ -21,6 +21,7 @@ import type {
   TypeExecutionEvent,
   VerdictExecution,
 } from '../../logique-metier/domaine/types'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -29,6 +30,20 @@ const structureStore = useStructureSystemeStore()
 const testStore = useTestDefinitionStore()
 const executionStore = useExecutionStore()
 const evidenceStore = useEvidenceStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nomClient = ref<string | null>(null)
 const erreurParExecution = ref<Record<string, string>>({})
@@ -98,7 +113,11 @@ const testSelectionne = ref('')
 const assetNodeSelectionne = ref('')
 const erreurDemarrage = ref<string | null>(null)
 
-async function demarrer(): Promise<void> {
+async function demarrer(...args: Parameters<typeof demarrerSansGarde>): Promise<void> {
+  await envoyer(() => demarrerSansGarde(...args))
+}
+
+async function demarrerSansGarde(): Promise<void> {
   erreurDemarrage.value = null
   if (!testSelectionne.value) return
   const resultat = await executionStore.demarrerExecution(props.clientId, {
@@ -145,7 +164,16 @@ function cleEtape(executionId: string, testStepId: string): string {
   return `${executionId}:${testStepId}`
 }
 
-async function enregistrerResultat(executionId: string, testStepId: string): Promise<void> {
+async function enregistrerResultat(
+  ...args: Parameters<typeof enregistrerResultatSansGarde>
+): Promise<void> {
+  await envoyer(() => enregistrerResultatSansGarde(...args))
+}
+
+async function enregistrerResultatSansGarde(
+  executionId: string,
+  testStepId: string,
+): Promise<void> {
   const cle = cleEtape(executionId, testStepId)
   const resultat = resultatsBrouillon.value[cle]
   if (!resultat) {
@@ -182,7 +210,11 @@ function mesureBrouillon(executionStepId: string): {
   return nouvelle
 }
 
-async function ajouterMesure(executionId: string, executionStepId: string): Promise<void> {
+async function ajouterMesure(...args: Parameters<typeof ajouterMesureSansGarde>): Promise<void> {
+  await envoyer(() => ajouterMesureSansGarde(...args))
+}
+
+async function ajouterMesureSansGarde(executionId: string, executionStepId: string): Promise<void> {
   const brouillon = mesuresBrouillon.value[executionStepId]
   if (!brouillon || brouillon.libelle.trim().length === 0 || brouillon.valeur.trim().length === 0)
     return
@@ -203,7 +235,13 @@ async function ajouterMesure(executionId: string, executionStepId: string): Prom
 const typeEvenementBrouillon = ref<Record<string, TypeExecutionEvent>>({})
 const descriptionEvenementBrouillon = ref<Record<string, string>>({})
 
-async function consignerEvenement(executionId: string): Promise<void> {
+async function consignerEvenement(
+  ...args: Parameters<typeof consignerEvenementSansGarde>
+): Promise<void> {
+  await envoyer(() => consignerEvenementSansGarde(...args))
+}
+
+async function consignerEvenementSansGarde(executionId: string): Promise<void> {
   const type = typeEvenementBrouillon.value[executionId] ?? 'commentaire'
   const description = descriptionEvenementBrouillon.value[executionId]?.trim()
   if (!description) {
@@ -229,7 +267,13 @@ const titrePreuveBrouillon = ref<Record<string, string>>({})
 const descriptionPreuveBrouillon = ref<Record<string, string>>({})
 const referenceLocalisationBrouillon = ref<Record<string, string>>({})
 
-async function enregistrerPreuve(executionId: string): Promise<void> {
+async function enregistrerPreuve(
+  ...args: Parameters<typeof enregistrerPreuveSansGarde>
+): Promise<void> {
+  await envoyer(() => enregistrerPreuveSansGarde(...args))
+}
+
+async function enregistrerPreuveSansGarde(executionId: string): Promise<void> {
   const type = typePreuveBrouillon.value[executionId] ?? 'native'
   const titre = titrePreuveBrouillon.value[executionId]?.trim()
   if (!titre) {
@@ -272,7 +316,11 @@ async function enregistrerPreuve(executionId: string): Promise<void> {
 // --- Clôture ---
 const verdictBrouillon = ref<Record<string, VerdictExecution>>({})
 
-async function cloturer(executionId: string): Promise<void> {
+async function cloturer(...args: Parameters<typeof cloturerSansGarde>): Promise<void> {
+  await envoyer(() => cloturerSansGarde(...args))
+}
+
+async function cloturerSansGarde(executionId: string): Promise<void> {
   const verdict = verdictBrouillon.value[executionId]
   if (!verdict) {
     erreurParExecution.value[executionId] = 'Choisissez le verdict avant de clôturer.'
@@ -349,6 +397,7 @@ async function signerCloture(motDePasse: string): Promise<void> {
   <main class="execution-tests">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Exécution de tests — {{ nomClient ?? props.clientId }}</h1>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="rappel">
       Le verdict n'est jamais déduit des résultats d'étape — toujours une décision explicite à la
       clôture. Immutable après clôture.
@@ -374,7 +423,7 @@ async function signerCloture(motDePasse: string): Promise<void> {
           </select>
         </label>
         <p v-if="erreurDemarrage" class="bandeau-erreur" role="alert">{{ erreurDemarrage }}</p>
-        <button type="submit">Démarrer l'exécution</button>
+        <button type="submit" :disabled="envoiEnCours">Démarrer l'exécution</button>
       </form>
     </section>
 

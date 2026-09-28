@@ -13,6 +13,7 @@ import type {
 } from '../../logique-metier/domaine/types'
 import { qualityEventsAMigrer, referencesQualityEventAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function evenementWireVersDomaine(wire: QualityEventWire): QualityEvent {
   return {
@@ -135,7 +136,9 @@ export const useQualityEventStore = defineStore('qualityEvent', () => {
       references: referencesDuClient.map(referenceDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration QualityEvent : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration QualityEvent : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const e of evenementsDuClient) {
       const index = qualityEventsAMigrer.indexOf(e)
@@ -190,7 +193,9 @@ export const useQualityEventStore = defineStore('qualityEvent', () => {
       manufacturingContextId: input.manufacturingContextId,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création de l'événement : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création de l'événement : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const evenement = evenementWireVersDomaine(resultat.donnees.evenement)
     evenements.value = [...evenements.value, evenement]
@@ -227,7 +232,9 @@ export const useQualityEventStore = defineStore('qualityEvent', () => {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.creerReferenceQualityEvent(jeton, clientId, { sourceId, cibleId })
     if (!resultat.ok) {
-      throw new Error(`Échec de la référence entre événements : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la référence entre événements : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const reference = referenceWireVersDomaine(resultat.donnees.reference)
     references.value = [...references.value, reference]

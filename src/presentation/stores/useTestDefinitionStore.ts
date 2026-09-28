@@ -29,6 +29,7 @@ import {
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
 import { useRiskAssessmentStore } from './useRiskAssessmentStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function requirementWireVersDomaine(wire: RequirementWire): Requirement {
   return {
@@ -275,7 +276,9 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       couvertures: couverturesDuClient.map(couvertureDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Test Definition : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration Test Definition : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const r of requirementsDuClient) {
       const index = requirementsAMigrer.indexOf(r)
@@ -355,7 +358,9 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       processId: input.processId,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création du requirement : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création du requirement : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const requirement = requirementWireVersDomaine(resultat.donnees.requirement)
     requirements.value = [...requirements.value, requirement]
@@ -373,7 +378,9 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       description: input.description,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création du test objective : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création du test objective : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const objectif = testObjectiveWireVersDomaine(resultat.donnees.testObjective)
     testObjectives.value = [...testObjectives.value, objectif]
@@ -391,7 +398,9 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       description: input.description,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création du test candidate : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création du test candidate : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const candidat = testCandidateWireVersDomaine(resultat.donnees.testCandidate)
     testCandidates.value = [...testCandidates.value, candidat]
@@ -438,7 +447,9 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       })),
     )
     if (!resultat.ok) {
-      throw new Error(`Échec de la génération de candidats depuis les risques : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la génération de candidats depuis les risques : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const nouveaux = resultat.donnees.testCandidates.map(testCandidateWireVersDomaine)
     testCandidates.value = [...testCandidates.value, ...nouveaux]
@@ -557,7 +568,7 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
       ) {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de la création du test : ${resultat.erreur}`)
+      throw new Error(`Échec de la création du test : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const test = testWireVersDomaine(resultat.donnees.test)
     tests.value = [...tests.value, test]
@@ -596,7 +607,9 @@ export const useTestDefinitionStore = defineStore('testDefinition', () => {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.creerCouverture(jeton, clientId, { requirementId, testId })
     if (!resultat.ok) {
-      throw new Error(`Échec de la déclaration de couverture : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la déclaration de couverture : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const couverture = couvertureWireVersDomaine(resultat.donnees.couverture)
     couvertures.value = [...couvertures.value, couverture]

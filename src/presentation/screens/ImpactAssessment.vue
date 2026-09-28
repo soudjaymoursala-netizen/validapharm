@@ -20,6 +20,7 @@ import {
   methodeCompletementRepondue,
 } from '../../logique-metier/assessment/evaluerVerdictImpactAssessment'
 import { libelleVerdictImpact } from '../i18n/libellesVerdictQuestionnaire'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -55,7 +56,25 @@ function retirerLigneQuestion(index: number): void {
   if (brouillonQuestions.length > 1) brouillonQuestions.splice(index, 1)
 }
 
+// Un seul envoi à la fois (audit M2 : deux clics créaient deux évaluations)
+// et les refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<void>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
+
 async function enregistrerNouvelleVersion(): Promise<void> {
+  await envoyer(enregistrerNouvelleVersionSansGarde)
+}
+
+async function enregistrerNouvelleVersionSansGarde(): Promise<void> {
   const questions = brouillonQuestions
     .map((texte) => texte.trim())
     .filter((texte) => texte.length > 0)
@@ -109,6 +128,10 @@ const verdict = computed(() => {
 })
 
 async function enregistrerEvaluation(): Promise<void> {
+  await envoyer(enregistrerEvaluationSansGarde)
+}
+
+async function enregistrerEvaluationSansGarde(): Promise<void> {
   if (!complet.value || nomElement.value.trim().length === 0) return
   const resultat = await methodeStore.creerEvaluation(props.clientId, {
     nomElement: nomElement.value.trim(),
@@ -125,6 +148,10 @@ function nouvelleEvaluation(): void {
   for (const cle of Object.keys(reponses)) Reflect.deleteProperty(reponses, cle)
   evaluationEnregistree.value = false
 }
+
+function recharger(): void {
+  window.location.reload()
+}
 </script>
 
 <template>
@@ -132,8 +159,15 @@ function nouvelleEvaluation(): void {
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Impact Assessment / System Classification — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">Aide à la décision, non une décision de classification.</p>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
 
     <p v-if="chargementInitial" class="etat-vide">Chargement…</p>
+    <p v-else-if="methodeStore.chargementEchoue" class="bandeau-erreur" role="alert">
+      Impossible de charger les méthodes Impact Assessment de ce client (serveur injoignable ou
+      session expirée) : rien n'est perdu, mais n'en créez pas de nouvelle avant d'avoir rechargé la
+      page.
+      <button type="button" @click="recharger">Recharger</button>
+    </p>
     <template v-else>
       <section v-if="!methodeStore.profilActif || formulaireConfigOuvert" class="bloc-config">
         <h2>Configuration de la méthode</h2>
@@ -185,7 +219,7 @@ function nouvelleEvaluation(): void {
             >
               Annuler
             </button>
-            <button type="submit">Enregistrer cette version</button>
+            <button type="submit" :disabled="envoiEnCours">Enregistrer cette version</button>
           </div>
         </form>
       </section>
@@ -249,6 +283,7 @@ function nouvelleEvaluation(): void {
           <button
             v-if="complet && !evaluationEnregistree"
             type="button"
+            :disabled="envoiEnCours"
             @click="enregistrerEvaluation"
           >
             Enregistrer cette évaluation

@@ -20,6 +20,7 @@ import { useProcessContextStore } from '../stores/useProcessContextStore'
 import { useQualityEventStore } from '../stores/useQualityEventStore'
 import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string; missionId: string }>()
 
@@ -32,6 +33,20 @@ const structureStore = useStructureSystemeStore()
 const processContextStore = useProcessContextStore()
 const configStore = useClientConfigStore()
 const relaisStore = useConnexionRelaisIAStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nouvelleActivite = reactive({ titre: '', description: '' })
 const dependanceSourceId = ref('')
@@ -108,7 +123,11 @@ async function changerStatutMission(statut: Mission['statut']): Promise<void> {
   }
 }
 
-async function creerActivite(): Promise<void> {
+async function creerActivite(...args: Parameters<typeof creerActiviteSansGarde>): Promise<void> {
+  await envoyer(() => creerActiviteSansGarde(...args))
+}
+
+async function creerActiviteSansGarde(): Promise<void> {
   if (nouvelleActivite.titre.trim().length === 0) return
   await missionStore.creerActivity(props.clientId, {
     missionId: props.missionId,
@@ -119,7 +138,13 @@ async function creerActivite(): Promise<void> {
   nouvelleActivite.description = ''
 }
 
-async function changerStatutActivite(activityId: string, statut: string): Promise<void> {
+async function changerStatutActivite(
+  ...args: Parameters<typeof changerStatutActiviteSansGarde>
+): Promise<void> {
+  await envoyer(() => changerStatutActiviteSansGarde(...args))
+}
+
+async function changerStatutActiviteSansGarde(activityId: string, statut: string): Promise<void> {
   erreurStatut.value = null
   const resultat = await missionStore.changerStatutActivity(
     props.clientId,
@@ -134,7 +159,13 @@ async function changerStatutActivite(activityId: string, statut: string): Promis
 
 const erreurDependance = ref<string | null>(null)
 
-async function ajouterDependance(): Promise<void> {
+async function ajouterDependance(
+  ...args: Parameters<typeof ajouterDependanceSansGarde>
+): Promise<void> {
+  await envoyer(() => ajouterDependanceSansGarde(...args))
+}
+
+async function ajouterDependanceSansGarde(): Promise<void> {
   if (!dependanceSourceId.value || !dependanceCibleId.value) return
   erreurDependance.value = null
   const resultat = await missionStore.ajouterDependance(
@@ -161,7 +192,13 @@ function titreQualityEvent(id: string): string {
   return qualityEventStore.evenements.find((e) => e.id === id)?.titre ?? id
 }
 
-async function associerQualityEvent(): Promise<void> {
+async function associerQualityEvent(
+  ...args: Parameters<typeof associerQualityEventSansGarde>
+): Promise<void> {
+  await envoyer(() => associerQualityEventSansGarde(...args))
+}
+
+async function associerQualityEventSansGarde(): Promise<void> {
   if (!qualityEventASsocierId.value) return
   await missionStore.associerQualityEvent(
     props.clientId,
@@ -171,7 +208,13 @@ async function associerQualityEvent(): Promise<void> {
   qualityEventASsocierId.value = ''
 }
 
-async function assemblerContexte(): Promise<void> {
+async function assemblerContexte(
+  ...args: Parameters<typeof assemblerContexteSansGarde>
+): Promise<void> {
+  await envoyer(() => assemblerContexteSansGarde(...args))
+}
+
+async function assemblerContexteSansGarde(): Promise<void> {
   if (!mission.value) return
   await contextStore.assemblerSnapshot(props.clientId, {
     workspaceId: mission.value.workspace_id,
@@ -179,7 +222,11 @@ async function assemblerContexte(): Promise<void> {
   })
 }
 
-async function raisonner(): Promise<void> {
+async function raisonner(...args: Parameters<typeof raisonnerSansGarde>): Promise<void> {
+  await envoyer(() => raisonnerSansGarde(...args))
+}
+
+async function raisonnerSansGarde(): Promise<void> {
   if (objectifRaisonnement.value.trim().length === 0) return
   raisonnementEnCours.value = true
   erreurRaisonnement.value = null
@@ -228,6 +275,7 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
     </RouterLink>
     <header>
       <h1>{{ mission.titre }} — {{ nomClient ?? props.clientId }}</h1>
+      <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
       <select
         :value="mission.statut"
         @change="
@@ -252,7 +300,7 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
           required
         />
         <input v-model="nouvelleActivite.description" type="text" placeholder="Description" />
-        <button type="submit">Ajouter</button>
+        <button type="submit" :disabled="envoiEnCours">Ajouter</button>
       </form>
       <ul>
         <li v-for="activite in activites" :key="activite.id">
@@ -293,7 +341,7 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
           <option value="" disabled>Activité requise…</option>
           <option v-for="a in activites" :key="a.id" :value="a.id">{{ a.titre }}</option>
         </select>
-        <button type="submit">Lier</button>
+        <button type="submit" :disabled="envoiEnCours">Lier</button>
       </form>
       <p v-if="erreurDependance" class="bandeau-erreur" role="alert">{{ erreurDependance }}</p>
     </section>
@@ -316,7 +364,7 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
             {{ evenement.titre }}
           </option>
         </select>
-        <button type="submit">Associer</button>
+        <button type="submit" :disabled="envoiEnCours">Associer</button>
       </form>
     </section>
 

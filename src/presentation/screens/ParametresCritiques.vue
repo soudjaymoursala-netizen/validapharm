@@ -9,12 +9,27 @@ import { useClientsStore } from '../stores/useClientsStore'
 import { useParameterStore } from '../stores/useParameterStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import type { NiveauCriticiteParametre } from '../../logique-metier/domaine/types'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
 
 const clientsStore = useClientsStore()
 const structureStore = useStructureSystemeStore()
 const parameterStore = useParameterStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nomClient = ref<string | null>(null)
 
@@ -36,7 +51,11 @@ const descriptionParametre = ref('')
 const uniteParametre = ref('')
 const assetNodeParametre = ref('')
 
-async function creerParametre(): Promise<void> {
+async function creerParametre(...args: Parameters<typeof creerParametreSansGarde>): Promise<void> {
+  await envoyer(() => creerParametreSansGarde(...args))
+}
+
+async function creerParametreSansGarde(): Promise<void> {
   if (nomParametre.value.trim().length === 0) return
   await parameterStore.creerParametre(props.clientId, {
     nom: nomParametre.value.trim(),
@@ -56,7 +75,11 @@ const niveauClassification = ref<NiveauCriticiteParametre | ''>('')
 const contexteClassification = ref('')
 const justificationClassification = ref('')
 
-async function classifier(): Promise<void> {
+async function classifier(...args: Parameters<typeof classifierSansGarde>): Promise<void> {
+  await envoyer(() => classifierSansGarde(...args))
+}
+
+async function classifierSansGarde(): Promise<void> {
   if (
     !parametreClassification.value ||
     !niveauClassification.value ||
@@ -86,7 +109,11 @@ const erreurDesactivation = ref<Record<string, string>>({})
 const MOTIF_OBLIGATOIRE =
   'Saisissez un motif de désactivation : il est tracé dans le journal d’audit.'
 
-async function declarerCPP(): Promise<void> {
+async function declarerCPP(...args: Parameters<typeof declarerCPPSansGarde>): Promise<void> {
+  await envoyer(() => declarerCPPSansGarde(...args))
+}
+
+async function declarerCPPSansGarde(): Promise<void> {
   erreurCPP.value = null
   if (
     !parametreCPP.value ||
@@ -109,7 +136,11 @@ async function declarerCPP(): Promise<void> {
   justificationCPP.value = ''
 }
 
-async function desactiverCPP(cppId: string): Promise<void> {
+async function desactiverCPP(...args: Parameters<typeof desactiverCPPSansGarde>): Promise<void> {
+  await envoyer(() => desactiverCPPSansGarde(...args))
+}
+
+async function desactiverCPPSansGarde(cppId: string): Promise<void> {
   const motif = motifsDesactivationCPP.value[cppId]?.trim()
   if (!motif) {
     erreurDesactivation.value[cppId] = MOTIF_OBLIGATOIRE
@@ -128,7 +159,11 @@ const justificationCQA = ref('')
 const motifsDesactivationCQA = ref<Record<string, string>>({})
 const erreurCQA = ref<string | null>(null)
 
-async function declarerCQA(): Promise<void> {
+async function declarerCQA(...args: Parameters<typeof declarerCQASansGarde>): Promise<void> {
+  await envoyer(() => declarerCQASansGarde(...args))
+}
+
+async function declarerCQASansGarde(): Promise<void> {
   erreurCQA.value = null
   if (
     nomCQA.value.trim().length === 0 ||
@@ -153,7 +188,11 @@ async function declarerCQA(): Promise<void> {
   justificationCQA.value = ''
 }
 
-async function desactiverCQA(cqaId: string): Promise<void> {
+async function desactiverCQA(...args: Parameters<typeof desactiverCQASansGarde>): Promise<void> {
+  await envoyer(() => desactiverCQASansGarde(...args))
+}
+
+async function desactiverCQASansGarde(cqaId: string): Promise<void> {
   const motif = motifsDesactivationCQA.value[cqaId]?.trim()
   if (!motif) {
     erreurDesactivation.value[cqaId] = MOTIF_OBLIGATOIRE
@@ -174,6 +213,7 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
   <main class="parametres-critiques">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Paramètres critiques — {{ nomClient ?? props.clientId }}</h1>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="rappel">
       Un CPP ou un CQA n'est jamais promu automatiquement à partir d'une classification de criticité
       — toujours une déclaration humaine explicite et séparée (ICH Q8/Q9/Q10).
@@ -203,7 +243,7 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
             </option>
           </select>
         </label>
-        <button type="submit">Créer le paramètre</button>
+        <button type="submit" :disabled="envoiEnCours">Créer le paramètre</button>
       </form>
       <ul v-if="parameterStore.parametres.length > 0">
         <li v-for="p in parameterStore.parametres" :key="p.id">
@@ -242,7 +282,7 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
           Justification
           <textarea v-model="justificationClassification" rows="2" required />
         </label>
-        <button type="submit">Classifier</button>
+        <button type="submit" :disabled="envoiEnCours">Classifier</button>
       </form>
       <ul v-if="parameterStore.classifications.length > 0">
         <li v-for="c in parameterStore.classifications" :key="c.id">
@@ -274,7 +314,7 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
           <textarea v-model="justificationCPP" rows="2" required />
         </label>
         <p v-if="erreurCPP" class="bandeau-erreur" role="alert">{{ erreurCPP }}</p>
-        <button type="submit">Déclarer le CPP</button>
+        <button type="submit" :disabled="envoiEnCours">Déclarer le CPP</button>
       </form>
       <ul v-if="parameterStore.cppsActifs.length > 0" class="liste-cpp">
         <li v-for="cpp in parameterStore.cppsActifs" :key="cpp.id">
@@ -315,7 +355,7 @@ const libellesNiveauCriticite: Record<NiveauCriticiteParametre, string> = {
           <textarea v-model="justificationCQA" rows="2" required />
         </label>
         <p v-if="erreurCQA" class="bandeau-erreur" role="alert">{{ erreurCQA }}</p>
-        <button type="submit">Déclarer le CQA</button>
+        <button type="submit" :disabled="envoiEnCours">Déclarer le CQA</button>
       </form>
       <ul v-if="parameterStore.cqasActifs.length > 0" class="liste-cqa">
         <li v-for="cqa in parameterStore.cqasActifs" :key="cqa.id">

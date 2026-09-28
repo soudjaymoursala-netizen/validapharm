@@ -7,6 +7,7 @@ import { useMissionStore, type NouvelleMissionInput } from '../stores/useMission
 import { useOrganizationStore } from '../stores/useOrganizationStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import type { StatutMission } from '../../logique-metier/domaine/types'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const LIBELLES_STATUT_MISSION: Record<StatutMission, string> = {
   ouverte: 'Ouverte',
@@ -21,6 +22,20 @@ const missionStore = useMissionStore()
 const organizationStore = useOrganizationStore()
 const structureStore = useStructureSystemeStore()
 const router = useRouter()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const formulaireOuvert = ref(false)
 const brouillon = reactive({ titre: '', description: '', workspaceId: '', assetNodeId: '' })
@@ -38,7 +53,11 @@ onMounted(async () => {
   ])
 })
 
-async function creerMission(): Promise<void> {
+async function creerMission(...args: Parameters<typeof creerMissionSansGarde>): Promise<void> {
+  await envoyer(() => creerMissionSansGarde(...args))
+}
+
+async function creerMissionSansGarde(): Promise<void> {
   if (brouillon.titre.trim().length === 0) return
   const input: NouvelleMissionInput = {
     titre: brouillon.titre,
@@ -69,6 +88,7 @@ async function creerMission(): Promise<void> {
     </RouterLink>
     <header>
       <h1>Missions — {{ nomClient ?? props.clientId }}</h1>
+      <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
       <button type="button" @click="formulaireOuvert = true">Nouvelle mission</button>
     </header>
 
@@ -98,7 +118,7 @@ async function creerMission(): Promise<void> {
         </select>
       </label>
       <div class="actions-formulaire">
-        <button type="submit">Créer</button>
+        <button type="submit" :disabled="envoiEnCours">Créer</button>
         <button type="button" @click="formulaireOuvert = false">Annuler</button>
       </div>
     </form>

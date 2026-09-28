@@ -37,6 +37,7 @@ import {
   sourcesAMigrer,
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface NouvelleSourceInput {
   type: TypeSource
@@ -352,7 +353,9 @@ export const useSourceIntelligenceStore = defineStore('sourceIntelligence', () =
       conflicts: conflictsDuClient.map(conflictDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Source Intelligence/Knowledge : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration Source Intelligence/Knowledge : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const [tableau, duClient] of [
       [sourcesAMigrer, sourcesDuClient],
@@ -428,7 +431,10 @@ export const useSourceIntelligenceStore = defineStore('sourceIntelligence', () =
       type: input.type,
       titre: input.titre,
     })
-    if (!resultat.ok) throw new Error(`Échec de la création de la source : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la création de la source : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const source = sourceWireVersDomaine(resultat.donnees.source)
     sources.value = [...sources.value, source]
     return source
@@ -447,7 +453,9 @@ export const useSourceIntelligenceStore = defineStore('sourceIntelligence', () =
     })
     if (!resultat.ok) {
       if (resultat.erreur === 'source_introuvable') return { erreur: 'source_introuvable' }
-      throw new Error(`Échec de l'ajout de la localisation : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'ajout de la localisation : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const localisation = sourceLocationWireVersDomaine(resultat.donnees.sourceLocation)
     sourceLocations.value = [...sourceLocations.value, localisation]
@@ -463,7 +471,9 @@ export const useSourceIntelligenceStore = defineStore('sourceIntelligence', () =
     const resultat = await api.creerSourceVersion(jeton, clientId, sourceId)
     if (!resultat.ok) {
       if (resultat.erreur === 'source_introuvable') return { erreur: 'source_introuvable' }
-      throw new Error(`Échec de la création de la version : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création de la version : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const version = sourceVersionWireVersDomaine(resultat.donnees.sourceVersion)
     sourceVersions.value = [...sourceVersions.value, version]
@@ -481,7 +491,9 @@ export const useSourceIntelligenceStore = defineStore('sourceIntelligence', () =
     })
     if (!resultat.ok) {
       if (resultat.erreur === 'version_introuvable') return { erreur: 'version_introuvable' }
-      throw new Error(`Échec de l'enregistrement de l'extraction : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'enregistrement de l'extraction : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const extraction = extractionWireVersDomaine(resultat.donnees.extraction)
     extractions.value = [...extractions.value, extraction]
@@ -501,7 +513,9 @@ export const useSourceIntelligenceStore = defineStore('sourceIntelligence', () =
     })
     if (!resultat.ok) {
       if (resultat.erreur === 'extraction_introuvable') return { erreur: 'extraction_introuvable' }
-      throw new Error(`Échec de l'ajout de l'ExtractionItem : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'ajout de l'ExtractionItem : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const item = extractionItemWireVersDomaine(resultat.donnees.extractionItem)
     extractionItems.value = [...extractionItems.value, item]
@@ -523,7 +537,9 @@ export const useSourceIntelligenceStore = defineStore('sourceIntelligence', () =
       if (resultat.erreur === 'extraction_item_introuvable') {
         return { erreur: 'extraction_item_introuvable' }
       }
-      throw new Error(`Échec de la création du KnowledgeItem : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création du KnowledgeItem : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const knowledgeItem = knowledgeItemWireVersDomaine(resultat.donnees.knowledgeItem)
     knowledgeItems.value = [...knowledgeItems.value, knowledgeItem]
@@ -582,7 +598,9 @@ export const useSourceIntelligenceStore = defineStore('sourceIntelligence', () =
       type: input.type,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la déclaration de la relation : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la déclaration de la relation : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const relation = knowledgeRelationWireVersDomaine(resultat.donnees.knowledgeRelation)
     if (!knowledgeRelations.value.some((r) => r.id === relation.id)) {
@@ -598,7 +616,10 @@ export const useSourceIntelligenceStore = defineStore('sourceIntelligence', () =
       knowledgeItemCibleId: input.knowledgeItemCibleId,
       description: input.description,
     })
-    if (!resultat.ok) throw new Error(`Échec de la déclaration du conflit : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la déclaration du conflit : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const conflit = conflictWireVersDomaine(resultat.donnees.conflict)
     conflicts.value = [...conflicts.value, conflit]
     return conflit

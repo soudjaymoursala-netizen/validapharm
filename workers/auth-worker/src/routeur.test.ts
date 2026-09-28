@@ -4183,6 +4183,15 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
       jeton: admin.jeton,
     })
     expect(liste.corps.executionSteps.map((e) => e.id)).toContain(resultat.corps.executionStep.id)
+
+    // Second résultat pour la même étape (double clic, audit M2) : refusé.
+    const second = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${executionId}/etapes`,
+      { jeton: admin.jeton, body: { testStepId, resultat: 'non_conforme', observation: '' } },
+    )
+    expect([second.status, second.corps.erreur]).toEqual([409, 'resultat_etape_deja_enregistre'])
   })
 
   test('enregistrer un résultat d’étape sur une étape inconnue -> etape_inconnue', async () => {

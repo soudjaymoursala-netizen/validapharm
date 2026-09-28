@@ -15,6 +15,7 @@ import { evaluerVerdictACFC } from '../../logique-metier/acfc/evaluerVerdictACFC
 import { numeroVersion } from '../../logique-metier/versionnage/numeroVersion'
 import { methodProfilesACFCAMigrer, evaluationsACFCAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function profilAcfcWireVersDomaine(wire: MethodProfileACFCWire): MethodProfileACFC {
   return {
@@ -113,6 +114,11 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
   const profils = ref<MethodProfileACFC[]>([])
   const evaluations = ref<EvaluationACFC[]>([])
   const enChargement = ref(false)
+  /**
+   * Le dernier chargement a échoué : « aucune méthode configurée » serait faux
+   * (audit UX : l'écran invitait à recréer une méthode pendant une panne).
+   */
+  const chargementEchoue = ref(false)
 
   /** Lève si le relais n'est pas configuré — mutations sur ACFC exigent désormais systématiquement le Worker/D1, même discipline que `useStructureSystemeStore`. */
   async function obtenirApi() {
@@ -160,7 +166,8 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
       profils: profilsDuClient.map(profilAcfcDomaineVersWire),
       evaluations: evaluationsDuClient.map(evaluationAcfcDomaineVersWire),
     })
-    if (!resultat.ok) throw new Error(`Échec de la migration ACFC : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de la migration ACFC : ${libelleErreurServeur(resultat.erreur)}`)
     for (const p of profilsDuClient) {
       const index = methodProfilesACFCAMigrer.indexOf(p)
       if (index !== -1) methodProfilesACFCAMigrer.splice(index, 1)
@@ -177,14 +184,17 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
       try {
         await migrerAcfcLocalVersServeur(clientId)
       } catch {
+      chargementEchoue.value = true
         // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
       }
       const { api, jeton } = await obtenirApi()
       const resultat = await api.obtenirAcfc(jeton, clientId)
       if (resultat.ok) {
+        chargementEchoue.value = false
         profils.value = resultat.donnees.profils.map(profilAcfcWireVersDomaine)
         evaluations.value = resultat.donnees.evaluations.map(evaluationAcfcWireVersDomaine)
       } else {
+        chargementEchoue.value = true
         profils.value = []
         evaluations.value = []
       }
@@ -213,7 +223,10 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
       questions,
       decisionRule: 'au_moins_un_oui_critique',
     })
-    if (!resultat.ok) throw new Error(`Échec de la création du profil ACFC : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la création du profil ACFC : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const profil = profilAcfcWireVersDomaine(resultat.donnees.profil)
     profils.value = [...profils.value, profil]
     return profil
@@ -237,7 +250,9 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
       verdict,
     })
     if (!resultat.ok)
-      throw new Error(`Échec de la création de l'évaluation ACFC : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création de l'évaluation ACFC : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const evaluation = evaluationAcfcWireVersDomaine(resultat.donnees.evaluation)
     evaluations.value = [...evaluations.value, evaluation]
     return evaluation
@@ -247,6 +262,7 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
     profils,
     evaluations,
     enChargement,
+    chargementEchoue,
     profilActif,
     charger,
     creerNouvelleVersion,

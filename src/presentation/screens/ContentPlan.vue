@@ -15,6 +15,7 @@ import type {
   TypeMethodProfileReference,
 } from '../../logique-metier/domaine/types'
 import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -22,6 +23,20 @@ const clientsStore = useClientsStore()
 const structureStore = useStructureSystemeStore()
 const processStore = useProcessContextStore()
 const contentPlanStore = useContentPlanStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nomClient = ref<string | null>(null)
 
@@ -61,7 +76,13 @@ const typeProfilMethode = ref<TypeMethodProfileReference | ''>('')
 const referenceProfilMethode = ref('')
 const noteContexte = ref('')
 
-async function creerContentPlan(): Promise<void> {
+async function creerContentPlan(
+  ...args: Parameters<typeof creerContentPlanSansGarde>
+): Promise<void> {
+  await envoyer(() => creerContentPlanSansGarde(...args))
+}
+
+async function creerContentPlanSansGarde(): Promise<void> {
   if (!templateSelectionne.value) return
   await contentPlanStore.creerContentPlan(props.clientId, {
     templateId: templateSelectionne.value,
@@ -82,17 +103,29 @@ async function creerContentPlan(): Promise<void> {
 // --- Actions sur un plan existant ---
 const erreursParPlan = ref<Record<string, string>>({})
 
-async function recalculer(contentPlanId: string): Promise<void> {
+async function recalculer(...args: Parameters<typeof recalculerSansGarde>): Promise<void> {
+  await envoyer(() => recalculerSansGarde(...args))
+}
+
+async function recalculerSansGarde(contentPlanId: string): Promise<void> {
   const resultat = await contentPlanStore.recalculerReadiness(props.clientId, contentPlanId)
   erreursParPlan.value[contentPlanId] = 'erreur' in resultat ? LIBELLES_ERREUR[resultat.erreur] : ''
 }
 
-async function valider(contentPlanId: string): Promise<void> {
+async function valider(...args: Parameters<typeof validerSansGarde>): Promise<void> {
+  await envoyer(() => validerSansGarde(...args))
+}
+
+async function validerSansGarde(contentPlanId: string): Promise<void> {
   const resultat = await contentPlanStore.validerContentPlan(props.clientId, contentPlanId)
   erreursParPlan.value[contentPlanId] = 'erreur' in resultat ? LIBELLES_ERREUR[resultat.erreur] : ''
 }
 
-async function geler(contentPlanId: string): Promise<void> {
+async function geler(...args: Parameters<typeof gelerSansGarde>): Promise<void> {
+  await envoyer(() => gelerSansGarde(...args))
+}
+
+async function gelerSansGarde(contentPlanId: string): Promise<void> {
   const resultat = await contentPlanStore.gelerContentPlan(props.clientId, contentPlanId)
   erreursParPlan.value[contentPlanId] = 'erreur' in resultat ? LIBELLES_ERREUR[resultat.erreur] : ''
 }
@@ -112,6 +145,7 @@ const plansTries = computed(() =>
   <main class="content-plan">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Plans de livrable — {{ nomClient ?? props.clientId }}</h1>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="rappel">
       La readiness est recalculée à la demande, jamais en tâche de fond. Un plan ne peut être gelé
       que s'il est déjà validé ET que ses données sont prêtes — jamais l'un sans l'autre.
@@ -163,7 +197,7 @@ const plansTries = computed(() =>
           Note de contexte (figée à la création, immutable)
           <textarea v-model="noteContexte" rows="2" />
         </label>
-        <button type="submit">Créer le plan</button>
+        <button type="submit" :disabled="envoiEnCours">Créer le plan</button>
       </form>
     </section>
 

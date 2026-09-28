@@ -20,6 +20,7 @@ import {
   cqasAMigrer,
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function parametreWireVersDomaine(wire: ParameterWire): Parameter {
   return {
@@ -250,7 +251,9 @@ export const useParameterStore = defineStore('parameter', () => {
       cqas: cqasDuClient.map(cqaDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Parameter/CPP/CQA : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration Parameter/CPP/CQA : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const p of parametresDuClient) {
       const index = parametersAMigrer.indexOf(p)
@@ -314,7 +317,10 @@ export const useParameterStore = defineStore('parameter', () => {
       unite: input.unite,
       assetNodeId: input.assetNodeId,
     })
-    if (!resultat.ok) throw new Error(`Échec de la création du paramètre : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la création du paramètre : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const parametre = parametreWireVersDomaine(resultat.donnees.parametreProcede)
     parametres.value = [...parametres.value, parametre]
     return parametre
@@ -335,7 +341,8 @@ export const useParameterStore = defineStore('parameter', () => {
       contexte: input.contexte,
       justification: input.justification,
     })
-    if (!resultat.ok) throw new Error(`Échec de la classification : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de la classification : ${libelleErreurServeur(resultat.erreur)}`)
     const classification = classificationWireVersDomaine(resultat.donnees.classification)
     classifications.value = [...classifications.value, classification]
     return classification
@@ -349,7 +356,8 @@ export const useParameterStore = defineStore('parameter', () => {
       contexte: input.contexte,
       justification: input.justification,
     })
-    if (!resultat.ok) throw new Error(`Échec de la déclaration du CPP : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de la déclaration du CPP : ${libelleErreurServeur(resultat.erreur)}`)
     const cpp = cppWireVersDomaine(resultat.donnees.cpp)
     cpps.value = [...cpps.value, cpp]
     return cpp
@@ -381,7 +389,8 @@ export const useParameterStore = defineStore('parameter', () => {
       contexte: input.contexte,
       justification: input.justification,
     })
-    if (!resultat.ok) throw new Error(`Échec de la déclaration du CQA : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de la déclaration du CQA : ${libelleErreurServeur(resultat.erreur)}`)
     const cqa = cqaWireVersDomaine(resultat.donnees.cqa)
     cqas.value = [...cqas.value, cqa]
     return cqa

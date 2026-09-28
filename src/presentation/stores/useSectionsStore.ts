@@ -28,6 +28,7 @@ import { sectionsAMigrer } from '../../persistance/db'
 import { messageRefusSignature } from '../i18n/libellesSignature'
 import { useAuthStore } from './useAuthStore'
 import { documentProjetWireVersDomaine } from './useProjectDocumentsStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface NouvelleSectionInput {
   project_id: string
@@ -304,7 +305,10 @@ export const useSectionsStore = defineStore('sections', () => {
       jeton,
       sectionsAMigrer.map(sectionDomaineVersWire),
     )
-    if (!resultat.ok) throw new Error(`Échec de la migration des sections : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la migration des sections : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     sectionsAMigrer.splice(0, sectionsAMigrer.length)
   }
 
@@ -352,7 +356,10 @@ export const useSectionsStore = defineStore('sections', () => {
     }
     const { api, jeton } = await obtenirApiSection()
     const resultat = await api.creerSection(jeton, sectionDomaineVersWire(section))
-    if (!resultat.ok) throw new Error(`Échec de la création de la section : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la création de la section : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const sectionCreee = sectionWireVersDomaine(resultat.donnees.section)
 
     const apiProjet = await obtenirApiProjet()
@@ -415,7 +422,9 @@ export const useSectionsStore = defineStore('sections', () => {
       texte: entrees.texteDocumentReference,
     })
     if (!resultatDocument.ok) {
-      throw new Error(`Échec de la création du document de référence : ${resultatDocument.erreur}`)
+      throw new Error(
+        `Échec de la création du document de référence : ${libelleErreurServeur(resultatDocument.erreur)}`,
+      )
     }
     const documentReference = documentProjetWireVersDomaine(resultatDocument.donnees.documentProjet)
 
@@ -568,7 +577,8 @@ export const useSectionsStore = defineStore('sections', () => {
     }
     const { api, jeton } = await obtenirApiSection()
     const resultat = await api.creerSection(jeton, sectionDomaineVersWire(section))
-    if (!resultat.ok) throw new Error(`Échec de l'import de la section : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de l'import de la section : ${libelleErreurServeur(resultat.erreur)}`)
     const sectionCreee = sectionWireVersDomaine(resultat.donnees.section)
 
     const apiProjetImport = await obtenirApiProjet()

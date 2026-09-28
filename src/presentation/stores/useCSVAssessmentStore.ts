@@ -4,6 +4,7 @@ import type { EvaluationCSVAssessmentWire } from '../../connecteurs/auth/AuthApi
 import type { CategorieGAMP5, EvaluationCSVAssessment } from '../../logique-metier/domaine/types'
 import { evaluationsCSVAssessmentAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function evaluationCsvWireVersDomaine(
   wire: EvaluationCSVAssessmentWire,
@@ -95,7 +96,9 @@ export const useCSVAssessmentStore = defineStore('csvAssessment', () => {
       evaluationsCsv: evaluationsDuClient.map(evaluationCsvDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Computer System Assessment : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration Computer System Assessment : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const e of evaluationsDuClient) {
       const index = evaluationsCSVAssessmentAMigrer.indexOf(e)
@@ -140,7 +143,9 @@ export const useCSVAssessmentStore = defineStore('csvAssessment', () => {
       justificationPertinence: input.justificationPertinence,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création de l'évaluation CSV : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création de l'évaluation CSV : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const evaluation = evaluationCsvWireVersDomaine(resultat.donnees.evaluationCsv)
     evaluations.value = [...evaluations.value, evaluation]

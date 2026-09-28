@@ -5630,6 +5630,15 @@ async function gererEnregistrerResultatEtape(
   const test = await ctx.testDefinitionRepo.testParId(execution.testId)
   const etapeConnue = test?.etapes.some((e) => e.id === corps.testStepId) ?? false
   if (!etapeConnue) return reponseJson({ erreur: 'etape_inconnue' }, 400, entetes)
+  // Un seul résultat par étape d'une exécution (audit d'intégrité M2 : deux
+  // clics enregistraient deux résultats, parfois contradictoires, pour la
+  // même étape). Une correction passe par un événement d'exécution tracé.
+  const dejaEnregistre = (await ctx.executionRepo.listerExecutionSteps(clientId)).some(
+    (e) => e.executionId === executionId && e.testStepId === corps.testStepId,
+  )
+  if (dejaEnregistre) {
+    return reponseJson({ erreur: 'resultat_etape_deja_enregistre' }, 409, entetes)
+  }
 
   const etape: ExecutionStepEnregistree = {
     id: genererId(),

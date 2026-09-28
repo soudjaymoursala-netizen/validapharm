@@ -12,12 +12,27 @@ import { useClientsStore } from '../stores/useClientsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import { useTestDefinitionStore } from '../stores/useTestDefinitionStore'
 import type { StatutTestCandidate } from '../../logique-metier/domaine/types'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
 
 const clientsStore = useClientsStore()
 const structureStore = useStructureSystemeStore()
 const testStore = useTestDefinitionStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nomClient = ref<string | null>(null)
 const enChargement = ref(true)
@@ -50,7 +65,13 @@ const titreRequirement = ref('')
 const descriptionRequirement = ref('')
 const assetNodeRequirement = ref('')
 
-async function creerRequirement(): Promise<void> {
+async function creerRequirement(
+  ...args: Parameters<typeof creerRequirementSansGarde>
+): Promise<void> {
+  await envoyer(() => creerRequirementSansGarde(...args))
+}
+
+async function creerRequirementSansGarde(): Promise<void> {
   if (refRequirement.value.trim().length === 0 || titreRequirement.value.trim().length === 0) return
   await testStore.creerRequirement(props.clientId, {
     reference: refRequirement.value.trim(),
@@ -83,7 +104,11 @@ const requirementSelectionne = ref('')
 const titreObjectif = ref('')
 const descriptionObjectif = ref('')
 
-async function creerObjectif(): Promise<void> {
+async function creerObjectif(...args: Parameters<typeof creerObjectifSansGarde>): Promise<void> {
+  await envoyer(() => creerObjectifSansGarde(...args))
+}
+
+async function creerObjectifSansGarde(): Promise<void> {
   if (!requirementSelectionne.value || titreObjectif.value.trim().length === 0) return
   await testStore.creerTestObjective(props.clientId, {
     requirementId: requirementSelectionne.value,
@@ -102,7 +127,13 @@ function libelleObjectif(testObjectiveId: string): string {
 // --- Génération de candidats depuis les risques ---
 const messageGenerationParObjectif = ref<Record<string, string>>({})
 
-async function genererDepuisRisques(testObjectiveId: string): Promise<void> {
+async function genererDepuisRisques(
+  ...args: Parameters<typeof genererDepuisRisquesSansGarde>
+): Promise<void> {
+  await envoyer(() => genererDepuisRisquesSansGarde(...args))
+}
+
+async function genererDepuisRisquesSansGarde(testObjectiveId: string): Promise<void> {
   const resultat = await testStore.genererCandidatsRisquesPourObjectif(
     props.clientId,
     testObjectiveId,
@@ -120,7 +151,11 @@ const titreCandidat = ref('')
 const descriptionCandidat = ref('')
 const motifsParCandidat = ref<Record<string, string>>({})
 
-async function creerCandidat(): Promise<void> {
+async function creerCandidat(...args: Parameters<typeof creerCandidatSansGarde>): Promise<void> {
+  await envoyer(() => creerCandidatSansGarde(...args))
+}
+
+async function creerCandidatSansGarde(): Promise<void> {
   if (!objectifSelectionne.value || titreCandidat.value.trim().length === 0) return
   await testStore.creerTestCandidate(props.clientId, {
     testObjectiveId: objectifSelectionne.value,
@@ -131,7 +166,11 @@ async function creerCandidat(): Promise<void> {
   descriptionCandidat.value = ''
 }
 
-async function accepter(candidatId: string): Promise<void> {
+async function accepter(...args: Parameters<typeof accepterSansGarde>): Promise<void> {
+  await envoyer(() => accepterSansGarde(...args))
+}
+
+async function accepterSansGarde(candidatId: string): Promise<void> {
   erreurAction.value = null
   const resultat = await testStore.accepterTestCandidate(props.clientId, candidatId)
   if (!resultat) {
@@ -140,7 +179,11 @@ async function accepter(candidatId: string): Promise<void> {
   }
 }
 
-async function rejeter(candidatId: string): Promise<void> {
+async function rejeter(...args: Parameters<typeof rejeterSansGarde>): Promise<void> {
+  await envoyer(() => rejeterSansGarde(...args))
+}
+
+async function rejeterSansGarde(candidatId: string): Promise<void> {
   const motif = motifsParCandidat.value[candidatId]?.trim()
   if (!motif) return
   erreurAction.value = null
@@ -151,7 +194,13 @@ async function rejeter(candidatId: string): Promise<void> {
   }
 }
 
-async function besoinInformation(candidatId: string): Promise<void> {
+async function besoinInformation(
+  ...args: Parameters<typeof besoinInformationSansGarde>
+): Promise<void> {
+  await envoyer(() => besoinInformationSansGarde(...args))
+}
+
+async function besoinInformationSansGarde(candidatId: string): Promise<void> {
   const motif = motifsParCandidat.value[candidatId]?.trim()
   if (!motif) return
   erreurAction.value = null
@@ -182,7 +231,11 @@ function retirerEtape(index: number): void {
   if (etapesBrouillon.value.length > 1) etapesBrouillon.value.splice(index, 1)
 }
 
-async function creerTest(): Promise<void> {
+async function creerTest(...args: Parameters<typeof creerTestSansGarde>): Promise<void> {
+  await envoyer(() => creerTestSansGarde(...args))
+}
+
+async function creerTestSansGarde(): Promise<void> {
   erreurCreationTest.value = null
   if (!candidatSelectionne.value || titreTest.value.trim().length === 0) return
   const etapes = etapesBrouillon.value
@@ -251,7 +304,13 @@ const requirementCouverture = ref('')
 const testCouverture = ref('')
 const testsApprouves = computed(() => testStore.tests.filter((t) => t.statut === 'approuve'))
 
-async function declarerCouverture(): Promise<void> {
+async function declarerCouverture(
+  ...args: Parameters<typeof declarerCouvertureSansGarde>
+): Promise<void> {
+  await envoyer(() => declarerCouvertureSansGarde(...args))
+}
+
+async function declarerCouvertureSansGarde(): Promise<void> {
   if (!requirementCouverture.value || !testCouverture.value) return
   await testStore.declarerCouverture(
     props.clientId,
@@ -267,6 +326,7 @@ async function declarerCouverture(): Promise<void> {
   <main class="definition-tests">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Exigences et tests — {{ nomClient ?? props.clientId }}</h1>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="rappel">
       Chaîne de définition Requirement → Objectif de test → Candidat → Test, avec couverture
       explicite — jamais déduite automatiquement.
@@ -299,7 +359,7 @@ async function declarerCouverture(): Promise<void> {
               </option>
             </select>
           </label>
-          <button type="submit">Créer l'exigence</button>
+          <button type="submit" :disabled="envoiEnCours">Créer l'exigence</button>
         </form>
         <ul v-if="testStore.requirements.length > 0">
           <li v-for="r in testStore.requirements" :key="r.id">
@@ -339,7 +399,7 @@ async function declarerCouverture(): Promise<void> {
             Description
             <textarea v-model="descriptionObjectif" rows="2" />
           </label>
-          <button type="submit">Ajouter l'objectif</button>
+          <button type="submit" :disabled="envoiEnCours">Ajouter l'objectif</button>
         </form>
         <ul v-if="testStore.testObjectives.length > 0">
           <li v-for="o in testStore.testObjectives" :key="o.id">
@@ -375,7 +435,7 @@ async function declarerCouverture(): Promise<void> {
             Description
             <textarea v-model="descriptionCandidat" rows="2" />
           </label>
-          <button type="submit">Proposer le candidat</button>
+          <button type="submit" :disabled="envoiEnCours">Proposer le candidat</button>
         </form>
         <ul v-if="testStore.testCandidates.length > 0" class="liste-candidats">
           <li v-for="c in testStore.testCandidates" :key="c.id">
@@ -439,7 +499,7 @@ async function declarerCouverture(): Promise<void> {
           <p v-if="erreurCreationTest" class="bandeau-erreur" role="alert">
             {{ erreurCreationTest }}
           </p>
-          <button type="submit">Créer le test</button>
+          <button type="submit" :disabled="envoiEnCours">Créer le test</button>
         </form>
         <ul v-if="testStore.tests.length > 0" class="liste-tests">
           <li v-for="t in testStore.tests" :key="t.id">
@@ -475,7 +535,7 @@ async function declarerCouverture(): Promise<void> {
               <option v-for="t in testsApprouves" :key="t.id" :value="t.id">{{ t.titre }}</option>
             </select>
           </label>
-          <button type="submit">Déclarer la couverture</button>
+          <button type="submit" :disabled="envoiEnCours">Déclarer la couverture</button>
         </form>
         <ul v-if="testStore.couvertures.length > 0">
           <li v-for="c in testStore.couvertures" :key="c.id">

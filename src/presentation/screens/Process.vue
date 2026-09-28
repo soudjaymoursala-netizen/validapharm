@@ -13,6 +13,7 @@ import { useClientsStore } from '../stores/useClientsStore'
 import { useProcessContextStore } from '../stores/useProcessContextStore'
 import { useSourceIntelligenceStore } from '../stores/useSourceIntelligenceStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 defineOptions({ name: 'EcranProcess' })
 const props = defineProps<{ clientId: string }>()
@@ -21,6 +22,20 @@ const clientsStore = useClientsStore()
 const processStore = useProcessContextStore()
 const structureStore = useStructureSystemeStore()
 const sourceStore = useSourceIntelligenceStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nomClient = ref<string | null>(null)
 
@@ -68,7 +83,13 @@ const sourceIdCourante = ref<string | null>(null)
 const enExtraction = ref(false)
 const erreurExtraction = ref<string | null>(null)
 
-async function importerDocumentProcess(evenement: Event): Promise<void> {
+async function importerDocumentProcess(
+  ...args: Parameters<typeof importerDocumentProcessSansGarde>
+): Promise<void> {
+  await envoyer(() => importerDocumentProcessSansGarde(...args))
+}
+
+async function importerDocumentProcessSansGarde(evenement: Event): Promise<void> {
   erreurExtraction.value = null
   const fichier = (evenement.target as HTMLInputElement).files?.[0]
   if (!fichier) return
@@ -109,7 +130,11 @@ async function importerDocumentProcess(evenement: Event): Promise<void> {
   }
 }
 
-async function creerProcess(): Promise<void> {
+async function creerProcess(...args: Parameters<typeof creerProcessSansGarde>): Promise<void> {
+  await envoyer(() => creerProcessSansGarde(...args))
+}
+
+async function creerProcessSansGarde(): Promise<void> {
   if (nomProcess.value.trim().length === 0) return
   await processStore.creerProcess(props.clientId, {
     nom: nomProcess.value.trim(),
@@ -128,7 +153,11 @@ async function creerProcess(): Promise<void> {
 const nomFonction = ref('')
 const descriptionFonction = ref('')
 
-async function creerFonction(): Promise<void> {
+async function creerFonction(...args: Parameters<typeof creerFonctionSansGarde>): Promise<void> {
+  await envoyer(() => creerFonctionSansGarde(...args))
+}
+
+async function creerFonctionSansGarde(): Promise<void> {
   if (nomFonction.value.trim().length === 0) return
   await processStore.creerFonction(props.clientId, {
     nom: nomFonction.value.trim(),
@@ -143,7 +172,13 @@ const fonctionARattacher = ref('')
 const processCibleRattachement = ref('')
 const assetNodeCibleRattachement = ref('')
 
-async function rattacherAProcess(): Promise<void> {
+async function rattacherAProcess(
+  ...args: Parameters<typeof rattacherAProcessSansGarde>
+): Promise<void> {
+  await envoyer(() => rattacherAProcessSansGarde(...args))
+}
+
+async function rattacherAProcessSansGarde(): Promise<void> {
   if (!fonctionARattacher.value || !processCibleRattachement.value) return
   await processStore.associerFonctionAProcess(
     props.clientId,
@@ -153,7 +188,13 @@ async function rattacherAProcess(): Promise<void> {
   processCibleRattachement.value = ''
 }
 
-async function rattacherAActif(): Promise<void> {
+async function rattacherAActif(
+  ...args: Parameters<typeof rattacherAActifSansGarde>
+): Promise<void> {
+  await envoyer(() => rattacherAActifSansGarde(...args))
+}
+
+async function rattacherAActifSansGarde(): Promise<void> {
   if (!fonctionARattacher.value || !assetNodeCibleRattachement.value) return
   await processStore.associerFonctionAAssetNode(
     props.clientId,
@@ -196,6 +237,7 @@ function actifsDeFonction(functionId: string): string[] {
       {{ nomClient ?? props.clientId }}
     </RouterLink>
     <h1>Process — {{ nomClient ?? props.clientId }}</h1>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="rappel">
       Un site peut définir autant de process que nécessaire. Une fonction peut être utilisée dans
       plusieurs process, et un même équipement peut porter plusieurs fonctions — jamais une relation
@@ -238,7 +280,7 @@ function actifsDeFonction(functionId: string): string[] {
             </option>
           </select>
         </label>
-        <button type="submit">Créer le process</button>
+        <button type="submit" :disabled="envoiEnCours">Créer le process</button>
       </form>
       <ul v-if="processStore.processes.length > 0">
         <li v-for="p in processStore.processes" :key="p.id">
@@ -273,7 +315,7 @@ function actifsDeFonction(functionId: string): string[] {
           Description
           <textarea v-model="descriptionFonction" rows="2" />
         </label>
-        <button type="submit">Créer la fonction</button>
+        <button type="submit" :disabled="envoiEnCours">Créer la fonction</button>
       </form>
 
       <ul v-if="processStore.fonctions.length > 0" class="liste-fonctions">

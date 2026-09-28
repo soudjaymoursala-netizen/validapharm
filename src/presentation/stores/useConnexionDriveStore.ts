@@ -4,6 +4,7 @@ import type { ConnexionDriveWire } from '../../connecteurs/auth/AuthApiClient'
 import { DriveConnector } from '../../connecteurs/drive/DriveConnector'
 import { connexionDriveAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface SaisieConnexionDrive {
   dossierId: string
@@ -108,7 +109,8 @@ export const useConnexionDriveStore = defineStore('connexionDrive', () => {
       jeton: saisie.jeton.trim(),
     })
     // Audit d'intégrité M9 : un échec n'est plus ignoré en silence.
-    if (!resultat.ok) throw new Error(`Connexion Drive non enregistrée : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Connexion Drive non enregistrée : ${libelleErreurServeur(resultat.erreur)}`)
     connexion.value = wireVersConnexion(resultat.donnees.connexionDrive)
   }
 
@@ -118,7 +120,8 @@ export const useConnexionDriveStore = defineStore('connexionDrive', () => {
     if (api && authStore.jeton) {
       const resultat = await api.effacerConnexionDrive(authStore.jeton, clientId)
       // Jamais afficher « effacée » si le serveur l'a conservée.
-      if (!resultat.ok) throw new Error(`Échec de l'effacement : ${resultat.erreur}`)
+      if (!resultat.ok)
+        throw new Error(`Échec de l'effacement : ${libelleErreurServeur(resultat.erreur)}`)
     }
     connexion.value = null
   }

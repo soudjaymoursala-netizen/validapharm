@@ -4116,6 +4116,11 @@ focus visible ; jeton invalide → retour à la connexion avec message.
 ### 40.4 Reste à faire (constats non traités dans ce lot, par priorité)
 
 Référence : rapports de `docs/audits/audit-2026-09-25/`.
+
+> **(28/09/2026)** Les deux premiers points (« Intégrité » et « Robustesse
+> front ») sont traités au §42, sauf le retrait d'`extractedText` des listes
+> de normes (voir §42.4). Les points UX qui suivent restent à faire.
+
 - **Intégrité** : le Worker n'effectue pas de recalcul des verdicts ACFC/Impact/AMDEC
   envoyés par le navigateur ni de vérification du profil/de la version (intégrité M5) ;
   couverture de test vers un test inexistant ou d'un autre client
@@ -4303,3 +4308,131 @@ la nouvelle session (`sessionInvalide` ne compare pas le jeton refusé au
 jeton courant). Cas rare (se déconnecter puis se reconnecter pendant qu'un
 chargement est en cours) ; correctif simple : transmettre le jeton utilisé
 à `observateurSessionInvalide` et ignorer le refus s'il ne correspond plus.
+**Corrigé au §42.2.**
+
+## 42. Suite de l'audit : intégrité serveur et robustesse de l'interface (28/09/2026)
+
+**Demande** : « D'autres chantiers restent ? » → proposition des blocs 1
+(intégrité et sécurité serveur) et 2 (robustesse de l'interface) du §40.4
+→ « Oui » (nouvelle PR, fusion une fois la CI verte).
+
+**Aucune migration D1** : tout tient dans le schéma existant (le quota IA
+réutilise la table `tentatives_connexion` de la migration 0029, déjà en
+production ; l'auteur d'une qualification IA vit dans la colonne JSON
+existante ; l'auteur d'une couverture est consigné dans le journal
+central). Le déploiement du Worker suffit.
+
+### 42.1 Serveur (Worker)
+
+- **Verdicts recalculés par le serveur** (`verdictsEvaluation.ts`,
+  intégrité M5) : ACFC, Impact Assessment, AMDEC (IPR et verdicts initial
+  et résiduel). La méthode est résolue depuis `methodProfileId` (400
+  `methode_introuvable`), la version envoyée doit être la sienne (409
+  `version_methode_incoherente`), chaque réponse doit viser une question de
+  la méthode avec une valeur connue (400 `reponses_invalides`). Verdict
+  absent → le serveur le fournit ; verdict différent → 409
+  `verdict_incoherent` (avec le verdict attendu). Copie serveur des règles
+  (discipline habituelle du Worker, jamais d'import du front) ; un test de
+  parité (`verdictsEvaluation.parite.test.ts`) vérifie toutes les
+  combinaisons de 0 à 3 questions et toutes les notes AMDEC (absentes, hors
+  échelle, décimales, `NaN`).
+- **Questionnaire vide / règle inconnue** (m4) : méthode sans question
+  refusée ; aucune question → aucun verdict (jamais « non critique ») ;
+  règle inconnue → `null` (front et serveur).
+- **Notes AMDEC entières** (m5) : `NaN` ou 2,5 → IPR non calculé, jamais
+  « acceptable » (front et serveur).
+- **Bornes AMDEC** (M10) : entiers, échelle minimale ≥ 1,
+  `min³ < seuil ≤ max³` (`refusBornesAmdec` / `messageBornesAmdec`,
+  même règle des deux côtés, message clair à l'écran).
+- **Numéro de version de méthode attribué par le serveur** (M7,
+  `versionSuivante`) : le navigateur ne l'envoie plus (ignoré s'il le
+  fait) ; deux envois « v1 » donnent v1 puis v2. Reste une course
+  théorique entre deux créations simultanées (pas de contrainte d'unicité
+  en base : l'ajouter demanderait une migration et échouerait si des
+  doublons existent déjà en production).
+- **Couvertures de test** (M6) : exigence et test doivent exister et
+  appartenir au client (400 `exigence_introuvable` / `test_introuvable`),
+  création consignée (`creation_couverture`). Readiness : un test couvrant
+  introuvable → `besoin_information`, jamais « prêt » (front et serveur).
+- **Références vérifiées** (sécurité m6, `refusReferences`) : nœud,
+  parent, espace de travail, processus, paramètre, exigence — existants et
+  du même client — sur les créations de paramètre, classification, CPP,
+  évaluations ACFC/Impact/CSV/AMDEC, associations fonction↔nœud/processus,
+  contexte de fabrication, événement qualité, exigence, objectif de test,
+  exécution, plan de livrable, mission, nœud (création, lot, pull QMS,
+  re-parentage). Re-parentage : jamais sous un de ses descendants (400
+  `cycle_hierarchie`).
+- **Tailles** (m4) : corps JSON ≤ 10 Mo, fichier ≤ 30 Mo par requête
+  (413 `corps_trop_volumineux`) ; à l'import d'un document (normes,
+  projet) fichier ≤ 25 Mo et texte extrait ≤ 2 Mo ; lots de nœuds ≤ 500
+  (413 `lot_trop_grand`, le front découpe désormais l'import en paquets,
+  parents d'abord) ; id imposé déjà pris → 409 `id_conflit`.
+- **Qualification IA** (M8) : auteur (`par`) et horodatage serveur
+  (`enregistreeLe` ; `date` reste la date de la campagne saisie) ;
+  acquittement des conditions daté et attribué par le serveur ; une valeur
+  inchangée garde son auteur et sa date ; chaque changement consigné avec
+  l'avant/après (`qualification_ia_modifiee`, `conditions_ia_acquittees`,
+  `fournisseur_ia_modifie`).
+- **Connecteurs QMS** (M9) : activation, désactivation et suppression
+  consignées (`suppression_connecteur` avec type et nom).
+- **Quota du relais IA** (a1, `quotaRelaisIA.ts`) : 300 appels par heure
+  et par utilisateur (429 `quota_ia_atteint`), persisté en D1 (clé
+  `ia:<userId>` dans `tentatives_connexion`), repli mémoire.
+- **Jeton d'initialisation** (a3) et empreintes de mot de passe comparés à
+  temps constant (`chainesEgalesTempsConstant`).
+- **OAuth Google** (a4) : un état par admin (`drive-oauth-etat:<adminId>`,
+  un second admin n'écrase plus le flux du premier) et PKCE S256.
+- **Un seul résultat par étape d'exécution** (M2 côté serveur) : 409
+  `resultat_etape_deja_enregistre`.
+
+### 42.2 Interface
+
+- **Codes d'erreur lisibles** (m3, `i18n/libellesErreurServeur.ts`) : les
+  ~130 messages `Échec … : ${resultat.erreur}` des stores affichent une
+  phrase française suivie du code entre parenthèses (pour le support). Un
+  test vérifie que **chaque** code émis par le Worker a un libellé. Dates
+  en français (`formaterDateFr`, jamais décalées d'un jour) dans le
+  Dossier vivant et la fiche projet.
+- **Filet global** (M1, `useErreursGlobalesStore`) : `app.config.errorHandler`
+  et `unhandledrejection` → bandeau « Action non aboutie : … » dans la
+  coquille (sans doublon, 3 au plus, refermé au changement d'écran).
+- **Un seul envoi à la fois** (M2, `composables/useEnvoiUnique.ts`) sur les
+  actions d'écriture de 16 écrans (Impact, ACFC, AMDEC, CSV, paramètres
+  critiques, sources, process, définition et exécution des tests,
+  missions, anomalies, plans de livrable, Structure Système, fiche
+  projet, tableau de bord, assistant de livrable) + message d'erreur dans
+  l'écran. Preuve P1 de l'audit reprise en test (double clic → une seule
+  évaluation ; échoue sans le correctif).
+- **États vides honnêtes** (UX entrée #2) : si le chargement échoue,
+  clients, projets, méthodes ACFC/Impact/AMDEC et comptes affichent
+  « Impossible de charger… » (et non « créez le premier »), et les boutons
+  de création sont désactivés.
+- **Configuration IA / Drive / connecteurs QMS** (M8, M9) : les échecs
+  d'enregistrement sont affichés (auparavant ignorés), suppression d'un
+  connecteur confirmée, auteur de la qualification affiché.
+- **Session** : le refus d'une requête partie avec un ancien jeton ne
+  ferme plus la nouvelle session (`observateurSessionInvalide` reçoit le
+  jeton refusé ; test qui échoue sans le correctif).
+
+### 42.3 Vérification
+
+Worker : 413 tests (+ verdicts falsifiés refusés, méthode/version/réponses
+invalides, nœud d'un autre client, questionnaire vide, numérotation v1→v2,
+bornes AMDEC, IPR résiduel recalculé, couvertures, références et boucle,
+lots, qualification IA attribuée et tracée, quota, tailles, suppression de
+connecteur tracée, PKCE, résultat d'étape unique). Front : libellés
+d'erreur, bornes AMDEC, parité des verdicts, bandeau global, envoi unique,
+double clic, session. Les tests qui citaient des nœuds ou processus
+inventés sèment désormais de vrais enregistrements
+(`semerNoeudsDeTest`, `semerWorkspaceDeTest`).
+
+### 42.4 Reste à faire
+
+- `extractedText` toujours présent dans `GET /documents-normatifs` : le
+  chat normatif s'en sert directement depuis la liste ; le retirer demande
+  un chargement du texte à la demande (chantier dédié). La taille est
+  désormais bornée à 2 Mo par document.
+- Contrainte d'unicité (client, version) des méthodes : migration à
+  prévoir après vérification des doublons existants en production.
+- Les points UX du §40.4 (projets/rédaction, évaluations,
+  exécution/qualité, entrée/administration).

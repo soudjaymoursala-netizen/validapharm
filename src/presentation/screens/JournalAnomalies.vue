@@ -17,12 +17,27 @@ import type {
   QualityEvent,
   TypeQualityEvent,
 } from '../../logique-metier/domaine/types'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
 
 const clientsStore = useClientsStore()
 const evenementsStore = useQualityEventStore()
 const structureStore = useStructureSystemeStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nomClient = ref<string | null>(null)
 const chargementInitial = ref(true)
@@ -84,7 +99,11 @@ async function changerStatut(evenementId: string, statut: QualityEvent['statut']
 
 const formulaireComplet = computed(() => brouillon.type !== '' && brouillon.titre.trim().length > 0)
 
-async function creerEvenement(): Promise<void> {
+async function creerEvenement(...args: Parameters<typeof creerEvenementSansGarde>): Promise<void> {
+  await envoyer(() => creerEvenementSansGarde(...args))
+}
+
+async function creerEvenementSansGarde(): Promise<void> {
   if (!formulaireComplet.value || !brouillon.type) return
   await evenementsStore.creerEvenement(props.clientId, {
     type: brouillon.type,
@@ -118,7 +137,11 @@ const evenementsFiltres = computed(() =>
     .sort((a, b) => b.created_at.localeCompare(a.created_at)),
 )
 
-async function creerReference(cibleId: string): Promise<void> {
+async function creerReference(...args: Parameters<typeof creerReferenceSansGarde>): Promise<void> {
+  await envoyer(() => creerReferenceSansGarde(...args))
+}
+
+async function creerReferenceSansGarde(cibleId: string): Promise<void> {
   const sourceId = evenementSourcePourReference[cibleId]
   if (!sourceId) return
   await evenementsStore.referencerEvenement(props.clientId, sourceId, cibleId)
@@ -139,6 +162,7 @@ function titreEvenement(id: string): string {
   <main class="journal-anomalies">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Journal d'anomalies — {{ nomClient ?? props.clientId }}</h1>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="bandeau-disclaimer">
       Change Control, Déviation, CAPA, Investigation, Constat d'audit, Revue périodique. Un
       événement externe référencé n'est jamais un verrou sur un autre module.

@@ -35,6 +35,7 @@ import { useQualityEventStore } from './useQualityEventStore'
 import { useSourceIntelligenceStore } from './useSourceIntelligenceStore'
 import { useStructureSystemeStore } from './useStructureSystemeStore'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 const VERSION_CONFIGURATION_ACTUELLE = 'v1'
 
@@ -198,7 +199,9 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       citations: citationsDuClient.map(citationDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Reasoning Engine : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration Reasoning Engine : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const [tableau, duClient] of [
       [aiConfigurationsAMigrer, configurationsDuClient],
@@ -263,7 +266,9 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       outilsDisponibles: CATALOGUE_OUTILS_RAISONNEMENT.map((o) => o.nom),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création de l'AIConfiguration : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création de l'AIConfiguration : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const configuration = aiConfigurationWireVersDomaine(resultat.donnees.configuration)
     const dejaPresente = configurations.value.some((c) => c.id === configuration.id)
@@ -384,7 +389,9 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       objectif: entrees.objectif,
     })
     if (!creationRequest.ok) {
-      throw new Error(`Échec de la création de l'AIRequest : ${creationRequest.erreur}`)
+      throw new Error(
+        `Échec de la création de l'AIRequest : ${libelleErreurServeur(creationRequest.erreur)}`,
+      )
     }
     const request = aiRequestWireVersDomaine(creationRequest.donnees.request)
     requests.value = [...requests.value, request]
@@ -397,7 +404,9 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
       versionMoteur: resultat.versionMoteur,
     })
     if (!creationResponse.ok) {
-      throw new Error(`Échec de la création de l'AIResponse : ${creationResponse.erreur}`)
+      throw new Error(
+        `Échec de la création de l'AIResponse : ${libelleErreurServeur(creationResponse.erreur)}`,
+      )
     }
     const response = aiResponseWireVersDomaine(creationResponse.donnees.response)
     responses.value = [...responses.value, response]
@@ -427,7 +436,9 @@ export const useReasoningEngineStore = defineStore('reasoningEngine', () => {
         citationsAEnvoyer,
       )
       if (!creationCitations.ok) {
-        throw new Error(`Échec de la création des citations : ${creationCitations.erreur}`)
+        throw new Error(
+          `Échec de la création des citations : ${libelleErreurServeur(creationCitations.erreur)}`,
+        )
       }
       const nouvellesCitations = creationCitations.donnees.citations.map(citationWireVersDomaine)
       citations.value = [...citations.value, ...nouvellesCitations]

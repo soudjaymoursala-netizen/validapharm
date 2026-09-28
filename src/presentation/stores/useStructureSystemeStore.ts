@@ -40,6 +40,7 @@ import {
   relationsTechniquesAMigrer,
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface NouveauNiveauInput {
   key: string
@@ -254,7 +255,10 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
         clientId,
         noeudsClient.map(noeudDomaineVersWireComplet),
       )
-      if (!resultat.ok) throw new Error(`Échec de la migration des nœuds : ${resultat.erreur}`)
+      if (!resultat.ok)
+        throw new Error(
+          `Échec de la migration des nœuds : ${libelleErreurServeur(resultat.erreur)}`,
+        )
       for (const n of noeudsClient) {
         const index = assetNodesAMigrer.findIndex((x) => x.id === n.id)
         if (index !== -1) assetNodesAMigrer.splice(index, 1)
@@ -272,7 +276,9 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       // Même discipline que les nœuds ci-dessus : jamais retirer une
       // relation de la file de migration sans écriture confirmée.
       if (!ecriture.ok) {
-        throw new Error(`Échec de la migration des relations techniques : ${ecriture.erreur}`)
+        throw new Error(
+          `Échec de la migration des relations techniques : ${libelleErreurServeur(ecriture.erreur)}`,
+        )
       }
       const index = relationsTechniquesAMigrer.findIndex((x) => x.id === r.id)
       if (index !== -1) relationsTechniquesAMigrer.splice(index, 1)
@@ -340,7 +346,8 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       clientId,
       niveaux.map(niveauDomaineVersWire),
     )
-    if (!resultat.ok) throw new Error(`Échec de l'enregistrement : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de l'enregistrement : ${libelleErreurServeur(resultat.erreur)}`)
     return schemaWireVersDomaine(resultat.donnees.schema)
   }
 
@@ -455,7 +462,8 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       parentId: input.parent_id,
       workspaceId,
     })
-    if (!resultat.ok) throw new Error(`Échec de la création du nœud : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de la création du nœud : ${libelleErreurServeur(resultat.erreur)}`)
     const noeud = noeudWireVersDomaine(resultat.donnees.noeud)
     noeuds.value = [...noeuds.value, noeud]
     return { ok: true }
@@ -607,7 +615,7 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
           nouveauxNoeuds.length > 0
             ? ` (${nouveauxNoeuds.length} nœud(s) déjà créé(s) avant l'échec)`
             : ''
-        throw new Error(`Échec de l'import : ${resultat.erreur}${dejaCrees}`)
+        throw new Error(`Échec de l'import : ${libelleErreurServeur(resultat.erreur)}${dejaCrees}`)
       }
       const crees = resultat.donnees.noeuds.map(noeudWireVersDomaine)
       nouveauxNoeuds.push(...crees)
@@ -639,7 +647,8 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
     }))
     const { api, jeton } = await obtenirApi()
     const resultat = await api.creerNoeudsPullQms(jeton, clientId, connectorId, saisies)
-    if (!resultat.ok) throw new Error(`Échec du pull QMS : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec du pull QMS : ${libelleErreurServeur(resultat.erreur)}`)
     const nouveauxNoeuds = resultat.donnees.noeuds.map(noeudWireVersDomaine)
     noeuds.value = [...noeuds.value, ...nouveauxNoeuds]
     return nouveauxNoeuds
@@ -664,7 +673,8 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       parentId: nouveauParentId,
       action: 'modification',
     })
-    if (!resultat.ok) throw new Error(`Échec du reparentage : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec du reparentage : ${libelleErreurServeur(resultat.erreur)}`)
     const misAJour = noeudWireVersDomaine(resultat.donnees.noeud)
     noeuds.value = noeuds.value.map((n) => (n.id === noeudId ? misAJour : n))
     return { ok: true }
@@ -714,7 +724,10 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       noeudSourceId,
       noeudCibleId,
     })
-    if (!resultat.ok) throw new Error(`Échec de la création de la relation : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la création de la relation : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const relation = relationWireVersDomaine(resultat.donnees.relation)
     relationsTechniques.value = [...relationsTechniques.value, relation]
     return { ok: true, relation }
@@ -748,7 +761,8 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       periodicQualification: changement.periodic_qualification,
       action: 'modification',
     })
-    if (!resultat.ok) throw new Error(`Échec de la modification : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de la modification : ${libelleErreurServeur(resultat.erreur)}`)
     const misAJour = noeudWireVersDomaine(resultat.donnees.noeud)
     noeuds.value = noeuds.value.map((n) => (n.id === noeudId ? misAJour : n))
   }

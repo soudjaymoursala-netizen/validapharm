@@ -15,9 +15,11 @@ import { useRoute } from 'vue-router'
 import BarreLaterale from './BarreLaterale.vue'
 import IconeSvg from './IconeSvg.vue'
 import { useConnectiviteServeurStore } from '../stores/useConnectiviteServeurStore'
+import { useErreursGlobalesStore } from '../stores/useErreursGlobalesStore'
 
 const route = useRoute()
 const connectivite = useConnectiviteServeurStore()
+const erreursGlobales = useErreursGlobalesStore()
 
 // Recharge la page : chaque écran relance ses chargements, et le bandeau
 // disparaît de lui-même dès que le serveur répond à nouveau.
@@ -48,6 +50,8 @@ watch(
   () => route.fullPath,
   () => {
     menuMobileOuvert.value = false
+    // Les erreurs d'un écran quitté ne concernent plus l'écran affiché.
+    erreursGlobales.toutFermer()
   },
 )
 </script>
@@ -77,6 +81,12 @@ watch(
         N'enregistrez rien de nouveau avant le retour de la connexion.
         <button type="button" @click="reessayer">Réessayer</button>
       </p>
+      <div v-if="erreursGlobales.erreurs.length > 0" class="erreurs-globales" role="alert">
+        <p v-for="e in erreursGlobales.erreurs" :key="e.id" class="erreurs-globales__message">
+          <span>Action non aboutie : {{ e.message }}</span>
+          <button type="button" @click="erreursGlobales.fermer(e.id)">Fermer</button>
+        </p>
+      </div>
       <RouterView :key="cleEcran" />
     </div>
   </div>
@@ -103,6 +113,27 @@ watch(
   gap: 0.75rem;
   margin: 0;
   padding: 0.75rem 1rem;
+  background-color: var(--vp-danger-fond-leger);
+  color: var(--vp-danger);
+  border-bottom: 1px solid var(--vp-danger);
+}
+
+.erreurs-globales {
+  position: sticky;
+  top: 0;
+  z-index: 49;
+  display: flex;
+  flex-direction: column;
+}
+
+.erreurs-globales__message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.6rem 1rem;
   background-color: var(--vp-danger-fond-leger);
   color: var(--vp-danger);
   border-bottom: 1px solid var(--vp-danger);

@@ -8,6 +8,7 @@ import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
 import type { ClientConfig, QualificationFiabiliteIA } from '../../logique-metier/domaine/types'
 import { clientConfigsAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface SaisieQualification {
   date: string
@@ -179,7 +180,7 @@ export const useClientConfigStore = defineStore('clientConfig', () => {
       clientConfigDomaineVersWire(misAJour),
     )
     if (!resultat.ok) {
-      throw new Error(`Configuration IA non enregistrée : ${resultat.erreur}`)
+      throw new Error(`Configuration IA non enregistrée : ${libelleErreurServeur(resultat.erreur)}`)
     }
     config.value = clientConfigWireVersDomaine(resultat.donnees.clientConfig)
   }
