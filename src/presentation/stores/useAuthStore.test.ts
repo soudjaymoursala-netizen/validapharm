@@ -130,3 +130,19 @@ describe('useAuthStore', () => {
     expect(await useAuthStore().client()).not.toBeNull()
   })
 })
+
+describe('session refusée par le serveur', () => {
+  test("le refus d'une requête partie avec un ancien jeton ne ferme jamais la session actuelle", async () => {
+    await connecterAdminDeTest('admin@pharmatech.example', 'CoffreFort!2026')
+    const store = useAuthStore()
+    const api = await store.client()
+
+    // Requête envoyée avec un jeton qui n'est plus celui de la session
+    // (typiquement : partie juste avant une reconnexion).
+    const resultat = await api?.listerClients('jeton-d-une-session-remplacee')
+    expect(resultat?.ok).toBe(false)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(store.estConnecte).toBe(true)
+  })
+})

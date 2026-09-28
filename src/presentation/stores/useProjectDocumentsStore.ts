@@ -4,6 +4,7 @@ import type { ProjectDocumentWire } from '../../connecteurs/auth/AuthApiClient'
 import type { ProjectDocument } from '../../logique-metier/domaine/types'
 import { projectDocumentsAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function documentProjetWireVersDomaine(wire: ProjectDocumentWire): ProjectDocument {
   return {
@@ -90,7 +91,9 @@ export const useProjectDocumentsStore = defineStore('projectDocuments', () => {
         ...(ancien.content ? { contenu: ancien.content } : {}),
       })
       if (!resultat.ok) {
-        throw new Error(`Échec de la migration du document : ${resultat.erreur}`)
+        throw new Error(
+          `Échec de la migration du document : ${libelleErreurServeur(resultat.erreur)}`,
+        )
       }
       projectDocumentsAMigrer.shift()
     }
@@ -131,7 +134,8 @@ export const useProjectDocumentsStore = defineStore('projectDocuments', () => {
       texte: '',
       contenu: fichier,
     })
-    if (!resultat.ok) throw new Error(`Échec du chargement du document : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec du chargement du document : ${libelleErreurServeur(resultat.erreur)}`)
     const document = documentProjetWireVersDomaine(resultat.donnees.documentProjet)
 
     const apiProjet = await obtenirApiProjet()
@@ -150,7 +154,8 @@ export const useProjectDocumentsStore = defineStore('projectDocuments', () => {
   async function supprimerDocument(documentId: string): Promise<void> {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.supprimerDocumentProjet(jeton, documentId)
-    if (!resultat.ok) throw new Error(`Échec de la suppression : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de la suppression : ${libelleErreurServeur(resultat.erreur)}`)
     documents.value = documents.value.filter((d) => d.id !== documentId)
   }
 
@@ -158,7 +163,8 @@ export const useProjectDocumentsStore = defineStore('projectDocuments', () => {
   async function telechargerContenu(documentId: string): Promise<Blob> {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.obtenirContenuDocumentProjet(jeton, documentId)
-    if (!resultat.ok) throw new Error(`Échec du téléchargement : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec du téléchargement : ${libelleErreurServeur(resultat.erreur)}`)
     return resultat.blob
   }
 

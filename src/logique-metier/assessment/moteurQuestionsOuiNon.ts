@@ -31,12 +31,16 @@ export function auMoinsUneReponseOui(
  *   `null` : **pas de verdict**, l'évaluation reste « à compléter ». Un
  *   `inconnu` n'est jamais assimilé à un `non` — le deviner serait fabriquer
  *   une conclusion ;
- * - sinon (uniquement des `non`/`sans_objet`) → `'negatif'`.
+ * - sinon (uniquement des `non`/`sans_objet`) → `'negatif'` ;
+ * - aucune question → `null`.
  */
 export function conclusionQuestionnaireOuiNon(
   questionIds: readonly string[],
   reponses: Readonly<Record<string, ReponseQuestionOuiNon>>,
 ): 'positif' | 'negatif' | null {
+  // Aucune question : rien ne permet de conclure (audit m4 — un
+  // questionnaire vide donnait un verdict favorable).
+  if (questionIds.length === 0) return null
   if (auMoinsUneReponseOui(questionIds, reponses)) return 'positif'
   const indetermine = questionIds.some(
     (id) => reponses[id] === undefined || reponses[id] === 'inconnu',

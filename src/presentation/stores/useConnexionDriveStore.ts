@@ -4,6 +4,7 @@ import type { ConnexionDriveWire } from '../../connecteurs/auth/AuthApiClient'
 import { DriveConnector } from '../../connecteurs/drive/DriveConnector'
 import { connexionDriveAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface SaisieConnexionDrive {
   dossierId: string
@@ -99,13 +100,18 @@ export const useConnexionDriveStore = defineStore('connexionDrive', () => {
   async function enregistrer(clientId: string, saisie: SaisieConnexionDrive): Promise<void> {
     const authStore = useAuthStore()
     const api = await authStore.client()
-    if (!api || !authStore.jeton) return
+    if (!api || !authStore.jeton) {
+      throw new Error("Connexion Drive non enregistrée : serveur d'authentification non configuré.")
+    }
 
     const resultat = await api.enregistrerConnexionDrive(authStore.jeton, clientId, {
       dossierId: saisie.dossierId.trim(),
       jeton: saisie.jeton.trim(),
     })
-    if (resultat.ok) connexion.value = wireVersConnexion(resultat.donnees.connexionDrive)
+    // Audit d'intégrité M9 : un échec n'est plus ignoré en silence.
+    if (!resultat.ok)
+      throw new Error(`Connexion Drive non enregistrée : ${libelleErreurServeur(resultat.erreur)}`)
+    connexion.value = wireVersConnexion(resultat.donnees.connexionDrive)
   }
 
   async function effacer(clientId: string): Promise<void> {
@@ -114,7 +120,8 @@ export const useConnexionDriveStore = defineStore('connexionDrive', () => {
     if (api && authStore.jeton) {
       const resultat = await api.effacerConnexionDrive(authStore.jeton, clientId)
       // Jamais afficher « effacée » si le serveur l'a conservée.
-      if (!resultat.ok) throw new Error(`Échec de l'effacement : ${resultat.erreur}`)
+      if (!resultat.ok)
+        throw new Error(`Échec de l'effacement : ${libelleErreurServeur(resultat.erreur)}`)
     }
     connexion.value = null
   }

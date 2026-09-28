@@ -27,12 +27,27 @@ import {
   type NiveauComplexite,
 } from '../../logique-metier/strategie-qualification/grilleDecision'
 import { libelleVerdictAcfc } from '../i18n/libellesVerdictQuestionnaire'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
 
 const clientsStore = useClientsStore()
 const methodeStore = useMethodProfileACFCStore()
 const structureStore = useStructureSystemeStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nomClient = ref<string | null>(null)
 const formulaireConfigOuvert = ref(false)
@@ -70,7 +85,13 @@ function retirerLigneQuestion(index: number): void {
  * que le reste de l'écran : aucune question n'est jamais fabriquée,
  * seulement reprise mot pour mot de ce que l'utilisateur a fourni).
  */
-async function importerQuestionsTexte(evenement: Event): Promise<void> {
+async function importerQuestionsTexte(
+  ...args: Parameters<typeof importerQuestionsTexteSansGarde>
+): Promise<void> {
+  await envoyer(() => importerQuestionsTexteSansGarde(...args))
+}
+
+async function importerQuestionsTexteSansGarde(evenement: Event): Promise<void> {
   const fichier = (evenement.target as HTMLInputElement).files?.[0]
   if (!fichier) return
   ;(evenement.target as HTMLInputElement).value = ''
@@ -84,7 +105,13 @@ async function importerQuestionsTexte(evenement: Event): Promise<void> {
   brouillonQuestions.splice(0, brouillonQuestions.length, ...lignes)
 }
 
-async function enregistrerNouvelleVersion(): Promise<void> {
+async function enregistrerNouvelleVersion(
+  ...args: Parameters<typeof enregistrerNouvelleVersionSansGarde>
+): Promise<void> {
+  await envoyer(() => enregistrerNouvelleVersionSansGarde(...args))
+}
+
+async function enregistrerNouvelleVersionSansGarde(): Promise<void> {
   const questions = brouillonQuestions
     .map((texte) => texte.trim())
     .filter((texte) => texte.length > 0)
@@ -134,7 +161,13 @@ const verdict = computed(() => {
   )
 })
 
-async function enregistrerEvaluation(): Promise<void> {
+async function enregistrerEvaluation(
+  ...args: Parameters<typeof enregistrerEvaluationSansGarde>
+): Promise<void> {
+  await envoyer(() => enregistrerEvaluationSansGarde(...args))
+}
+
+async function enregistrerEvaluationSansGarde(): Promise<void> {
   if (!complet.value || nomElement.value.trim().length === 0) return
   erreurEvaluation.value = null
   const resultat = await methodeStore.creerEvaluation(props.clientId, {
@@ -164,15 +197,25 @@ const complexite = ref<NiveauComplexite | null>(null)
 const conclusion = computed(() =>
   verdict.value ? determinerConclusion(verdict.value, complexite.value) : null,
 )
+
+function recharger(): void {
+  window.location.reload()
+}
 </script>
 
 <template>
   <main class="assistant-strategie">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Stratégie de qualification — {{ nomClient ?? props.clientId }}</h1>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="bandeau-disclaimer">Aide à la décision, non une décision de qualification.</p>
 
     <p v-if="enChargement" class="etat-vide">Chargement…</p>
+    <p v-else-if="methodeStore.chargementEchoue" class="bandeau-erreur" role="alert">
+      Impossible de charger les méthodes ACFC de ce client (serveur injoignable ou session expirée)
+      : rien n'est perdu, mais n'en créez pas de nouvelle avant d'avoir rechargé la page.
+      <button type="button" @click="recharger">Recharger</button>
+    </p>
     <template v-else>
       <section v-if="!methodeStore.profilActif || formulaireConfigOuvert" class="bloc-config">
         <h2>Configuration de la méthode ACFC</h2>
@@ -230,7 +273,7 @@ const conclusion = computed(() =>
             >
               Annuler
             </button>
-            <button type="submit">Enregistrer cette version</button>
+            <button type="submit" :disabled="envoiEnCours">Enregistrer cette version</button>
           </div>
         </form>
       </section>

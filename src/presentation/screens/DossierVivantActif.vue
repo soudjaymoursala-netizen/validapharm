@@ -39,6 +39,7 @@ import { useAuthStore } from '../stores/useAuthStore'
 import { sectionWireVersDomaine } from '../stores/useSectionsStore'
 import { LIBELLES_STATUT_QUALIFICATION } from '../../logique-metier/i18n/libellesStatutQualification'
 import { libelleVerdictAcfc, libelleVerdictImpact } from '../i18n/libellesVerdictQuestionnaire'
+import { formaterDateFr } from '../i18n/formaterDate'
 
 const props = defineProps<{ clientId: string; noeudId: string }>()
 
@@ -153,7 +154,7 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
           <dd>{{ LIBELLES_STATUT_QUALIFICATION[noeud.qualification_status] }}</dd>
           <dt v-if="noeud.periodic_qualification.applicable">Échéance de requalification</dt>
           <dd v-if="noeud.periodic_qualification.applicable">
-            {{ noeud.periodic_qualification.deadline ?? 'non renseignée' }}
+            {{ formaterDateFr(noeud.periodic_qualification.deadline) || 'non renseignée' }}
           </dd>
         </dl>
       </section>
@@ -184,20 +185,20 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
         <ul v-else class="liste-evaluations">
           <li v-for="e in evaluationsACFC" :key="e.id">
             ACFC — {{ e.nom_element }} : {{ libelleVerdictAcfc(e.verdict) }} ({{
-              e.created_at.slice(0, 10)
+              formaterDateFr(e.created_at)
             }})
           </li>
           <li v-for="e in evaluationsImpact" :key="e.id">
             Impact Assessment — {{ e.nom_element }} :
             {{ libelleVerdictImpact(e.verdict) }}
-            ({{ e.created_at.slice(0, 10) }})
+            ({{ formaterDateFr(e.created_at) }})
           </li>
           <li v-for="e in evaluationsCSV" :key="e.id">
             Computer System Assessment — {{ e.nom_systeme }} : Catégorie GAMP
-            {{ e.categorie_gamp5 }} ({{ e.created_at.slice(0, 10) }})
+            {{ e.categorie_gamp5 }} ({{ formaterDateFr(e.created_at) }})
           </li>
           <li v-for="e in evaluationsRisque" :key="e.id">
-            Risk Assessment / AMDEC ({{ e.created_at.slice(0, 10) }})
+            Risk Assessment / AMDEC ({{ formaterDateFr(e.created_at) }})
           </li>
         </ul>
       </section>
@@ -226,7 +227,7 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
             <strong>{{ e.titre }}</strong>
             <span class="meta">
               ({{ LIBELLES_TYPE_QUALITY_EVENT[e.type] }} —
-              {{ LIBELLES_STATUT_QUALITY_EVENT[e.statut] }}, {{ e.created_at.slice(0, 10) }})
+              {{ LIBELLES_STATUT_QUALITY_EVENT[e.statut] }}, {{ formaterDateFr(e.created_at) }})
             </span>
           </li>
         </ul>

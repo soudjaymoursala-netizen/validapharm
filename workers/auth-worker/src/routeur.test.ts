@@ -20,6 +20,7 @@ import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from './repos/evidenceRepo'
 import { AiChatSessionLogRepoMemoire } from './repos/aiChatSessionLogRepo'
 import { ClientConfigRepoMemoire } from './repos/clientConfigRepo'
+import { QuotaRelaisIAMemoire } from './quotaRelaisIA'
 import { ConnexionDriveRepoMemoire } from './repos/connexionDriveRepo'
 import { EtatMiroirDriveRepoMemoire } from './repos/etatMiroirDriveRepo'
 import { ExecutionRepoMemoire } from './repos/executionRepo'
@@ -127,6 +128,7 @@ interface EntreeAuditJson {
   action: string
   targetType: string
   targetId: string
+  acteurEmail?: string
   justification: string | null
   timestamp: string
 }
@@ -725,7 +727,7 @@ interface QualificationFiabiliteIAJson {
 interface ClientConfigJson {
   clientId: string
   aiProvider: string
-  aiProviderConditionsAcquittees: { fournisseur: string; date: string } | null
+  aiProviderConditionsAcquittees: { fournisseur: string; date: string; par?: string } | null
   aiProviderReliabilityQualification: {
     chat_normatif: QualificationFiabiliteIAJson | null
     audit_simule: QualificationFiabiliteIAJson | null
@@ -1116,6 +1118,47 @@ async function requete(
   )
   const corps = await reponse.json().catch(() => null)
   return { status: reponse.status, corps }
+}
+
+/**
+ * Nœuds et processus « de décor » réellement enregistrés pour ce client :
+ * le Worker refuse désormais une référence inexistante ou d'un autre
+ * client (audit sécurité m6).
+ */
+async function semerReferences(ctx: Contexte, clientId: string): Promise<void> {
+  const maintenant = new Date().toISOString()
+  for (const id of ['n1', 'noeud-1', 'noeud-2', 'noeud-vide', 'granulateur-01']) {
+    await ctx.structureSystemeRepo.creerNoeud({
+      id,
+      clientId,
+      workspaceId: null,
+      levelKey: 'equipement',
+      name: id,
+      code: id,
+      parentId: null,
+      associatedNodes: [],
+      source: 'manuel',
+      qmsConnectorId: null,
+      periodicQualification: { applicable: false, deadline: null },
+      qualificationStatus: 'non_qualifie',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    })
+  }
+  for (const id of ['p1', 'process-1']) {
+    await ctx.processContextRepo.creerProcess({
+      id,
+      clientId,
+      nom: id,
+      description: '',
+      type: 'fabrication',
+      sourceId: null,
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    })
+  }
 }
 
 async function bootstrapAdmin(
@@ -3101,6 +3144,7 @@ describe('routerRequete — Process/FonctionActif/ManufacturingContext (Target A
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     const fonction = await requete(ctx, 'POST', `/clients/${clientId}/process-context/fonctions`, {
       jeton: admin.jeton,
       body: { nom: 'Mesure de pression', description: 'x' },
@@ -3158,6 +3202,7 @@ describe('routerRequete — Process/FonctionActif/ManufacturingContext (Target A
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     const process = await requete(ctx, 'POST', `/clients/${clientId}/process-context/processes`, {
       jeton: admin.jeton,
       body: { nom: 'Coating', description: 'x', type: 'manufacturing', sourceId: null },
@@ -3414,6 +3459,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     const source = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
       jeton: admin.jeton,
       body: {
@@ -3864,6 +3910,30 @@ describe('routerRequete — Requirement/TestObjective/TestCandidate/Test/Couvert
       jeton: admin.jeton,
     })
     expect(liste.corps.couvertures).toHaveLength(1)
+
+    // Test inexistant ou d'un autre client, exigence inventée : refusés
+    // (audit d'intégrité M6 — la couverture rendait le plan « prêt » à tort).
+    const testInvente = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/couvertures`,
+      { jeton: admin.jeton, body: { requirementId: requirement.id, testId: 'test-invente' } },
+    )
+    expect([testInvente.status, testInvente.corps.erreur]).toEqual([400, 'test_introuvable'])
+    const exigenceInventee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/couvertures`,
+      { jeton: admin.jeton, body: { requirementId: 'req-inventee', testId: test.corps.test.id } },
+    )
+    expect([exigenceInventee.status, exigenceInventee.corps.erreur]).toEqual([
+      400,
+      'exigence_introuvable',
+    ])
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(audit.corps.entrees.map((e: { action: string }) => e.action)).toContain(
+      'creation_couverture',
+    )
   })
 
   test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
@@ -4003,6 +4073,7 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     const test = await creerTestApprouveDeTest(ctx, admin.jeton, clientId)
 
     const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
@@ -4112,6 +4183,15 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
       jeton: admin.jeton,
     })
     expect(liste.corps.executionSteps.map((e) => e.id)).toContain(resultat.corps.executionStep.id)
+
+    // Second résultat pour la même étape (double clic, audit M2) : refusé.
+    const second = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${executionId}/etapes`,
+      { jeton: admin.jeton, body: { testStepId, resultat: 'non_conforme', observation: '' } },
+    )
+    expect([second.status, second.corps.erreur]).toEqual([409, 'resultat_etape_deja_enregistre'])
   })
 
   test('enregistrer un résultat d’étape sur une étape inconnue -> etape_inconnue', async () => {
@@ -5175,6 +5255,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     const { testId } = await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
       jeton: admin.jeton,
@@ -5239,6 +5320,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
       jeton: admin.jeton,
@@ -5265,6 +5347,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5294,6 +5377,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
       jeton: admin.jeton,
@@ -5327,6 +5411,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5390,6 +5475,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5430,6 +5516,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5451,6 +5538,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     // aucun requirement pour ce nœud -> readiness restera besoin_information
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
       jeton: admin.jeton,
@@ -5472,6 +5560,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5495,6 +5584,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5748,6 +5838,12 @@ describe('routerRequete — Integration (Target Architecture, domaine "Integrati
       jeton: admin.jeton,
     })
     expect(liste.corps.connectors).toEqual([])
+
+    // Audit d'intégrité M9 : suppression tracée (qui, quand, quel connecteur).
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    const entree = audit.corps.entrees.find((e) => e.action === 'suppression_connecteur')
+    expect(entree?.targetId).toBe(connectorId)
+    expect(entree?.acteurEmail).toBe('admin@pharmatech.example')
   })
 
   test('démarrer un SyncJob sur un connecteur inconnu -> connector_introuvable', async () => {
@@ -9513,6 +9609,23 @@ describe('routerRequete — OAuth Google (Drive normes)', () => {
       'https://oauth2.googleapis.com/token',
       expect.objectContaining({ method: 'POST' }),
     )
+    // PKCE (audit a4) : le vérificateur envoyé à Google correspond au défi
+    // annoncé au démarrage du flux.
+    const defi = new URL(demarrage.urlAutorisation).searchParams.get('code_challenge')
+    expect(new URL(demarrage.urlAutorisation).searchParams.get('code_challenge_method')).toBe(
+      'S256',
+    )
+    const corpsEchange = new URLSearchParams(fetchMock.mock.calls[0]?.[1]?.body as string)
+    const verificateur = corpsEchange.get('code_verifier') ?? ''
+    const empreinte = new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verificateur)),
+    )
+    const attendu = btoa(String.fromCharCode(...empreinte))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+    expect(verificateur.length).toBeGreaterThan(40)
+    expect(defi).toBe(attendu)
 
     const parametre = await requete(ctx, 'GET', '/parametres-installation/drive-normes', {
       jeton: admin.jeton,
@@ -10964,5 +11077,427 @@ describe('routerRequete — décisions du 26/09/2026 (comptes, signature, suppre
     expect(await limiteur.estBloque(['email:a'])).toBe(true)
     await limiteur.enregistrerSucces(['email:a'])
     expect(await limiteur.estBloque(['email:a'])).toBe(false)
+  })
+})
+
+describe('verdicts d’évaluation recalculés par le serveur (audit du 25/09/2026, intégrité M5/M7/M10, m4)', () => {
+  async function preparer() {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const client = await requete(ctx, 'POST', '/clients', {
+      jeton: admin.jeton,
+      body: { name: 'Client verdicts' },
+    })
+    return { ctx, jeton: admin.jeton, clientId: client.corps.client.id as string }
+  }
+
+  const PROFIL_ACFC = {
+    source: 'QP-042',
+    origin: 'procedure_client',
+    questions: [
+      { id: 'q-1', texte: { fr: 'Contact produit ?' } },
+      { id: 'q-2', texte: { fr: 'Impact sur la stérilité ?' } },
+    ],
+    decisionRule: 'au_moins_un_oui_critique',
+  }
+
+  test('ACFC : un verdict qui contredit les réponses est refusé ; sans verdict, le serveur le calcule', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: PROFIL_ACFC,
+    })
+    const base = {
+      methodProfileId: profil.corps.profil.id,
+      methodProfileVersion: profil.corps.profil.version,
+      nomElement: 'Vanne V-101',
+    }
+
+    const falsifie = await requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, {
+      jeton,
+      body: { ...base, reponses: { 'q-1': 'oui', 'q-2': 'non' }, verdict: 'non_critique' },
+    })
+    expect(falsifie.status).toBe(409)
+    expect(falsifie.corps).toEqual({ erreur: 'verdict_incoherent', verdict: 'critique' })
+
+    const calcule = await requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, {
+      jeton,
+      body: { ...base, reponses: { 'q-1': 'non', 'q-2': 'non' } },
+    })
+    expect(calcule.status).toBe(201)
+    expect(calcule.corps.evaluation.verdict).toBe('non_critique')
+
+    // `inconnu` sans aucun oui : pas de verdict, jamais « non critique ».
+    const indetermine = await requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, {
+      jeton,
+      body: { ...base, reponses: { 'q-1': 'inconnu', 'q-2': 'non' }, verdict: null },
+    })
+    expect(indetermine.status).toBe(201)
+    expect(indetermine.corps.evaluation.verdict).toBeNull()
+  })
+
+  test('ACFC : méthode inconnue, autre version, réponse hors méthode ou nœud d’un autre client refusés', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const autre = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Autre client' } })
+    const noeudAutre = await requete(
+      ctx,
+      'POST',
+      `/clients/${autre.corps.client.id}/structure-systeme/noeuds`,
+      { jeton, body: { levelKey: 'site', name: 'Site B', code: 'B', parentId: null } },
+    )
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: PROFIL_ACFC,
+    })
+    const base = {
+      methodProfileId: profil.corps.profil.id,
+      methodProfileVersion: profil.corps.profil.version,
+      nomElement: 'Vanne V-101',
+      reponses: { 'q-1': 'oui' },
+    }
+    const envoyer = (body: Record<string, unknown>) =>
+      requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, { jeton, body })
+
+    const inconnue = await envoyer({ ...base, methodProfileId: 'profil-invente' })
+    expect([inconnue.status, inconnue.corps.erreur]).toEqual([400, 'methode_introuvable'])
+    const version = await envoyer({ ...base, methodProfileVersion: 'v9' })
+    expect([version.status, version.corps.erreur]).toEqual([409, 'version_methode_incoherente'])
+    const horsMethode = await envoyer({ ...base, reponses: { 'q-99': 'oui' } })
+    expect([horsMethode.status, horsMethode.corps.erreur]).toEqual([400, 'reponses_invalides'])
+    const reponseInventee = await envoyer({ ...base, reponses: { 'q-1': 'peut-etre' } })
+    expect(reponseInventee.status).toBe(400)
+    const noeud = await envoyer({ ...base, assetNodeId: noeudAutre.corps.noeud.id })
+    expect([noeud.status, noeud.corps.erreur]).toEqual([400, 'noeud_introuvable'])
+  })
+
+  test('méthode sans question refusée ; numéro de version attribué par le serveur, jamais deux « v1 »', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const vide = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: { ...PROFIL_ACFC, questions: [] },
+    })
+    expect(vide.status).toBe(400)
+
+    const v1 = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: { ...PROFIL_ACFC, version: 'v1' },
+    })
+    // Le navigateur croyait la liste vide (chargement en échec) : il renvoie « v1 ».
+    const v2 = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: { ...PROFIL_ACFC, version: 'v1' },
+    })
+    expect([v1.corps.profil.version, v2.corps.profil.version]).toEqual(['v1', 'v2'])
+
+    const impact1 = await requete(ctx, 'POST', `/clients/${clientId}/impact-assessment/profils`, {
+      jeton,
+      body: {
+        source: 'PMP',
+        origin: 'procedure_client',
+        questions: [{ id: 'i-1', texte: { fr: 'Contact produit ?' } }],
+        decisionRule: 'au_moins_un_oui_impact_direct',
+      },
+    })
+    expect(impact1.corps.profilImpact.version).toBe('v1')
+  })
+
+  test('Impact : verdict recalculé', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/impact-assessment/profils`, {
+      jeton,
+      body: {
+        source: 'PMP',
+        origin: 'procedure_client',
+        questions: [{ id: 'i-1', texte: { fr: 'Contact produit ?' } }],
+        decisionRule: 'au_moins_un_oui_impact_direct',
+      },
+    })
+    const falsifie = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/impact-assessment/evaluations`,
+      {
+        jeton,
+        body: {
+          methodProfileId: profil.corps.profilImpact.id,
+          methodProfileVersion: profil.corps.profilImpact.version,
+          nomElement: 'Autoclave',
+          reponses: { 'i-1': 'oui' },
+          verdict: 'non_impact_direct',
+        },
+      },
+    )
+    expect([falsifie.status, falsifie.corps.erreur]).toEqual([409, 'verdict_incoherent'])
+  })
+
+  test('AMDEC : bornes de la méthode, IPR et verdicts initial et résiduel recalculés', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const methode = (seuilAction: number, echelleMin = 1) =>
+      requete(ctx, 'POST', `/clients/${clientId}/risk-assessment/profils`, {
+        jeton,
+        body: {
+          source: 'Processus_AMDEC.xlsx',
+          origin: 'procedure_client',
+          echelleMin,
+          echelleMax: 5,
+          seuilAction,
+        },
+      })
+    expect((await methode(200)).corps.erreur).toBe('seuil_hors_bornes')
+    expect((await methode(50, 0)).corps.erreur).toBe('echelle_min_invalide')
+    const profil = await methode(50)
+    expect(profil.status).toBe(201)
+    expect(profil.corps.profilRisque.version).toBe('v1')
+
+    const ligne = {
+      methodProfileId: profil.corps.profilRisque.id,
+      methodProfileVersion: 'v1',
+      etapeProcessus: 'Stérilisation',
+      modeDefaillance: 'Température basse',
+      effetDefaillance: '',
+      causePotentielle: '',
+      controleActuel: '',
+      severiteInitiale: 5,
+      occurrenceInitiale: 5,
+      detectabiliteInitiale: 5,
+    }
+    const falsifie = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/evaluations`,
+      {
+        jeton,
+        body: { ...ligne, iprInitial: 125, verdictInitial: 'acceptable' },
+      },
+    )
+    expect(falsifie.status).toBe(409)
+    expect(falsifie.corps).toEqual({
+      erreur: 'verdict_incoherent',
+      ipr: 125,
+      verdict: 'action_requise',
+    })
+
+    const creee = await requete(ctx, 'POST', `/clients/${clientId}/risk-assessment/evaluations`, {
+      jeton,
+      body: ligne,
+    })
+    expect(creee.status).toBe(201)
+    expect(creee.corps.evaluationRisque.iprInitial).toBe(125)
+    expect(creee.corps.evaluationRisque.verdictInitial).toBe('action_requise')
+
+    const chemin = `/clients/${clientId}/risk-assessment/evaluations/${creee.corps.evaluationRisque.id}/action-residuelle`
+    const residuelFalsifie = await requete(ctx, 'PATCH', chemin, {
+      jeton,
+      body: {
+        severiteResiduelle: 5,
+        occurrenceResiduelle: 5,
+        detectabiliteResiduelle: 5,
+        iprResiduel: 125,
+        verdictResiduel: 'acceptable',
+      },
+    })
+    expect(residuelFalsifie.status).toBe(409)
+    const residuel = await requete(ctx, 'PATCH', chemin, {
+      jeton,
+      body: { severiteResiduelle: 2, occurrenceResiduelle: 2, detectabiliteResiduelle: 2 },
+    })
+    expect(residuel.status).toBe(200)
+    expect(residuel.corps.evaluationRisque.iprResiduel).toBe(8)
+    expect(residuel.corps.evaluationRisque.verdictResiduel).toBe('acceptable')
+  })
+})
+
+describe('références vers d’autres objets vérifiées (audit sécurité m6)', () => {
+  async function preparer() {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const a = await requete(ctx, 'POST', '/clients', { jeton: admin.jeton, body: { name: 'A' } })
+    const b = await requete(ctx, 'POST', '/clients', { jeton: admin.jeton, body: { name: 'B' } })
+    const noeudB = await requete(
+      ctx,
+      'POST',
+      `/clients/${b.corps.client.id}/structure-systeme/noeuds`,
+      { jeton: admin.jeton, body: { levelKey: 'site', name: 'Site B', code: 'B', parentId: null } },
+    )
+    return {
+      ctx,
+      jeton: admin.jeton,
+      clientA: a.corps.client.id as string,
+      noeudB: noeudB.corps.noeud.id as string,
+    }
+  }
+
+  test('un nœud d’un autre client ou inexistant est refusé partout où il est référencé', async () => {
+    const { ctx, jeton, clientA, noeudB } = await preparer()
+    for (const assetNodeId of [noeudB, 'noeud-invente']) {
+      const parametre = await requete(ctx, 'POST', `/clients/${clientA}/parameters/parametres`, {
+        jeton,
+        body: { nom: 'Température', description: '', unite: '°C', assetNodeId },
+      })
+      expect([parametre.status, parametre.corps.erreur]).toEqual([400, 'noeud_introuvable'])
+      const exigence = await requete(
+        ctx,
+        'POST',
+        `/clients/${clientA}/test-definition/requirements`,
+        {
+          jeton,
+          body: { reference: 'REQ-1', titre: 'Débit', description: '', assetNodeId },
+        },
+      )
+      expect([exigence.status, exigence.corps.erreur]).toEqual([400, 'noeud_introuvable'])
+      const enfant = await requete(ctx, 'POST', `/clients/${clientA}/structure-systeme/noeuds`, {
+        jeton,
+        body: { levelKey: 'ligne', name: 'Ligne', code: 'L1', parentId: assetNodeId },
+      })
+      expect([enfant.status, enfant.corps.erreur]).toEqual([400, 'parent_introuvable'])
+    }
+  })
+
+  test('nœud : jamais rattaché à l’un de ses descendants (boucle)', async () => {
+    const { ctx, jeton, clientA } = await preparer()
+    const creer = async (code: string, parentId: string | null) =>
+      (
+        await requete(ctx, 'POST', `/clients/${clientA}/structure-systeme/noeuds`, {
+          jeton,
+          body: { levelKey: 'n', name: code, code, parentId },
+        })
+      ).corps.noeud.id as string
+    const racine = await creer('R', null)
+    const enfant = await creer('E', racine)
+    const petitEnfant = await creer('PE', enfant)
+    const boucle = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientA}/structure-systeme/noeuds/${racine}`,
+      { jeton, body: { parentId: petitEnfant } },
+    )
+    expect([boucle.status, boucle.corps.erreur]).toEqual([400, 'cycle_hierarchie'])
+  })
+
+  test('import en lot : 500 nœuds au plus, parent du lot ou existant, id jamais déjà pris', async () => {
+    const { ctx, jeton, clientA, noeudB } = await preparer()
+    const chemin = `/clients/${clientA}/structure-systeme/noeuds/lot`
+    const trop = Array.from({ length: 501 }, (_, i) => ({
+      id: `n-${i}`,
+      levelKey: 'n',
+      name: `N${i}`,
+      code: `N${i}`,
+      parentId: null,
+    }))
+    const tropGrand = await requete(ctx, 'POST', chemin, { jeton, body: { noeuds: trop } })
+    expect([tropGrand.status, tropGrand.corps.erreur]).toEqual([413, 'lot_trop_grand'])
+
+    const chaine = await requete(ctx, 'POST', chemin, {
+      jeton,
+      body: {
+        noeuds: [
+          { id: 'site-1', levelKey: 'site', name: 'Site', code: 'S', parentId: null },
+          { id: 'ligne-1', levelKey: 'ligne', name: 'Ligne', code: 'L', parentId: 'site-1' },
+        ],
+      },
+    })
+    expect(chaine.status).toBe(201)
+
+    const idPris = await requete(ctx, 'POST', chemin, {
+      jeton,
+      body: { noeuds: [{ id: noeudB, levelKey: 'n', name: 'X', code: 'X', parentId: null }] },
+    })
+    expect([idPris.status, idPris.corps.erreur]).toEqual([409, 'id_conflit'])
+  })
+})
+
+describe('configuration IA attribuée et tracée (audit d’intégrité M8)', () => {
+  test('qualification et acquittement : auteur et heure du serveur, inchangés si la valeur ne change pas, journal central', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const client = await requete(ctx, 'POST', '/clients', {
+      jeton: admin.jeton,
+      body: { name: 'Client IA' },
+    })
+    const chemin = `/clients/${client.corps.client.id}/config`
+    const qualification = {
+      date: '2026-09-01',
+      resultat: 'favorable',
+      qualificationTestSetId: 'set-1',
+      qualificationTestSetVersion: '1.0.0',
+      moteurVersionQualifiee: null,
+      par: 'quelqu.un.d.autre@exemple.com',
+    }
+    const corps = {
+      aiProvider: 'openai',
+      aiProviderConditionsAcquittees: { fournisseur: 'openai', date: '2020-01-01T00:00:00.000Z' },
+      aiProviderReliabilityQualification: { chat_normatif: qualification, audit_simule: null },
+      exportTemplateId: null,
+      consentTelemetry: { granted: false, date: null, revocableAtAnyTime: true },
+    }
+    const premier = await requete(ctx, 'PUT', chemin, { jeton: admin.jeton, body: corps })
+    expect(premier.status).toBe(200)
+    const cfg = premier.corps.clientConfig
+    expect(cfg?.aiProviderConditionsAcquittees?.par).toBe('admin@pharmatech.example')
+    expect(cfg?.aiProviderConditionsAcquittees?.date).not.toBe('2020-01-01T00:00:00.000Z')
+    expect(cfg?.aiProviderReliabilityQualification.chat_normatif).toMatchObject({
+      date: '2026-09-01',
+      par: 'admin@pharmatech.example',
+      enregistreeLe: expect.any(String),
+    })
+
+    // Réenvoi identique : auteur et dates d'origine conservés, rien de plus au journal.
+    const second = await requete(ctx, 'PUT', chemin, { jeton: admin.jeton, body: corps })
+    expect(second.corps.clientConfig?.aiProviderReliabilityQualification.chat_normatif).toEqual(
+      cfg?.aiProviderReliabilityQualification.chat_normatif,
+    )
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    const actions = audit.corps.entrees.map((e: { action: string }) => e.action)
+    expect(actions.filter((a: string) => a === 'qualification_ia_modifiee')).toHaveLength(1)
+    expect(actions.filter((a: string) => a === 'conditions_ia_acquittees')).toHaveLength(1)
+  })
+})
+
+describe('quota du relais IA et tailles maximales (audit sécurité a1, m4)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  test('au-delà du quota horaire, le relais IA répond 429 sans appeler le fournisseur', async () => {
+    const ctx = nouveauContexte()
+    ctx.quotaRelaisIA = new QuotaRelaisIAMemoire(2)
+    const admin = await bootstrapAdmin(ctx)
+    await requete(ctx, 'PUT', '/parametres-installation/relais-ia', {
+      jeton: admin.jeton,
+      body: { valeur: { relayUrl: 'https://relais-ia.example.workers.dev', jeton: 'j' } },
+    })
+    const fournisseur = vi.fn(async () => new Response('{"texte":"ok"}', { status: 200 }))
+    vi.stubGlobal('fetch', fournisseur)
+    const envoyer = () =>
+      requete(ctx, 'POST', '/relais-ia', { jeton: admin.jeton, body: { question: 'Q' } })
+
+    expect((await envoyer()).status).toBe(200)
+    expect((await envoyer()).status).toBe(200)
+    const troisieme = await envoyer()
+    expect([troisieme.status, troisieme.corps.erreur]).toEqual([429, 'quota_ia_atteint'])
+    expect(fournisseur).toHaveBeenCalledTimes(2)
+  })
+
+  test('corps JSON annoncé au-delà de 10 Mo : 413 avant toute lecture', async () => {
+    const ctx = nouveauContexte()
+    const reponse = await routerRequete(
+      new Request('https://relais.workers.dev/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': String(11 * 1024 * 1024) },
+        body: '{}',
+      }),
+      ctx,
+    )
+    expect(reponse.status).toBe(413)
+    expect((await reponse.json()).erreur).toBe('corps_trop_volumineux')
+  })
+
+  test('document normatif : texte extrait au-delà de 2 Mo refusé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { status, corps } = await creerDocumentNormatif(ctx, admin.jeton, {
+      texte: 'x'.repeat(2 * 1024 * 1024 + 1),
+    })
+    expect([status, corps.erreur]).toEqual([413, 'texte_trop_volumineux'])
   })
 })

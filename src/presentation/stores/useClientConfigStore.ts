@@ -8,6 +8,7 @@ import type { ModeUsageIA } from '../../connecteurs/ia/ProviderAdapter'
 import type { ClientConfig, QualificationFiabiliteIA } from '../../logique-metier/domaine/types'
 import { clientConfigsAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface SaisieQualification {
   date: string
@@ -26,6 +27,8 @@ function qualificationWireVersDomaine(w: QualificationFiabiliteIAWire): Qualific
     qualification_test_set_id: w.qualificationTestSetId,
     qualification_test_set_version: w.qualificationTestSetVersion,
     moteur_version_qualifiee: w.moteurVersionQualifiee,
+    ...(w.par ? { par: w.par } : {}),
+    ...(w.enregistreeLe ? { enregistree_le: w.enregistreeLe } : {}),
   }
 }
 
@@ -158,16 +161,28 @@ export const useClientConfigStore = defineStore('clientConfig', () => {
       : configParDefaut(clientId)
   }
 
+  /**
+   * Un échec lève une erreur (audit d'intégrité M8) : auparavant il était
+   * ignoré en silence — l'écran laissait croire la qualification ou
+   * l'acquittement enregistrés.
+   */
   async function enregistrer(clientId: string, misAJour: ClientConfig): Promise<void> {
     const authStore = useAuthStore()
     const api = await authStore.client()
-    if (!api || !authStore.jeton) return
+    if (!api || !authStore.jeton) {
+      throw new Error(
+        "Configuration IA non enregistrée : serveur d'authentification non configuré.",
+      )
+    }
     const resultat = await api.enregistrerClientConfig(
       authStore.jeton,
       clientId,
       clientConfigDomaineVersWire(misAJour),
     )
-    if (resultat.ok) config.value = clientConfigWireVersDomaine(resultat.donnees.clientConfig)
+    if (!resultat.ok) {
+      throw new Error(`Configuration IA non enregistrée : ${libelleErreurServeur(resultat.erreur)}`)
+    }
+    config.value = clientConfigWireVersDomaine(resultat.donnees.clientConfig)
   }
 
   async function charger(clientId: string): Promise<void> {

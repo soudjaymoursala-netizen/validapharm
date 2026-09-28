@@ -16,6 +16,7 @@ import { useAuthStore } from './useAuthStore'
 import { useClientConfigStore } from './useClientConfigStore'
 import { useConnexionRelaisIAStore } from './useConnexionRelaisIAStore'
 import { sectionWireVersDomaine } from './useSectionsStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 function aiChatSessionLogWireVersDomaine(w: AiChatSessionLogWire): AiChatSessionLog {
   return {
@@ -131,7 +132,9 @@ export const usePanneauChatStore = defineStore('panneauChat', () => {
       aiChatSessionLogs: entreesDuClient.map(aiChatSessionLogDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration du journal de chat : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration du journal de chat : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const entree of entreesDuClient) {
       const index = aiChatSessionLogsAMigrer.indexOf(entree)

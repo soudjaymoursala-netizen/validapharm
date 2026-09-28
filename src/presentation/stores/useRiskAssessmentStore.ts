@@ -14,6 +14,7 @@ import { evaluerVerdictRiskAssessment } from '../../logique-metier/risque/evalue
 import { numeroVersion } from '../../logique-metier/versionnage/numeroVersion'
 import { methodProfilesRiskAssessmentAMigrer, risksAssessmentAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function profilRisqueWireVersDomaine(
   wire: MethodProfileRiskAssessmentWire,
@@ -167,6 +168,11 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
   const profils = ref<MethodProfileRiskAssessment[]>([])
   const evaluations = ref<RiskAssessment[]>([])
   const enChargement = ref(false)
+  /**
+   * Le dernier chargement a échoué : « aucune méthode configurée » serait faux
+   * (audit UX : l'écran invitait à recréer une méthode pendant une panne).
+   */
+  const chargementEchoue = ref(false)
 
   /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que `useMethodProfileACFCStore`. */
   async function obtenirApi() {
@@ -207,7 +213,9 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
       evaluationsRisque: evaluationsDuClient.map(evaluationRisqueDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Risk Assessment : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration Risk Assessment : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const p of profilsDuClient) {
       const index = methodProfilesRiskAssessmentAMigrer.indexOf(p)
@@ -230,13 +238,16 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
       const { api, jeton } = await obtenirApi()
       const resultat = await api.obtenirRiskAssessment(jeton, clientId)
       if (resultat.ok) {
+        chargementEchoue.value = false
         profils.value = resultat.donnees.profilsRisque.map(profilRisqueWireVersDomaine)
         evaluations.value = resultat.donnees.evaluationsRisque.map(evaluationRisqueWireVersDomaine)
       } else {
+        chargementEchoue.value = true
         profils.value = []
         evaluations.value = []
       }
     } catch {
+      chargementEchoue.value = true
       // Panne réseau réelle ou relais non configuré : jamais une exception
       // non gérée, même discipline que `useMethodProfileACFCStore.charger`.
       profils.value = []
@@ -246,17 +257,12 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
     }
   }
 
-  function prochaineVersion(): string {
-    return `v${profils.value.length + 1}`
-  }
-
   async function creerNouvelleVersion(
     clientId: string,
     input: NouveauProfilRiskAssessmentInput,
   ): Promise<MethodProfileRiskAssessment> {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.creerProfilRiskAssessment(jeton, clientId, {
-      version: prochaineVersion(),
       source: input.source,
       origin: input.origin,
       echelleMin: input.echelleMin,
@@ -264,7 +270,9 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
       seuilAction: input.seuilAction,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création du profil Risk Assessment : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création du profil Risk Assessment : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const profil = profilRisqueWireVersDomaine(resultat.donnees.profilRisque)
     profils.value = [...profils.value, profil]
@@ -303,7 +311,9 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
       verdictInitial: evaluerVerdictRiskAssessment(resultatIPR, profil.seuil_action),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création de l'évaluation Risk Assessment : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création de l'évaluation Risk Assessment : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const evaluation = evaluationRisqueWireVersDomaine(resultat.donnees.evaluationRisque)
     evaluations.value = [...evaluations.value, evaluation]
@@ -360,7 +370,9 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
     )
     if (!resultat.ok) {
       if (resultat.erreur === 'introuvable') return { erreur: 'introuvable' }
-      throw new Error(`Échec de l'enregistrement de l'action résiduelle : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'enregistrement de l'action résiduelle : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const miseAJour = evaluationRisqueWireVersDomaine(resultat.donnees.evaluationRisque)
     evaluations.value = evaluations.value.map((e) => (e.id === existant.id ? miseAJour : e))
@@ -371,6 +383,7 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
     profils,
     evaluations,
     enChargement,
+    chargementEchoue,
     profilActif,
     charger,
     creerNouvelleVersion,

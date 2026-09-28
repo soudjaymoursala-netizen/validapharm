@@ -7,6 +7,7 @@
 // suivants.
 import { onMounted, reactive, ref } from 'vue'
 import type { UtilisateurWire } from '../../connecteurs/auth/AuthApiClient'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 import { useAuthStore } from '../stores/useAuthStore'
 
 const authStore = useAuthStore()
@@ -16,6 +17,9 @@ const erreur = ref<string | null>(null)
 // Refus d'une action sur un compte existant (rôle, statut) — affiché
 // au-dessus de la liste, jamais dans le formulaire de création fermé.
 const erreurAction = ref<string | null>(null)
+// Échec du chargement de la liste (audit UX entrée #2 : liste vide sans
+// message, exception non gérée au montage).
+const erreurChargement = ref<string | null>(null)
 
 const formulaireOuvert = ref(false)
 const brouillon = reactive({
@@ -39,11 +43,20 @@ const LIBELLES_ERREUR: Record<string, string> = {
 async function charger(): Promise<void> {
   enChargement.value = true
   erreur.value = null
+  erreurChargement.value = null
   try {
     const api = await authStore.client()
     if (!api || !authStore.jeton) return
     const resultat = await api.listerUtilisateurs(authStore.jeton)
-    if (resultat.ok) utilisateurs.value = resultat.donnees.utilisateurs
+    if (resultat.ok) {
+      utilisateurs.value = resultat.donnees.utilisateurs
+    } else {
+      const motif = libelleErreurServeur(resultat.erreur)
+      erreurChargement.value = `Impossible de charger les comptes : ${motif}.`
+    }
+  } catch (e) {
+    const motif = e instanceof Error ? e.message : String(e)
+    erreurChargement.value = `Impossible de charger les comptes : ${motif}.`
   } finally {
     enChargement.value = false
   }
@@ -183,7 +196,12 @@ async function copierLien(): Promise<void> {
     <RouterLink :to="{ name: 'accueil' }" class="lien-retour">Accueil</RouterLink>
     <header>
       <h1>Gestion des comptes</h1>
-      <button type="button" class="bouton-principal" @click="formulaireOuvert = true">
+      <button
+        type="button"
+        class="bouton-principal"
+        :disabled="erreurChargement !== null"
+        @click="formulaireOuvert = true"
+      >
         Nouveau compte
       </button>
     </header>
@@ -244,6 +262,9 @@ async function copierLien(): Promise<void> {
     </section>
 
     <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
+    <p v-if="erreurChargement" class="bandeau-erreur" role="alert">
+      {{ erreurChargement }} <button type="button" @click="charger">Réessayer</button>
+    </p>
     <p v-if="enChargement" class="etat-vide">Chargement…</p>
     <ul v-else class="liste-comptes">
       <li v-for="u in utilisateurs" :key="u.id">

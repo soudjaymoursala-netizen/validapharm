@@ -47,12 +47,23 @@ onMounted(async () => {
   dernierMiroirReussi.value = await miroirStore.obtenirDernierMiroirReussi(props.clientId)
 })
 
-async function enregistrer(): Promise<void> {
-  await connexionStore.enregistrer(props.clientId, { ...brouillon })
-  resultatTest.value = undefined
-}
-
 const erreurEffacement = ref<string | null>(null)
+const erreurEnregistrement = ref<string | null>(null)
+const enregistrementEnCours = ref(false)
+
+async function enregistrer(): Promise<void> {
+  if (enregistrementEnCours.value) return
+  enregistrementEnCours.value = true
+  erreurEnregistrement.value = null
+  try {
+    await connexionStore.enregistrer(props.clientId, { ...brouillon })
+    resultatTest.value = undefined
+  } catch (e) {
+    erreurEnregistrement.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    enregistrementEnCours.value = false
+  }
+}
 
 async function effacer(): Promise<void> {
   erreurEffacement.value = null
@@ -109,8 +120,11 @@ async function sauvegarderMaintenant(): Promise<void> {
         </label>
         <div class="actions">
           <button type="button" @click="effacer">Effacer</button>
-          <button type="submit">Enregistrer</button>
+          <button type="submit" :disabled="enregistrementEnCours">Enregistrer</button>
         </div>
+        <p v-if="erreurEnregistrement" class="message-miroir message-miroir--erreur" role="alert">
+          {{ erreurEnregistrement }}
+        </p>
         <p v-if="erreurEffacement" class="message-miroir message-miroir--erreur" role="alert">
           {{ erreurEffacement }}
         </p>

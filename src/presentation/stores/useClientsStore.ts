@@ -73,6 +73,12 @@ export const useClientsStore = defineStore('clients', () => {
   let mutationsLocales = 0
   const clients = ref<Client[]>([])
   const enChargement = ref(false)
+  /**
+   * Le dernier chargement a échoué (serveur injoignable, refus) : la liste
+   * affichée n'est pas fiable — jamais présentée comme « aucun client »
+   * (audit UX entrée #2 : « créez le premier » s'affichait pendant une panne).
+   */
+  const chargementEchoue = ref(false)
 
   const clientsActifs = computed(() => clients.value.filter((c) => c.statut !== 'archive'))
   const clientsArchives = computed(() => clients.value.filter((c) => c.statut === 'archive'))
@@ -107,19 +113,27 @@ export const useClientsStore = defineStore('clients', () => {
       // ce cas la liste est relue, jamais remplacée par l'état périmé.
       for (let essai = 0; essai < 3; essai++) {
         const versionAuDepart = mutationsLocales
-        const resultat = await api.listerClients(authStore.jeton)
+        const jetonUtilise = authStore.jeton
+        const resultat = await api.listerClients(jetonUtilise)
         if (!resultat.ok) {
-          if (resultat.status === 401) await authStore.deconnecter()
+          chargementEchoue.value = true
+          // Jamais la fermeture d'une session plus récente (reconnexion
+          // pendant le chargement) pour le refus d'un ancien jeton.
+          if (resultat.status === 401 && authStore.jeton === jetonUtilise) {
+            await authStore.deconnecter()
+          }
           // Autre échec (403, panne inattendue) : la liste déjà chargée reste affichée.
           return
         }
         if (versionAuDepart === mutationsLocales) {
           clients.value = trierParNom(resultat.donnees.clients.map(wireVersClient))
+          chargementEchoue.value = false
           return
         }
       }
     } catch {
       // Worker injoignable/délai dépassé (panne réseau transitoire) : idem, jamais d'effacement.
+      chargementEchoue.value = true
     } finally {
       enChargement.value = false
     }
@@ -266,6 +280,7 @@ export const useClientsStore = defineStore('clients', () => {
     clientsActifs,
     clientsArchives,
     enChargement,
+    chargementEchoue,
     chargerClients,
     creerClient,
     obtenirClient,

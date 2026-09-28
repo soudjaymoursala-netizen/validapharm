@@ -4,12 +4,16 @@ export interface QualificationFiabiliteIAEnregistree {
   qualificationTestSetId: string
   qualificationTestSetVersion: string
   moteurVersionQualifiee: string | null
+  /** Compte qui a enregistré cette qualification (fixé par le serveur, audit M8). */
+  par?: string
+  /** Horodatage serveur de l'enregistrement (`date` reste la date de la campagne, saisie). */
+  enregistreeLe?: string
 }
 
 export interface ClientConfigEnregistre {
   clientId: string
   aiProvider: string
-  aiProviderConditionsAcquittees: { fournisseur: string; date: string } | null
+  aiProviderConditionsAcquittees: { fournisseur: string; date: string; par?: string } | null
   aiProviderReliabilityQualification: {
     chat_normatif: QualificationFiabiliteIAEnregistree | null
     audit_simule: QualificationFiabiliteIAEnregistree | null

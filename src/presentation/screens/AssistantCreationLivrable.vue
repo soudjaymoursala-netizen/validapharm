@@ -28,6 +28,7 @@ import { useRiskAssessmentStore } from '../stores/useRiskAssessmentStore'
 import { sectionWireVersDomaine, useSectionsStore } from '../stores/useSectionsStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 defineOptions({ name: 'EcranAssistantCreationLivrable' })
 const props = defineProps<{ projectId: string }>()
@@ -41,6 +42,20 @@ const procedureStore = useProcedureStore()
 const riskStore = useRiskAssessmentStore()
 const methodStore = useMethodProfileACFCStore()
 const sectionsStore = useSectionsStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const projet = ref<Project | undefined>(undefined)
 // Un projet appartient à un client : la barre latérale doit proposer les
@@ -160,7 +175,13 @@ async function chargerPrecedents(): Promise<void> {
     }))
 }
 
-async function allerAPrecedents(): Promise<void> {
+async function allerAPrecedents(
+  ...args: Parameters<typeof allerAPrecedentsSansGarde>
+): Promise<void> {
+  await envoyer(() => allerAPrecedentsSansGarde(...args))
+}
+
+async function allerAPrecedentsSansGarde(): Promise<void> {
   await chargerPrecedents()
   suivant()
 }
@@ -175,7 +196,13 @@ function libelleNoeud(noeudId: string): string {
   return n ? `${n.name} (${n.code})` : noeudId
 }
 
-async function genererLivrable(depuisDocument: boolean): Promise<void> {
+async function genererLivrable(
+  ...args: Parameters<typeof genererLivrableSansGarde>
+): Promise<void> {
+  await envoyer(() => genererLivrableSansGarde(...args))
+}
+
+async function genererLivrableSansGarde(depuisDocument: boolean): Promise<void> {
   if (!templateChoisi.value || titreLivrable.value.trim().length === 0 || !projet.value) return
   enGeneration.value = true
   try {
@@ -231,6 +258,7 @@ async function genererLivrable(depuisDocument: boolean): Promise<void> {
       {{ projet.name }}
     </RouterLink>
     <h1>Assistant guidé — Nouveau livrable</h1>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="rappel">
       Un livrable n'est jamais créé dans un silo : cet assistant rassemble le contexte réellement
       disponible (architecture, process, procédures, risques, méthode, précédents) avant de vous
@@ -376,7 +404,7 @@ async function genererLivrable(depuisDocument: boolean): Promise<void> {
       </ul>
       <div class="actions">
         <button type="button" @click="precedent">Précédent</button>
-        <button type="button" @click="allerAPrecedents">Suivant</button>
+        <button type="button" :disabled="envoiEnCours" @click="allerAPrecedents">Suivant</button>
       </div>
     </section>
 
@@ -405,10 +433,18 @@ async function genererLivrable(depuisDocument: boolean): Promise<void> {
       </p>
       <div class="actions">
         <button type="button" @click="precedent">Précédent</button>
-        <button type="button" :disabled="enGeneration" @click="genererLivrable(false)">
+        <button
+          type="button"
+          :disabled="enGeneration || envoiEnCours"
+          @click="genererLivrable(false)"
+        >
           Démarrer d'un gabarit vierge
         </button>
-        <button type="button" :disabled="enGeneration" @click="genererLivrable(true)">
+        <button
+          type="button"
+          :disabled="enGeneration || envoiEnCours"
+          @click="genererLivrable(true)"
+        >
           Démarrer à partir d'un document
         </button>
       </div>

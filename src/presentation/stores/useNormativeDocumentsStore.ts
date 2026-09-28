@@ -17,6 +17,7 @@ import type {
 } from '../../logique-metier/domaine/types'
 import { useAuthStore } from './useAuthStore'
 import { useConnexionGitHubStore } from './useConnexionGitHubStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 /** Extensions dont l'extraction native (locale, sans réseau) est supportée par ce chantier. */
 const EXTENSIONS_TEXTE_BRUT = ['.txt', '.md']
@@ -56,7 +57,10 @@ async function obtenirConnexionDriveNormes(): Promise<ConnexionDriveLectureNorme
   }
 
   const frais = await api.rafraichirJetonOAuthDrive(authStore.jeton)
-  if (!frais.ok) throw new Error(`Échec du renouvellement du jeton Drive : ${frais.erreur}`)
+  if (!frais.ok)
+    throw new Error(
+      `Échec du renouvellement du jeton Drive : ${libelleErreurServeur(frais.erreur)}`,
+    )
   return { dossierId: valeur.dossierId, jeton: frais.donnees.jeton }
 }
 
@@ -204,7 +208,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
       throw new Error("Relais d'authentification non configuré (Configuration client).")
     }
     const resultat = await api.creerDocumentNormatif(authStore.jeton, saisie)
-    if (!resultat.ok) throw new Error(`Échec de l'import : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de l'import : ${libelleErreurServeur(resultat.erreur)}`)
     const document = wireVersDomaine(resultat.donnees.document)
     documents.value = [...documents.value, document]
     return document
@@ -369,7 +374,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
       throw new Error("Relais d'authentification non configuré (Configuration client).")
     }
     const resultat = await api.obtenirContenuDocumentNormatif(authStore.jeton, documentId)
-    if (!resultat.ok) throw new Error(`Échec du téléchargement : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec du téléchargement : ${libelleErreurServeur(resultat.erreur)}`)
     return resultat.blob
   }
 
@@ -380,7 +386,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
       throw new Error("Relais d'authentification non configuré (Configuration client).")
     }
     const resultat = await api.renommerDocumentNormatif(authStore.jeton, documentId, nouveauTitre)
-    if (!resultat.ok) throw new Error(`Échec du renommage : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec du renommage : ${libelleErreurServeur(resultat.erreur)}`)
     const document = wireVersDomaine(resultat.donnees.document)
     documents.value = documents.value.map((d) => (d.id === documentId ? document : d))
   }
@@ -434,7 +441,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
       new Blob([contenuBinaire], { type: document.mime_type }),
       document.mime_type,
     )
-    if (!resultat.ok) throw new Error(`Échec de la réparation : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de la réparation : ${libelleErreurServeur(resultat.erreur)}`)
     const documentRepare = wireVersDomaine(resultat.donnees.document)
     documents.value = documents.value.map((d) => (d.id === documentId ? documentRepare : d))
   }
@@ -481,7 +489,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
         authStore.jeton,
         lot.map((d) => d.id),
       )
-      if (!resultat.ok) throw new Error(`Échec du diagnostic : ${resultat.erreur}`)
+      if (!resultat.ok)
+        throw new Error(`Échec du diagnostic : ${libelleErreurServeur(resultat.erreur)}`)
       nbCorriges += resultat.donnees.resultats.filter((r) => r.corrige).length
     }
     if (nbCorriges > 0) await charger()
@@ -494,7 +503,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     if (api && authStore.jeton) {
       const resultat = await api.supprimerDocumentNormatif(authStore.jeton, documentId)
       // Jamais retirer de l'écran un document que le serveur a conservé.
-      if (!resultat.ok) throw new Error(`Échec de la suppression : ${resultat.erreur}`)
+      if (!resultat.ok)
+        throw new Error(`Échec de la suppression : ${libelleErreurServeur(resultat.erreur)}`)
     }
     documents.value = documents.value.filter((d) => d.id !== documentId)
   }

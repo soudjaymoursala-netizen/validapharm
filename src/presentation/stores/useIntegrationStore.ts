@@ -14,6 +14,7 @@ import type {
 } from '../../logique-metier/domaine/types'
 import { connectorsAMigrer, externalReferencesAMigrer, syncJobsAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export type NouveauConnectorInput = ConfigConnector & { nom: string }
 
@@ -153,7 +154,9 @@ export const useIntegrationStore = defineStore('integration', () => {
       externalReferences: externalReferencesDuClient.map(externalReferenceDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Integration : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration Integration : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const [tableau, duClient] of [
       [connectorsAMigrer, connectorsDuClient],
@@ -210,7 +213,10 @@ export const useIntegrationStore = defineStore('integration', () => {
       type: configConnector.type,
       config: configConnector.config,
     })
-    if (!resultat.ok) throw new Error(`Échec de la création du connecteur : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la création du connecteur : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const connector = connectorWireVersDomaine(resultat.donnees.connector)
     connectors.value = [...connectors.value, connector]
     return connector
@@ -236,7 +242,7 @@ export const useIntegrationStore = defineStore('integration', () => {
     const resultat = await api.demarrerSyncJob(jeton, clientId, connectorId)
     if (!resultat.ok) {
       if (resultat.erreur === 'connector_introuvable') return { erreur: 'connector_introuvable' }
-      throw new Error(`Échec du démarrage du SyncJob : ${resultat.erreur}`)
+      throw new Error(`Échec du démarrage du SyncJob : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const job = syncJobWireVersDomaine(resultat.donnees.syncJob)
     syncJobs.value = [...syncJobs.value, job]
@@ -301,7 +307,9 @@ export const useIntegrationStore = defineStore('integration', () => {
       libelle: input.libelle,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la déclaration de la référence : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la déclaration de la référence : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const reference = externalReferenceWireVersDomaine(resultat.donnees.externalReference)
     externalReferences.value = [...externalReferences.value, reference]

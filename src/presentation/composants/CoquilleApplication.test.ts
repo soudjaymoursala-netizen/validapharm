@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { useConnectiviteServeurStore } from '../stores/useConnectiviteServeurStore'
+import { useErreursGlobalesStore } from '../stores/useErreursGlobalesStore'
 import CoquilleApplication from './CoquilleApplication.vue'
 
 function routeurDeTest() {
@@ -81,5 +82,38 @@ describe('CoquilleApplication — serveur injoignable', () => {
     connectivite.signaler(true)
     await wrapper.vm.$nextTick()
     expect(wrapper.find('.bandeau-serveur-injoignable').exists()).toBe(false)
+  })
+})
+
+describe('CoquilleApplication — erreurs non gérées affichées (audit M1)', () => {
+  test("l'erreur d'une action non gérée par l'écran apparaît dans un bandeau, sans doublon, jusqu'à fermeture ou navigation", async () => {
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(CoquilleApplication, {
+      global: {
+        plugins: [router],
+        config: {
+          errorHandler: (e: unknown) => useErreursGlobalesStore().signaler(e),
+        },
+      },
+    })
+    const erreurs = useErreursGlobalesStore()
+    erreurs.signaler(new Error('Échec de la création : données incomplètes (corps_invalide)'))
+    erreurs.signaler(new Error('Échec de la création : données incomplètes (corps_invalide)'))
+    await wrapper.vm.$nextTick()
+
+    const messages = wrapper.findAll('.erreurs-globales__message')
+    expect(messages).toHaveLength(1)
+    expect(messages[0]?.text()).toContain('Action non aboutie : Échec de la création')
+
+    await messages[0]?.find('button').trigger('click')
+    expect(wrapper.find('.erreurs-globales').exists()).toBe(false)
+
+    erreurs.signaler(new Error('Autre échec'))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.erreurs-globales').exists()).toBe(true)
+    await router.push('/profil')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.erreurs-globales').exists()).toBe(false)
   })
 })

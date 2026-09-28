@@ -5,6 +5,7 @@ import type { Langue, PhaseProjet, Project } from '../../logique-metier/domaine/
 import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { projectsAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export type NiveauAccesPartage = 'lecture' | 'édition'
 export type ErreurPartageProjet = { erreur: 'introuvable' }
@@ -100,6 +101,8 @@ export function projetDomaineVersWireComplet(p: Project): ProjectWire {
 export const useProjectsStore = defineStore('projects', () => {
   const projects = ref<Project[]>([])
   const enChargement = ref(false)
+  /** Le dernier chargement a échoué : la liste n'est pas fiable (jamais « aucun projet »). */
+  const chargementEchoue = ref(false)
   /**
    * Identité résolue de l'utilisateur courant (email du compte réel
    * connecté, `useAuthStore`) — mise à jour à chaque
@@ -149,7 +152,10 @@ export const useProjectsStore = defineStore('projects', () => {
       jeton,
       projectsAMigrer.map(projetDomaineVersWireComplet),
     )
-    if (!resultat.ok) throw new Error(`Échec de la migration des projets : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la migration des projets : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     projectsAMigrer.splice(0, projectsAMigrer.length)
   }
 
@@ -174,14 +180,17 @@ export const useProjectsStore = defineStore('projects', () => {
       const resultat = await api.listerProjets(jeton)
       if (!resultat.ok) {
         projects.value = []
+        chargementEchoue.value = true
         return
       }
       const visibles = resultat.donnees.projects.map(projetWireVersDomaine)
       projects.value = visibles.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      chargementEchoue.value = false
     } catch {
       // Panne réseau réelle ou relais non configuré : jamais une exception
       // non gérée, même discipline que `useOrganizationStore.charger`.
       projects.value = []
+      chargementEchoue.value = true
     } finally {
       enChargement.value = false
     }
@@ -211,7 +220,8 @@ export const useProjectsStore = defineStore('projects', () => {
       languageDefault: input.language_default,
       clientId: input.client_id,
     })
-    if (!resultat.ok) throw new Error(`Échec de la création du projet : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(`Échec de la création du projet : ${libelleErreurServeur(resultat.erreur)}`)
     const projet = projetWireVersDomaine(resultat.donnees.projet)
     projects.value = [projet, ...projects.value]
     return projet
@@ -233,7 +243,7 @@ export const useProjectsStore = defineStore('projects', () => {
     const resultat = await api.partagerProjet(jeton, projectId, userId, accessLevel)
     if (!resultat.ok) {
       if (resultat.erreur === 'introuvable') return { erreur: 'introuvable' }
-      throw new Error(`Échec du partage : ${resultat.erreur}`)
+      throw new Error(`Échec du partage : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
@@ -250,7 +260,7 @@ export const useProjectsStore = defineStore('projects', () => {
     const resultat = await api.retirerPartageProjet(jeton, projectId, userId)
     if (!resultat.ok) {
       if (resultat.erreur === 'introuvable') return { erreur: 'introuvable' }
-      throw new Error(`Échec du retrait de partage : ${resultat.erreur}`)
+      throw new Error(`Échec du retrait de partage : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
@@ -296,7 +306,7 @@ export const useProjectsStore = defineStore('projects', () => {
     const resultat = await api.ajouterLienProjet(jeton, projectId, fromSectionId, toSectionId)
     if (!resultat.ok) {
       if (resultat.erreur === 'introuvable') throw new Error(`Projet introuvable : ${projectId}`)
-      throw new Error(`Échec de l'ajout du lien : ${resultat.erreur}`)
+      throw new Error(`Échec de l'ajout du lien : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
@@ -313,7 +323,7 @@ export const useProjectsStore = defineStore('projects', () => {
     const resultat = await api.retirerLienProjet(jeton, projectId, fromSectionId, toSectionId)
     if (!resultat.ok) {
       if (resultat.erreur === 'introuvable') throw new Error(`Projet introuvable : ${projectId}`)
-      throw new Error(`Échec du retrait du lien : ${resultat.erreur}`)
+      throw new Error(`Échec du retrait du lien : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
@@ -343,7 +353,7 @@ export const useProjectsStore = defineStore('projects', () => {
       if (resultat.erreur === 'introuvable' || resultat.erreur === 'deja_archive') {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de l'archivage : ${resultat.erreur}`)
+      throw new Error(`Échec de l'archivage : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
@@ -362,7 +372,7 @@ export const useProjectsStore = defineStore('projects', () => {
       if (resultat.erreur === 'introuvable' || resultat.erreur === 'deja_actif') {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec du désarchivage : ${resultat.erreur}`)
+      throw new Error(`Échec du désarchivage : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
@@ -389,7 +399,7 @@ export const useProjectsStore = defineStore('projects', () => {
     const resultat = await api.changerPhaseProjet(jeton, projectId, phase)
     if (!resultat.ok) {
       if (resultat.erreur === 'introuvable') return { erreur: 'introuvable' }
-      throw new Error(`Échec du changement de phase : ${resultat.erreur}`)
+      throw new Error(`Échec du changement de phase : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
@@ -413,7 +423,7 @@ export const useProjectsStore = defineStore('projects', () => {
       if (resultat.erreur === 'introuvable' || resultat.erreur === 'deja_suspendu') {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de la suspension : ${resultat.erreur}`)
+      throw new Error(`Échec de la suspension : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
@@ -433,7 +443,7 @@ export const useProjectsStore = defineStore('projects', () => {
       if (resultat.erreur === 'introuvable' || resultat.erreur === 'pas_suspendu') {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de la reprise : ${resultat.erreur}`)
+      throw new Error(`Échec de la reprise : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
@@ -469,7 +479,7 @@ export const useProjectsStore = defineStore('projects', () => {
       ) {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de la suppression : ${resultat.erreur}`)
+      throw new Error(`Échec de la suppression : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
@@ -484,6 +494,7 @@ export const useProjectsStore = defineStore('projects', () => {
     projetsArchives,
     projetsSupprimes,
     enChargement,
+    chargementEchoue,
     identiteCourante,
     resoudreIdentiteCourante,
     chargerProjets,

@@ -7,6 +7,7 @@ import type {
 import type { ContextSnapshot, ContextSnapshotItem } from '../../logique-metier/domaine/types'
 import { contextSnapshotItemsAMigrer, contextSnapshotsAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface EntreesAssemblage {
   workspaceId?: string | null
@@ -110,7 +111,9 @@ export const useContextEngineStore = defineStore('contextEngine', () => {
       contextSnapshotItems: itemsDuClient.map(contextSnapshotItemDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration ContextSnapshot : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration ContextSnapshot : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const [tableau, duClient] of [
       [contextSnapshotsAMigrer, snapshotsDuClient],
@@ -167,7 +170,9 @@ export const useContextEngineStore = defineStore('contextEngine', () => {
       assetNodeId: entrees.assetNodeId ?? null,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de l'assemblage du ContextSnapshot : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'assemblage du ContextSnapshot : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const snapshot = contextSnapshotWireVersDomaine(resultat.donnees.contextSnapshot)
     snapshots.value = [...snapshots.value, snapshot]

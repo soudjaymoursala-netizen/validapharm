@@ -6,6 +6,7 @@ import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
+  semerNoeudsDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import { useQualityEventStore } from './useQualityEventStore'
 import { useProcessContextStore } from './useProcessContextStore'
@@ -41,6 +42,7 @@ beforeEach(async () => {
   await creerClientDeTest('client-1')
   await creerClientDeTest('client-A')
   await creerClientDeTest('client-B')
+  await semerNoeudsDeTest(ctx, 'client-1', ['granulateur-01'])
 })
 
 afterEach(() => {

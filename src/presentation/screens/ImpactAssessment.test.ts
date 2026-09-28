@@ -146,12 +146,17 @@ describe('ImpactAssessment', () => {
     const enregistrerBtn = wrapper
       .findAll('button')
       .find((b) => b.text() === 'Enregistrer cette évaluation')
-    await enregistrerBtn?.trigger('click')
+    // Double clic dans le même instant (preuve P1 de l'audit M2 : deux
+    // évaluations étaient créées) — une seule doit l'être.
+    enregistrerBtn?.element.click()
+    enregistrerBtn?.element.click()
 
     await attendreQue(
       async () => (await ctx.impactAssessmentRepo.listerEvaluations(CLIENT_ID)).length > 0,
     )
+    await flushPromises()
     const evals = await ctx.impactAssessmentRepo.listerEvaluations(CLIENT_ID)
+    expect(evals).toHaveLength(1)
     expect(evals[0]?.verdict).toBe('impact_direct')
     expect(evals[0]?.nomElement).toBe('Isolateur STICK002')
 

@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { GitHubConnector } from '../../connecteurs/github/GitHubConnector'
 import { useAuthStore } from './useAuthStore'
 import { useConnexionAuthentificationStore } from './useConnexionAuthentificationStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 /** Saisie admin : `jeton` vide = conserver le PAT déjà enregistré côté serveur. */
 export interface SaisieConnexionGitHub {
@@ -117,7 +118,8 @@ export const useConnexionGitHubStore = defineStore('connexionGitHub', () => {
     if (api && authStore.jeton) {
       const resultat = await api.effacerParametreInstallation(authStore.jeton, CLE_PARAMETRE)
       // Jamais afficher « effacée » si le serveur l'a conservée.
-      if (!resultat.ok) throw new Error(`Échec de l'effacement : ${resultat.erreur}`)
+      if (!resultat.ok)
+        throw new Error(`Échec de l'effacement : ${libelleErreurServeur(resultat.erreur)}`)
     }
     connexion.value = null
   }

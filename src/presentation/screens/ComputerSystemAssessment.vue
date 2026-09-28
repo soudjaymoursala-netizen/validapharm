@@ -15,12 +15,27 @@ import {
   CATEGORIES_GAMP5_SELECTIONNABLES,
   type CategorieGAMP5,
 } from '../../logique-metier/domaine/types'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
 
 const clientsStore = useClientsStore()
 const csvStore = useCSVAssessmentStore()
 const structureStore = useStructureSystemeStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nomClient = ref<string | null>(null)
 
@@ -63,7 +78,13 @@ const formulaireComplet = computed(
     justificationPertinence.value.trim().length > 0,
 )
 
-async function enregistrerEvaluation(): Promise<void> {
+async function enregistrerEvaluation(
+  ...args: Parameters<typeof enregistrerEvaluationSansGarde>
+): Promise<void> {
+  await envoyer(() => enregistrerEvaluationSansGarde(...args))
+}
+
+async function enregistrerEvaluationSansGarde(): Promise<void> {
   if (!formulaireComplet.value || categorieGamp5.value === null) return
   if (pertinenceGxp.value === null || pertinenceEresPart11.value === null) return
   await csvStore.creerEvaluation(props.clientId, {
@@ -94,6 +115,7 @@ function nouvelleEvaluation(): void {
   <main class="csv-assessment">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Computer System Assessment — {{ nomClient ?? props.clientId }}</h1>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="bandeau-disclaimer">Aide à la décision, non une décision de classification.</p>
 
     <section v-if="!evaluationEnregistree" class="bloc-evaluation">
@@ -141,7 +163,9 @@ function nouvelleEvaluation(): void {
         </label>
 
         <div class="actions">
-          <button type="submit" :disabled="!formulaireComplet">Enregistrer cette évaluation</button>
+          <button type="submit" :disabled="!formulaireComplet || envoiEnCours">
+            Enregistrer cette évaluation
+          </button>
         </div>
       </form>
     </section>

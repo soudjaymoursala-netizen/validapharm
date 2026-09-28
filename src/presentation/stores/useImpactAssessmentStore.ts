@@ -18,6 +18,7 @@ import {
   evaluationsImpactAssessmentAMigrer,
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function profilImpactWireVersDomaine(
   wire: MethodProfileImpactAssessmentWire,
@@ -121,6 +122,11 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
   const profils = ref<MethodProfileImpactAssessment[]>([])
   const evaluations = ref<EvaluationImpactAssessment[]>([])
   const enChargement = ref(false)
+  /**
+   * Le dernier chargement a échoué : « aucune méthode configurée » serait faux
+   * (audit UX : l'écran invitait à recréer une méthode pendant une panne).
+   */
+  const chargementEchoue = ref(false)
 
   /** Lève si le relais n'est pas configuré — mutations exigent désormais systématiquement le Worker/D1, même discipline que `useMethodProfileACFCStore`. */
   async function obtenirApi() {
@@ -162,7 +168,9 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
       evaluationsImpact: evaluationsDuClient.map(evaluationImpactDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Impact Assessment : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration Impact Assessment : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const p of profilsDuClient) {
       const index = methodProfilesImpactAssessmentAMigrer.indexOf(p)
@@ -185,13 +193,16 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
       const { api, jeton } = await obtenirApi()
       const resultat = await api.obtenirImpactAssessment(jeton, clientId)
       if (resultat.ok) {
+        chargementEchoue.value = false
         profils.value = resultat.donnees.profilsImpact.map(profilImpactWireVersDomaine)
         evaluations.value = resultat.donnees.evaluationsImpact.map(evaluationImpactWireVersDomaine)
       } else {
+        chargementEchoue.value = true
         profils.value = []
         evaluations.value = []
       }
     } catch {
+      chargementEchoue.value = true
       // Panne réseau réelle ou relais non configuré : jamais une exception
       // non gérée, même discipline que `useMethodProfileACFCStore.charger`.
       profils.value = []
@@ -199,10 +210,6 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
     } finally {
       enChargement.value = false
     }
-  }
-
-  function prochaineVersion(): string {
-    return `v${profils.value.length + 1}`
   }
 
   async function creerNouvelleVersion(
@@ -215,14 +222,15 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
     }))
     const { api, jeton } = await obtenirApi()
     const resultat = await api.creerProfilImpactAssessment(jeton, clientId, {
-      version: prochaineVersion(),
       source: input.source,
       origin: input.origin,
       questions,
       decisionRule: 'au_moins_un_oui_impact_direct',
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création du profil Impact Assessment : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création du profil Impact Assessment : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const profil = profilImpactWireVersDomaine(resultat.donnees.profilImpact)
     profils.value = [...profils.value, profil]
@@ -251,7 +259,9 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
       verdict,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création de l'évaluation Impact Assessment : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création de l'évaluation Impact Assessment : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const evaluation = evaluationImpactWireVersDomaine(resultat.donnees.evaluationImpact)
     evaluations.value = [...evaluations.value, evaluation]
@@ -262,6 +272,7 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
     profils,
     evaluations,
     enChargement,
+    chargementEchoue,
     profilActif,
     charger,
     creerNouvelleVersion,

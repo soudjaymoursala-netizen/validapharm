@@ -60,3 +60,9 @@ describe('conclusionQuestionnaireOuiNon', () => {
     )
   })
 })
+
+describe('questionnaire vide (audit m4)', () => {
+  test('aucune question : aucun verdict, jamais « négatif » par défaut', () => {
+    expect(conclusionQuestionnaireOuiNon([], {})).toBeNull()
+  })
+})

@@ -24,6 +24,7 @@ import {
 import { messageRefusSignature } from '../i18n/libellesSignature'
 import { useAuthStore } from './useAuthStore'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function executionWireVersDomaine(wire: ExecutionWire): Execution {
   return {
@@ -221,7 +222,7 @@ export const useExecutionStore = defineStore('execution', () => {
       executionEvents: executionEventsDuClient.map(executionEventDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Execution : ${resultat.erreur}`)
+      throw new Error(`Échec de la migration Execution : ${libelleErreurServeur(resultat.erreur)}`)
     }
     for (const e of executionsDuClient) {
       const index = executionsAMigrer.indexOf(e)
@@ -297,7 +298,9 @@ export const useExecutionStore = defineStore('execution', () => {
       if (resultat.erreur === 'test_introuvable' || resultat.erreur === 'test_non_approuve') {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec du démarrage de l'exécution : ${resultat.erreur}`)
+      throw new Error(
+        `Échec du démarrage de l'exécution : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const execution = executionWireVersDomaine(resultat.donnees.execution)
     executions.value = [...executions.value, execution]
@@ -328,7 +331,9 @@ export const useExecutionStore = defineStore('execution', () => {
       ) {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de l'enregistrement du résultat d'étape : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'enregistrement du résultat d'étape : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const etape = executionStepWireVersDomaine(resultat.donnees.executionStep)
     executionSteps.value = [...executionSteps.value, etape]
@@ -348,7 +353,7 @@ export const useExecutionStore = defineStore('execution', () => {
     })
     if (!resultat.ok) {
       if (resultat.erreur === 'etape_execution_introuvable') return { erreur: resultat.erreur }
-      throw new Error(`Échec de l'ajout de la mesure : ${resultat.erreur}`)
+      throw new Error(`Échec de l'ajout de la mesure : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const mesure = measurementWireVersDomaine(resultat.donnees.measurement)
     measurements.value = [...measurements.value, mesure]
@@ -381,7 +386,9 @@ export const useExecutionStore = defineStore('execution', () => {
       ) {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de la consignation de l'événement : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la consignation de l'événement : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const evenement = executionEventWireVersDomaine(resultat.donnees.executionEvent)
     executionEvents.value = [...executionEvents.value, evenement]
@@ -409,7 +416,9 @@ export const useExecutionStore = defineStore('execution', () => {
       ) {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de la clôture de l'exécution : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la clôture de l'exécution : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const miseAJour = executionWireVersDomaine(resultat.donnees.execution)
     executions.value = executions.value.map((e) => (e.id === executionId ? miseAJour : e))

@@ -6,6 +6,7 @@ import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
+  semerNoeudsDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import { useContentPlanStore } from './useContentPlanStore'
 
@@ -35,6 +36,7 @@ beforeEach(async () => {
       updatedAt: new Date().toISOString(),
     })
   }
+  await semerNoeudsDeTest(ctx, 'client-1', ['n1'])
 })
 
 afterEach(() => {
@@ -292,9 +294,22 @@ describe('useContentPlanStore — isolation stricte par client', () => {
   test('readiness ne fuit pas les données de traçabilité d’un autre client', async () => {
     await semerChaineComplete('client-A', 'n1')
     const store = useContentPlanStore()
+    // Le nœud d'un autre client ne peut même plus être cité (audit sécurité m6).
+    await expect(
+      store.creerContentPlan('client-B', {
+        templateId: 'urs',
+        assetNodeId: 'n1',
+        processId: null,
+        methodProfileId: null,
+        methodProfileType: null,
+        contextSnapshot: {},
+      }),
+    ).rejects.toThrow('noeud_introuvable')
+
+    await semerNoeudsDeTest(ctx, 'client-B', ['n1-b'])
     const plan = await store.creerContentPlan('client-B', {
       templateId: 'urs',
-      assetNodeId: 'n1',
+      assetNodeId: 'n1-b',
       processId: null,
       methodProfileId: null,
       methodProfileType: null,

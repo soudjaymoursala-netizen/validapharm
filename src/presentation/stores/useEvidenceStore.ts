@@ -19,6 +19,7 @@ import {
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
 import { useExecutionStore } from './useExecutionStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export function evidenceWireVersDomaine(wire: EvidenceWire): Evidence {
   return {
@@ -166,7 +167,7 @@ export const useEvidenceStore = defineStore('evidence', () => {
       provenanceLinks: provenanceLinksDuClient.map(provenanceLinkDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Evidence : ${resultat.erreur}`)
+      throw new Error(`Échec de la migration Evidence : ${libelleErreurServeur(resultat.erreur)}`)
     }
     for (const e of evidencesDuClient) {
       const index = evidencesAMigrer.indexOf(e)
@@ -250,7 +251,9 @@ export const useEvidenceStore = defineStore('evidence', () => {
       ) {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de l'enregistrement de la preuve : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'enregistrement de la preuve : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const preuve = evidenceWireVersDomaine(resultat.donnees.evidence)
     evidences.value = [...evidences.value, preuve]
@@ -272,7 +275,9 @@ export const useEvidenceStore = defineStore('evidence', () => {
       if (resultat.erreur === 'evidence_introuvable' || resultat.erreur === 'type_non_document') {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de l'ajout de la localisation : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'ajout de la localisation : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const localisation = evidenceLocationWireVersDomaine(resultat.donnees.evidenceLocation)
     evidenceLocations.value = [...evidenceLocations.value, localisation]
@@ -293,7 +298,9 @@ export const useEvidenceStore = defineStore('evidence', () => {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.declarerProvenance(jeton, clientId, { evidenceId, requirementId })
     if (!resultat.ok) {
-      throw new Error(`Échec de la déclaration de provenance : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la déclaration de provenance : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const lien = provenanceLinkWireVersDomaine(resultat.donnees.provenanceLink)
     provenanceLinks.value = [...provenanceLinks.value, lien]

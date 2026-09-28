@@ -21,11 +21,26 @@ import type {
   TypeRelationTechnique,
 } from '../../logique-metier/domaine/types'
 import { LIBELLES_STATUT_QUALIFICATION } from '../../logique-metier/i18n/libellesStatutQualification'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
 
 const clientsStore = useClientsStore()
 const structureStore = useStructureSystemeStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nomClient = ref<string | null>(null)
 const brouillonNiveau = reactive({ key: '', libelleFr: '', numbering_pattern: '' })
@@ -67,7 +82,13 @@ function messageErreurNiveau(
   return 'Niveau introuvable.'
 }
 
-async function enregistrerEditionNiveau(cleActuelle: string): Promise<void> {
+async function enregistrerEditionNiveau(
+  ...args: Parameters<typeof enregistrerEditionNiveauSansGarde>
+): Promise<void> {
+  await envoyer(() => enregistrerEditionNiveauSansGarde(...args))
+}
+
+async function enregistrerEditionNiveauSansGarde(cleActuelle: string): Promise<void> {
   erreurNiveau.value = null
   const resultat = await structureStore.modifierNiveau(props.clientId, cleActuelle, {
     key: brouillonEditionNiveau.key.trim(),
@@ -81,7 +102,13 @@ async function enregistrerEditionNiveau(cleActuelle: string): Promise<void> {
   niveauEnEdition.value = null
 }
 
-async function supprimerNiveau(key: string): Promise<void> {
+async function supprimerNiveau(
+  ...args: Parameters<typeof supprimerNiveauSansGarde>
+): Promise<void> {
+  await envoyer(() => supprimerNiveauSansGarde(...args))
+}
+
+async function supprimerNiveauSansGarde(key: string): Promise<void> {
   erreurNiveau.value = null
   const resultat = await structureStore.supprimerNiveau(props.clientId, key)
   if (!resultat.ok) erreurNiveau.value = messageErreurNiveau(resultat)
@@ -104,7 +131,11 @@ const brouillonRelation = reactive({
 })
 const erreurRelation = ref<string | null>(null)
 
-async function creerRelation(): Promise<void> {
+async function creerRelation(...args: Parameters<typeof creerRelationSansGarde>): Promise<void> {
+  await envoyer(() => creerRelationSansGarde(...args))
+}
+
+async function creerRelationSansGarde(): Promise<void> {
   erreurRelation.value = null
   if (
     !brouillonRelation.type_relation ||
@@ -166,7 +197,13 @@ watch(
   { immediate: true, deep: true },
 )
 
-async function enregistrerQualification(noeud: AssetNode): Promise<void> {
+async function enregistrerQualification(
+  ...args: Parameters<typeof enregistrerQualificationSansGarde>
+): Promise<void> {
+  await envoyer(() => enregistrerQualificationSansGarde(...args))
+}
+
+async function enregistrerQualificationSansGarde(noeud: AssetNode): Promise<void> {
   const statut = statutChoisi[noeud.id]
   if (!statut) return
   await structureStore.modifierQualificationNoeud(noeud.id, {
@@ -184,7 +221,11 @@ onMounted(async () => {
   await structureStore.charger(props.clientId)
 })
 
-async function ajouterNiveau(): Promise<void> {
+async function ajouterNiveau(...args: Parameters<typeof ajouterNiveauSansGarde>): Promise<void> {
+  await envoyer(() => ajouterNiveauSansGarde(...args))
+}
+
+async function ajouterNiveauSansGarde(): Promise<void> {
   if (brouillonNiveau.key.trim().length === 0) return
   erreurNiveau.value = null
   const resultat = await structureStore.ajouterNiveau(props.clientId, {
@@ -227,7 +268,13 @@ function messageErreurImport(resultat: Extract<ResultatImportHierarchie, { ok: f
   return MESSAGES_ERREUR_IMPORT[resultat.raison] ?? 'Import refusé.'
 }
 
-async function importerFichier(evenement: Event): Promise<void> {
+async function importerFichier(
+  ...args: Parameters<typeof importerFichierSansGarde>
+): Promise<void> {
+  await envoyer(() => importerFichierSansGarde(...args))
+}
+
+async function importerFichierSansGarde(evenement: Event): Promise<void> {
   const fichier = (evenement.target as HTMLInputElement).files?.[0]
   if (!fichier) return
 
@@ -289,7 +336,13 @@ function estArchiveZip(octets: Uint8Array): boolean {
   return octets[0] === 0x50 && octets[1] === 0x4b && octets[2] === 0x03 && octets[3] === 0x04
 }
 
-async function importerFichierSap(evenement: Event): Promise<void> {
+async function importerFichierSap(
+  ...args: Parameters<typeof importerFichierSapSansGarde>
+): Promise<void> {
+  await envoyer(() => importerFichierSapSansGarde(...args))
+}
+
+async function importerFichierSapSansGarde(evenement: Event): Promise<void> {
   const fichier = (evenement.target as HTMLInputElement).files?.[0]
   if (!fichier) return
 
@@ -319,7 +372,11 @@ async function importerFichierSap(evenement: Event): Promise<void> {
   }
 }
 
-async function creerNoeud(): Promise<void> {
+async function creerNoeud(...args: Parameters<typeof creerNoeudSansGarde>): Promise<void> {
+  await envoyer(() => creerNoeudSansGarde(...args))
+}
+
+async function creerNoeudSansGarde(): Promise<void> {
   resultatCreation.value = await structureStore.creerNoeud(props.clientId, {
     level_key: brouillonNoeud.level_key,
     name: brouillonNoeud.name,
@@ -334,7 +391,11 @@ async function creerNoeud(): Promise<void> {
 
 const parentChoisi = reactive<Record<string, string>>({})
 
-async function reparenter(noeud: AssetNode): Promise<void> {
+async function reparenter(...args: Parameters<typeof reparenterSansGarde>): Promise<void> {
+  await envoyer(() => reparenterSansGarde(...args))
+}
+
+async function reparenterSansGarde(noeud: AssetNode): Promise<void> {
   const nouveauParentId = parentChoisi[noeud.id] || null
   const resultat = await structureStore.reparenterNoeud(noeud.id, nouveauParentId)
   if (!resultat.ok) {
@@ -371,6 +432,7 @@ const noeudsAffiches = computed(() =>
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <div class="entete">
       <h1>Structure Système — {{ nomClient ?? props.clientId }}</h1>
+      <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
       <RouterLink
         :to="{ name: 'suivi-periodicite', params: { clientId: props.clientId } }"
         class="lien-suivi-periodicite"
@@ -416,7 +478,7 @@ const noeudsAffiches = computed(() =>
           <input v-model="brouillonNiveau.numbering_pattern" type="text" placeholder="ex. S-{n}" />
         </label>
         <div class="actions">
-          <button type="submit">Ajouter le niveau</button>
+          <button type="submit" :disabled="envoiEnCours">Ajouter le niveau</button>
         </div>
       </form>
     </section>
@@ -528,7 +590,7 @@ const noeudsAffiches = computed(() =>
           </select>
         </label>
         <div class="actions">
-          <button type="submit">Créer le nœud</button>
+          <button type="submit" :disabled="envoiEnCours">Créer le nœud</button>
         </div>
       </form>
       <p v-if="resultatCreation?.ok === false" class="erreur" role="alert">
@@ -634,7 +696,7 @@ const noeudsAffiches = computed(() =>
           </select>
         </label>
         <div class="actions">
-          <button type="submit">Créer la relation</button>
+          <button type="submit" :disabled="envoiEnCours">Créer la relation</button>
         </div>
       </form>
       <p v-if="erreurRelation" class="erreur" role="alert">{{ erreurRelation }}</p>

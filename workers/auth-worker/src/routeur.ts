@@ -1,5 +1,19 @@
 import { signerJwt, verifierJwt } from './jwt'
-import { genererSel, hacherMotDePasse, verifierMotDePasse } from './motDePasse'
+import {
+  calculerIpr,
+  reponsesValides,
+  refusBornesAmdec,
+  verdictAcfc,
+  verdictImpact,
+  verdictRisque,
+  versionSuivante,
+} from './verdictsEvaluation'
+import {
+  chainesEgalesTempsConstant,
+  genererSel,
+  hacherMotDePasse,
+  verifierMotDePasse,
+} from './motDePasse'
 import type { EnvoyeurEmail } from './notifications/envoyeurEmail'
 import type {
   ACFCRepo,
@@ -149,6 +163,7 @@ import type {
 } from './repos/structureSystemeRepo'
 import type { UtilisateursRepo } from './repos/utilisateursRepo'
 import type { LimiteurConnexion } from './limiteurConnexion'
+import { QuotaRelaisIAMemoire, type QuotaRelaisIA } from './quotaRelaisIA'
 import type { JetonsCompteRepo, TypeJetonCompte } from './repos/jetonsCompteRepo'
 import type { ClientEnregistre, EntreeAudit, Role, UtilisateurEnregistre } from './types'
 import { versUtilisateurPublic } from './types'
@@ -196,6 +211,8 @@ export interface Contexte {
   jetonsCompteRepo: JetonsCompteRepo
   /** Limitation des tentatives de mot de passe — absente : aucune limitation (tests). */
   limiteurConnexion?: LimiteurConnexion
+  /** Quota d'appels au relais IA par utilisateur (audit a1) ; mémoire par défaut. */
+  quotaRelaisIA?: QuotaRelaisIA
   utilisateursRepo: UtilisateursRepo
   clientsRepo: ClientsRepo
   parametresInstallationRepo: ParametresInstallationRepo
@@ -320,6 +337,99 @@ function nombreOptionnelInvalide(valeur: unknown): boolean {
 function horsDomaine(valeur: string | null | undefined, valides: readonly string[]): boolean {
   return valeur !== null && valeur !== undefined && !valides.includes(valeur)
 }
+
+/**
+ * Questions d'une méthode (ACFC, Impact) : au moins une (audit m4 — un
+ * questionnaire vide concluait « non critique »), identifiants uniques,
+ * texte présent.
+ */
+function questionsMethodeValides(questions: unknown): questions is { id: string }[] {
+  if (!Array.isArray(questions) || questions.length === 0) return false
+  const ids = new Set<string>()
+  for (const q of questions as { id?: unknown; texte?: unknown }[]) {
+    if (!q || typeof q.id !== 'string' || q.id.length === 0 || ids.has(q.id)) return false
+    if (!q.texte || typeof q.texte !== 'object') return false
+    ids.add(q.id)
+  }
+  return true
+}
+
+/**
+ * Valeur calculée par le serveur comparée à celle envoyée par le navigateur
+ * (audit d'intégrité M5) : absente → le serveur la fournit ; présente et
+ * différente → refus (`verdict_incoherent`), jamais un enregistrement du
+ * verdict du poste.
+ */
+function valeurIncoherente<T>(envoyee: T | null | undefined, calculee: T | null): boolean {
+  return envoyee !== undefined && (envoyee ?? null) !== calculee
+}
+
+/**
+ * Référence à un nœud de la Structure Système (audit sécurité m6) : jamais
+ * un id inexistant ni celui d'un autre client — la traçabilité d'une
+ * évaluation, d'une exécution ou d'un nœud enfant en dépend.
+ */
+async function noeudEtranger(
+  ctx: Contexte,
+  clientId: string,
+  noeudId: string | null | undefined,
+): Promise<boolean> {
+  if (noeudId === null || noeudId === undefined) return false
+  if (typeof noeudId !== 'string') return true
+  const noeud = await ctx.structureSystemeRepo.noeudParId(noeudId)
+  return !noeud || noeud.clientId !== clientId
+}
+
+type ReferencesCorps = {
+  assetNodeId?: unknown
+  parentId?: unknown
+  workspaceId?: unknown
+  processId?: unknown
+  parameterId?: unknown
+  requirementId?: unknown
+}
+
+/**
+ * Références d'un corps de requête vers d'autres objets (audit sécurité
+ * m6) : chacune doit exister et appartenir au même client. Renvoie le code
+ * de refus, ou `null`. Une référence absente (`null`/non fournie) est
+ * acceptée — elle est facultative partout où elle l'est déjà.
+ */
+async function refusReferences(
+  ctx: Contexte,
+  clientId: string,
+  corps: ReferencesCorps,
+): Promise<string | null> {
+  const fournie = (v: unknown) => v !== null && v !== undefined
+  const pasUneChaine = Object.values(corps).some((v) => fournie(v) && typeof v !== 'string')
+  if (pasUneChaine) return 'corps_invalide'
+  if (await noeudEtranger(ctx, clientId, corps.assetNodeId as string | null | undefined)) {
+    return 'noeud_introuvable'
+  }
+  if (await noeudEtranger(ctx, clientId, corps.parentId as string | null | undefined)) {
+    return 'parent_introuvable'
+  }
+  if (fournie(corps.workspaceId)) {
+    const workspace = await ctx.organisationRepo.workspaceParId(corps.workspaceId as string)
+    if (!workspace || workspace.organizationId !== clientId) return 'workspace_introuvable'
+  }
+  if (fournie(corps.processId)) {
+    const processes = await ctx.processContextRepo.listerProcesses(clientId)
+    if (!processes.some((p) => p.id === corps.processId)) return 'process_introuvable'
+  }
+  if (fournie(corps.parameterId)) {
+    const parametres = await ctx.parametersRepo.listerParametres(clientId)
+    if (!parametres.some((p) => p.id === corps.parameterId)) return 'parametre_introuvable'
+  }
+  if (fournie(corps.requirementId)) {
+    const exigences = await ctx.testDefinitionRepo.listerRequirements(clientId)
+    if (!exigences.some((e) => e.id === corps.requirementId)) return 'exigence_introuvable'
+  }
+  return null
+}
+
+/** Nombre maximal d'éléments d'un envoi groupé (audit sécurité m4 : 3 000 nœuds acceptés). */
+const TAILLE_MAX_LOT = 500
 
 const ORIGINES_METHOD_PROFILE = [
   'procedure_client',
@@ -484,6 +594,8 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   // un JSON 500 avec les en-têtes CORS — jamais une page HTML que le
   // navigateur masque derrière une « erreur réseau » trompeuse.
   try {
+    const refusTaille = refusTailleCorps(request, ctx)
+    if (refusTaille) return refusTaille
     const migration = await preparerMigrationLocaleClient(request, ctx)
     if (migration instanceof Response) return migration
     const reponse = await routerRequeteInterne(migration.request, ctx)
@@ -502,6 +614,42 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
     console.error('Erreur interne du Worker', erreur)
     return reponseJson({ erreur: 'erreur_interne' }, 500, entetesCors(ctx.corsOrigin))
   }
+}
+
+/**
+ * Tailles maximales d'un corps de requête (audit sécurité m4 : 40 Mo de
+ * binaire et 5 Mo de texte acceptés par tout compte, listes alourdies
+ * d'autant pour tous). Contrôle sur `Content-Length`, que le navigateur
+ * envoie toujours pour une requête `fetch` à corps fini ; les fichiers
+ * sont en plus vérifiés un par un à l'import (`TAILLE_MAX_FICHIER`).
+ */
+const TAILLE_MAX_CORPS_JSON = 10 * 1024 * 1024
+const TAILLE_MAX_CORPS_FICHIER = 30 * 1024 * 1024
+const TAILLE_MAX_FICHIER = 25 * 1024 * 1024
+const TAILLE_MAX_TEXTE_EXTRAIT = 2 * 1024 * 1024
+
+function refusTailleCorps(request: Request, ctx: Contexte): Response | null {
+  const longueur = Number(request.headers.get('Content-Length') ?? '0')
+  if (!Number.isFinite(longueur) || longueur <= 0) return null
+  // JSON : 10 Mo ; fichier (formulaire multipart ou binaire brut d'une
+  // réparation de contenu) : 30 Mo.
+  const json = (request.headers.get('Content-Type') ?? '').includes('application/json')
+  const maximum = json ? TAILLE_MAX_CORPS_JSON : TAILLE_MAX_CORPS_FICHIER
+  if (longueur <= maximum) return null
+  return reponseJson(
+    { erreur: 'corps_trop_volumineux', maximumOctets: maximum },
+    413,
+    entetesCors(ctx.corsOrigin),
+  )
+}
+
+/** Fichier ou texte extrait d'un import au-delà des tailles admises, ou `null`. */
+function refusTailleImport(fichier: Blob | null, texte: string): string | null {
+  if (fichier && fichier.size > TAILLE_MAX_FICHIER) return 'fichier_trop_volumineux'
+  if (new TextEncoder().encode(texte).byteLength > TAILLE_MAX_TEXTE_EXTRAIT) {
+    return 'texte_trop_volumineux'
+  }
+  return null
 }
 
 /**
@@ -2053,7 +2201,11 @@ async function gererBootstrapAdmin(
   }>(request)
   if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
 
-  if (!corps.jetonBootstrap || corps.jetonBootstrap !== ctx.jetonBootstrap) {
+  if (
+    !corps.jetonBootstrap ||
+    !ctx.jetonBootstrap ||
+    !(await chainesEgalesTempsConstant(corps.jetonBootstrap, ctx.jetonBootstrap))
+  ) {
     return reponseJson({ erreur: 'jeton_invalide' }, 403, entetes)
   }
   if ((await ctx.utilisateursRepo.compter()) > 0) {
@@ -2981,6 +3133,11 @@ async function gererCreerNoeud(
   const corps = await lireCorpsJson<SaisieCreationNoeud>(request)
   const noeud = corps ? noeudDepuisSaisie(clientId, corps, 'manuel', acteur, 'création') : null
   if (!noeud) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const refusReference = await refusReferences(ctx, clientId, {
+    parentId: noeud.parentId,
+    workspaceId: noeud.workspaceId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   await ctx.structureSystemeRepo.creerNoeud(noeud)
   return reponseJson({ noeud }, 201, entetes)
@@ -2999,6 +3156,9 @@ async function gererCreerNoeudsEnLot(
   if (!corps || !Array.isArray(corps.noeuds)) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  if (corps.noeuds.length > TAILLE_MAX_LOT) {
+    return reponseJson({ erreur: 'lot_trop_grand', maximum: TAILLE_MAX_LOT }, 413, entetes)
+  }
   const action = corps.action ?? 'création (import)'
   const noeuds: AssetNodeEnregistre[] = []
   for (const saisie of corps.noeuds) {
@@ -3006,6 +3166,22 @@ async function gererCreerNoeudsEnLot(
     const noeud = noeudDepuisSaisie(clientId, saisie, 'import_fichier', acteur, action, saisie.id)
     if (!noeud) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
     noeuds.push(noeud)
+  }
+  // Parent : un nœud du même lot (chaînage d'un import) ou un nœud existant
+  // de ce client ; id imposé jamais déjà pris (audit sécurité m6).
+  const idsDuLot = new Set(noeuds.map((n) => n.id))
+  if (idsDuLot.size !== noeuds.length) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const noeud of noeuds) {
+    if (await ctx.structureSystemeRepo.noeudParId(noeud.id)) {
+      return reponseJson({ erreur: 'id_conflit' }, 409, entetes)
+    }
+    const refusReference = await refusReferences(ctx, clientId, {
+      parentId: noeud.parentId !== null && idsDuLot.has(noeud.parentId) ? null : noeud.parentId,
+      workspaceId: noeud.workspaceId,
+    })
+    if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   }
 
   await ctx.structureSystemeRepo.creerNoeuds(noeuds)
@@ -3058,6 +3234,11 @@ async function gererCreerNoeudsPullQms(
       connector.id,
     )
     if (!noeud) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    const refusReference = await refusReferences(ctx, clientId, {
+      parentId: noeud.parentId,
+      workspaceId: noeud.workspaceId,
+    })
+    if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
     noeuds.push(noeud)
   }
 
@@ -3126,6 +3307,17 @@ async function gererModifierNoeud(
   if (!corps || horsDomaine(corps.qualificationStatus, STATUTS_QUALIFICATION)) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  if (corps.parentId !== undefined && corps.parentId !== null) {
+    const refusReference = await refusReferences(ctx, clientId, { parentId: corps.parentId })
+    if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
+    // Jamais un nœud sous lui-même ou sous l'un de ses descendants : la
+    // hiérarchie deviendrait une boucle sans racine.
+    let ancetre: string | null = corps.parentId
+    for (let pas = 0; ancetre !== null && pas < 1000; pas++) {
+      if (ancetre === noeud.id) return reponseJson({ erreur: 'cycle_hierarchie' }, 400, entetes)
+      ancetre = (await ctx.structureSystemeRepo.noeudParId(ancetre))?.parentId ?? null
+    }
+  }
 
   const maintenant = horodatage()
   const misAJour: AssetNodeEnregistre = {
@@ -3187,11 +3379,9 @@ async function gererCreerRelationTechnique(
 // --- Handlers : ACFC (méthode configurable par client, F2 du catalogue
 // §10, Phase 4a du chantier de migration D1) ---
 //
-// La logique métier (numéro de version suivant, calcul du verdict via
-// `evaluerVerdictACFC`) reste côté store frontend
-// (`useMethodProfileACFCStore.ts`, déjà testée) — ces handlers ne font
-// qu'authentifier, vérifier l'accès au client concerné et persister l'état
-// qu'on leur donne, même discipline que les handlers Structure Système.
+// **(28/09/2026, audit d'intégrité M5/M7)** Le numéro de version est
+// attribué ici et le verdict recalculé ici (`verdictsEvaluation.ts`) —
+// plus jamais la valeur du navigateur enregistrée telle quelle.
 
 interface SaisieCreationProfilAcfc {
   version?: string
@@ -3204,13 +3394,13 @@ interface SaisieCreationProfilAcfc {
 function profilAcfcDepuisSaisie(
   clientId: string,
   saisie: SaisieCreationProfilAcfc,
+  version: string,
 ): MethodProfileACFCEnregistre | null {
   if (
-    !saisie.version ||
     !saisie.source ||
     !saisie.origin ||
     !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(saisie.origin) ||
-    !Array.isArray(saisie.questions) ||
+    !questionsMethodeValides(saisie.questions) ||
     saisie.decisionRule !== 'au_moins_un_oui_critique'
   ) {
     return null
@@ -3219,7 +3409,7 @@ function profilAcfcDepuisSaisie(
   return {
     id: genererId(),
     clientId,
-    version: saisie.version,
+    version,
     effectiveDate: maintenant,
     source: saisie.source,
     origin: saisie.origin,
@@ -3256,7 +3446,9 @@ async function gererCreerProfilAcfc(
   void acteur
 
   const corps = await lireCorpsJson<SaisieCreationProfilAcfc>(request)
-  const profil = corps ? profilAcfcDepuisSaisie(clientId, corps) : null
+  const existants = await ctx.acfcRepo.listerProfils(clientId)
+  const version = versionSuivante(existants.map((p) => p.version))
+  const profil = corps ? profilAcfcDepuisSaisie(clientId, corps, version) : null
   if (!profil) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
 
   await ctx.acfcRepo.creerProfil(profil)
@@ -3284,24 +3476,41 @@ async function gererCreerEvaluationAcfc(
   const corps = await lireCorpsJson<SaisieCreationEvaluationAcfc>(request)
   if (
     !corps?.methodProfileId ||
-    !corps.methodProfileVersion ||
     !corps.nomElement ||
     !corps.reponses ||
     horsDomaine(corps.verdict, VERDICTS_ACFC)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const profil = (await ctx.acfcRepo.listerProfils(clientId)).find(
+    (p) => p.id === corps.methodProfileId,
+  )
+  if (!profil) return reponseJson({ erreur: 'methode_introuvable' }, 400, entetes)
+  if (corps.methodProfileVersion && corps.methodProfileVersion !== profil.version) {
+    return reponseJson({ erreur: 'version_methode_incoherente' }, 409, entetes)
+  }
+  const questionIds = profil.questions.map((q) => q.id)
+  if (!reponsesValides(questionIds, corps.reponses)) {
+    return reponseJson({ erreur: 'reponses_invalides' }, 400, entetes)
+  }
+  if (await noeudEtranger(ctx, clientId, corps.assetNodeId)) {
+    return reponseJson({ erreur: 'noeud_introuvable' }, 400, entetes)
+  }
+  const verdict = verdictAcfc(questionIds, corps.reponses, profil.decisionRule)
+  if (valeurIncoherente(corps.verdict, verdict)) {
+    return reponseJson({ erreur: 'verdict_incoherent', verdict }, 409, entetes)
+  }
 
   const maintenant = horodatage()
   const evaluation: EvaluationACFCEnregistree = {
     id: genererId(),
     clientId,
-    methodProfileId: corps.methodProfileId,
-    methodProfileVersion: corps.methodProfileVersion,
+    methodProfileId: profil.id,
+    methodProfileVersion: profil.version,
     assetNodeId: corps.assetNodeId ?? null,
     nomElement: corps.nomElement,
     reponses: corps.reponses,
-    verdict: corps.verdict ?? null,
+    verdict,
     auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
     createdAt: maintenant,
     updatedAt: maintenant,
@@ -3399,6 +3608,8 @@ async function gererCreerParametre(
   if (!corps?.nom || corps.description === undefined) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { assetNodeId: corps.assetNodeId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const maintenant = horodatage()
   // Clé `parametreProcede` (jamais `parametre`) : `parametre` désigne déjà
   // une entrée `parametres_installation` (config technique clé/valeur,
@@ -3444,6 +3655,8 @@ async function gererCreerClassification(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { parameterId: corps.parameterId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const maintenant = horodatage()
   const classification: ClassificationCriticiteParametreEnregistree = {
     id: genererId(),
@@ -3478,6 +3691,8 @@ async function gererCreerCPP(
   if (!corps?.parameterId || !corps.contexte || !corps.justification) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { parameterId: corps.parameterId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const maintenant = horodatage()
   const cpp: CPPEnregistre = {
     id: genererId(),
@@ -3664,11 +3879,8 @@ async function gererMigrerParametersLocal(
 // --- Handlers : Impact Assessment / System Classification (F1 du
 // catalogue §10, Phase 4c du chantier de migration D1) ---
 //
-// La logique métier (numéro de version suivant, calcul du verdict) reste
-// côté store frontend (`useImpactAssessmentStore.ts`, déjà testée) — ces
-// handlers ne font qu'authentifier, vérifier l'accès au client concerné
-// et persister l'état qu'on leur donne, même discipline que les handlers
-// ACFC.
+// **(28/09/2026, audit d'intégrité M5/M7)** Version attribuée et verdict
+// recalculé par le serveur, même règle que l'ACFC.
 
 interface SaisieCreationProfilImpactAssessment {
   version?: string
@@ -3681,13 +3893,13 @@ interface SaisieCreationProfilImpactAssessment {
 function profilImpactAssessmentDepuisSaisie(
   clientId: string,
   saisie: SaisieCreationProfilImpactAssessment,
+  version: string,
 ): MethodProfileImpactAssessmentEnregistre | null {
   if (
-    !saisie.version ||
     !saisie.source ||
     !saisie.origin ||
     !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(saisie.origin) ||
-    !Array.isArray(saisie.questions) ||
+    !questionsMethodeValides(saisie.questions) ||
     saisie.decisionRule !== 'au_moins_un_oui_impact_direct'
   ) {
     return null
@@ -3696,7 +3908,7 @@ function profilImpactAssessmentDepuisSaisie(
   return {
     id: genererId(),
     clientId,
-    version: saisie.version,
+    version,
     effectiveDate: maintenant,
     source: saisie.source,
     origin: saisie.origin,
@@ -3737,7 +3949,9 @@ async function gererCreerProfilImpactAssessment(
   // réponse de `POST /clients/:id/acfc/profils` — même discipline que
   // `parametreProcede` pour éviter une collision de nom entre deux
   // réponses JSON distinctes.
-  const profilImpact = corps ? profilImpactAssessmentDepuisSaisie(clientId, corps) : null
+  const existants = await ctx.impactAssessmentRepo.listerProfils(clientId)
+  const version = versionSuivante(existants.map((p) => p.version))
+  const profilImpact = corps ? profilImpactAssessmentDepuisSaisie(clientId, corps, version) : null
   if (!profilImpact) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
 
   await ctx.impactAssessmentRepo.creerProfil(profilImpact)
@@ -3765,24 +3979,41 @@ async function gererCreerEvaluationImpactAssessment(
   const corps = await lireCorpsJson<SaisieCreationEvaluationImpactAssessment>(request)
   if (
     !corps?.methodProfileId ||
-    !corps.methodProfileVersion ||
     !corps.nomElement ||
     !corps.reponses ||
     horsDomaine(corps.verdict, VERDICTS_IMPACT_ASSESSMENT)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const profil = (await ctx.impactAssessmentRepo.listerProfils(clientId)).find(
+    (p) => p.id === corps.methodProfileId,
+  )
+  if (!profil) return reponseJson({ erreur: 'methode_introuvable' }, 400, entetes)
+  if (corps.methodProfileVersion && corps.methodProfileVersion !== profil.version) {
+    return reponseJson({ erreur: 'version_methode_incoherente' }, 409, entetes)
+  }
+  const questionIds = profil.questions.map((q) => q.id)
+  if (!reponsesValides(questionIds, corps.reponses)) {
+    return reponseJson({ erreur: 'reponses_invalides' }, 400, entetes)
+  }
+  if (await noeudEtranger(ctx, clientId, corps.assetNodeId)) {
+    return reponseJson({ erreur: 'noeud_introuvable' }, 400, entetes)
+  }
+  const verdict = verdictImpact(questionIds, corps.reponses, profil.decisionRule)
+  if (valeurIncoherente(corps.verdict, verdict)) {
+    return reponseJson({ erreur: 'verdict_incoherent', verdict }, 409, entetes)
+  }
 
   const maintenant = horodatage()
   const evaluationImpact: EvaluationImpactAssessmentEnregistree = {
     id: genererId(),
     clientId,
-    methodProfileId: corps.methodProfileId,
-    methodProfileVersion: corps.methodProfileVersion,
+    methodProfileId: profil.id,
+    methodProfileVersion: profil.version,
     assetNodeId: corps.assetNodeId ?? null,
     nomElement: corps.nomElement,
     reponses: corps.reponses,
-    verdict: corps.verdict ?? null,
+    verdict,
     auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
     createdAt: maintenant,
     updatedAt: maintenant,
@@ -3887,6 +4118,8 @@ async function gererCreerEvaluationCsvAssessment(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { assetNodeId: corps.assetNodeId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const maintenant = horodatage()
   const evaluationCsv: EvaluationCSVAssessmentEnregistree = {
@@ -3941,11 +4174,9 @@ async function gererMigrerCsvAssessmentLocal(
 // --- Handlers : Risk Assessment / AMDEC (Target Architecture §10, Phase
 // 4d du chantier de migration D1) ---
 //
-// La logique métier (numéro de version suivant, calcul IPR, verdict) reste
-// côté store frontend (`useRiskAssessmentStore.ts`, déjà testée) — ces
-// handlers ne font qu'authentifier, vérifier l'accès au client concerné et
-// persister l'état qu'on leur donne, même discipline que les handlers
-// Impact Assessment/Parameters. Clés JSON `profilRisque`/`evaluationRisque`
+// **(28/09/2026, audit d'intégrité M5/M7/M10)** Version attribuée, bornes
+// de la méthode contrôlées, IPR et verdicts recalculés par le serveur
+// (`verdictsEvaluation.ts`). Clés JSON `profilRisque`/`evaluationRisque`
 // (jamais `profil`/`evaluation`, déjà pris par ACFC, ni `profilImpact`/
 // `evaluationImpact`/`evaluationCsv`) — même discipline de désambiguïsation
 // que `parametreProcede`.
@@ -3987,23 +4218,24 @@ async function gererCreerProfilRiskAssessment(
 
   const corps = await lireCorpsJson<SaisieCreationProfilRiskAssessment>(request)
   if (
-    !corps?.version ||
-    !corps.source ||
+    !corps?.source ||
     !corps.origin ||
     !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(corps.origin) ||
     !estNombre(corps.echelleMin) ||
     !estNombre(corps.echelleMax) ||
-    corps.echelleMin >= corps.echelleMax ||
     !estNombre(corps.seuilAction)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusBornes = refusBornesAmdec(corps.echelleMin, corps.echelleMax, corps.seuilAction)
+  if (refusBornes) return reponseJson({ erreur: refusBornes }, 400, entetes)
 
+  const existants = await ctx.riskAssessmentRepo.listerProfils(clientId)
   const maintenant = horodatage()
   const profilRisque: MethodProfileRiskAssessmentEnregistre = {
     id: genererId(),
     clientId,
-    version: corps.version,
+    version: versionSuivante(existants.map((p) => p.version)),
     effectiveDate: maintenant,
     source: corps.source,
     origin: corps.origin,
@@ -4063,13 +4295,46 @@ async function gererCreerEvaluationRiskAssessment(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const profil = (await ctx.riskAssessmentRepo.listerProfils(clientId)).find(
+    (p) => p.id === corps.methodProfileId,
+  )
+  if (!profil) return reponseJson({ erreur: 'methode_introuvable' }, 400, entetes)
+  if (corps.methodProfileVersion !== profil.version) {
+    return reponseJson({ erreur: 'version_methode_incoherente' }, 409, entetes)
+  }
+  if (await noeudEtranger(ctx, clientId, corps.assetNodeId)) {
+    return reponseJson({ erreur: 'noeud_introuvable' }, 400, entetes)
+  }
+  if (corps.parameterId) {
+    const parametres = await ctx.parametersRepo.listerParametres(clientId)
+    if (!parametres.some((p) => p.id === corps.parameterId)) {
+      return reponseJson({ erreur: 'parametre_introuvable' }, 400, entetes)
+    }
+  }
+  const iprInitial = calculerIpr(
+    corps.severiteInitiale ?? null,
+    corps.occurrenceInitiale ?? null,
+    corps.detectabiliteInitiale ?? null,
+    { min: profil.echelleMin, max: profil.echelleMax },
+  )
+  const verdictInitial = verdictRisque(iprInitial, profil.seuilAction)
+  if (
+    valeurIncoherente(corps.iprInitial, iprInitial) ||
+    valeurIncoherente(corps.verdictInitial, verdictInitial)
+  ) {
+    return reponseJson(
+      { erreur: 'verdict_incoherent', ipr: iprInitial, verdict: verdictInitial },
+      409,
+      entetes,
+    )
+  }
 
   const maintenant = horodatage()
   const evaluationRisque: RiskAssessmentEnregistre = {
     id: genererId(),
     clientId,
-    methodProfileId: corps.methodProfileId,
-    methodProfileVersion: corps.methodProfileVersion,
+    methodProfileId: profil.id,
+    methodProfileVersion: profil.version,
     assetNodeId: corps.assetNodeId ?? null,
     parameterId: corps.parameterId ?? null,
     etapeProcessus: corps.etapeProcessus,
@@ -4080,8 +4345,8 @@ async function gererCreerEvaluationRiskAssessment(
     severiteInitiale: corps.severiteInitiale ?? null,
     occurrenceInitiale: corps.occurrenceInitiale ?? null,
     detectabiliteInitiale: corps.detectabiliteInitiale ?? null,
-    iprInitial: corps.iprInitial ?? null,
-    verdictInitial: corps.verdictInitial ?? null,
+    iprInitial,
+    verdictInitial,
     recommandation: null,
     responsable: null,
     dateCible: null,
@@ -4115,9 +4380,9 @@ interface SaisieActionResiduelleRiskAssessment {
  * Enregistre l'action corrective et l'évaluation résiduelle (deuxième
  * temps du cycle AMDEC) sans muter les champs de l'évaluation initiale —
  * même principe que `gererDesactiverCPP` : l'historique reste lisible tel
- * qu'il a été produit. Le calcul IPR résiduel/verdict reste côté store
- * frontend (`calculerIPR`/`evaluerVerdictRiskAssessment`, déjà testés) —
- * ce handler ne persiste que ce qu'on lui donne.
+ * qu'il a été produit. IPR et verdict résiduels recalculés ici avec
+ * l'échelle et le seuil de la méthode figée de l'évaluation ; méthode
+ * introuvable → aucun verdict (jamais « acceptable » par défaut).
  */
 async function gererEnregistrerActionResiduelleRiskAssessment(
   request: Request,
@@ -4144,6 +4409,26 @@ async function gererEnregistrerActionResiduelleRiskAssessment(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const profilFige = (await ctx.riskAssessmentRepo.listerProfils(clientId)).find(
+    (p) => p.id === existant.methodProfileId,
+  )
+  const iprResiduel = calculerIpr(
+    corps.severiteResiduelle ?? null,
+    corps.occurrenceResiduelle ?? null,
+    corps.detectabiliteResiduelle ?? null,
+    profilFige ? { min: profilFige.echelleMin, max: profilFige.echelleMax } : { min: 1, max: 5 },
+  )
+  const verdictResiduel = verdictRisque(iprResiduel, profilFige?.seuilAction ?? null)
+  if (
+    valeurIncoherente(corps.iprResiduel, iprResiduel) ||
+    valeurIncoherente(corps.verdictResiduel, verdictResiduel)
+  ) {
+    return reponseJson(
+      { erreur: 'verdict_incoherent', ipr: iprResiduel, verdict: verdictResiduel },
+      409,
+      entetes,
+    )
+  }
 
   const maintenant = horodatage()
   const evaluationRisque: RiskAssessmentEnregistre = {
@@ -4155,8 +4440,8 @@ async function gererEnregistrerActionResiduelleRiskAssessment(
     severiteResiduelle: corps.severiteResiduelle ?? null,
     occurrenceResiduelle: corps.occurrenceResiduelle ?? null,
     detectabiliteResiduelle: corps.detectabiliteResiduelle ?? null,
-    iprResiduel: corps.iprResiduel ?? null,
-    verdictResiduel: corps.verdictResiduel ?? null,
+    iprResiduel,
+    verdictResiduel,
     updatedAt: maintenant,
     auditLog: [
       ...existant.auditLog,
@@ -4347,6 +4632,8 @@ async function gererCreerAssociationFonctionAssetNode(
   if (!corps?.functionId || !corps.assetNodeId) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { assetNodeId: corps.assetNodeId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const associationFonctionAssetNode: AssociationFonctionAssetNodeEnregistree = {
     id: genererId(),
     clientId,
@@ -4377,6 +4664,8 @@ async function gererCreerAssociationFonctionProcess(
   if (!corps?.functionId || !corps.processId) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { processId: corps.processId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const associationFonctionProcess: AssociationFonctionProcessEnregistree = {
     id: genererId(),
     clientId,
@@ -4411,6 +4700,11 @@ async function gererCreerManufacturingContext(
   if (!corps?.assetNodeId || !corps.processId || !corps.produit) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    assetNodeId: corps.assetNodeId,
+    processId: corps.processId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const maintenant = horodatage()
   const manufacturingContext: ManufacturingContextEnregistre = {
     id: genererId(),
@@ -4567,6 +4861,11 @@ async function gererCreerEvenementQualityEvent(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    assetNodeId: corps.assetNodeId,
+    processId: corps.processId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const maintenant = horodatage()
   const evenement: QualityEventEnregistre = {
@@ -4764,6 +5063,11 @@ async function gererCreerRequirement(
   if (!corps?.reference || !corps.titre || corps.description === undefined) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    assetNodeId: corps.assetNodeId,
+    processId: corps.processId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const maintenant = horodatage()
   const requirement: RequirementEnregistre = {
@@ -4802,6 +5106,10 @@ async function gererCreerTestObjective(
   if (!corps?.requirementId || !corps.titre || corps.description === undefined) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    requirementId: corps.requirementId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const maintenant = horodatage()
   const testObjective: TestObjectiveEnregistre = {
@@ -5105,11 +5413,23 @@ async function gererCreerCouverture(
 ): Promise<Response> {
   const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
   if (acteur instanceof Response) return acteur
-  void acteur
 
   const corps = await lireCorpsJson<SaisieCreationCouverture>(request)
   if (!corps?.requirementId || !corps.testId) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  // Exigence et test réels et du même client (audit d'intégrité M6) : une
+  // couverture vers un test inexistant ou d'un autre client rendait le plan
+  // de livrable « prêt » à tort.
+  const [exigences, test] = await Promise.all([
+    ctx.testDefinitionRepo.listerRequirements(clientId),
+    ctx.testDefinitionRepo.testParId(corps.testId),
+  ])
+  if (!exigences.some((e) => e.id === corps.requirementId)) {
+    return reponseJson({ erreur: 'exigence_introuvable' }, 400, entetes)
+  }
+  if (!test || test.clientId !== clientId) {
+    return reponseJson({ erreur: 'test_introuvable' }, 400, entetes)
   }
   const existantes = await ctx.testDefinitionRepo.listerCouvertures(clientId)
   const dejaExistante = existantes.find(
@@ -5125,6 +5445,9 @@ async function gererCreerCouverture(
     createdAt: horodatage(),
   }
   await ctx.testDefinitionRepo.creerCouverture(couverture)
+  // Attribution : la table `couvertures` n'a pas de colonne d'auteur — le
+  // journal central garde qui a déclaré cette couverture.
+  await consignerAudit(ctx, acteur, 'creation_couverture', 'couverture', couverture.id, null)
   return reponseJson({ couverture }, 201, entetes)
 }
 
@@ -5245,6 +5568,8 @@ async function gererDemarrerExecution(
   if (test.statut !== 'approuve') {
     return reponseJson({ erreur: 'test_non_approuve' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { assetNodeId: corps.assetNodeId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const maintenant = horodatage()
   const execution: ExecutionEnregistree = {
@@ -5305,6 +5630,15 @@ async function gererEnregistrerResultatEtape(
   const test = await ctx.testDefinitionRepo.testParId(execution.testId)
   const etapeConnue = test?.etapes.some((e) => e.id === corps.testStepId) ?? false
   if (!etapeConnue) return reponseJson({ erreur: 'etape_inconnue' }, 400, entetes)
+  // Un seul résultat par étape d'une exécution (audit d'intégrité M2 : deux
+  // clics enregistraient deux résultats, parfois contradictoires, pour la
+  // même étape). Une correction passe par un événement d'exécution tracé.
+  const dejaEnregistre = (await ctx.executionRepo.listerExecutionSteps(clientId)).some(
+    (e) => e.executionId === executionId && e.testStepId === corps.testStepId,
+  )
+  if (dejaEnregistre) {
+    return reponseJson({ erreur: 'resultat_etape_deja_enregistre' }, 409, entetes)
+  }
 
   const etape: ExecutionStepEnregistree = {
     id: genererId(),
@@ -6406,6 +6740,15 @@ async function calculerReadinessContentPlan(
     }
 
     const testsCouvrants = tests.filter((t) => testIdsCouvrants.includes(t.id))
+    // Couverture vers un test introuvable (supprimé, d'un autre client ou
+    // jamais existant) : jamais « prêt » par défaut (audit d'intégrité M6).
+    const introuvables = testIdsCouvrants.filter((id) => !testsCouvrants.some((t) => t.id === id))
+    if (introuvables.length > 0) {
+      signaler(
+        'besoin_information',
+        `${requirement.reference} : ${introuvables.length} test(s) déclaré(s) comme couvrant(s) introuvable(s).`,
+      )
+    }
     for (const test of testsCouvrants) {
       const prefixe = `${requirement.reference} → « ${test.titre} »`
       if (test.statut === 'brouillon') {
@@ -6485,6 +6828,11 @@ async function gererCreerContentPlan(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    assetNodeId: corps.assetNodeId,
+    processId: corps.processId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const assetNodeId = corps.assetNodeId ?? null
   const { readiness } = await calculerReadinessContentPlan(ctx, clientId, assetNodeId)
@@ -6729,7 +7077,6 @@ async function gererDesactiverConnector(
 ): Promise<Response> {
   const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
   if (acteur instanceof Response) return acteur
-  void acteur
 
   const existant = await ctx.integrationRepo.connectorParId(connectorId)
   if (!existant || existant.clientId !== clientId) {
@@ -6738,6 +7085,7 @@ async function gererDesactiverConnector(
 
   const miseAJour: ConnectorEnregistre = { ...existant, actif: false }
   await ctx.integrationRepo.remplacerConnector(miseAJour)
+  await consignerAudit(ctx, acteur, 'desactivation_connecteur', 'connecteur', connectorId, null)
   return reponseJson({ connector: miseAJour }, 200, entetes)
 }
 
@@ -6750,7 +7098,6 @@ async function gererBasculerActifConnector(
 ): Promise<Response> {
   const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
   if (acteur instanceof Response) return acteur
-  void acteur
 
   const existant = await ctx.integrationRepo.connectorParId(connectorId)
   if (!existant || existant.clientId !== clientId) {
@@ -6759,6 +7106,14 @@ async function gererBasculerActifConnector(
 
   const miseAJour: ConnectorEnregistre = { ...existant, actif: !existant.actif }
   await ctx.integrationRepo.remplacerConnector(miseAJour)
+  await consignerAudit(
+    ctx,
+    acteur,
+    miseAJour.actif ? 'activation_connecteur' : 'desactivation_connecteur',
+    'connecteur',
+    connectorId,
+    null,
+  )
   return reponseJson({ connector: miseAJour }, 200, entetes)
 }
 
@@ -6766,7 +7121,9 @@ async function gererBasculerActifConnector(
  * Vraie suppression physique — nouveau patron dans ce chantier,
  * justifié car `Connector` est une pure configuration technique (pas un
  * enregistrement GxP à préserver), contrairement à tous les autres
- * domaines migrés jusqu'ici.
+ * domaines migrés jusqu'ici. **(28/09/2026, audit d'intégrité M9)** La
+ * suppression est consignée dans le journal central (qui, quand, quel
+ * connecteur) — auparavant aucune trace.
  */
 async function gererSupprimerConnector(
   request: Request,
@@ -6777,7 +7134,6 @@ async function gererSupprimerConnector(
 ): Promise<Response> {
   const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
   if (acteur instanceof Response) return acteur
-  void acteur
 
   const existant = await ctx.integrationRepo.connectorParId(connectorId)
   if (!existant || existant.clientId !== clientId) {
@@ -6785,6 +7141,14 @@ async function gererSupprimerConnector(
   }
 
   await ctx.integrationRepo.supprimerConnector(connectorId)
+  await consignerAudit(
+    ctx,
+    acteur,
+    'suppression_connecteur',
+    'connecteur',
+    connectorId,
+    `${existant.type} « ${existant.nom} »`,
+  )
   return reponseJson({ ok: true }, 200, entetes)
 }
 
@@ -7032,6 +7396,11 @@ async function gererCreerMission(
   if (!corps?.titre || corps.description === undefined) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    workspaceId: corps.workspaceId,
+    assetNodeId: corps.assetNodeId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const maintenant = horodatage()
   const mission: MissionEnregistree = {
     id: genererId(),
@@ -8368,12 +8737,14 @@ interface QualificationFiabiliteIAJson {
   qualificationTestSetId: string
   qualificationTestSetVersion: string
   moteurVersionQualifiee: string | null
+  par?: string
+  enregistreeLe?: string
 }
 
 interface ClientConfigJson {
   clientId: string
   aiProvider: string
-  aiProviderConditionsAcquittees: { fournisseur: string; date: string } | null
+  aiProviderConditionsAcquittees: { fournisseur: string; date: string; par?: string } | null
   aiProviderReliabilityQualification: {
     chat_normatif: QualificationFiabiliteIAJson | null
     audit_simule: QualificationFiabiliteIAJson | null
@@ -8416,6 +8787,50 @@ interface SaisieClientConfig {
   consentTelemetry?: { granted: boolean; date: string | null; revocableAtAnyTime: boolean }
 }
 
+const MODES_QUALIFICATION_IA = ['chat_normatif', 'audit_simule'] as const
+
+function qualificationIAValide(q: unknown): q is QualificationFiabiliteIAJson | null {
+  if (q === null) return true
+  if (!q || typeof q !== 'object') return false
+  const v = q as Record<string, unknown>
+  return (
+    typeof v.date === 'string' &&
+    typeof v.resultat === 'string' &&
+    typeof v.qualificationTestSetId === 'string' &&
+    typeof v.qualificationTestSetVersion === 'string' &&
+    (v.moteurVersionQualifiee === null || typeof v.moteurVersionQualifiee === 'string')
+  )
+}
+
+function memeQualificationIA(
+  a: QualificationFiabiliteIAJson | null,
+  b: QualificationFiabiliteIAJson | null,
+): boolean {
+  if (a === null || b === null) return a === b
+  return (
+    a.date === b.date &&
+    a.resultat === b.resultat &&
+    a.qualificationTestSetId === b.qualificationTestSetId &&
+    a.qualificationTestSetVersion === b.qualificationTestSetVersion &&
+    a.moteurVersionQualifiee === b.moteurVersionQualifiee
+  )
+}
+
+function resumeQualificationIA(q: QualificationFiabiliteIAJson | null): string {
+  return q
+    ? `${q.resultat} (jeu ${q.qualificationTestSetId} ${q.qualificationTestSetVersion})`
+    : 'aucune'
+}
+
+/**
+ * Configuration IA d'un client (audit d'intégrité M8) : le contrôle qui
+ * autorise l'« usage réel » de l'IA repose sur la qualification et
+ * l'acquittement des conditions — ils sont désormais **attribués et datés
+ * par le serveur** (`par`, `enregistreeLe` / date d'acquittement serveur ;
+ * une valeur inchangée garde son auteur et sa date d'origine) et chaque changement est consigné dans
+ * le journal central avec l'avant/après. Auparavant : date du poste, aucun
+ * auteur, écrasement sans trace.
+ */
 async function gererEnregistrerClientConfig(
   request: Request,
   ctx: Contexte,
@@ -8424,20 +8839,86 @@ async function gererEnregistrerClientConfig(
 ): Promise<Response> {
   const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
   if (acteur instanceof Response) return acteur
-  void acteur
   const corps = await lireCorpsJson<SaisieClientConfig>(request)
-  if (!corps?.aiProvider || !corps.aiProviderReliabilityQualification || !corps.consentTelemetry) {
+  if (
+    !corps?.aiProvider ||
+    typeof corps.aiProvider !== 'string' ||
+    !corps.aiProviderReliabilityQualification ||
+    !corps.consentTelemetry ||
+    !MODES_QUALIFICATION_IA.every((m) =>
+      qualificationIAValide(corps.aiProviderReliabilityQualification?.[m] ?? null),
+    )
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const conditions = corps.aiProviderConditionsAcquittees ?? null
+  if (conditions !== null && typeof conditions.fournisseur !== 'string') {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const existant = await ctx.clientConfigRepo.obtenirParClient(clientId)
+  const maintenant = horodatage()
+  const journal: { action: string; detail: string }[] = []
+
+  if (existant && existant.aiProvider !== corps.aiProvider) {
+    journal.push({
+      action: 'fournisseur_ia_modifie',
+      detail: `${existant.aiProvider} → ${corps.aiProvider}`,
+    })
+  }
+
+  const conditionsAvant = existant?.aiProviderConditionsAcquittees ?? null
+  let conditionsApres: ClientConfigEnregistre['aiProviderConditionsAcquittees'] = null
+  if (conditions !== null) {
+    conditionsApres =
+      conditionsAvant && conditionsAvant.fournisseur === conditions.fournisseur
+        ? conditionsAvant
+        : { fournisseur: conditions.fournisseur, date: maintenant, par: acteur.email }
+  }
+  if ((conditionsAvant?.fournisseur ?? null) !== (conditionsApres?.fournisseur ?? null)) {
+    journal.push({
+      action: conditionsApres ? 'conditions_ia_acquittees' : 'conditions_ia_retirees',
+      detail: conditionsApres
+        ? `conditions de ${conditionsApres.fournisseur}`
+        : `conditions de ${conditionsAvant?.fournisseur ?? '?'}`,
+    })
+  }
+
+  const qualification = {} as ClientConfigEnregistre['aiProviderReliabilityQualification']
+  for (const mode of MODES_QUALIFICATION_IA) {
+    const avant = existant?.aiProviderReliabilityQualification[mode] ?? null
+    const saisie = corps.aiProviderReliabilityQualification[mode] ?? null
+    if (memeQualificationIA(avant, saisie)) {
+      qualification[mode] = avant
+      continue
+    }
+    qualification[mode] = saisie && {
+      date: saisie.date,
+      resultat: saisie.resultat,
+      qualificationTestSetId: saisie.qualificationTestSetId,
+      qualificationTestSetVersion: saisie.qualificationTestSetVersion,
+      moteurVersionQualifiee: saisie.moteurVersionQualifiee,
+      par: acteur.email,
+      enregistreeLe: maintenant,
+    }
+    journal.push({
+      action: 'qualification_ia_modifiee',
+      detail: `${mode} : ${resumeQualificationIA(avant)} → ${resumeQualificationIA(saisie)}`,
+    })
+  }
+
   const config: ClientConfigEnregistre = {
     clientId,
     aiProvider: corps.aiProvider,
-    aiProviderConditionsAcquittees: corps.aiProviderConditionsAcquittees ?? null,
-    aiProviderReliabilityQualification: corps.aiProviderReliabilityQualification,
+    aiProviderConditionsAcquittees: conditionsApres,
+    aiProviderReliabilityQualification: qualification,
     exportTemplateId: corps.exportTemplateId ?? null,
     consentTelemetry: corps.consentTelemetry,
   }
   await ctx.clientConfigRepo.enregistrer(config)
+  for (const { action, detail } of journal) {
+    await consignerAudit(ctx, acteur, action, 'client_config', clientId, detail)
+  }
   return reponseJson({ clientConfig: assemblerClientConfig(config) }, 200, entetes)
 }
 
@@ -9805,6 +10286,8 @@ async function gererCreerDocumentProjet(
   if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
   const mimeType = corps.mimeType ?? 'application/octet-stream'
   const status = corps.status ?? 'reference_de_travail_non_maitre'
+  const refusTaille = refusTailleImport(contenuBlob, extractedText)
+  if (refusTaille) return reponseJson({ erreur: refusTaille }, 413, entetes)
 
   const id = genererId()
   await ctx.stockageBinaireRepo.enregistrer(
@@ -10249,6 +10732,15 @@ async function gererRelaisIA(
   const relayUrl = parametre?.valeur.relayUrl
   if (!relayUrl) return reponseJson({ erreur: 'relais_ia_non_configure' }, 404, entetes)
 
+  // Quota par utilisateur (audit sécurité a1) — seuls les appels au
+  // fournisseur (POST) comptent, jamais la simple vérification de santé.
+  if (request.method === 'POST') {
+    const quota = (ctx.quotaRelaisIA ??= new QuotaRelaisIAMemoire())
+    if (!(await quota.consommer(`ia:${utilisateur.id}`))) {
+      return reponseJson({ erreur: 'quota_ia_atteint' }, 429, entetes)
+    }
+  }
+
   const jeton = parametre?.valeur.jeton
   let reponse: Response
   try {
@@ -10279,6 +10771,16 @@ const CLE_PARAMETRE_DRIVE_NORMES = 'drive-normes'
 const CLE_ETAT_OAUTH_DRIVE = 'drive-oauth-etat'
 const DUREE_VALIDITE_ETAT_OAUTH_MS = 10 * 60 * 1000
 const PORTEE_OAUTH_DRIVE = 'https://www.googleapis.com/auth/drive.readonly'
+
+/** Défi PKCE S256 : base64url(SHA-256(vérificateur)) (RFC 7636). */
+async function defiPkce(verificateur: string): Promise<string> {
+  const empreinte = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verificateur)),
+  )
+  let binaire = ''
+  for (const o of empreinte) binaire += String.fromCharCode(o)
+  return btoa(binaire).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
 
 function urlRedirectionOAuthDrive(request: Request): string {
   return `${new URL(request.url).origin}/drive-oauth/callback`
@@ -10322,11 +10824,16 @@ async function gererDemarrerOAuthDrive(
     return reponseJson({ erreur: 'oauth_google_non_configure' }, 501, entetes)
   }
 
-  const etat = genererId()
+  // (28/09/2026, audit sécurité a4) Un état par admin — un second admin qui
+  // démarre le flux n'écrase plus celui du premier — et PKCE (S256) : le
+  // code d'autorisation seul, intercepté, ne suffit plus à obtenir un jeton.
+  const secret = genererJetonAleatoire()
+  const verificateur = genererJetonAleatoire()
   await ctx.parametresInstallationRepo.enregistrer(
-    CLE_ETAT_OAUTH_DRIVE,
+    `${CLE_ETAT_OAUTH_DRIVE}:${acteur.id}`,
     {
-      etat,
+      etat: secret,
+      verificateur,
       utilisateurId: acteur.id,
       expireA: new Date(Date.now() + DUREE_VALIDITE_ETAT_OAUTH_MS).toISOString(),
     },
@@ -10340,7 +10847,9 @@ async function gererDemarrerOAuthDrive(
     scope: PORTEE_OAUTH_DRIVE,
     access_type: 'offline',
     prompt: 'consent',
-    state: etat,
+    state: `${acteur.id}.${secret}`,
+    code_challenge: await defiPkce(verificateur),
+    code_challenge_method: 'S256',
   })
   return reponseJson(
     { urlAutorisation: `https://accounts.google.com/o/oauth2/v2/auth?${parametres.toString()}` },
@@ -10372,17 +10881,24 @@ async function gererCallbackOAuthDrive(request: Request, ctx: Contexte): Promise
     return echec('oauth_google_non_configure')
   }
 
-  const etatEnregistre = await ctx.parametresInstallationRepo.obtenir(CLE_ETAT_OAUTH_DRIVE)
+  const separateur = etatRecu.indexOf('.')
+  const cleEtat = `${CLE_ETAT_OAUTH_DRIVE}:${etatRecu.slice(0, separateur)}`
+  const etatEnregistre =
+    separateur > 0 ? await ctx.parametresInstallationRepo.obtenir(cleEtat) : null
   if (
-    !etatEnregistre ||
-    etatEnregistre.valeur.etat !== etatRecu ||
+    !etatEnregistre?.valeur.etat ||
+    !(await chainesEgalesTempsConstant(
+      etatEnregistre.valeur.etat,
+      etatRecu.slice(separateur + 1),
+    )) ||
     new Date(etatEnregistre.valeur.expireA ?? 0) < new Date()
   ) {
     return echec('etat_invalide_ou_expire')
   }
   const utilisateurId = etatEnregistre.valeur.utilisateurId
-  await ctx.parametresInstallationRepo.effacer(CLE_ETAT_OAUTH_DRIVE)
-  if (!utilisateurId) return echec('etat_invalide_ou_expire')
+  const verificateur = etatEnregistre.valeur.verificateur
+  await ctx.parametresInstallationRepo.effacer(cleEtat)
+  if (!utilisateurId || !verificateur) return echec('etat_invalide_ou_expire')
 
   const utilisateur = await ctx.utilisateursRepo.parId(utilisateurId)
   if (!utilisateur) return echec('utilisateur_introuvable')
@@ -10393,6 +10909,7 @@ async function gererCallbackOAuthDrive(request: Request, ctx: Contexte): Promise
     client_secret: ctx.googleOAuthClientSecret,
     redirect_uri: urlRedirectionOAuthDrive(request),
     grant_type: 'authorization_code',
+    code_verifier: verificateur,
   })
   if (!jetons?.refresh_token) return echec('echange_jeton_echoue')
 
@@ -10583,6 +11100,8 @@ async function gererCreerDocumentNormatif(
     (contenuValeur as Blob).size > 0
       ? (contenuValeur as Blob)
       : null
+  const refusTaille = refusTailleImport(contenuBlob, extractedText)
+  if (refusTaille) return reponseJson({ erreur: refusTaille }, 413, entetes)
 
   const id = genererId()
   await ctx.stockageBinaireRepo.enregistrer(

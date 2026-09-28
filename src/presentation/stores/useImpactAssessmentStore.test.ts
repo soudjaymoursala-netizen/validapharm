@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { AuthApiClient } from '../../connecteurs/auth/AuthApiClient'
 import type { Contexte } from '../../../workers/auth-worker/src/routeur'
 import {
   connecterAdminDeTest,
@@ -179,5 +180,20 @@ describe('useImpactAssessmentStore — isolation stricte par client', () => {
     })
     await store.charger('client-B')
     expect(store.profilActif).toBeNull()
+  })
+})
+
+describe('useImpactAssessmentStore — chargement en échec (audit UX entrée #2)', () => {
+  test('serveur injoignable : chargementEchoue signalé, jamais « aucune méthode » par défaut ; remis à faux au prochain succès', async () => {
+    const store = useImpactAssessmentStore()
+    const espion = vi
+      .spyOn(AuthApiClient.prototype, 'obtenirImpactAssessment')
+      .mockRejectedValueOnce(new Error("Worker d'authentification injoignable."))
+    await store.charger('client-1')
+    expect(store.chargementEchoue).toBe(true)
+
+    espion.mockRestore()
+    await store.charger('client-1')
+    expect(store.chargementEchoue).toBe(false)
   })
 })

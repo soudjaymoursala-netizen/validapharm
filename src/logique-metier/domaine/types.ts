@@ -344,6 +344,10 @@ export interface QualificationFiabiliteIA {
    * au moment de la qualification.
    */
   moteur_version_qualifiee: string | null
+  /** Compte qui a enregistré la qualification (attribué par le serveur). */
+  par?: string
+  /** Horodatage serveur de l'enregistrement ; `date` reste la date de la campagne. */
+  enregistree_le?: string
 }
 
 export interface ClientConfig {
@@ -356,7 +360,7 @@ export interface ClientConfig {
    * exige un nouvel accusé, les conditions différant d'un fournisseur à
    * l'autre.
    */
-  ai_provider_conditions_acquittees: { fournisseur: string; date: string } | null
+  ai_provider_conditions_acquittees: { fournisseur: string; date: string; par?: string } | null
   /**
    * Qualification de fiabilité, **une par mode d'usage**
    * — chat normatif et audit simulé n'ont pas le même profil

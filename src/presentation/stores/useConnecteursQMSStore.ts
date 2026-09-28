@@ -11,6 +11,7 @@ import {
   useIntegrationStore,
 } from './useIntegrationStore'
 import { useStructureSystemeStore } from './useStructureSystemeStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export type NouveauConnecteurInput = { nom: string; actif: boolean } & ConfigConnector
 
@@ -74,7 +75,9 @@ export const useConnecteursQMSStore = defineStore('connecteursQMS', () => {
       externalReferences: [],
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration des connecteurs QMS : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration des connecteurs QMS : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const entree of connecteursDuClient) {
       const index = connectorsAMigrer.indexOf(entree)
@@ -112,7 +115,10 @@ export const useConnecteursQMSStore = defineStore('connecteursQMS', () => {
       type: input.type,
       config: input.config,
     })
-    if (!resultat.ok) throw new Error(`Échec de la création du connecteur : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la création du connecteur : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const connecteur = connectorWireVersDomaine(resultat.donnees.connector)
     connecteurs.value = [...connecteurs.value, connecteur]
   }
@@ -122,7 +128,11 @@ export const useConnecteursQMSStore = defineStore('connecteursQMS', () => {
     if (!connecteur) return
     const { api, jeton } = await obtenirApi()
     const resultat = await api.basculerActifConnector(jeton, connecteur.client_id, connecteurId)
-    if (!resultat.ok) return
+    // Audit d'intégrité M9 : un échec n'est plus ignoré en silence.
+    if (!resultat.ok)
+      throw new Error(
+        `Échec du changement d'état du connecteur : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const misAJour = connectorWireVersDomaine(resultat.donnees.connector)
     connecteurs.value = connecteurs.value.map((c) => (c.id === connecteurId ? misAJour : c))
   }
@@ -132,7 +142,10 @@ export const useConnecteursQMSStore = defineStore('connecteursQMS', () => {
     if (!connecteur) return
     const { api, jeton } = await obtenirApi()
     const resultat = await api.supprimerConnector(jeton, connecteur.client_id, connecteurId)
-    if (!resultat.ok) return
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la suppression du connecteur : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     connecteurs.value = connecteurs.value.filter((c) => c.id !== connecteurId)
   }
 

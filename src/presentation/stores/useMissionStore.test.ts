@@ -5,6 +5,8 @@ import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
+  semerNoeudsDeTest,
+  semerWorkspaceDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import { useMissionStore } from './useMissionStore'
 
@@ -48,6 +50,8 @@ beforeEach(async () => {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   })
+  await semerNoeudsDeTest(installation.ctx, 'client-1', ['granulateur-01'])
+  await semerWorkspaceDeTest(installation.ctx, 'client-1', 'site-lyon')
 })
 
 afterEach(() => {

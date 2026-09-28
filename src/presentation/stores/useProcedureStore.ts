@@ -12,6 +12,7 @@ import type { PropositionAvecSource } from '../../logique-metier/procedures/prop
 import { proposerStructureProcedureAvecRepli } from '../../logique-metier/procedures/proposerStructureProcedureAvecRepli'
 import { proceduresAMigrer, procedureStepsAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 function procedureWireVersDomaine(w: ProcedureWire): Procedure {
   return {
@@ -136,7 +137,7 @@ export const useProcedureStore = defineStore('procedure', () => {
       procedureSteps: etapesDuClient.map(procedureStepDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Procedure : ${resultat.erreur}`)
+      throw new Error(`Échec de la migration Procedure : ${libelleErreurServeur(resultat.erreur)}`)
     }
     for (const [tableau, duClient] of [
       [proceduresAMigrer, proceduresDuClient],
@@ -190,7 +191,9 @@ export const useProcedureStore = defineStore('procedure', () => {
       sourceId: input.sourceId ?? null,
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la création de la Procedure : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la création de la Procedure : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const procedure = procedureWireVersDomaine(resultat.donnees.procedure)
     procedures.value = [...procedures.value, procedure]
@@ -213,7 +216,7 @@ export const useProcedureStore = defineStore('procedure', () => {
       if (resultat.erreur === 'procedure_introuvable') {
         return { erreur: 'procedure_introuvable' }
       }
-      throw new Error(`Échec de la création de l'étape : ${resultat.erreur}`)
+      throw new Error(`Échec de la création de l'étape : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const etape = procedureStepWireVersDomaine(resultat.donnees.etape)
     procedureSteps.value = [...procedureSteps.value, etape]

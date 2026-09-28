@@ -25,6 +25,7 @@ import {
   missionsAMigrer,
 } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export type ResultatAjoutDependance =
   { ok: true; dependance: Dependency } | { ok: false; raison: RaisonDependanceInvalide }
@@ -205,7 +206,7 @@ export const useMissionStore = defineStore('mission', () => {
       associationsQualityEvent: associationsDuClient.map(associationDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration Mission : ${resultat.erreur}`)
+      throw new Error(`Échec de la migration Mission : ${libelleErreurServeur(resultat.erreur)}`)
     }
     for (const [tableau, duClient] of [
       [missionsAMigrer, missionsDuClient],
@@ -263,7 +264,10 @@ export const useMissionStore = defineStore('mission', () => {
       titre: input.titre,
       description: input.description,
     })
-    if (!resultat.ok) throw new Error(`Échec de la création de la mission : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la création de la mission : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const mission = missionWireVersDomaine(resultat.donnees.mission)
     missions.value = [...missions.value, mission]
     return mission
@@ -295,7 +299,9 @@ export const useMissionStore = defineStore('mission', () => {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.associerQualityEvent(jeton, clientId, missionId, qualityEventId)
     if (!resultat.ok) {
-      throw new Error(`Échec de l'association au QualityEvent : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de l'association au QualityEvent : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const association = associationWireVersDomaine(resultat.donnees.association)
     if (!associationsQualityEvent.value.some((a) => a.id === association.id)) {
@@ -314,7 +320,10 @@ export const useMissionStore = defineStore('mission', () => {
       titre: input.titre,
       description: input.description,
     })
-    if (!resultat.ok) throw new Error(`Échec de la création de l'activité : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la création de l'activité : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const activite = activityWireVersDomaine(resultat.donnees.activity)
     activities.value = [...activities.value, activite]
     return activite
@@ -353,7 +362,10 @@ export const useMissionStore = defineStore('mission', () => {
     if (raison) return { ok: false, raison }
     const { api, jeton } = await obtenirApi()
     const resultat = await api.ajouterDependance(jeton, clientId, activitySourceId, activityCibleId)
-    if (!resultat.ok) throw new Error(`Échec de l'ajout de la dépendance : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de l'ajout de la dépendance : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const dependance = dependencyWireVersDomaine(resultat.donnees.dependency)
     if (!dependencies.value.some((d) => d.id === dependance.id)) {
       dependencies.value = [...dependencies.value, dependance]

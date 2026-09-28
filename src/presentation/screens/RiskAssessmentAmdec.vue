@@ -11,6 +11,8 @@ import { useParameterStore } from '../stores/useParameterStore'
 import { useRiskAssessmentStore } from '../stores/useRiskAssessmentStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import type { OrigineMethodeRiskAssessment } from '../../logique-metier/domaine/types'
+import { messageBornesAmdec } from '../../logique-metier/risque/bornesMethodeAmdec'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -18,6 +20,20 @@ const clientsStore = useClientsStore()
 const structureStore = useStructureSystemeStore()
 const parameterStore = useParameterStore()
 const riskStore = useRiskAssessmentStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 
 const nomClient = ref<string | null>(null)
 const formulaireConfigOuvert = ref(false)
@@ -50,21 +66,32 @@ const origin = ref<OrigineMethodeRiskAssessment>('defini_utilisateur')
 
 const erreurConfig = ref<string | null>(null)
 
-async function enregistrerNouvelleVersion(): Promise<void> {
+async function enregistrerNouvelleVersion(
+  ...args: Parameters<typeof enregistrerNouvelleVersionSansGarde>
+): Promise<void> {
+  await envoyer(() => enregistrerNouvelleVersionSansGarde(...args))
+}
+
+async function enregistrerNouvelleVersionSansGarde(): Promise<void> {
   erreurConfig.value = null
   if (source.value.trim().length === 0) return
-  if (echelleMin.value >= echelleMax.value) {
-    erreurConfig.value =
-      "L'échelle minimale doit être strictement inférieure à l'échelle maximale — sinon aucune note ne serait jamais dans l'échelle et aucun IPR ne pourrait être calculé."
+  const refusBornes = messageBornesAmdec(echelleMin.value, echelleMax.value, seuilAction.value)
+  if (refusBornes) {
+    erreurConfig.value = refusBornes
     return
   }
-  await riskStore.creerNouvelleVersion(props.clientId, {
-    echelleMin: echelleMin.value,
-    echelleMax: echelleMax.value,
-    seuilAction: seuilAction.value,
-    source: source.value.trim(),
-    origin: origin.value,
-  })
+  try {
+    await riskStore.creerNouvelleVersion(props.clientId, {
+      echelleMin: echelleMin.value,
+      echelleMax: echelleMax.value,
+      seuilAction: seuilAction.value,
+      source: source.value.trim(),
+      origin: origin.value,
+    })
+  } catch (e) {
+    erreurConfig.value = e instanceof Error ? e.message : String(e)
+    return
+  }
   source.value = ''
   formulaireConfigOuvert.value = false
 }
@@ -82,7 +109,13 @@ const occurrenceInitiale = ref<number | null>(null)
 const detectabiliteInitiale = ref<number | null>(null)
 const erreurCreation = ref<string | null>(null)
 
-async function creerEvaluation(): Promise<void> {
+async function creerEvaluation(
+  ...args: Parameters<typeof creerEvaluationSansGarde>
+): Promise<void> {
+  await envoyer(() => creerEvaluationSansGarde(...args))
+}
+
+async function creerEvaluationSansGarde(): Promise<void> {
   erreurCreation.value = null
   if (etapeProcessus.value.trim().length === 0 || modeDefaillance.value.trim().length === 0) {
     erreurCreation.value = "L'étape du processus et le mode de défaillance sont obligatoires."
@@ -139,7 +172,16 @@ function profilDeLigne(methodProfileId: string) {
   return riskStore.profils.find((p) => p.id === methodProfileId) ?? null
 }
 
-async function enregistrerAction(riskAssessmentId: string, methodProfileId: string): Promise<void> {
+async function enregistrerAction(
+  ...args: Parameters<typeof enregistrerActionSansGarde>
+): Promise<void> {
+  await envoyer(() => enregistrerActionSansGarde(...args))
+}
+
+async function enregistrerActionSansGarde(
+  riskAssessmentId: string,
+  methodProfileId: string,
+): Promise<void> {
   erreurAction.value = null
   const profil = profilDeLigne(methodProfileId)
   const notes = [
@@ -194,18 +236,28 @@ function libelleAssetNode(assetNodeId: string | null): string | null {
 const evaluationsTriees = computed(() =>
   [...riskStore.evaluations].sort((a, b) => b.created_at.localeCompare(a.created_at)),
 )
+
+function recharger(): void {
+  window.location.reload()
+}
 </script>
 
 <template>
   <main class="risk-assessment">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Risk Assessment / AMDEC — {{ nomClient ?? props.clientId }}</h1>
+    <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="rappel">
       L'IPR est calculé mais jamais autoritatif à lui seul — le verdict reste une aide à la
       décision, cohérent avec la méthodologie AMDEC du client (ICH Q9).
     </p>
 
     <p v-if="chargementInitial" class="etat-vide">Chargement…</p>
+    <p v-else-if="riskStore.chargementEchoue" class="bandeau-erreur" role="alert">
+      Impossible de charger les profils AMDEC de ce client (serveur injoignable ou session expirée)
+      : rien n'est perdu, mais n'en créez pas de nouvelle avant d'avoir rechargé la page.
+      <button type="button" @click="recharger">Recharger</button>
+    </p>
     <template v-else>
       <section v-if="!riskStore.profilActif || formulaireConfigOuvert" class="bloc-config">
         <h2>Configuration du profil de méthode</h2>
@@ -228,15 +280,15 @@ const evaluationsTriees = computed(() =>
           </label>
           <label>
             Échelle minimale
-            <input v-model.number="echelleMin" type="number" required />
+            <input v-model.number="echelleMin" type="number" min="1" step="1" required />
           </label>
           <label>
             Échelle maximale
-            <input v-model.number="echelleMax" type="number" required />
+            <input v-model.number="echelleMax" type="number" min="2" step="1" required />
           </label>
           <label>
             Seuil d'action (IPR)
-            <input v-model.number="seuilAction" type="number" required />
+            <input v-model.number="seuilAction" type="number" min="2" step="1" required />
           </label>
           <p v-if="erreurConfig" class="bandeau-erreur" role="alert">{{ erreurConfig }}</p>
           <div class="actions">
@@ -247,7 +299,7 @@ const evaluationsTriees = computed(() =>
             >
               Annuler
             </button>
-            <button type="submit">Enregistrer cette version</button>
+            <button type="submit" :disabled="envoiEnCours">Enregistrer cette version</button>
           </div>
         </form>
       </section>
@@ -332,7 +384,7 @@ const evaluationsTriees = computed(() =>
               />
             </label>
             <p v-if="erreurCreation" class="bandeau-erreur" role="alert">{{ erreurCreation }}</p>
-            <button type="submit">Créer la ligne</button>
+            <button type="submit" :disabled="envoiEnCours">Créer la ligne</button>
           </form>
         </section>
       </template>

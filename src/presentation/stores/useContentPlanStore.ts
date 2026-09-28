@@ -13,6 +13,7 @@ import type {
 } from '../../logique-metier/domaine/types'
 import { contentPlansAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export interface NouveauContentPlanInput {
   templateId: TemplateType
@@ -114,7 +115,9 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
       contentPlans: contentPlansDuClient.map(contentPlanDomaineVersWire),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de la migration ContentPlan : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la migration ContentPlan : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     for (const entree of contentPlansDuClient) {
       const index = contentPlansAMigrer.indexOf(entree)
@@ -159,7 +162,10 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
       contextSnapshot: JSON.stringify(input.contextSnapshot),
     }
     const resultat = await api.creerContentPlan(jeton, clientId, saisie)
-    if (!resultat.ok) throw new Error(`Échec de la création du ContentPlan : ${resultat.erreur}`)
+    if (!resultat.ok)
+      throw new Error(
+        `Échec de la création du ContentPlan : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     const plan = contentPlanWireVersDomaine(resultat.donnees.contentPlan)
     contentPlans.value = [...contentPlans.value, plan]
     return plan
@@ -180,7 +186,9 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
       if (resultat.erreur === 'introuvable' || resultat.erreur === 'deja_gele') {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec du recalcul de la readiness : ${resultat.erreur}`)
+      throw new Error(
+        `Échec du recalcul de la readiness : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     const miseAJour = contentPlanWireVersDomaine(resultat.donnees.contentPlan)
     contentPlans.value = contentPlans.value.map((p) => (p.id === contentPlanId ? miseAJour : p))
@@ -201,7 +209,7 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
       if (resultat.erreur === 'introuvable' || resultat.erreur === 'deja_gele') {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec de la validation : ${resultat.erreur}`)
+      throw new Error(`Échec de la validation : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const miseAJour = contentPlanWireVersDomaine(resultat.donnees.contentPlan)
     contentPlans.value = contentPlans.value.map((p) => (p.id === contentPlanId ? miseAJour : p))
@@ -231,7 +239,7 @@ export const useContentPlanStore = defineStore('contentPlan', () => {
       ) {
         return { erreur: resultat.erreur }
       }
-      throw new Error(`Échec du gel : ${resultat.erreur}`)
+      throw new Error(`Échec du gel : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const miseAJour = contentPlanWireVersDomaine(resultat.donnees.contentPlan)
     contentPlans.value = contentPlans.value.map((p) => (p.id === contentPlanId ? miseAJour : p))

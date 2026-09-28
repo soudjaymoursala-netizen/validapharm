@@ -25,6 +25,8 @@ import { useAuthStore } from '../stores/useAuthStore'
 import { useSectionsStore } from '../stores/useSectionsStore'
 import { useProjectDocumentsStore } from '../stores/useProjectDocumentsStore'
 import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
+import { formaterDateFr } from '../i18n/formaterDate'
+import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ projectId: string }>()
 
@@ -33,6 +35,20 @@ const projetsStore = useProjectsStore()
 const authStore = useAuthStore()
 const sectionsStore = useSectionsStore()
 const documentsStore = useProjectDocumentsStore()
+
+// Un seul envoi à la fois (audit d'intégrité M2 : deux clics créaient deux
+// enregistrements) et refus du serveur affichés (M1).
+const { enCours: envoiEnCours, executer } = useEnvoiUnique()
+const erreurEnvoi = ref<string | null>(null)
+
+async function envoyer(action: () => Promise<unknown>): Promise<void> {
+  erreurEnvoi.value = null
+  try {
+    await executer(action)
+  } catch (e) {
+    erreurEnvoi.value = e instanceof Error ? e.message : String(e)
+  }
+}
 const projet = ref<Project | undefined>(undefined)
 // Un projet appartient à un client : la barre latérale doit proposer les
 // outils de CE client, jamais ceux du client visité précédemment.
@@ -98,7 +114,11 @@ const peutGererPartage = computed(() =>
     : false,
 )
 
-async function ajouterPartage(): Promise<void> {
+async function ajouterPartage(...args: Parameters<typeof ajouterPartageSansGarde>): Promise<void> {
+  await envoyer(() => ajouterPartageSansGarde(...args))
+}
+
+async function ajouterPartageSansGarde(): Promise<void> {
   const userId = nouvelUtilisateurPartage.value.trim()
   if (userId.length === 0) return
   erreurAction.value = null
@@ -115,7 +135,11 @@ async function ajouterPartage(): Promise<void> {
   nouvelUtilisateurPartage.value = ''
 }
 
-async function retirerPartage(userId: string): Promise<void> {
+async function retirerPartage(...args: Parameters<typeof retirerPartageSansGarde>): Promise<void> {
+  await envoyer(() => retirerPartageSansGarde(...args))
+}
+
+async function retirerPartageSansGarde(userId: string): Promise<void> {
   erreurAction.value = null
   const resultat = await projetsStore.retirerPartage(props.projectId, userId)
   if ('erreur' in resultat) {
@@ -136,7 +160,13 @@ async function confirmerArchivage(identiteDeclaree: string): Promise<void> {
   await router.push({ name: 'tableau-de-bord' })
 }
 
-async function suspendreProjet(): Promise<void> {
+async function suspendreProjet(
+  ...args: Parameters<typeof suspendreProjetSansGarde>
+): Promise<void> {
+  await envoyer(() => suspendreProjetSansGarde(...args))
+}
+
+async function suspendreProjetSansGarde(): Promise<void> {
   erreurAction.value = null
   const resultat = await projetsStore.suspendreProjet(
     props.projectId,
@@ -149,7 +179,13 @@ async function suspendreProjet(): Promise<void> {
   projet.value = resultat
 }
 
-async function reprendreProjet(): Promise<void> {
+async function reprendreProjet(
+  ...args: Parameters<typeof reprendreProjetSansGarde>
+): Promise<void> {
+  await envoyer(() => reprendreProjetSansGarde(...args))
+}
+
+async function reprendreProjetSansGarde(): Promise<void> {
   erreurAction.value = null
   const resultat = await projetsStore.reprendreProjet(
     props.projectId,
@@ -162,7 +198,13 @@ async function reprendreProjet(): Promise<void> {
   projet.value = resultat
 }
 
-async function desarchiverProjet(): Promise<void> {
+async function desarchiverProjet(
+  ...args: Parameters<typeof desarchiverProjetSansGarde>
+): Promise<void> {
+  await envoyer(() => desarchiverProjetSansGarde(...args))
+}
+
+async function desarchiverProjetSansGarde(): Promise<void> {
   erreurAction.value = null
   const resultat = await projetsStore.desarchiverProjet(
     props.projectId,
@@ -193,7 +235,11 @@ const LIBELLES_PHASE: Record<PhaseProjet, string> = {
   retrait: 'Retrait',
 }
 
-async function changerPhase(evenement: Event): Promise<void> {
+async function changerPhase(...args: Parameters<typeof changerPhaseSansGarde>): Promise<void> {
+  await envoyer(() => changerPhaseSansGarde(...args))
+}
+
+async function changerPhaseSansGarde(evenement: Event): Promise<void> {
   erreurAction.value = null
   const phase = (evenement.target as HTMLSelectElement).value as PhaseProjet
   const resultat = await projetsStore.changerPhaseProjet(
@@ -255,7 +301,13 @@ onMounted(async () => {
  * garde-fou exigé est l'étiquetage automatique "référence de travail, non
  * maître" (porté par le store, jamais contournable depuis cet écran).
  */
-async function importerDocument(evenement: Event): Promise<void> {
+async function importerDocument(
+  ...args: Parameters<typeof importerDocumentSansGarde>
+): Promise<void> {
+  await envoyer(() => importerDocumentSansGarde(...args))
+}
+
+async function importerDocumentSansGarde(evenement: Event): Promise<void> {
   erreurImportDocument.value = null
   const fichier = (evenement.target as HTMLInputElement).files?.[0]
   if (!fichier) return
@@ -274,7 +326,16 @@ async function importerDocument(evenement: Event): Promise<void> {
  * la liste (voir `ProjectDocument.has_binary_content`, Phase 3c du
  * chantier de migration D1) : récupéré à la demande ici.
  */
-async function telechargerDocument(document: { id: string; filename: string }): Promise<void> {
+async function telechargerDocument(
+  ...args: Parameters<typeof telechargerDocumentSansGarde>
+): Promise<void> {
+  await envoyer(() => telechargerDocumentSansGarde(...args))
+}
+
+async function telechargerDocumentSansGarde(document: {
+  id: string
+  filename: string
+}): Promise<void> {
   erreurTelechargementDocument.value = null
   try {
     const contenu = await documentsStore.telechargerContenu(document.id)
@@ -302,7 +363,11 @@ function demarrerEtape(templateType: TemplateType): void {
  * (§4.1bis) déjà construit — jamais un nouveau moteur de génération,
  * seulement un raccourci de découverte vers une capacité existante.
  */
-async function ajouterSection(depuisDocument = false): Promise<void> {
+async function ajouterSection(...args: Parameters<typeof ajouterSectionSansGarde>): Promise<void> {
+  await envoyer(() => ajouterSectionSansGarde(...args))
+}
+
+async function ajouterSectionSansGarde(depuisDocument = false): Promise<void> {
   if (nouveauTitre.value.trim().length === 0) return
   const section = await sectionsStore.creerSection({
     project_id: props.projectId,
@@ -327,7 +392,13 @@ async function ajouterSection(depuisDocument = false): Promise<void> {
  * manuelle ou transfert entre postes") — crée toujours une section
  * nouvelle dans ce projet, jamais un écrasement.
  */
-async function importerFichier(evenement: Event): Promise<void> {
+async function importerFichier(
+  ...args: Parameters<typeof importerFichierSansGarde>
+): Promise<void> {
+  await envoyer(() => importerFichierSansGarde(...args))
+}
+
+async function importerFichierSansGarde(evenement: Event): Promise<void> {
   erreurImport.value = null
   const fichier = (evenement.target as HTMLInputElement).files?.[0]
   if (!fichier) return
@@ -359,6 +430,7 @@ async function importerFichier(evenement: Event): Promise<void> {
       <div>
         <div class="entete-projet__titre">
           <h1>{{ projet.name }}</h1>
+          <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
           <span
             v-if="projet.statut !== 'actif'"
             :class="['pastille-statut', `pastille-statut--${projet.statut}`]"
@@ -368,7 +440,7 @@ async function importerFichier(evenement: Event): Promise<void> {
         </div>
         <p v-if="projet.deadline" class="entete-projet__echeance">
           <IconeSvg nom="horloge" :taille="14" />
-          Échéance : {{ projet.deadline }}
+          Échéance : {{ formaterDateFr(projet.deadline) }}
         </p>
       </div>
       <div v-if="peutModifier" class="entete-projet__actions">
@@ -480,7 +552,7 @@ async function importerFichier(evenement: Event): Promise<void> {
           <option value="lecture">lecture</option>
           <option value="édition">édition</option>
         </select>
-        <button type="submit" class="bouton-secondaire">Partager</button>
+        <button type="submit" :disabled="envoiEnCours" class="bouton-secondaire">Partager</button>
       </form>
     </section>
 
@@ -548,7 +620,9 @@ async function importerFichier(evenement: Event): Promise<void> {
           <button type="button" class="bouton-secondaire" @click="ajouterSection(true)">
             À partir d'un document
           </button>
-          <button type="submit" class="bouton-principal">Créer la section vierge</button>
+          <button type="submit" :disabled="envoiEnCours" class="bouton-principal">
+            Créer la section vierge
+          </button>
         </div>
       </form>
 
@@ -625,7 +699,7 @@ async function importerFichier(evenement: Event): Promise<void> {
             <span class="liste-documents__nom">{{ document.filename }}</span>
             <span class="liste-documents__meta">
               Référence de travail — non maître · chargé le
-              {{ document.uploaded_at.slice(0, 10) }} par {{ document.uploaded_by }}
+              {{ formaterDateFr(document.uploaded_at) }} par {{ document.uploaded_by }}
             </span>
           </span>
           <div class="liste-documents__actions">

@@ -134,6 +134,20 @@ describe('construireReadinessContentPlan', () => {
     ).toBe('besoin_information')
   })
 
+  test('couverture vers un test introuvable -> besoin_information, jamais prêt (audit M6)', () => {
+    expect(
+      construireReadinessContentPlan({
+        assetNodeId: 'n1',
+        requirements: [requirement()],
+        couvertures: [couverture({ test_id: 'test-inexistant' })],
+        tests: [],
+        executions: [],
+        evidences: [],
+        qualityEvents: [],
+      }),
+    ).toBe('besoin_information')
+  })
+
   test('requirement sans test couvrant -> besoin_revue', () => {
     expect(
       construireReadinessContentPlan({

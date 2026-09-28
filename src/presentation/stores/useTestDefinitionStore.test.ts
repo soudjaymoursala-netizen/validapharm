@@ -7,6 +7,7 @@ import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
+  semerNoeudsDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
 
@@ -40,6 +41,7 @@ beforeEach(async () => {
   await connecterAdminDeTest()
   await creerClientDeTest('client-1')
   await creerClientDeTest('client-A')
+  await semerNoeudsDeTest(ctx, 'client-1', ['noeud-1'])
 })
 
 afterEach(() => {

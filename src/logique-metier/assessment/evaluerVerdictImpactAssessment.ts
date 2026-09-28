@@ -37,6 +37,9 @@ export function evaluerVerdictImpactAssessment(
       if (conclusion === null) return null
       return conclusion === 'positif' ? 'impact_direct' : 'non_impact_direct'
     }
+    default:
+      // Règle inconnue : jamais un verdict deviné (audit m4).
+      return null
   }
 }
 

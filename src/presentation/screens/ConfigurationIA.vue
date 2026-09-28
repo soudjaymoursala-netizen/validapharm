@@ -89,19 +89,39 @@ onMounted(async () => {
   }
 })
 
+// Un échec d'enregistrement est affiché (audit M8 : il était ignoré, l'écran
+// laissait croire la qualification enregistrée) ; un seul envoi à la fois.
+const erreurEnregistrement = ref<string | null>(null)
+const envoiEnCours = ref(false)
+
+async function executer(action: () => Promise<void>): Promise<void> {
+  if (envoiEnCours.value) return
+  envoiEnCours.value = true
+  erreurEnregistrement.value = null
+  try {
+    await action()
+  } catch (e) {
+    erreurEnregistrement.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    envoiEnCours.value = false
+  }
+}
+
 async function changerFournisseur(): Promise<void> {
-  await configStore.definirFournisseur(props.clientId, fournisseurChoisi.value)
+  await executer(() => configStore.definirFournisseur(props.clientId, fournisseurChoisi.value))
 }
 
 async function acquitterConditions(): Promise<void> {
-  await configStore.acquitterConditions(props.clientId, fournisseurChoisi.value)
+  await executer(() => configStore.acquitterConditions(props.clientId, fournisseurChoisi.value))
 }
 
 async function enregistrerQualification(): Promise<void> {
-  await configStore.enregistrerQualification(props.clientId, modeQualificationChoisi.value, {
-    ...qualificationBrouillon,
-    moteur_version_qualifiee: qualificationBrouillon.moteur_version_qualifiee.trim() || null,
-  })
+  await executer(() =>
+    configStore.enregistrerQualification(props.clientId, modeQualificationChoisi.value, {
+      ...qualificationBrouillon,
+      moteur_version_qualifiee: qualificationBrouillon.moteur_version_qualifiee.trim() || null,
+    }),
+  )
 }
 </script>
 
@@ -109,6 +129,9 @@ async function enregistrerQualification(): Promise<void> {
   <main class="configuration-ia">
     <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
     <h1>Configuration IA — {{ nomClient ?? props.clientId }}</h1>
+    <p v-if="erreurEnregistrement" class="bandeau-erreur" role="alert">
+      {{ erreurEnregistrement }}
+    </p>
 
     <section class="bloc-fournisseur">
       <h2>Fournisseur</h2>
@@ -133,7 +156,7 @@ async function enregistrerQualification(): Promise<void> {
           la qualification de fiabilité déjà enregistrés (propres à l'ancien fournisseur).
         </p>
         <div class="actions">
-          <button type="submit">Changer de fournisseur</button>
+          <button type="submit" :disabled="envoiEnCours">Changer de fournisseur</button>
         </div>
       </form>
     </section>
@@ -148,10 +171,15 @@ async function enregistrerQualification(): Promise<void> {
         <p v-if="conditionsAcquittees" class="etat-favorable">
           Conditions acquittées pour « {{ fournisseurChoisi }} » le
           {{
-            new Date(configStore.config!.ai_provider_conditions_acquittees!.date).toLocaleString()
-          }}.
+            new Date(configStore.config!.ai_provider_conditions_acquittees!.date).toLocaleString(
+              'fr-FR',
+            )
+          }}
+          <template v-if="configStore.config!.ai_provider_conditions_acquittees!.par">
+            par {{ configStore.config!.ai_provider_conditions_acquittees!.par }} </template
+          >.
         </p>
-        <button v-else type="button" @click="acquitterConditions">
+        <button v-else type="button" :disabled="envoiEnCours" @click="acquitterConditions">
           J'ai vérifié et j'accepte les conditions de traitement des données de «
           {{ fournisseurChoisi }} »
         </button>
@@ -177,6 +205,9 @@ async function enregistrerQualification(): Promise<void> {
           {{ qualificationModeChoisi!.resultat }}
           <template v-if="qualificationModeChoisi!.moteur_version_qualifiee">
             (version moteur {{ qualificationModeChoisi!.moteur_version_qualifiee }})
+          </template>
+          <template v-if="qualificationModeChoisi!.par">
+            — enregistrée par {{ qualificationModeChoisi!.par }}
           </template>
         </p>
 
@@ -221,7 +252,7 @@ async function enregistrerQualification(): Promise<void> {
             />
           </label>
           <div class="actions">
-            <button type="submit">Enregistrer la qualification</button>
+            <button type="submit" :disabled="envoiEnCours">Enregistrer la qualification</button>
           </div>
         </form>
       </section>

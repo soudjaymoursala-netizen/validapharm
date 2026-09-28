@@ -5,6 +5,7 @@ import { verifierGabaritExportClient } from '../../connecteurs/office/Generation
 import type { GabaritExportClient } from '../../logique-metier/domaine/types'
 import { gabaritsExportClientAMigrer } from '../../persistance/db'
 import { useAuthStore } from './useAuthStore'
+import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 
 export type ResultatImportGabarit =
   { ok: true; gabarit: GabaritExportClient } | { ok: false; tagsManquants: string[] }
@@ -76,7 +77,9 @@ export const useGabaritExportStore = defineStore('gabaritExport', () => {
         fichier: new Blob([ancien.fichier]),
       })
       if (!resultat.ok) {
-        throw new Error(`Échec de la migration du gabarit : ${resultat.erreur}`)
+        throw new Error(
+          `Échec de la migration du gabarit : ${libelleErreurServeur(resultat.erreur)}`,
+        )
       }
       gabaritsExportClientAMigrer.splice(index, 1)
     }
@@ -129,7 +132,7 @@ export const useGabaritExportStore = defineStore('gabaritExport', () => {
       fichier: new Blob([fichier]),
     })
     if (!resultat.ok) {
-      throw new Error(`Échec de l'import du gabarit : ${resultat.erreur}`)
+      throw new Error(`Échec de l'import du gabarit : ${libelleErreurServeur(resultat.erreur)}`)
     }
     const gabarit = gabaritWireVersDomaine(resultat.donnees.gabarit, fichier)
     gabarits.value = [...gabarits.value, gabarit]
@@ -140,7 +143,9 @@ export const useGabaritExportStore = defineStore('gabaritExport', () => {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.supprimerGabaritExportClient(jeton, id)
     if (!resultat.ok) {
-      throw new Error(`Échec de la suppression du gabarit : ${resultat.erreur}`)
+      throw new Error(
+        `Échec de la suppression du gabarit : ${libelleErreurServeur(resultat.erreur)}`,
+      )
     }
     gabarits.value = gabarits.value.filter((g) => g.id !== id)
   }

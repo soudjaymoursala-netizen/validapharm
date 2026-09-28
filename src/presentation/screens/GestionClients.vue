@@ -137,7 +137,17 @@ async function confirmerSuppressionDefinitive(
     <header>
       <RouterLink :to="{ name: 'accueil' }" class="lien-retour">Accueil</RouterLink>
       <h1>Mes clients</h1>
-      <button type="button" class="bouton-principal" @click="formulaireOuvert = true">
+      <button
+        type="button"
+        class="bouton-principal"
+        :disabled="store.chargementEchoue"
+        :title="
+          store.chargementEchoue
+            ? 'Liste non chargée : rechargez la page avant de créer'
+            : undefined
+        "
+        @click="formulaireOuvert = true"
+      >
         Nouveau client
       </button>
     </header>
@@ -173,7 +183,11 @@ async function confirmerSuppressionDefinitive(
 
     <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
 
-    <p v-if="!store.enChargement && store.clientsActifs.length === 0" class="etat-vide">
+    <p v-if="store.chargementEchoue" class="bandeau-erreur" role="alert">
+      Impossible de charger les clients (serveur injoignable ou session expirée). La liste affichée
+      peut être incomplète ; rechargez la page avant de créer un client.
+    </p>
+    <p v-else-if="!store.enChargement && store.clientsActifs.length === 0" class="etat-vide">
       Aucun client actif pour l'instant — créez le premier avec le bouton ci-dessus.
     </p>
 

@@ -140,7 +140,8 @@ export interface EvaluationACFCWire {
 }
 
 export interface SaisieCreationProfilAcfcWire {
-  version: string
+  /** Ignoré : le numéro de version est attribué par le serveur (audit M7). */
+  version?: string
   source: string
   origin: string
   questions: QuestionACFCWire[]
@@ -263,7 +264,8 @@ export interface EvaluationImpactAssessmentWire {
 }
 
 export interface SaisieCreationProfilImpactAssessmentWire {
-  version: string
+  /** Ignoré : le numéro de version est attribué par le serveur (audit M7). */
+  version?: string
   source: string
   origin: string
   questions: QuestionImpactAssessmentWire[]
@@ -349,7 +351,8 @@ export interface RiskAssessmentWire {
 }
 
 export interface SaisieCreationProfilRiskAssessmentWire {
-  version: string
+  /** Ignoré : le numéro de version est attribué par le serveur (audit M7). */
+  version?: string
   source: string
   origin: string
   echelleMin: number
@@ -1164,12 +1167,15 @@ export interface QualificationFiabiliteIAWire {
   qualificationTestSetId: string
   qualificationTestSetVersion: string
   moteurVersionQualifiee: string | null
+  /** Compte qui l'a enregistrée — fixé par le serveur, ignoré s'il est envoyé. */
+  par?: string
+  enregistreeLe?: string
 }
 
 export interface ClientConfigWire {
   clientId: string
   aiProvider: string
-  aiProviderConditionsAcquittees: { fournisseur: string; date: string } | null
+  aiProviderConditionsAcquittees: { fournisseur: string; date: string; par?: string } | null
   aiProviderReliabilityQualification: {
     chat_normatif: QualificationFiabiliteIAWire | null
     audit_simule: QualificationFiabiliteIAWire | null
@@ -1296,9 +1302,11 @@ async function codeErreur(reponse: Response): Promise<unknown> {
   }
 }
 
-function aUneSession(init: RequestInit): boolean {
+/** Jeton de session porté par la requête (`Authorization: Bearer …`), ou `null`. */
+function jetonDeLaRequete(init: RequestInit): string | null {
   const entetes = init.headers as Record<string, string> | undefined
-  return typeof entetes?.Authorization === 'string'
+  const autorisation = entetes?.Authorization
+  return typeof autorisation === 'string' ? autorisation.replace(/^Bearer /, '') : null
 }
 
 /**
@@ -1324,8 +1332,13 @@ export class AuthApiClient {
     private readonly relayUrl: string,
     private readonly delaiMaxMs: number = DELAI_MAX_PAR_DEFAUT_MS,
     private readonly observateurConnectivite?: (joignable: boolean) => void,
-    /** Prévenu quand le Worker refuse la session (401 `non_authentifie` sur un appel authentifié) : jeton expiré, compte désactivé ou mot de passe changé ailleurs. */
-    private readonly observateurSessionInvalide?: () => void,
+    /**
+     * Prévenu quand le Worker refuse la session (401 `non_authentifie` sur un
+     * appel authentifié) : jeton expiré, compte désactivé ou mot de passe
+     * changé ailleurs. Reçoit le jeton refusé — l'appelant ignore un refus
+     * visant une session déjà remplacée (requête partie avant une reconnexion).
+     */
+    private readonly observateurSessionInvalide?: (jetonRefuse: string) => void,
   ) {}
 
   // --- Vérification de connexion (« Tester la connexion », avant toute
@@ -3612,8 +3625,11 @@ export class AuthApiClient {
       }
     }
     this.observateurConnectivite?.(true)
-    if (reponse.status === 401 && this.observateurSessionInvalide && aUneSession(init)) {
-      if ((await codeErreur(reponse)) === 'non_authentifie') this.observateurSessionInvalide()
+    const jetonEnvoye = jetonDeLaRequete(init)
+    if (reponse.status === 401 && this.observateurSessionInvalide && jetonEnvoye) {
+      if ((await codeErreur(reponse)) === 'non_authentifie') {
+        this.observateurSessionInvalide(jetonEnvoye)
+      }
     }
     return reponse
   }
