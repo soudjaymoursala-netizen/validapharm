@@ -115,7 +115,44 @@ const formulaireComplet = computed(() => {
   }
 })
 
+// Audit d'intégrité M9 : échecs affichés, suppression confirmée, un seul
+// envoi à la fois (double clic).
+const erreurAction = ref<string | null>(null)
+const actionEnCours = ref(false)
+
+async function executerAction(action: () => Promise<void>): Promise<void> {
+  if (actionEnCours.value) return
+  actionEnCours.value = true
+  erreurAction.value = null
+  try {
+    await action()
+  } catch (e) {
+    erreurAction.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    actionEnCours.value = false
+  }
+}
+
+async function basculerActif(connecteurId: string): Promise<void> {
+  await executerAction(() => connecteursStore.basculerActif(connecteurId))
+}
+
+async function supprimerConnecteur(connecteurId: string, nom: string): Promise<void> {
+  if (
+    !window.confirm(
+      `Supprimer définitivement le connecteur « ${nom} » ? Sa configuration (dont le jeton d'accès) sera effacée ; la suppression est tracée dans le journal d'audit.`,
+    )
+  ) {
+    return
+  }
+  await executerAction(() => connecteursStore.supprimerConnecteur(connecteurId))
+}
+
 async function creerConnecteur(): Promise<void> {
+  await executerAction(creerConnecteurSansGarde)
+}
+
+async function creerConnecteurSansGarde(): Promise<void> {
   if (!formulaireComplet.value || !brouillon.type) return
   const nom = brouillon.nom.trim()
   switch (brouillon.type) {
@@ -259,9 +296,13 @@ async function creerConnecteur(): Promise<void> {
       </template>
 
       <div class="actions">
-        <button type="submit" :disabled="!formulaireComplet">Créer le connecteur</button>
+        <button type="submit" :disabled="!formulaireComplet || actionEnCours">
+          Créer le connecteur
+        </button>
       </div>
     </form>
+
+    <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
 
     <ul class="liste-connecteurs">
       <li v-for="c in connecteursStore.connecteurs" :key="c.id">
@@ -273,10 +314,10 @@ async function creerConnecteur(): Promise<void> {
           }}</span>
         </div>
         <div class="actions-connecteur">
-          <button type="button" @click="connecteursStore.basculerActif(c.id)">
+          <button type="button" :disabled="actionEnCours" @click="basculerActif(c.id)">
             {{ c.actif ? 'Désactiver' : 'Activer' }}
           </button>
-          <button type="button" @click="connecteursStore.supprimerConnecteur(c.id)">
+          <button type="button" :disabled="actionEnCours" @click="supprimerConnecteur(c.id, c.nom)">
             Supprimer
           </button>
         </div>

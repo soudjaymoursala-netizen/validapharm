@@ -107,9 +107,14 @@ export const useClientsStore = defineStore('clients', () => {
       // ce cas la liste est relue, jamais remplacée par l'état périmé.
       for (let essai = 0; essai < 3; essai++) {
         const versionAuDepart = mutationsLocales
-        const resultat = await api.listerClients(authStore.jeton)
+        const jetonUtilise = authStore.jeton
+        const resultat = await api.listerClients(jetonUtilise)
         if (!resultat.ok) {
-          if (resultat.status === 401) await authStore.deconnecter()
+          // Jamais la fermeture d'une session plus récente (reconnexion
+          // pendant le chargement) pour le refus d'un ancien jeton.
+          if (resultat.status === 401 && authStore.jeton === jetonUtilise) {
+            await authStore.deconnecter()
+          }
           // Autre échec (403, panne inattendue) : la liste déjà chargée reste affichée.
           return
         }

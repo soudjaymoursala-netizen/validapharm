@@ -35,7 +35,7 @@ export const useAuthStore = defineStore('auth', () => {
       relayUrl,
       undefined,
       (joignable) => connectivite.signaler(joignable),
-      () => void sessionInvalide(),
+      (jetonRefuse) => void sessionInvalide(jetonRefuse),
     )
   }
 
@@ -44,8 +44,11 @@ export const useAuthStore = defineStore('auth', () => {
    * changé ailleurs) : déconnexion puis retour à « Se connecter » avec une
    * explication — jamais des écrans vides sans raison (audit du 25/09/2026).
    */
-  async function sessionInvalide(): Promise<void> {
+  async function sessionInvalide(jetonRefuse?: string): Promise<void> {
     if (!jeton.value) return
+    // Refus d'une requête partie avec un ancien jeton (avant une reconnexion) :
+    // la session actuelle, elle, est valide — jamais la fermer pour ça.
+    if (jetonRefuse !== undefined && jetonRefuse !== jeton.value) return
     await deconnecter()
     const { router } = await import('../router')
     const actuelle = router.currentRoute.value

@@ -60,5 +60,25 @@ export async function verifierMotDePasse(
   hashAttendu: string,
 ): Promise<boolean> {
   const hashCalcule = await hacherMotDePasse(motDePasse, selHex)
-  return hashCalcule === hashAttendu
+  return chainesEgalesTempsConstant(hashCalcule, hashAttendu)
+}
+
+/**
+ * Égalité de deux secrets sans fuite par le temps de réponse (audit
+ * sécurité a3 : le jeton d'initialisation était comparé avec `!==`, qui
+ * s'arrête au premier caractère différent). Les deux valeurs sont d'abord
+ * condensées (SHA-256, longueur fixe), puis comparées octet par octet sans
+ * sortie anticipée.
+ */
+export async function chainesEgalesTempsConstant(a: string, b: string): Promise<boolean> {
+  const encodeur = new TextEncoder()
+  const [ea, eb] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encodeur.encode(a)),
+    crypto.subtle.digest('SHA-256', encodeur.encode(b)),
+  ])
+  const va = new Uint8Array(ea)
+  const vb = new Uint8Array(eb)
+  let difference = 0
+  for (let i = 0; i < va.length; i++) difference |= (va[i] ?? 0) ^ (vb[i] ?? 0)
+  return difference === 0
 }

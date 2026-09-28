@@ -122,7 +122,9 @@ export const useConnecteursQMSStore = defineStore('connecteursQMS', () => {
     if (!connecteur) return
     const { api, jeton } = await obtenirApi()
     const resultat = await api.basculerActifConnector(jeton, connecteur.client_id, connecteurId)
-    if (!resultat.ok) return
+    // Audit d'intégrité M9 : un échec n'est plus ignoré en silence.
+    if (!resultat.ok)
+      throw new Error(`Échec du changement d'état du connecteur : ${resultat.erreur}`)
     const misAJour = connectorWireVersDomaine(resultat.donnees.connector)
     connecteurs.value = connecteurs.value.map((c) => (c.id === connecteurId ? misAJour : c))
   }
@@ -132,7 +134,7 @@ export const useConnecteursQMSStore = defineStore('connecteursQMS', () => {
     if (!connecteur) return
     const { api, jeton } = await obtenirApi()
     const resultat = await api.supprimerConnector(jeton, connecteur.client_id, connecteurId)
-    if (!resultat.ok) return
+    if (!resultat.ok) throw new Error(`Échec de la suppression du connecteur : ${resultat.erreur}`)
     connecteurs.value = connecteurs.value.filter((c) => c.id !== connecteurId)
   }
 

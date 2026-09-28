@@ -1,5 +1,6 @@
 import type { D1Database } from './d1Types'
 import { D1LimiteurConnexion } from './limiteurConnexion'
+import { D1QuotaRelaisIA } from './quotaRelaisIA'
 import { ResendEnvoyeurEmail } from './notifications/resendEnvoyeurEmail'
 import { D1AcfcRepo } from './repos/d1/d1AcfcRepo'
 import { D1AiChatSessionLogRepo } from './repos/d1/d1AiChatSessionLogRepo'
@@ -105,6 +106,7 @@ export default {
       googleOAuthClientId: env.GOOGLE_OAUTH_CLIENT_ID,
       googleOAuthClientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET,
       limiteurConnexion: new D1LimiteurConnexion(env.DB),
+      quotaRelaisIA: new D1QuotaRelaisIA(env.DB),
       jetonsCompteRepo: new D1JetonsCompteRepo(env.DB),
     })
   },

@@ -20,6 +20,7 @@ import { DocumentsNormatifsRepoMemoire } from './repos/documentsNormatifsRepo'
 import { EvidenceRepoMemoire } from './repos/evidenceRepo'
 import { AiChatSessionLogRepoMemoire } from './repos/aiChatSessionLogRepo'
 import { ClientConfigRepoMemoire } from './repos/clientConfigRepo'
+import { QuotaRelaisIAMemoire } from './quotaRelaisIA'
 import { ConnexionDriveRepoMemoire } from './repos/connexionDriveRepo'
 import { EtatMiroirDriveRepoMemoire } from './repos/etatMiroirDriveRepo'
 import { ExecutionRepoMemoire } from './repos/executionRepo'
@@ -127,6 +128,7 @@ interface EntreeAuditJson {
   action: string
   targetType: string
   targetId: string
+  acteurEmail?: string
   justification: string | null
   timestamp: string
 }
@@ -725,7 +727,7 @@ interface QualificationFiabiliteIAJson {
 interface ClientConfigJson {
   clientId: string
   aiProvider: string
-  aiProviderConditionsAcquittees: { fournisseur: string; date: string } | null
+  aiProviderConditionsAcquittees: { fournisseur: string; date: string; par?: string } | null
   aiProviderReliabilityQualification: {
     chat_normatif: QualificationFiabiliteIAJson | null
     audit_simule: QualificationFiabiliteIAJson | null
@@ -5827,6 +5829,12 @@ describe('routerRequete — Integration (Target Architecture, domaine "Integrati
       jeton: admin.jeton,
     })
     expect(liste.corps.connectors).toEqual([])
+
+    // Audit d'intégrité M9 : suppression tracée (qui, quand, quel connecteur).
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    const entree = audit.corps.entrees.find((e) => e.action === 'suppression_connecteur')
+    expect(entree?.targetId).toBe(connectorId)
+    expect(entree?.acteurEmail).toBe('admin@pharmatech.example')
   })
 
   test('démarrer un SyncJob sur un connecteur inconnu -> connector_introuvable', async () => {
@@ -9592,6 +9600,23 @@ describe('routerRequete — OAuth Google (Drive normes)', () => {
       'https://oauth2.googleapis.com/token',
       expect.objectContaining({ method: 'POST' }),
     )
+    // PKCE (audit a4) : le vérificateur envoyé à Google correspond au défi
+    // annoncé au démarrage du flux.
+    const defi = new URL(demarrage.urlAutorisation).searchParams.get('code_challenge')
+    expect(new URL(demarrage.urlAutorisation).searchParams.get('code_challenge_method')).toBe(
+      'S256',
+    )
+    const corpsEchange = new URLSearchParams(fetchMock.mock.calls[0]?.[1]?.body as string)
+    const verificateur = corpsEchange.get('code_verifier') ?? ''
+    const empreinte = new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verificateur)),
+    )
+    const attendu = btoa(String.fromCharCode(...empreinte))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+    expect(verificateur.length).toBeGreaterThan(40)
+    expect(defi).toBe(attendu)
 
     const parametre = await requete(ctx, 'GET', '/parametres-installation/drive-normes', {
       jeton: admin.jeton,
@@ -11369,5 +11394,101 @@ describe('références vers d’autres objets vérifiées (audit sécurité m6)'
       body: { noeuds: [{ id: noeudB, levelKey: 'n', name: 'X', code: 'X', parentId: null }] },
     })
     expect([idPris.status, idPris.corps.erreur]).toEqual([409, 'id_conflit'])
+  })
+})
+
+describe('configuration IA attribuée et tracée (audit d’intégrité M8)', () => {
+  test('qualification et acquittement : auteur et heure du serveur, inchangés si la valeur ne change pas, journal central', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const client = await requete(ctx, 'POST', '/clients', {
+      jeton: admin.jeton,
+      body: { name: 'Client IA' },
+    })
+    const chemin = `/clients/${client.corps.client.id}/config`
+    const qualification = {
+      date: '2026-09-01',
+      resultat: 'favorable',
+      qualificationTestSetId: 'set-1',
+      qualificationTestSetVersion: '1.0.0',
+      moteurVersionQualifiee: null,
+      par: 'quelqu.un.d.autre@exemple.com',
+    }
+    const corps = {
+      aiProvider: 'openai',
+      aiProviderConditionsAcquittees: { fournisseur: 'openai', date: '2020-01-01T00:00:00.000Z' },
+      aiProviderReliabilityQualification: { chat_normatif: qualification, audit_simule: null },
+      exportTemplateId: null,
+      consentTelemetry: { granted: false, date: null, revocableAtAnyTime: true },
+    }
+    const premier = await requete(ctx, 'PUT', chemin, { jeton: admin.jeton, body: corps })
+    expect(premier.status).toBe(200)
+    const cfg = premier.corps.clientConfig
+    expect(cfg?.aiProviderConditionsAcquittees?.par).toBe('admin@pharmatech.example')
+    expect(cfg?.aiProviderConditionsAcquittees?.date).not.toBe('2020-01-01T00:00:00.000Z')
+    expect(cfg?.aiProviderReliabilityQualification.chat_normatif).toMatchObject({
+      date: '2026-09-01',
+      par: 'admin@pharmatech.example',
+      enregistreeLe: expect.any(String),
+    })
+
+    // Réenvoi identique : auteur et dates d'origine conservés, rien de plus au journal.
+    const second = await requete(ctx, 'PUT', chemin, { jeton: admin.jeton, body: corps })
+    expect(second.corps.clientConfig?.aiProviderReliabilityQualification.chat_normatif).toEqual(
+      cfg?.aiProviderReliabilityQualification.chat_normatif,
+    )
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    const actions = audit.corps.entrees.map((e: { action: string }) => e.action)
+    expect(actions.filter((a: string) => a === 'qualification_ia_modifiee')).toHaveLength(1)
+    expect(actions.filter((a: string) => a === 'conditions_ia_acquittees')).toHaveLength(1)
+  })
+})
+
+describe('quota du relais IA et tailles maximales (audit sécurité a1, m4)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  test('au-delà du quota horaire, le relais IA répond 429 sans appeler le fournisseur', async () => {
+    const ctx = nouveauContexte()
+    ctx.quotaRelaisIA = new QuotaRelaisIAMemoire(2)
+    const admin = await bootstrapAdmin(ctx)
+    await requete(ctx, 'PUT', '/parametres-installation/relais-ia', {
+      jeton: admin.jeton,
+      body: { valeur: { relayUrl: 'https://relais-ia.example.workers.dev', jeton: 'j' } },
+    })
+    const fournisseur = vi.fn(async () => new Response('{"texte":"ok"}', { status: 200 }))
+    vi.stubGlobal('fetch', fournisseur)
+    const envoyer = () =>
+      requete(ctx, 'POST', '/relais-ia', { jeton: admin.jeton, body: { question: 'Q' } })
+
+    expect((await envoyer()).status).toBe(200)
+    expect((await envoyer()).status).toBe(200)
+    const troisieme = await envoyer()
+    expect([troisieme.status, troisieme.corps.erreur]).toEqual([429, 'quota_ia_atteint'])
+    expect(fournisseur).toHaveBeenCalledTimes(2)
+  })
+
+  test('corps JSON annoncé au-delà de 10 Mo : 413 avant toute lecture', async () => {
+    const ctx = nouveauContexte()
+    const reponse = await routerRequete(
+      new Request('https://relais.workers.dev/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': String(11 * 1024 * 1024) },
+        body: '{}',
+      }),
+      ctx,
+    )
+    expect(reponse.status).toBe(413)
+    expect((await reponse.json()).erreur).toBe('corps_trop_volumineux')
+  })
+
+  test('document normatif : texte extrait au-delà de 2 Mo refusé', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const { status, corps } = await creerDocumentNormatif(ctx, admin.jeton, {
+      texte: 'x'.repeat(2 * 1024 * 1024 + 1),
+    })
+    expect([status, corps.erreur]).toEqual([413, 'texte_trop_volumineux'])
   })
 })

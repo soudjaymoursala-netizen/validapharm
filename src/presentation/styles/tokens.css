@@ -416,3 +416,12 @@ textarea {
   box-shadow: 0 0 0 3px var(--vp-marque-fond-leger);
   border-color: var(--vp-marque);
 }
+
+/* (28/09/2026, audit d'intégrité M1) Base commune des messages d'échec :
+   un écran qui n'avait pas encore de style local pour `.bandeau-erreur`
+   affichait l'erreur comme du texte ordinaire, facile à manquer. Les règles
+   scoped existantes, plus spécifiques, restent prioritaires. */
+.bandeau-erreur {
+  color: var(--vp-danger);
+  font-weight: 600;
+}

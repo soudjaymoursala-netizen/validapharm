@@ -117,6 +117,9 @@ describe('useClientConfigStore — enregistrerQualification (séparée par mode)
       qualification_test_set_id: 'set-1',
       qualification_test_set_version: '1.0.0',
       moteur_version_qualifiee: 'claude-v1',
+      // Attribution fixée par le serveur (audit M8), jamais par le poste.
+      par: 'admin@pharmatech.example',
+      enregistree_le: expect.any(String),
     })
     expect(store.config?.ai_provider_reliability_qualification.audit_simule).toBeNull()
   })

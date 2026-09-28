@@ -8,7 +8,12 @@ import {
   verdictRisque,
   versionSuivante,
 } from './verdictsEvaluation'
-import { genererSel, hacherMotDePasse, verifierMotDePasse } from './motDePasse'
+import {
+  chainesEgalesTempsConstant,
+  genererSel,
+  hacherMotDePasse,
+  verifierMotDePasse,
+} from './motDePasse'
 import type { EnvoyeurEmail } from './notifications/envoyeurEmail'
 import type {
   ACFCRepo,
@@ -158,6 +163,7 @@ import type {
 } from './repos/structureSystemeRepo'
 import type { UtilisateursRepo } from './repos/utilisateursRepo'
 import type { LimiteurConnexion } from './limiteurConnexion'
+import { QuotaRelaisIAMemoire, type QuotaRelaisIA } from './quotaRelaisIA'
 import type { JetonsCompteRepo, TypeJetonCompte } from './repos/jetonsCompteRepo'
 import type { ClientEnregistre, EntreeAudit, Role, UtilisateurEnregistre } from './types'
 import { versUtilisateurPublic } from './types'
@@ -205,6 +211,8 @@ export interface Contexte {
   jetonsCompteRepo: JetonsCompteRepo
   /** Limitation des tentatives de mot de passe — absente : aucune limitation (tests). */
   limiteurConnexion?: LimiteurConnexion
+  /** Quota d'appels au relais IA par utilisateur (audit a1) ; mémoire par défaut. */
+  quotaRelaisIA?: QuotaRelaisIA
   utilisateursRepo: UtilisateursRepo
   clientsRepo: ClientsRepo
   parametresInstallationRepo: ParametresInstallationRepo
@@ -586,6 +594,8 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
   // un JSON 500 avec les en-têtes CORS — jamais une page HTML que le
   // navigateur masque derrière une « erreur réseau » trompeuse.
   try {
+    const refusTaille = refusTailleCorps(request, ctx)
+    if (refusTaille) return refusTaille
     const migration = await preparerMigrationLocaleClient(request, ctx)
     if (migration instanceof Response) return migration
     const reponse = await routerRequeteInterne(migration.request, ctx)
@@ -604,6 +614,42 @@ export async function routerRequete(request: Request, ctx: Contexte): Promise<Re
     console.error('Erreur interne du Worker', erreur)
     return reponseJson({ erreur: 'erreur_interne' }, 500, entetesCors(ctx.corsOrigin))
   }
+}
+
+/**
+ * Tailles maximales d'un corps de requête (audit sécurité m4 : 40 Mo de
+ * binaire et 5 Mo de texte acceptés par tout compte, listes alourdies
+ * d'autant pour tous). Contrôle sur `Content-Length`, que le navigateur
+ * envoie toujours pour une requête `fetch` à corps fini ; les fichiers
+ * sont en plus vérifiés un par un à l'import (`TAILLE_MAX_FICHIER`).
+ */
+const TAILLE_MAX_CORPS_JSON = 10 * 1024 * 1024
+const TAILLE_MAX_CORPS_FICHIER = 30 * 1024 * 1024
+const TAILLE_MAX_FICHIER = 25 * 1024 * 1024
+const TAILLE_MAX_TEXTE_EXTRAIT = 2 * 1024 * 1024
+
+function refusTailleCorps(request: Request, ctx: Contexte): Response | null {
+  const longueur = Number(request.headers.get('Content-Length') ?? '0')
+  if (!Number.isFinite(longueur) || longueur <= 0) return null
+  // JSON : 10 Mo ; fichier (formulaire multipart ou binaire brut d'une
+  // réparation de contenu) : 30 Mo.
+  const json = (request.headers.get('Content-Type') ?? '').includes('application/json')
+  const maximum = json ? TAILLE_MAX_CORPS_JSON : TAILLE_MAX_CORPS_FICHIER
+  if (longueur <= maximum) return null
+  return reponseJson(
+    { erreur: 'corps_trop_volumineux', maximumOctets: maximum },
+    413,
+    entetesCors(ctx.corsOrigin),
+  )
+}
+
+/** Fichier ou texte extrait d'un import au-delà des tailles admises, ou `null`. */
+function refusTailleImport(fichier: Blob | null, texte: string): string | null {
+  if (fichier && fichier.size > TAILLE_MAX_FICHIER) return 'fichier_trop_volumineux'
+  if (new TextEncoder().encode(texte).byteLength > TAILLE_MAX_TEXTE_EXTRAIT) {
+    return 'texte_trop_volumineux'
+  }
+  return null
 }
 
 /**
@@ -2155,7 +2201,11 @@ async function gererBootstrapAdmin(
   }>(request)
   if (!corps) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
 
-  if (!corps.jetonBootstrap || corps.jetonBootstrap !== ctx.jetonBootstrap) {
+  if (
+    !corps.jetonBootstrap ||
+    !ctx.jetonBootstrap ||
+    !(await chainesEgalesTempsConstant(corps.jetonBootstrap, ctx.jetonBootstrap))
+  ) {
     return reponseJson({ erreur: 'jeton_invalide' }, 403, entetes)
   }
   if ((await ctx.utilisateursRepo.compter()) > 0) {
@@ -7018,7 +7068,6 @@ async function gererDesactiverConnector(
 ): Promise<Response> {
   const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
   if (acteur instanceof Response) return acteur
-  void acteur
 
   const existant = await ctx.integrationRepo.connectorParId(connectorId)
   if (!existant || existant.clientId !== clientId) {
@@ -7027,6 +7076,7 @@ async function gererDesactiverConnector(
 
   const miseAJour: ConnectorEnregistre = { ...existant, actif: false }
   await ctx.integrationRepo.remplacerConnector(miseAJour)
+  await consignerAudit(ctx, acteur, 'desactivation_connecteur', 'connecteur', connectorId, null)
   return reponseJson({ connector: miseAJour }, 200, entetes)
 }
 
@@ -7039,7 +7089,6 @@ async function gererBasculerActifConnector(
 ): Promise<Response> {
   const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
   if (acteur instanceof Response) return acteur
-  void acteur
 
   const existant = await ctx.integrationRepo.connectorParId(connectorId)
   if (!existant || existant.clientId !== clientId) {
@@ -7048,6 +7097,14 @@ async function gererBasculerActifConnector(
 
   const miseAJour: ConnectorEnregistre = { ...existant, actif: !existant.actif }
   await ctx.integrationRepo.remplacerConnector(miseAJour)
+  await consignerAudit(
+    ctx,
+    acteur,
+    miseAJour.actif ? 'activation_connecteur' : 'desactivation_connecteur',
+    'connecteur',
+    connectorId,
+    null,
+  )
   return reponseJson({ connector: miseAJour }, 200, entetes)
 }
 
@@ -7055,7 +7112,9 @@ async function gererBasculerActifConnector(
  * Vraie suppression physique — nouveau patron dans ce chantier,
  * justifié car `Connector` est une pure configuration technique (pas un
  * enregistrement GxP à préserver), contrairement à tous les autres
- * domaines migrés jusqu'ici.
+ * domaines migrés jusqu'ici. **(28/09/2026, audit d'intégrité M9)** La
+ * suppression est consignée dans le journal central (qui, quand, quel
+ * connecteur) — auparavant aucune trace.
  */
 async function gererSupprimerConnector(
   request: Request,
@@ -7066,7 +7125,6 @@ async function gererSupprimerConnector(
 ): Promise<Response> {
   const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
   if (acteur instanceof Response) return acteur
-  void acteur
 
   const existant = await ctx.integrationRepo.connectorParId(connectorId)
   if (!existant || existant.clientId !== clientId) {
@@ -7074,6 +7132,14 @@ async function gererSupprimerConnector(
   }
 
   await ctx.integrationRepo.supprimerConnector(connectorId)
+  await consignerAudit(
+    ctx,
+    acteur,
+    'suppression_connecteur',
+    'connecteur',
+    connectorId,
+    `${existant.type} « ${existant.nom} »`,
+  )
   return reponseJson({ ok: true }, 200, entetes)
 }
 
@@ -8662,12 +8728,14 @@ interface QualificationFiabiliteIAJson {
   qualificationTestSetId: string
   qualificationTestSetVersion: string
   moteurVersionQualifiee: string | null
+  par?: string
+  enregistreeLe?: string
 }
 
 interface ClientConfigJson {
   clientId: string
   aiProvider: string
-  aiProviderConditionsAcquittees: { fournisseur: string; date: string } | null
+  aiProviderConditionsAcquittees: { fournisseur: string; date: string; par?: string } | null
   aiProviderReliabilityQualification: {
     chat_normatif: QualificationFiabiliteIAJson | null
     audit_simule: QualificationFiabiliteIAJson | null
@@ -8710,6 +8778,50 @@ interface SaisieClientConfig {
   consentTelemetry?: { granted: boolean; date: string | null; revocableAtAnyTime: boolean }
 }
 
+const MODES_QUALIFICATION_IA = ['chat_normatif', 'audit_simule'] as const
+
+function qualificationIAValide(q: unknown): q is QualificationFiabiliteIAJson | null {
+  if (q === null) return true
+  if (!q || typeof q !== 'object') return false
+  const v = q as Record<string, unknown>
+  return (
+    typeof v.date === 'string' &&
+    typeof v.resultat === 'string' &&
+    typeof v.qualificationTestSetId === 'string' &&
+    typeof v.qualificationTestSetVersion === 'string' &&
+    (v.moteurVersionQualifiee === null || typeof v.moteurVersionQualifiee === 'string')
+  )
+}
+
+function memeQualificationIA(
+  a: QualificationFiabiliteIAJson | null,
+  b: QualificationFiabiliteIAJson | null,
+): boolean {
+  if (a === null || b === null) return a === b
+  return (
+    a.date === b.date &&
+    a.resultat === b.resultat &&
+    a.qualificationTestSetId === b.qualificationTestSetId &&
+    a.qualificationTestSetVersion === b.qualificationTestSetVersion &&
+    a.moteurVersionQualifiee === b.moteurVersionQualifiee
+  )
+}
+
+function resumeQualificationIA(q: QualificationFiabiliteIAJson | null): string {
+  return q
+    ? `${q.resultat} (jeu ${q.qualificationTestSetId} ${q.qualificationTestSetVersion})`
+    : 'aucune'
+}
+
+/**
+ * Configuration IA d'un client (audit d'intégrité M8) : le contrôle qui
+ * autorise l'« usage réel » de l'IA repose sur la qualification et
+ * l'acquittement des conditions — ils sont désormais **attribués et datés
+ * par le serveur** (`par`, `enregistreeLe` / date d'acquittement serveur ;
+ * une valeur inchangée garde son auteur et sa date d'origine) et chaque changement est consigné dans
+ * le journal central avec l'avant/après. Auparavant : date du poste, aucun
+ * auteur, écrasement sans trace.
+ */
 async function gererEnregistrerClientConfig(
   request: Request,
   ctx: Contexte,
@@ -8718,20 +8830,86 @@ async function gererEnregistrerClientConfig(
 ): Promise<Response> {
   const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
   if (acteur instanceof Response) return acteur
-  void acteur
   const corps = await lireCorpsJson<SaisieClientConfig>(request)
-  if (!corps?.aiProvider || !corps.aiProviderReliabilityQualification || !corps.consentTelemetry) {
+  if (
+    !corps?.aiProvider ||
+    typeof corps.aiProvider !== 'string' ||
+    !corps.aiProviderReliabilityQualification ||
+    !corps.consentTelemetry ||
+    !MODES_QUALIFICATION_IA.every((m) =>
+      qualificationIAValide(corps.aiProviderReliabilityQualification?.[m] ?? null),
+    )
+  ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const conditions = corps.aiProviderConditionsAcquittees ?? null
+  if (conditions !== null && typeof conditions.fournisseur !== 'string') {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+
+  const existant = await ctx.clientConfigRepo.obtenirParClient(clientId)
+  const maintenant = horodatage()
+  const journal: { action: string; detail: string }[] = []
+
+  if (existant && existant.aiProvider !== corps.aiProvider) {
+    journal.push({
+      action: 'fournisseur_ia_modifie',
+      detail: `${existant.aiProvider} → ${corps.aiProvider}`,
+    })
+  }
+
+  const conditionsAvant = existant?.aiProviderConditionsAcquittees ?? null
+  let conditionsApres: ClientConfigEnregistre['aiProviderConditionsAcquittees'] = null
+  if (conditions !== null) {
+    conditionsApres =
+      conditionsAvant && conditionsAvant.fournisseur === conditions.fournisseur
+        ? conditionsAvant
+        : { fournisseur: conditions.fournisseur, date: maintenant, par: acteur.email }
+  }
+  if ((conditionsAvant?.fournisseur ?? null) !== (conditionsApres?.fournisseur ?? null)) {
+    journal.push({
+      action: conditionsApres ? 'conditions_ia_acquittees' : 'conditions_ia_retirees',
+      detail: conditionsApres
+        ? `conditions de ${conditionsApres.fournisseur}`
+        : `conditions de ${conditionsAvant?.fournisseur ?? '?'}`,
+    })
+  }
+
+  const qualification = {} as ClientConfigEnregistre['aiProviderReliabilityQualification']
+  for (const mode of MODES_QUALIFICATION_IA) {
+    const avant = existant?.aiProviderReliabilityQualification[mode] ?? null
+    const saisie = corps.aiProviderReliabilityQualification[mode] ?? null
+    if (memeQualificationIA(avant, saisie)) {
+      qualification[mode] = avant
+      continue
+    }
+    qualification[mode] = saisie && {
+      date: saisie.date,
+      resultat: saisie.resultat,
+      qualificationTestSetId: saisie.qualificationTestSetId,
+      qualificationTestSetVersion: saisie.qualificationTestSetVersion,
+      moteurVersionQualifiee: saisie.moteurVersionQualifiee,
+      par: acteur.email,
+      enregistreeLe: maintenant,
+    }
+    journal.push({
+      action: 'qualification_ia_modifiee',
+      detail: `${mode} : ${resumeQualificationIA(avant)} → ${resumeQualificationIA(saisie)}`,
+    })
+  }
+
   const config: ClientConfigEnregistre = {
     clientId,
     aiProvider: corps.aiProvider,
-    aiProviderConditionsAcquittees: corps.aiProviderConditionsAcquittees ?? null,
-    aiProviderReliabilityQualification: corps.aiProviderReliabilityQualification,
+    aiProviderConditionsAcquittees: conditionsApres,
+    aiProviderReliabilityQualification: qualification,
     exportTemplateId: corps.exportTemplateId ?? null,
     consentTelemetry: corps.consentTelemetry,
   }
   await ctx.clientConfigRepo.enregistrer(config)
+  for (const { action, detail } of journal) {
+    await consignerAudit(ctx, acteur, action, 'client_config', clientId, detail)
+  }
   return reponseJson({ clientConfig: assemblerClientConfig(config) }, 200, entetes)
 }
 
@@ -10099,6 +10277,8 @@ async function gererCreerDocumentProjet(
   if (refus) return reponseJson({ erreur: refus.erreur }, refus.statut, entetes)
   const mimeType = corps.mimeType ?? 'application/octet-stream'
   const status = corps.status ?? 'reference_de_travail_non_maitre'
+  const refusTaille = refusTailleImport(contenuBlob, extractedText)
+  if (refusTaille) return reponseJson({ erreur: refusTaille }, 413, entetes)
 
   const id = genererId()
   await ctx.stockageBinaireRepo.enregistrer(
@@ -10543,6 +10723,15 @@ async function gererRelaisIA(
   const relayUrl = parametre?.valeur.relayUrl
   if (!relayUrl) return reponseJson({ erreur: 'relais_ia_non_configure' }, 404, entetes)
 
+  // Quota par utilisateur (audit sécurité a1) — seuls les appels au
+  // fournisseur (POST) comptent, jamais la simple vérification de santé.
+  if (request.method === 'POST') {
+    const quota = (ctx.quotaRelaisIA ??= new QuotaRelaisIAMemoire())
+    if (!(await quota.consommer(`ia:${utilisateur.id}`))) {
+      return reponseJson({ erreur: 'quota_ia_atteint' }, 429, entetes)
+    }
+  }
+
   const jeton = parametre?.valeur.jeton
   let reponse: Response
   try {
@@ -10573,6 +10762,16 @@ const CLE_PARAMETRE_DRIVE_NORMES = 'drive-normes'
 const CLE_ETAT_OAUTH_DRIVE = 'drive-oauth-etat'
 const DUREE_VALIDITE_ETAT_OAUTH_MS = 10 * 60 * 1000
 const PORTEE_OAUTH_DRIVE = 'https://www.googleapis.com/auth/drive.readonly'
+
+/** Défi PKCE S256 : base64url(SHA-256(vérificateur)) (RFC 7636). */
+async function defiPkce(verificateur: string): Promise<string> {
+  const empreinte = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verificateur)),
+  )
+  let binaire = ''
+  for (const o of empreinte) binaire += String.fromCharCode(o)
+  return btoa(binaire).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
 
 function urlRedirectionOAuthDrive(request: Request): string {
   return `${new URL(request.url).origin}/drive-oauth/callback`
@@ -10616,11 +10815,16 @@ async function gererDemarrerOAuthDrive(
     return reponseJson({ erreur: 'oauth_google_non_configure' }, 501, entetes)
   }
 
-  const etat = genererId()
+  // (28/09/2026, audit sécurité a4) Un état par admin — un second admin qui
+  // démarre le flux n'écrase plus celui du premier — et PKCE (S256) : le
+  // code d'autorisation seul, intercepté, ne suffit plus à obtenir un jeton.
+  const secret = genererJetonAleatoire()
+  const verificateur = genererJetonAleatoire()
   await ctx.parametresInstallationRepo.enregistrer(
-    CLE_ETAT_OAUTH_DRIVE,
+    `${CLE_ETAT_OAUTH_DRIVE}:${acteur.id}`,
     {
-      etat,
+      etat: secret,
+      verificateur,
       utilisateurId: acteur.id,
       expireA: new Date(Date.now() + DUREE_VALIDITE_ETAT_OAUTH_MS).toISOString(),
     },
@@ -10634,7 +10838,9 @@ async function gererDemarrerOAuthDrive(
     scope: PORTEE_OAUTH_DRIVE,
     access_type: 'offline',
     prompt: 'consent',
-    state: etat,
+    state: `${acteur.id}.${secret}`,
+    code_challenge: await defiPkce(verificateur),
+    code_challenge_method: 'S256',
   })
   return reponseJson(
     { urlAutorisation: `https://accounts.google.com/o/oauth2/v2/auth?${parametres.toString()}` },
@@ -10666,17 +10872,24 @@ async function gererCallbackOAuthDrive(request: Request, ctx: Contexte): Promise
     return echec('oauth_google_non_configure')
   }
 
-  const etatEnregistre = await ctx.parametresInstallationRepo.obtenir(CLE_ETAT_OAUTH_DRIVE)
+  const separateur = etatRecu.indexOf('.')
+  const cleEtat = `${CLE_ETAT_OAUTH_DRIVE}:${etatRecu.slice(0, separateur)}`
+  const etatEnregistre =
+    separateur > 0 ? await ctx.parametresInstallationRepo.obtenir(cleEtat) : null
   if (
-    !etatEnregistre ||
-    etatEnregistre.valeur.etat !== etatRecu ||
+    !etatEnregistre?.valeur.etat ||
+    !(await chainesEgalesTempsConstant(
+      etatEnregistre.valeur.etat,
+      etatRecu.slice(separateur + 1),
+    )) ||
     new Date(etatEnregistre.valeur.expireA ?? 0) < new Date()
   ) {
     return echec('etat_invalide_ou_expire')
   }
   const utilisateurId = etatEnregistre.valeur.utilisateurId
-  await ctx.parametresInstallationRepo.effacer(CLE_ETAT_OAUTH_DRIVE)
-  if (!utilisateurId) return echec('etat_invalide_ou_expire')
+  const verificateur = etatEnregistre.valeur.verificateur
+  await ctx.parametresInstallationRepo.effacer(cleEtat)
+  if (!utilisateurId || !verificateur) return echec('etat_invalide_ou_expire')
 
   const utilisateur = await ctx.utilisateursRepo.parId(utilisateurId)
   if (!utilisateur) return echec('utilisateur_introuvable')
@@ -10687,6 +10900,7 @@ async function gererCallbackOAuthDrive(request: Request, ctx: Contexte): Promise
     client_secret: ctx.googleOAuthClientSecret,
     redirect_uri: urlRedirectionOAuthDrive(request),
     grant_type: 'authorization_code',
+    code_verifier: verificateur,
   })
   if (!jetons?.refresh_token) return echec('echange_jeton_echoue')
 
@@ -10877,6 +11091,8 @@ async function gererCreerDocumentNormatif(
     (contenuValeur as Blob).size > 0
       ? (contenuValeur as Blob)
       : null
+  const refusTaille = refusTailleImport(contenuBlob, extractedText)
+  if (refusTaille) return reponseJson({ erreur: refusTaille }, 413, entetes)
 
   const id = genererId()
   await ctx.stockageBinaireRepo.enregistrer(

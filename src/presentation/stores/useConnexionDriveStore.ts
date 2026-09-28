@@ -99,13 +99,17 @@ export const useConnexionDriveStore = defineStore('connexionDrive', () => {
   async function enregistrer(clientId: string, saisie: SaisieConnexionDrive): Promise<void> {
     const authStore = useAuthStore()
     const api = await authStore.client()
-    if (!api || !authStore.jeton) return
+    if (!api || !authStore.jeton) {
+      throw new Error("Connexion Drive non enregistrée : serveur d'authentification non configuré.")
+    }
 
     const resultat = await api.enregistrerConnexionDrive(authStore.jeton, clientId, {
       dossierId: saisie.dossierId.trim(),
       jeton: saisie.jeton.trim(),
     })
-    if (resultat.ok) connexion.value = wireVersConnexion(resultat.donnees.connexionDrive)
+    // Audit d'intégrité M9 : un échec n'est plus ignoré en silence.
+    if (!resultat.ok) throw new Error(`Connexion Drive non enregistrée : ${resultat.erreur}`)
+    connexion.value = wireVersConnexion(resultat.donnees.connexionDrive)
   }
 
   async function effacer(clientId: string): Promise<void> {
