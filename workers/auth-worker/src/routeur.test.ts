@@ -1118,6 +1118,47 @@ async function requete(
   return { status: reponse.status, corps }
 }
 
+/**
+ * Nœuds et processus « de décor » réellement enregistrés pour ce client :
+ * le Worker refuse désormais une référence inexistante ou d'un autre
+ * client (audit sécurité m6).
+ */
+async function semerReferences(ctx: Contexte, clientId: string): Promise<void> {
+  const maintenant = new Date().toISOString()
+  for (const id of ['n1', 'noeud-1', 'noeud-2', 'noeud-vide', 'granulateur-01']) {
+    await ctx.structureSystemeRepo.creerNoeud({
+      id,
+      clientId,
+      workspaceId: null,
+      levelKey: 'equipement',
+      name: id,
+      code: id,
+      parentId: null,
+      associatedNodes: [],
+      source: 'manuel',
+      qmsConnectorId: null,
+      periodicQualification: { applicable: false, deadline: null },
+      qualificationStatus: 'non_qualifie',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    })
+  }
+  for (const id of ['p1', 'process-1']) {
+    await ctx.processContextRepo.creerProcess({
+      id,
+      clientId,
+      nom: id,
+      description: '',
+      type: 'fabrication',
+      sourceId: null,
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    })
+  }
+}
+
 async function bootstrapAdmin(
   ctx: Contexte,
   email = 'admin@pharmatech.example',
@@ -3101,6 +3142,7 @@ describe('routerRequete — Process/FonctionActif/ManufacturingContext (Target A
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     const fonction = await requete(ctx, 'POST', `/clients/${clientId}/process-context/fonctions`, {
       jeton: admin.jeton,
       body: { nom: 'Mesure de pression', description: 'x' },
@@ -3158,6 +3200,7 @@ describe('routerRequete — Process/FonctionActif/ManufacturingContext (Target A
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     const process = await requete(ctx, 'POST', `/clients/${clientId}/process-context/processes`, {
       jeton: admin.jeton,
       body: { nom: 'Coating', description: 'x', type: 'manufacturing', sourceId: null },
@@ -3414,6 +3457,7 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     const source = await requete(ctx, 'POST', `/clients/${clientId}/quality-events/evenements`, {
       jeton: admin.jeton,
       body: {
@@ -3864,6 +3908,30 @@ describe('routerRequete — Requirement/TestObjective/TestCandidate/Test/Couvert
       jeton: admin.jeton,
     })
     expect(liste.corps.couvertures).toHaveLength(1)
+
+    // Test inexistant ou d'un autre client, exigence inventée : refusés
+    // (audit d'intégrité M6 — la couverture rendait le plan « prêt » à tort).
+    const testInvente = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/couvertures`,
+      { jeton: admin.jeton, body: { requirementId: requirement.id, testId: 'test-invente' } },
+    )
+    expect([testInvente.status, testInvente.corps.erreur]).toEqual([400, 'test_introuvable'])
+    const exigenceInventee = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/couvertures`,
+      { jeton: admin.jeton, body: { requirementId: 'req-inventee', testId: test.corps.test.id } },
+    )
+    expect([exigenceInventee.status, exigenceInventee.corps.erreur]).toEqual([
+      400,
+      'exigence_introuvable',
+    ])
+    const audit = await requete(ctx, 'GET', '/admin/audit', { jeton: admin.jeton })
+    expect(audit.corps.entrees.map((e: { action: string }) => e.action)).toContain(
+      'creation_couverture',
+    )
   })
 
   test('migration locale : idempotente, l’existant côté serveur gagne toujours', async () => {
@@ -4003,6 +4071,7 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     const test = await creerTestApprouveDeTest(ctx, admin.jeton, clientId)
 
     const demarrage = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
@@ -5175,6 +5244,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     const { testId } = await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
       jeton: admin.jeton,
@@ -5239,6 +5309,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
       jeton: admin.jeton,
@@ -5265,6 +5336,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5294,6 +5366,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
       jeton: admin.jeton,
@@ -5327,6 +5400,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5390,6 +5464,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5430,6 +5505,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5451,6 +5527,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     // aucun requirement pour ce nœud -> readiness restera besoin_information
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
       jeton: admin.jeton,
@@ -5472,6 +5549,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -5495,6 +5573,7 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
     const clientId = await creerClientDeTest(ctx, admin.jeton)
+    await semerReferences(ctx, clientId)
     await creerChainePreteDeTest(ctx, admin.jeton, clientId, 'noeud-1')
 
     const creation = await requete(ctx, 'POST', `/clients/${clientId}/content-plans`, {
@@ -11191,5 +11270,104 @@ describe('verdicts d’évaluation recalculés par le serveur (audit du 25/09/20
     expect(residuel.status).toBe(200)
     expect(residuel.corps.evaluationRisque.iprResiduel).toBe(8)
     expect(residuel.corps.evaluationRisque.verdictResiduel).toBe('acceptable')
+  })
+})
+
+describe('références vers d’autres objets vérifiées (audit sécurité m6)', () => {
+  async function preparer() {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const a = await requete(ctx, 'POST', '/clients', { jeton: admin.jeton, body: { name: 'A' } })
+    const b = await requete(ctx, 'POST', '/clients', { jeton: admin.jeton, body: { name: 'B' } })
+    const noeudB = await requete(
+      ctx,
+      'POST',
+      `/clients/${b.corps.client.id}/structure-systeme/noeuds`,
+      { jeton: admin.jeton, body: { levelKey: 'site', name: 'Site B', code: 'B', parentId: null } },
+    )
+    return {
+      ctx,
+      jeton: admin.jeton,
+      clientA: a.corps.client.id as string,
+      noeudB: noeudB.corps.noeud.id as string,
+    }
+  }
+
+  test('un nœud d’un autre client ou inexistant est refusé partout où il est référencé', async () => {
+    const { ctx, jeton, clientA, noeudB } = await preparer()
+    for (const assetNodeId of [noeudB, 'noeud-invente']) {
+      const parametre = await requete(ctx, 'POST', `/clients/${clientA}/parameters/parametres`, {
+        jeton,
+        body: { nom: 'Température', description: '', unite: '°C', assetNodeId },
+      })
+      expect([parametre.status, parametre.corps.erreur]).toEqual([400, 'noeud_introuvable'])
+      const exigence = await requete(
+        ctx,
+        'POST',
+        `/clients/${clientA}/test-definition/requirements`,
+        {
+          jeton,
+          body: { reference: 'REQ-1', titre: 'Débit', description: '', assetNodeId },
+        },
+      )
+      expect([exigence.status, exigence.corps.erreur]).toEqual([400, 'noeud_introuvable'])
+      const enfant = await requete(ctx, 'POST', `/clients/${clientA}/structure-systeme/noeuds`, {
+        jeton,
+        body: { levelKey: 'ligne', name: 'Ligne', code: 'L1', parentId: assetNodeId },
+      })
+      expect([enfant.status, enfant.corps.erreur]).toEqual([400, 'parent_introuvable'])
+    }
+  })
+
+  test('nœud : jamais rattaché à l’un de ses descendants (boucle)', async () => {
+    const { ctx, jeton, clientA } = await preparer()
+    const creer = async (code: string, parentId: string | null) =>
+      (
+        await requete(ctx, 'POST', `/clients/${clientA}/structure-systeme/noeuds`, {
+          jeton,
+          body: { levelKey: 'n', name: code, code, parentId },
+        })
+      ).corps.noeud.id as string
+    const racine = await creer('R', null)
+    const enfant = await creer('E', racine)
+    const petitEnfant = await creer('PE', enfant)
+    const boucle = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientA}/structure-systeme/noeuds/${racine}`,
+      { jeton, body: { parentId: petitEnfant } },
+    )
+    expect([boucle.status, boucle.corps.erreur]).toEqual([400, 'cycle_hierarchie'])
+  })
+
+  test('import en lot : 500 nœuds au plus, parent du lot ou existant, id jamais déjà pris', async () => {
+    const { ctx, jeton, clientA, noeudB } = await preparer()
+    const chemin = `/clients/${clientA}/structure-systeme/noeuds/lot`
+    const trop = Array.from({ length: 501 }, (_, i) => ({
+      id: `n-${i}`,
+      levelKey: 'n',
+      name: `N${i}`,
+      code: `N${i}`,
+      parentId: null,
+    }))
+    const tropGrand = await requete(ctx, 'POST', chemin, { jeton, body: { noeuds: trop } })
+    expect([tropGrand.status, tropGrand.corps.erreur]).toEqual([413, 'lot_trop_grand'])
+
+    const chaine = await requete(ctx, 'POST', chemin, {
+      jeton,
+      body: {
+        noeuds: [
+          { id: 'site-1', levelKey: 'site', name: 'Site', code: 'S', parentId: null },
+          { id: 'ligne-1', levelKey: 'ligne', name: 'Ligne', code: 'L', parentId: 'site-1' },
+        ],
+      },
+    })
+    expect(chaine.status).toBe(201)
+
+    const idPris = await requete(ctx, 'POST', chemin, {
+      jeton,
+      body: { noeuds: [{ id: noeudB, levelKey: 'n', name: 'X', code: 'X', parentId: null }] },
+    })
+    expect([idPris.status, idPris.corps.erreur]).toEqual([409, 'id_conflit'])
   })
 })

@@ -84,7 +84,10 @@ function evaluerRequirement(
 
   const testsCouvrants = donnees.tests.filter((t) => testIdsCouvrants.includes(t.id))
 
-  let resultat: ReadinessContentPlan = 'pret'
+  // Test couvrant introuvable (supprimé, d'un autre client, jamais existant) :
+  // jamais « prêt » par défaut — même règle que le Worker (audit M6).
+  let resultat: ReadinessContentPlan =
+    testsCouvrants.length < new Set(testIdsCouvrants).size ? 'besoin_information' : 'pret'
   for (const test of testsCouvrants) {
     resultat = pire(resultat, evaluerTest(test, donnees))
   }

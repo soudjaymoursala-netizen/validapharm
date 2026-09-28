@@ -164,6 +164,33 @@ function relationWireVersDomaine(wire: RelationTechniqueWire): RelationTechnique
   }
 }
 
+/** Taille maximale d'un envoi de nœuds accepté par le Worker (`TAILLE_MAX_LOT`). */
+const TAILLE_PAQUET_IMPORT = 500
+
+/**
+ * Ordonne les saisies pour qu'un parent créé dans le même import précède
+ * toujours ses enfants, puis les découpe en paquets.
+ */
+function paquetsParentsDabord(
+  saisies: readonly SaisieCreationNoeudWire[],
+  taille: number,
+): SaisieCreationNoeudWire[][] {
+  const parId = new Map(saisies.map((n) => [n.id, n]))
+  const ordonnees: SaisieCreationNoeudWire[] = []
+  const places = new Set<string | undefined>()
+  const placer = (n: SaisieCreationNoeudWire, profondeur = 0): void => {
+    if (places.has(n.id)) return
+    const parent = n.parentId ? parId.get(n.parentId) : undefined
+    if (parent && parent !== n && profondeur < saisies.length) placer(parent, profondeur + 1)
+    places.add(n.id)
+    ordonnees.push(n)
+  }
+  for (const n of saisies) placer(n)
+  const paquets: SaisieCreationNoeudWire[][] = []
+  for (let i = 0; i < ordonnees.length; i += taille) paquets.push(ordonnees.slice(i, i + taille))
+  return paquets
+}
+
 /**
  * Store de la Couche Présentation pour le référentiel d'actifs —
  * hiérarchie configurable + CRUD de nœuds avec
@@ -569,10 +596,23 @@ export const useStructureSystemeStore = defineStore('structureSysteme', () => {
       parentId: n.parent_id,
     }))
     const { api, jeton } = await obtenirApi()
-    const resultat = await api.creerNoeudsEnLot(jeton, clientId, saisies, action)
-    if (!resultat.ok) throw new Error(`Échec de l'import : ${resultat.erreur}`)
-    const nouveauxNoeuds = resultat.donnees.noeuds.map(noeudWireVersDomaine)
-    noeuds.value = [...noeuds.value, ...nouveauxNoeuds]
+    // Le serveur limite un envoi à 500 nœuds (audit sécurité m4) : parents
+    // d'abord, puis envoi par paquets — un paquet peut ainsi rattacher ses
+    // nœuds à ceux d'un paquet précédent, déjà créés.
+    const nouveauxNoeuds: AssetNode[] = []
+    for (const paquet of paquetsParentsDabord(saisies, TAILLE_PAQUET_IMPORT)) {
+      const resultat = await api.creerNoeudsEnLot(jeton, clientId, paquet, action)
+      if (!resultat.ok) {
+        const dejaCrees =
+          nouveauxNoeuds.length > 0
+            ? ` (${nouveauxNoeuds.length} nœud(s) déjà créé(s) avant l'échec)`
+            : ''
+        throw new Error(`Échec de l'import : ${resultat.erreur}${dejaCrees}`)
+      }
+      const crees = resultat.donnees.noeuds.map(noeudWireVersDomaine)
+      nouveauxNoeuds.push(...crees)
+      noeuds.value = [...noeuds.value, ...crees]
+    }
     return nouveauxNoeuds
   }
 

@@ -372,6 +372,57 @@ async function noeudEtranger(
   return !noeud || noeud.clientId !== clientId
 }
 
+type ReferencesCorps = {
+  assetNodeId?: unknown
+  parentId?: unknown
+  workspaceId?: unknown
+  processId?: unknown
+  parameterId?: unknown
+  requirementId?: unknown
+}
+
+/**
+ * Références d'un corps de requête vers d'autres objets (audit sécurité
+ * m6) : chacune doit exister et appartenir au même client. Renvoie le code
+ * de refus, ou `null`. Une référence absente (`null`/non fournie) est
+ * acceptée — elle est facultative partout où elle l'est déjà.
+ */
+async function refusReferences(
+  ctx: Contexte,
+  clientId: string,
+  corps: ReferencesCorps,
+): Promise<string | null> {
+  const fournie = (v: unknown) => v !== null && v !== undefined
+  const pasUneChaine = Object.values(corps).some((v) => fournie(v) && typeof v !== 'string')
+  if (pasUneChaine) return 'corps_invalide'
+  if (await noeudEtranger(ctx, clientId, corps.assetNodeId as string | null | undefined)) {
+    return 'noeud_introuvable'
+  }
+  if (await noeudEtranger(ctx, clientId, corps.parentId as string | null | undefined)) {
+    return 'parent_introuvable'
+  }
+  if (fournie(corps.workspaceId)) {
+    const workspace = await ctx.organisationRepo.workspaceParId(corps.workspaceId as string)
+    if (!workspace || workspace.organizationId !== clientId) return 'workspace_introuvable'
+  }
+  if (fournie(corps.processId)) {
+    const processes = await ctx.processContextRepo.listerProcesses(clientId)
+    if (!processes.some((p) => p.id === corps.processId)) return 'process_introuvable'
+  }
+  if (fournie(corps.parameterId)) {
+    const parametres = await ctx.parametersRepo.listerParametres(clientId)
+    if (!parametres.some((p) => p.id === corps.parameterId)) return 'parametre_introuvable'
+  }
+  if (fournie(corps.requirementId)) {
+    const exigences = await ctx.testDefinitionRepo.listerRequirements(clientId)
+    if (!exigences.some((e) => e.id === corps.requirementId)) return 'exigence_introuvable'
+  }
+  return null
+}
+
+/** Nombre maximal d'éléments d'un envoi groupé (audit sécurité m4 : 3 000 nœuds acceptés). */
+const TAILLE_MAX_LOT = 500
+
 const ORIGINES_METHOD_PROFILE = [
   'procedure_client',
   'defini_utilisateur',
@@ -3032,6 +3083,11 @@ async function gererCreerNoeud(
   const corps = await lireCorpsJson<SaisieCreationNoeud>(request)
   const noeud = corps ? noeudDepuisSaisie(clientId, corps, 'manuel', acteur, 'création') : null
   if (!noeud) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  const refusReference = await refusReferences(ctx, clientId, {
+    parentId: noeud.parentId,
+    workspaceId: noeud.workspaceId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   await ctx.structureSystemeRepo.creerNoeud(noeud)
   return reponseJson({ noeud }, 201, entetes)
@@ -3050,6 +3106,9 @@ async function gererCreerNoeudsEnLot(
   if (!corps || !Array.isArray(corps.noeuds)) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  if (corps.noeuds.length > TAILLE_MAX_LOT) {
+    return reponseJson({ erreur: 'lot_trop_grand', maximum: TAILLE_MAX_LOT }, 413, entetes)
+  }
   const action = corps.action ?? 'création (import)'
   const noeuds: AssetNodeEnregistre[] = []
   for (const saisie of corps.noeuds) {
@@ -3057,6 +3116,22 @@ async function gererCreerNoeudsEnLot(
     const noeud = noeudDepuisSaisie(clientId, saisie, 'import_fichier', acteur, action, saisie.id)
     if (!noeud) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
     noeuds.push(noeud)
+  }
+  // Parent : un nœud du même lot (chaînage d'un import) ou un nœud existant
+  // de ce client ; id imposé jamais déjà pris (audit sécurité m6).
+  const idsDuLot = new Set(noeuds.map((n) => n.id))
+  if (idsDuLot.size !== noeuds.length) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  for (const noeud of noeuds) {
+    if (await ctx.structureSystemeRepo.noeudParId(noeud.id)) {
+      return reponseJson({ erreur: 'id_conflit' }, 409, entetes)
+    }
+    const refusReference = await refusReferences(ctx, clientId, {
+      parentId: noeud.parentId !== null && idsDuLot.has(noeud.parentId) ? null : noeud.parentId,
+      workspaceId: noeud.workspaceId,
+    })
+    if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   }
 
   await ctx.structureSystemeRepo.creerNoeuds(noeuds)
@@ -3109,6 +3184,11 @@ async function gererCreerNoeudsPullQms(
       connector.id,
     )
     if (!noeud) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+    const refusReference = await refusReferences(ctx, clientId, {
+      parentId: noeud.parentId,
+      workspaceId: noeud.workspaceId,
+    })
+    if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
     noeuds.push(noeud)
   }
 
@@ -3176,6 +3256,17 @@ async function gererModifierNoeud(
   }>(request)
   if (!corps || horsDomaine(corps.qualificationStatus, STATUTS_QUALIFICATION)) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  if (corps.parentId !== undefined && corps.parentId !== null) {
+    const refusReference = await refusReferences(ctx, clientId, { parentId: corps.parentId })
+    if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
+    // Jamais un nœud sous lui-même ou sous l'un de ses descendants : la
+    // hiérarchie deviendrait une boucle sans racine.
+    let ancetre: string | null = corps.parentId
+    for (let pas = 0; ancetre !== null && pas < 1000; pas++) {
+      if (ancetre === noeud.id) return reponseJson({ erreur: 'cycle_hierarchie' }, 400, entetes)
+      ancetre = (await ctx.structureSystemeRepo.noeudParId(ancetre))?.parentId ?? null
+    }
   }
 
   const maintenant = horodatage()
@@ -3467,6 +3558,8 @@ async function gererCreerParametre(
   if (!corps?.nom || corps.description === undefined) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { assetNodeId: corps.assetNodeId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const maintenant = horodatage()
   // Clé `parametreProcede` (jamais `parametre`) : `parametre` désigne déjà
   // une entrée `parametres_installation` (config technique clé/valeur,
@@ -3512,6 +3605,8 @@ async function gererCreerClassification(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { parameterId: corps.parameterId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const maintenant = horodatage()
   const classification: ClassificationCriticiteParametreEnregistree = {
     id: genererId(),
@@ -3546,6 +3641,8 @@ async function gererCreerCPP(
   if (!corps?.parameterId || !corps.contexte || !corps.justification) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { parameterId: corps.parameterId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const maintenant = horodatage()
   const cpp: CPPEnregistre = {
     id: genererId(),
@@ -3971,6 +4068,8 @@ async function gererCreerEvaluationCsvAssessment(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { assetNodeId: corps.assetNodeId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const maintenant = horodatage()
   const evaluationCsv: EvaluationCSVAssessmentEnregistree = {
@@ -4483,6 +4582,8 @@ async function gererCreerAssociationFonctionAssetNode(
   if (!corps?.functionId || !corps.assetNodeId) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { assetNodeId: corps.assetNodeId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const associationFonctionAssetNode: AssociationFonctionAssetNodeEnregistree = {
     id: genererId(),
     clientId,
@@ -4513,6 +4614,8 @@ async function gererCreerAssociationFonctionProcess(
   if (!corps?.functionId || !corps.processId) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { processId: corps.processId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const associationFonctionProcess: AssociationFonctionProcessEnregistree = {
     id: genererId(),
     clientId,
@@ -4547,6 +4650,11 @@ async function gererCreerManufacturingContext(
   if (!corps?.assetNodeId || !corps.processId || !corps.produit) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    assetNodeId: corps.assetNodeId,
+    processId: corps.processId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const maintenant = horodatage()
   const manufacturingContext: ManufacturingContextEnregistre = {
     id: genererId(),
@@ -4703,6 +4811,11 @@ async function gererCreerEvenementQualityEvent(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    assetNodeId: corps.assetNodeId,
+    processId: corps.processId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const maintenant = horodatage()
   const evenement: QualityEventEnregistre = {
@@ -4900,6 +5013,11 @@ async function gererCreerRequirement(
   if (!corps?.reference || !corps.titre || corps.description === undefined) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    assetNodeId: corps.assetNodeId,
+    processId: corps.processId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const maintenant = horodatage()
   const requirement: RequirementEnregistre = {
@@ -4938,6 +5056,10 @@ async function gererCreerTestObjective(
   if (!corps?.requirementId || !corps.titre || corps.description === undefined) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    requirementId: corps.requirementId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const maintenant = horodatage()
   const testObjective: TestObjectiveEnregistre = {
@@ -5241,11 +5363,23 @@ async function gererCreerCouverture(
 ): Promise<Response> {
   const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
   if (acteur instanceof Response) return acteur
-  void acteur
 
   const corps = await lireCorpsJson<SaisieCreationCouverture>(request)
   if (!corps?.requirementId || !corps.testId) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  // Exigence et test réels et du même client (audit d'intégrité M6) : une
+  // couverture vers un test inexistant ou d'un autre client rendait le plan
+  // de livrable « prêt » à tort.
+  const [exigences, test] = await Promise.all([
+    ctx.testDefinitionRepo.listerRequirements(clientId),
+    ctx.testDefinitionRepo.testParId(corps.testId),
+  ])
+  if (!exigences.some((e) => e.id === corps.requirementId)) {
+    return reponseJson({ erreur: 'exigence_introuvable' }, 400, entetes)
+  }
+  if (!test || test.clientId !== clientId) {
+    return reponseJson({ erreur: 'test_introuvable' }, 400, entetes)
   }
   const existantes = await ctx.testDefinitionRepo.listerCouvertures(clientId)
   const dejaExistante = existantes.find(
@@ -5261,6 +5395,9 @@ async function gererCreerCouverture(
     createdAt: horodatage(),
   }
   await ctx.testDefinitionRepo.creerCouverture(couverture)
+  // Attribution : la table `couvertures` n'a pas de colonne d'auteur — le
+  // journal central garde qui a déclaré cette couverture.
+  await consignerAudit(ctx, acteur, 'creation_couverture', 'couverture', couverture.id, null)
   return reponseJson({ couverture }, 201, entetes)
 }
 
@@ -5381,6 +5518,8 @@ async function gererDemarrerExecution(
   if (test.statut !== 'approuve') {
     return reponseJson({ erreur: 'test_non_approuve' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, { assetNodeId: corps.assetNodeId })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const maintenant = horodatage()
   const execution: ExecutionEnregistree = {
@@ -6542,6 +6681,15 @@ async function calculerReadinessContentPlan(
     }
 
     const testsCouvrants = tests.filter((t) => testIdsCouvrants.includes(t.id))
+    // Couverture vers un test introuvable (supprimé, d'un autre client ou
+    // jamais existant) : jamais « prêt » par défaut (audit d'intégrité M6).
+    const introuvables = testIdsCouvrants.filter((id) => !testsCouvrants.some((t) => t.id === id))
+    if (introuvables.length > 0) {
+      signaler(
+        'besoin_information',
+        `${requirement.reference} : ${introuvables.length} test(s) déclaré(s) comme couvrant(s) introuvable(s).`,
+      )
+    }
     for (const test of testsCouvrants) {
       const prefixe = `${requirement.reference} → « ${test.titre} »`
       if (test.statut === 'brouillon') {
@@ -6621,6 +6769,11 @@ async function gererCreerContentPlan(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    assetNodeId: corps.assetNodeId,
+    processId: corps.processId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
 
   const assetNodeId = corps.assetNodeId ?? null
   const { readiness } = await calculerReadinessContentPlan(ctx, clientId, assetNodeId)
@@ -7168,6 +7321,11 @@ async function gererCreerMission(
   if (!corps?.titre || corps.description === undefined) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusReference = await refusReferences(ctx, clientId, {
+    workspaceId: corps.workspaceId,
+    assetNodeId: corps.assetNodeId,
+  })
+  if (refusReference) return reponseJson({ erreur: refusReference }, 400, entetes)
   const maintenant = horodatage()
   const mission: MissionEnregistree = {
     id: genererId(),

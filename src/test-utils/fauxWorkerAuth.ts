@@ -202,3 +202,51 @@ export async function creerProjetDeTest(
     updatedAt: maintenant,
   })
 }
+
+/**
+ * Nœuds de Structure Système réellement enregistrés dans le faux Worker :
+ * le Worker refuse une référence à un nœud inexistant ou d'un autre client
+ * (audit sécurité m6), les tests ne peuvent plus citer un id inventé.
+ */
+export async function semerNoeudsDeTest(
+  ctx: Contexte,
+  clientId: string,
+  ids: readonly string[],
+): Promise<void> {
+  const maintenant = new Date().toISOString()
+  for (const id of ids) {
+    await ctx.structureSystemeRepo.creerNoeud({
+      id,
+      clientId,
+      workspaceId: null,
+      levelKey: 'equipement',
+      name: id,
+      code: id,
+      parentId: null,
+      associatedNodes: [],
+      source: 'manuel',
+      qmsConnectorId: null,
+      periodicQualification: { applicable: false, deadline: null },
+      qualificationStatus: 'non_qualifie',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    })
+  }
+}
+
+/** Espace de travail réellement enregistré pour ce client (même raison). */
+export async function semerWorkspaceDeTest(
+  ctx: Contexte,
+  clientId: string,
+  id: string,
+): Promise<void> {
+  await ctx.organisationRepo.creerWorkspace({
+    id,
+    organizationId: clientId,
+    type: 'site',
+    nom: id,
+    parentWorkspaceId: null,
+    createdAt: new Date().toISOString(),
+  })
+}

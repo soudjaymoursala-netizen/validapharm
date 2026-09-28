@@ -6,6 +6,7 @@ import {
   connecterAdminDeTest,
   installerFauxWorkerAuth,
   reinitialiserAuthDeTest,
+  semerNoeudsDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import { useProcessContextStore } from './useProcessContextStore'
 
@@ -40,6 +41,8 @@ beforeEach(async () => {
   await creerClientDeTest('client-1')
   await creerClientDeTest('client-A')
   await creerClientDeTest('client-B')
+  await semerNoeudsDeTest(ctx, 'client-1', ['asset-1', 'asset-2', 'presse-12', 'scada-305'])
+  await semerNoeudsDeTest(ctx, 'client-A', ['asset-A'])
 })
 
 afterEach(() => {
