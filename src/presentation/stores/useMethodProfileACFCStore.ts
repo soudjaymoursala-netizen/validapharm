@@ -184,7 +184,6 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
       try {
         await migrerAcfcLocalVersServeur(clientId)
       } catch {
-      chargementEchoue.value = true
         // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
       }
       const { api, jeton } = await obtenirApi()
@@ -199,6 +198,7 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
         evaluations.value = []
       }
     } catch {
+      chargementEchoue.value = true
       // Panne réseau réelle ou relais non configuré : jamais une exception
       // non gérée, même discipline que `useStructureSystemeStore.charger`.
       profils.value = []

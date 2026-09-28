@@ -216,7 +216,9 @@ function titreEvenement(id: string): string {
         <input v-model="brouillon.referenceExterneIdentifiant" type="text" />
       </label>
       <div class="actions">
-        <button type="submit" :disabled="!formulaireComplet">Créer l'événement</button>
+        <button type="submit" :disabled="!formulaireComplet || envoiEnCours">
+          Créer l'événement
+        </button>
       </div>
     </form>
 
@@ -290,7 +292,9 @@ function titreEvenement(id: string): string {
                 {{ autre.titre }}
               </option>
             </select>
-            <button type="button" @click="creerReference(e.id)">Référencer</button>
+            <button type="button" :disabled="envoiEnCours" @click="creerReference(e.id)">
+              Référencer
+            </button>
           </div>
         </li>
       </ul>

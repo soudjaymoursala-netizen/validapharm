@@ -240,3 +240,18 @@ describe('useClientsStore (Worker/D1)', () => {
     espion.mockRestore()
   })
 })
+
+describe('useClientsStore — chargement en échec (audit UX entrée #2)', () => {
+  test('panne réseau : chargementEchoue vrai, liste conservée ; succès suivant : faux', async () => {
+    const store = useClientsStore()
+    const espion = vi
+      .spyOn(AuthApiClient.prototype, 'listerClients')
+      .mockRejectedValueOnce(new Error("Worker d'authentification injoignable."))
+    await store.chargerClients()
+    expect(store.chargementEchoue).toBe(true)
+
+    espion.mockRestore()
+    await store.chargerClients()
+    expect(store.chargementEchoue).toBe(false)
+  })
+})

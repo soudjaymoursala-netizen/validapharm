@@ -163,7 +163,9 @@ function nouvelleEvaluation(): void {
         </label>
 
         <div class="actions">
-          <button type="submit" :disabled="!formulaireComplet">Enregistrer cette évaluation</button>
+          <button type="submit" :disabled="!formulaireComplet || envoiEnCours">
+            Enregistrer cette évaluation
+          </button>
         </div>
       </form>
     </section>

@@ -404,7 +404,7 @@ async function genererLivrableSansGarde(depuisDocument: boolean): Promise<void> 
       </ul>
       <div class="actions">
         <button type="button" @click="precedent">Précédent</button>
-        <button type="button" @click="allerAPrecedents">Suivant</button>
+        <button type="button" :disabled="envoiEnCours" @click="allerAPrecedents">Suivant</button>
       </div>
     </section>
 
@@ -433,10 +433,18 @@ async function genererLivrableSansGarde(depuisDocument: boolean): Promise<void> 
       </p>
       <div class="actions">
         <button type="button" @click="precedent">Précédent</button>
-        <button type="button" :disabled="enGeneration" @click="genererLivrable(false)">
+        <button
+          type="button"
+          :disabled="enGeneration || envoiEnCours"
+          @click="genererLivrable(false)"
+        >
           Démarrer d'un gabarit vierge
         </button>
-        <button type="button" :disabled="enGeneration" @click="genererLivrable(true)">
+        <button
+          type="button"
+          :disabled="enGeneration || envoiEnCours"
+          @click="genererLivrable(true)"
+        >
           Démarrer à partir d'un document
         </button>
       </div>
