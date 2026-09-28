@@ -10966,3 +10966,230 @@ describe('routerRequete — décisions du 26/09/2026 (comptes, signature, suppre
     expect(await limiteur.estBloque(['email:a'])).toBe(false)
   })
 })
+
+describe('verdicts d’évaluation recalculés par le serveur (audit du 25/09/2026, intégrité M5/M7/M10, m4)', () => {
+  async function preparer() {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const client = await requete(ctx, 'POST', '/clients', {
+      jeton: admin.jeton,
+      body: { name: 'Client verdicts' },
+    })
+    return { ctx, jeton: admin.jeton, clientId: client.corps.client.id as string }
+  }
+
+  const PROFIL_ACFC = {
+    source: 'QP-042',
+    origin: 'procedure_client',
+    questions: [
+      { id: 'q-1', texte: { fr: 'Contact produit ?' } },
+      { id: 'q-2', texte: { fr: 'Impact sur la stérilité ?' } },
+    ],
+    decisionRule: 'au_moins_un_oui_critique',
+  }
+
+  test('ACFC : un verdict qui contredit les réponses est refusé ; sans verdict, le serveur le calcule', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: PROFIL_ACFC,
+    })
+    const base = {
+      methodProfileId: profil.corps.profil.id,
+      methodProfileVersion: profil.corps.profil.version,
+      nomElement: 'Vanne V-101',
+    }
+
+    const falsifie = await requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, {
+      jeton,
+      body: { ...base, reponses: { 'q-1': 'oui', 'q-2': 'non' }, verdict: 'non_critique' },
+    })
+    expect(falsifie.status).toBe(409)
+    expect(falsifie.corps).toEqual({ erreur: 'verdict_incoherent', verdict: 'critique' })
+
+    const calcule = await requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, {
+      jeton,
+      body: { ...base, reponses: { 'q-1': 'non', 'q-2': 'non' } },
+    })
+    expect(calcule.status).toBe(201)
+    expect(calcule.corps.evaluation.verdict).toBe('non_critique')
+
+    // `inconnu` sans aucun oui : pas de verdict, jamais « non critique ».
+    const indetermine = await requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, {
+      jeton,
+      body: { ...base, reponses: { 'q-1': 'inconnu', 'q-2': 'non' }, verdict: null },
+    })
+    expect(indetermine.status).toBe(201)
+    expect(indetermine.corps.evaluation.verdict).toBeNull()
+  })
+
+  test('ACFC : méthode inconnue, autre version, réponse hors méthode ou nœud d’un autre client refusés', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const autre = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Autre client' } })
+    const noeudAutre = await requete(
+      ctx,
+      'POST',
+      `/clients/${autre.corps.client.id}/structure-systeme/noeuds`,
+      { jeton, body: { levelKey: 'site', name: 'Site B', code: 'B', parentId: null } },
+    )
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: PROFIL_ACFC,
+    })
+    const base = {
+      methodProfileId: profil.corps.profil.id,
+      methodProfileVersion: profil.corps.profil.version,
+      nomElement: 'Vanne V-101',
+      reponses: { 'q-1': 'oui' },
+    }
+    const envoyer = (body: Record<string, unknown>) =>
+      requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, { jeton, body })
+
+    const inconnue = await envoyer({ ...base, methodProfileId: 'profil-invente' })
+    expect([inconnue.status, inconnue.corps.erreur]).toEqual([400, 'methode_introuvable'])
+    const version = await envoyer({ ...base, methodProfileVersion: 'v9' })
+    expect([version.status, version.corps.erreur]).toEqual([409, 'version_methode_incoherente'])
+    const horsMethode = await envoyer({ ...base, reponses: { 'q-99': 'oui' } })
+    expect([horsMethode.status, horsMethode.corps.erreur]).toEqual([400, 'reponses_invalides'])
+    const reponseInventee = await envoyer({ ...base, reponses: { 'q-1': 'peut-etre' } })
+    expect(reponseInventee.status).toBe(400)
+    const noeud = await envoyer({ ...base, assetNodeId: noeudAutre.corps.noeud.id })
+    expect([noeud.status, noeud.corps.erreur]).toEqual([400, 'noeud_introuvable'])
+  })
+
+  test('méthode sans question refusée ; numéro de version attribué par le serveur, jamais deux « v1 »', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const vide = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: { ...PROFIL_ACFC, questions: [] },
+    })
+    expect(vide.status).toBe(400)
+
+    const v1 = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: { ...PROFIL_ACFC, version: 'v1' },
+    })
+    // Le navigateur croyait la liste vide (chargement en échec) : il renvoie « v1 ».
+    const v2 = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: { ...PROFIL_ACFC, version: 'v1' },
+    })
+    expect([v1.corps.profil.version, v2.corps.profil.version]).toEqual(['v1', 'v2'])
+
+    const impact1 = await requete(ctx, 'POST', `/clients/${clientId}/impact-assessment/profils`, {
+      jeton,
+      body: {
+        source: 'PMP',
+        origin: 'procedure_client',
+        questions: [{ id: 'i-1', texte: { fr: 'Contact produit ?' } }],
+        decisionRule: 'au_moins_un_oui_impact_direct',
+      },
+    })
+    expect(impact1.corps.profilImpact.version).toBe('v1')
+  })
+
+  test('Impact : verdict recalculé', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/impact-assessment/profils`, {
+      jeton,
+      body: {
+        source: 'PMP',
+        origin: 'procedure_client',
+        questions: [{ id: 'i-1', texte: { fr: 'Contact produit ?' } }],
+        decisionRule: 'au_moins_un_oui_impact_direct',
+      },
+    })
+    const falsifie = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/impact-assessment/evaluations`,
+      {
+        jeton,
+        body: {
+          methodProfileId: profil.corps.profilImpact.id,
+          methodProfileVersion: profil.corps.profilImpact.version,
+          nomElement: 'Autoclave',
+          reponses: { 'i-1': 'oui' },
+          verdict: 'non_impact_direct',
+        },
+      },
+    )
+    expect([falsifie.status, falsifie.corps.erreur]).toEqual([409, 'verdict_incoherent'])
+  })
+
+  test('AMDEC : bornes de la méthode, IPR et verdicts initial et résiduel recalculés', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const methode = (seuilAction: number, echelleMin = 1) =>
+      requete(ctx, 'POST', `/clients/${clientId}/risk-assessment/profils`, {
+        jeton,
+        body: {
+          source: 'Processus_AMDEC.xlsx',
+          origin: 'procedure_client',
+          echelleMin,
+          echelleMax: 5,
+          seuilAction,
+        },
+      })
+    expect((await methode(200)).corps.erreur).toBe('seuil_hors_bornes')
+    expect((await methode(50, 0)).corps.erreur).toBe('echelle_min_invalide')
+    const profil = await methode(50)
+    expect(profil.status).toBe(201)
+    expect(profil.corps.profilRisque.version).toBe('v1')
+
+    const ligne = {
+      methodProfileId: profil.corps.profilRisque.id,
+      methodProfileVersion: 'v1',
+      etapeProcessus: 'Stérilisation',
+      modeDefaillance: 'Température basse',
+      effetDefaillance: '',
+      causePotentielle: '',
+      controleActuel: '',
+      severiteInitiale: 5,
+      occurrenceInitiale: 5,
+      detectabiliteInitiale: 5,
+    }
+    const falsifie = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/risk-assessment/evaluations`,
+      {
+        jeton,
+        body: { ...ligne, iprInitial: 125, verdictInitial: 'acceptable' },
+      },
+    )
+    expect(falsifie.status).toBe(409)
+    expect(falsifie.corps).toEqual({
+      erreur: 'verdict_incoherent',
+      ipr: 125,
+      verdict: 'action_requise',
+    })
+
+    const creee = await requete(ctx, 'POST', `/clients/${clientId}/risk-assessment/evaluations`, {
+      jeton,
+      body: ligne,
+    })
+    expect(creee.status).toBe(201)
+    expect(creee.corps.evaluationRisque.iprInitial).toBe(125)
+    expect(creee.corps.evaluationRisque.verdictInitial).toBe('action_requise')
+
+    const chemin = `/clients/${clientId}/risk-assessment/evaluations/${creee.corps.evaluationRisque.id}/action-residuelle`
+    const residuelFalsifie = await requete(ctx, 'PATCH', chemin, {
+      jeton,
+      body: {
+        severiteResiduelle: 5,
+        occurrenceResiduelle: 5,
+        detectabiliteResiduelle: 5,
+        iprResiduel: 125,
+        verdictResiduel: 'acceptable',
+      },
+    })
+    expect(residuelFalsifie.status).toBe(409)
+    const residuel = await requete(ctx, 'PATCH', chemin, {
+      jeton,
+      body: { severiteResiduelle: 2, occurrenceResiduelle: 2, detectabiliteResiduelle: 2 },
+    })
+    expect(residuel.status).toBe(200)
+    expect(residuel.corps.evaluationRisque.iprResiduel).toBe(8)
+    expect(residuel.corps.evaluationRisque.verdictResiduel).toBe('acceptable')
+  })
+})

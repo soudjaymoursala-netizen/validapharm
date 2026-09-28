@@ -11,6 +11,7 @@ import { useParameterStore } from '../stores/useParameterStore'
 import { useRiskAssessmentStore } from '../stores/useRiskAssessmentStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
 import type { OrigineMethodeRiskAssessment } from '../../logique-metier/domaine/types'
+import { messageBornesAmdec } from '../../logique-metier/risque/bornesMethodeAmdec'
 
 const props = defineProps<{ clientId: string }>()
 
@@ -53,18 +54,23 @@ const erreurConfig = ref<string | null>(null)
 async function enregistrerNouvelleVersion(): Promise<void> {
   erreurConfig.value = null
   if (source.value.trim().length === 0) return
-  if (echelleMin.value >= echelleMax.value) {
-    erreurConfig.value =
-      "L'échelle minimale doit être strictement inférieure à l'échelle maximale — sinon aucune note ne serait jamais dans l'échelle et aucun IPR ne pourrait être calculé."
+  const refusBornes = messageBornesAmdec(echelleMin.value, echelleMax.value, seuilAction.value)
+  if (refusBornes) {
+    erreurConfig.value = refusBornes
     return
   }
-  await riskStore.creerNouvelleVersion(props.clientId, {
-    echelleMin: echelleMin.value,
-    echelleMax: echelleMax.value,
-    seuilAction: seuilAction.value,
-    source: source.value.trim(),
-    origin: origin.value,
-  })
+  try {
+    await riskStore.creerNouvelleVersion(props.clientId, {
+      echelleMin: echelleMin.value,
+      echelleMax: echelleMax.value,
+      seuilAction: seuilAction.value,
+      source: source.value.trim(),
+      origin: origin.value,
+    })
+  } catch (e) {
+    erreurConfig.value = e instanceof Error ? e.message : String(e)
+    return
+  }
   source.value = ''
   formulaireConfigOuvert.value = false
 }
@@ -228,15 +234,15 @@ const evaluationsTriees = computed(() =>
           </label>
           <label>
             Échelle minimale
-            <input v-model.number="echelleMin" type="number" required />
+            <input v-model.number="echelleMin" type="number" min="1" step="1" required />
           </label>
           <label>
             Échelle maximale
-            <input v-model.number="echelleMax" type="number" required />
+            <input v-model.number="echelleMax" type="number" min="2" step="1" required />
           </label>
           <label>
             Seuil d'action (IPR)
-            <input v-model.number="seuilAction" type="number" required />
+            <input v-model.number="seuilAction" type="number" min="2" step="1" required />
           </label>
           <p v-if="erreurConfig" class="bandeau-erreur" role="alert">{{ erreurConfig }}</p>
           <div class="actions">

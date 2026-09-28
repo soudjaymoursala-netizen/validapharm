@@ -1,4 +1,13 @@
 import { signerJwt, verifierJwt } from './jwt'
+import {
+  calculerIpr,
+  reponsesValides,
+  refusBornesAmdec,
+  verdictAcfc,
+  verdictImpact,
+  verdictRisque,
+  versionSuivante,
+} from './verdictsEvaluation'
 import { genererSel, hacherMotDePasse, verifierMotDePasse } from './motDePasse'
 import type { EnvoyeurEmail } from './notifications/envoyeurEmail'
 import type {
@@ -319,6 +328,48 @@ function nombreOptionnelInvalide(valeur: unknown): boolean {
 /** Valeur optionnelle (`null`/absente acceptée) mais hors de son énumération de domaine. */
 function horsDomaine(valeur: string | null | undefined, valides: readonly string[]): boolean {
   return valeur !== null && valeur !== undefined && !valides.includes(valeur)
+}
+
+/**
+ * Questions d'une méthode (ACFC, Impact) : au moins une (audit m4 — un
+ * questionnaire vide concluait « non critique »), identifiants uniques,
+ * texte présent.
+ */
+function questionsMethodeValides(questions: unknown): questions is { id: string }[] {
+  if (!Array.isArray(questions) || questions.length === 0) return false
+  const ids = new Set<string>()
+  for (const q of questions as { id?: unknown; texte?: unknown }[]) {
+    if (!q || typeof q.id !== 'string' || q.id.length === 0 || ids.has(q.id)) return false
+    if (!q.texte || typeof q.texte !== 'object') return false
+    ids.add(q.id)
+  }
+  return true
+}
+
+/**
+ * Valeur calculée par le serveur comparée à celle envoyée par le navigateur
+ * (audit d'intégrité M5) : absente → le serveur la fournit ; présente et
+ * différente → refus (`verdict_incoherent`), jamais un enregistrement du
+ * verdict du poste.
+ */
+function valeurIncoherente<T>(envoyee: T | null | undefined, calculee: T | null): boolean {
+  return envoyee !== undefined && (envoyee ?? null) !== calculee
+}
+
+/**
+ * Référence à un nœud de la Structure Système (audit sécurité m6) : jamais
+ * un id inexistant ni celui d'un autre client — la traçabilité d'une
+ * évaluation, d'une exécution ou d'un nœud enfant en dépend.
+ */
+async function noeudEtranger(
+  ctx: Contexte,
+  clientId: string,
+  noeudId: string | null | undefined,
+): Promise<boolean> {
+  if (noeudId === null || noeudId === undefined) return false
+  if (typeof noeudId !== 'string') return true
+  const noeud = await ctx.structureSystemeRepo.noeudParId(noeudId)
+  return !noeud || noeud.clientId !== clientId
 }
 
 const ORIGINES_METHOD_PROFILE = [
@@ -3187,11 +3238,9 @@ async function gererCreerRelationTechnique(
 // --- Handlers : ACFC (méthode configurable par client, F2 du catalogue
 // §10, Phase 4a du chantier de migration D1) ---
 //
-// La logique métier (numéro de version suivant, calcul du verdict via
-// `evaluerVerdictACFC`) reste côté store frontend
-// (`useMethodProfileACFCStore.ts`, déjà testée) — ces handlers ne font
-// qu'authentifier, vérifier l'accès au client concerné et persister l'état
-// qu'on leur donne, même discipline que les handlers Structure Système.
+// **(28/09/2026, audit d'intégrité M5/M7)** Le numéro de version est
+// attribué ici et le verdict recalculé ici (`verdictsEvaluation.ts`) —
+// plus jamais la valeur du navigateur enregistrée telle quelle.
 
 interface SaisieCreationProfilAcfc {
   version?: string
@@ -3204,13 +3253,13 @@ interface SaisieCreationProfilAcfc {
 function profilAcfcDepuisSaisie(
   clientId: string,
   saisie: SaisieCreationProfilAcfc,
+  version: string,
 ): MethodProfileACFCEnregistre | null {
   if (
-    !saisie.version ||
     !saisie.source ||
     !saisie.origin ||
     !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(saisie.origin) ||
-    !Array.isArray(saisie.questions) ||
+    !questionsMethodeValides(saisie.questions) ||
     saisie.decisionRule !== 'au_moins_un_oui_critique'
   ) {
     return null
@@ -3219,7 +3268,7 @@ function profilAcfcDepuisSaisie(
   return {
     id: genererId(),
     clientId,
-    version: saisie.version,
+    version,
     effectiveDate: maintenant,
     source: saisie.source,
     origin: saisie.origin,
@@ -3256,7 +3305,9 @@ async function gererCreerProfilAcfc(
   void acteur
 
   const corps = await lireCorpsJson<SaisieCreationProfilAcfc>(request)
-  const profil = corps ? profilAcfcDepuisSaisie(clientId, corps) : null
+  const existants = await ctx.acfcRepo.listerProfils(clientId)
+  const version = versionSuivante(existants.map((p) => p.version))
+  const profil = corps ? profilAcfcDepuisSaisie(clientId, corps, version) : null
   if (!profil) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
 
   await ctx.acfcRepo.creerProfil(profil)
@@ -3284,24 +3335,41 @@ async function gererCreerEvaluationAcfc(
   const corps = await lireCorpsJson<SaisieCreationEvaluationAcfc>(request)
   if (
     !corps?.methodProfileId ||
-    !corps.methodProfileVersion ||
     !corps.nomElement ||
     !corps.reponses ||
     horsDomaine(corps.verdict, VERDICTS_ACFC)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const profil = (await ctx.acfcRepo.listerProfils(clientId)).find(
+    (p) => p.id === corps.methodProfileId,
+  )
+  if (!profil) return reponseJson({ erreur: 'methode_introuvable' }, 400, entetes)
+  if (corps.methodProfileVersion && corps.methodProfileVersion !== profil.version) {
+    return reponseJson({ erreur: 'version_methode_incoherente' }, 409, entetes)
+  }
+  const questionIds = profil.questions.map((q) => q.id)
+  if (!reponsesValides(questionIds, corps.reponses)) {
+    return reponseJson({ erreur: 'reponses_invalides' }, 400, entetes)
+  }
+  if (await noeudEtranger(ctx, clientId, corps.assetNodeId)) {
+    return reponseJson({ erreur: 'noeud_introuvable' }, 400, entetes)
+  }
+  const verdict = verdictAcfc(questionIds, corps.reponses, profil.decisionRule)
+  if (valeurIncoherente(corps.verdict, verdict)) {
+    return reponseJson({ erreur: 'verdict_incoherent', verdict }, 409, entetes)
+  }
 
   const maintenant = horodatage()
   const evaluation: EvaluationACFCEnregistree = {
     id: genererId(),
     clientId,
-    methodProfileId: corps.methodProfileId,
-    methodProfileVersion: corps.methodProfileVersion,
+    methodProfileId: profil.id,
+    methodProfileVersion: profil.version,
     assetNodeId: corps.assetNodeId ?? null,
     nomElement: corps.nomElement,
     reponses: corps.reponses,
-    verdict: corps.verdict ?? null,
+    verdict,
     auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
     createdAt: maintenant,
     updatedAt: maintenant,
@@ -3664,11 +3732,8 @@ async function gererMigrerParametersLocal(
 // --- Handlers : Impact Assessment / System Classification (F1 du
 // catalogue §10, Phase 4c du chantier de migration D1) ---
 //
-// La logique métier (numéro de version suivant, calcul du verdict) reste
-// côté store frontend (`useImpactAssessmentStore.ts`, déjà testée) — ces
-// handlers ne font qu'authentifier, vérifier l'accès au client concerné
-// et persister l'état qu'on leur donne, même discipline que les handlers
-// ACFC.
+// **(28/09/2026, audit d'intégrité M5/M7)** Version attribuée et verdict
+// recalculé par le serveur, même règle que l'ACFC.
 
 interface SaisieCreationProfilImpactAssessment {
   version?: string
@@ -3681,13 +3746,13 @@ interface SaisieCreationProfilImpactAssessment {
 function profilImpactAssessmentDepuisSaisie(
   clientId: string,
   saisie: SaisieCreationProfilImpactAssessment,
+  version: string,
 ): MethodProfileImpactAssessmentEnregistre | null {
   if (
-    !saisie.version ||
     !saisie.source ||
     !saisie.origin ||
     !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(saisie.origin) ||
-    !Array.isArray(saisie.questions) ||
+    !questionsMethodeValides(saisie.questions) ||
     saisie.decisionRule !== 'au_moins_un_oui_impact_direct'
   ) {
     return null
@@ -3696,7 +3761,7 @@ function profilImpactAssessmentDepuisSaisie(
   return {
     id: genererId(),
     clientId,
-    version: saisie.version,
+    version,
     effectiveDate: maintenant,
     source: saisie.source,
     origin: saisie.origin,
@@ -3737,7 +3802,9 @@ async function gererCreerProfilImpactAssessment(
   // réponse de `POST /clients/:id/acfc/profils` — même discipline que
   // `parametreProcede` pour éviter une collision de nom entre deux
   // réponses JSON distinctes.
-  const profilImpact = corps ? profilImpactAssessmentDepuisSaisie(clientId, corps) : null
+  const existants = await ctx.impactAssessmentRepo.listerProfils(clientId)
+  const version = versionSuivante(existants.map((p) => p.version))
+  const profilImpact = corps ? profilImpactAssessmentDepuisSaisie(clientId, corps, version) : null
   if (!profilImpact) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
 
   await ctx.impactAssessmentRepo.creerProfil(profilImpact)
@@ -3765,24 +3832,41 @@ async function gererCreerEvaluationImpactAssessment(
   const corps = await lireCorpsJson<SaisieCreationEvaluationImpactAssessment>(request)
   if (
     !corps?.methodProfileId ||
-    !corps.methodProfileVersion ||
     !corps.nomElement ||
     !corps.reponses ||
     horsDomaine(corps.verdict, VERDICTS_IMPACT_ASSESSMENT)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const profil = (await ctx.impactAssessmentRepo.listerProfils(clientId)).find(
+    (p) => p.id === corps.methodProfileId,
+  )
+  if (!profil) return reponseJson({ erreur: 'methode_introuvable' }, 400, entetes)
+  if (corps.methodProfileVersion && corps.methodProfileVersion !== profil.version) {
+    return reponseJson({ erreur: 'version_methode_incoherente' }, 409, entetes)
+  }
+  const questionIds = profil.questions.map((q) => q.id)
+  if (!reponsesValides(questionIds, corps.reponses)) {
+    return reponseJson({ erreur: 'reponses_invalides' }, 400, entetes)
+  }
+  if (await noeudEtranger(ctx, clientId, corps.assetNodeId)) {
+    return reponseJson({ erreur: 'noeud_introuvable' }, 400, entetes)
+  }
+  const verdict = verdictImpact(questionIds, corps.reponses, profil.decisionRule)
+  if (valeurIncoherente(corps.verdict, verdict)) {
+    return reponseJson({ erreur: 'verdict_incoherent', verdict }, 409, entetes)
+  }
 
   const maintenant = horodatage()
   const evaluationImpact: EvaluationImpactAssessmentEnregistree = {
     id: genererId(),
     clientId,
-    methodProfileId: corps.methodProfileId,
-    methodProfileVersion: corps.methodProfileVersion,
+    methodProfileId: profil.id,
+    methodProfileVersion: profil.version,
     assetNodeId: corps.assetNodeId ?? null,
     nomElement: corps.nomElement,
     reponses: corps.reponses,
-    verdict: corps.verdict ?? null,
+    verdict,
     auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
     createdAt: maintenant,
     updatedAt: maintenant,
@@ -3941,11 +4025,9 @@ async function gererMigrerCsvAssessmentLocal(
 // --- Handlers : Risk Assessment / AMDEC (Target Architecture §10, Phase
 // 4d du chantier de migration D1) ---
 //
-// La logique métier (numéro de version suivant, calcul IPR, verdict) reste
-// côté store frontend (`useRiskAssessmentStore.ts`, déjà testée) — ces
-// handlers ne font qu'authentifier, vérifier l'accès au client concerné et
-// persister l'état qu'on leur donne, même discipline que les handlers
-// Impact Assessment/Parameters. Clés JSON `profilRisque`/`evaluationRisque`
+// **(28/09/2026, audit d'intégrité M5/M7/M10)** Version attribuée, bornes
+// de la méthode contrôlées, IPR et verdicts recalculés par le serveur
+// (`verdictsEvaluation.ts`). Clés JSON `profilRisque`/`evaluationRisque`
 // (jamais `profil`/`evaluation`, déjà pris par ACFC, ni `profilImpact`/
 // `evaluationImpact`/`evaluationCsv`) — même discipline de désambiguïsation
 // que `parametreProcede`.
@@ -3987,23 +4069,24 @@ async function gererCreerProfilRiskAssessment(
 
   const corps = await lireCorpsJson<SaisieCreationProfilRiskAssessment>(request)
   if (
-    !corps?.version ||
-    !corps.source ||
+    !corps?.source ||
     !corps.origin ||
     !(ORIGINES_METHOD_PROFILE as readonly string[]).includes(corps.origin) ||
     !estNombre(corps.echelleMin) ||
     !estNombre(corps.echelleMax) ||
-    corps.echelleMin >= corps.echelleMax ||
     !estNombre(corps.seuilAction)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const refusBornes = refusBornesAmdec(corps.echelleMin, corps.echelleMax, corps.seuilAction)
+  if (refusBornes) return reponseJson({ erreur: refusBornes }, 400, entetes)
 
+  const existants = await ctx.riskAssessmentRepo.listerProfils(clientId)
   const maintenant = horodatage()
   const profilRisque: MethodProfileRiskAssessmentEnregistre = {
     id: genererId(),
     clientId,
-    version: corps.version,
+    version: versionSuivante(existants.map((p) => p.version)),
     effectiveDate: maintenant,
     source: corps.source,
     origin: corps.origin,
@@ -4063,13 +4146,46 @@ async function gererCreerEvaluationRiskAssessment(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const profil = (await ctx.riskAssessmentRepo.listerProfils(clientId)).find(
+    (p) => p.id === corps.methodProfileId,
+  )
+  if (!profil) return reponseJson({ erreur: 'methode_introuvable' }, 400, entetes)
+  if (corps.methodProfileVersion !== profil.version) {
+    return reponseJson({ erreur: 'version_methode_incoherente' }, 409, entetes)
+  }
+  if (await noeudEtranger(ctx, clientId, corps.assetNodeId)) {
+    return reponseJson({ erreur: 'noeud_introuvable' }, 400, entetes)
+  }
+  if (corps.parameterId) {
+    const parametres = await ctx.parametersRepo.listerParametres(clientId)
+    if (!parametres.some((p) => p.id === corps.parameterId)) {
+      return reponseJson({ erreur: 'parametre_introuvable' }, 400, entetes)
+    }
+  }
+  const iprInitial = calculerIpr(
+    corps.severiteInitiale ?? null,
+    corps.occurrenceInitiale ?? null,
+    corps.detectabiliteInitiale ?? null,
+    { min: profil.echelleMin, max: profil.echelleMax },
+  )
+  const verdictInitial = verdictRisque(iprInitial, profil.seuilAction)
+  if (
+    valeurIncoherente(corps.iprInitial, iprInitial) ||
+    valeurIncoherente(corps.verdictInitial, verdictInitial)
+  ) {
+    return reponseJson(
+      { erreur: 'verdict_incoherent', ipr: iprInitial, verdict: verdictInitial },
+      409,
+      entetes,
+    )
+  }
 
   const maintenant = horodatage()
   const evaluationRisque: RiskAssessmentEnregistre = {
     id: genererId(),
     clientId,
-    methodProfileId: corps.methodProfileId,
-    methodProfileVersion: corps.methodProfileVersion,
+    methodProfileId: profil.id,
+    methodProfileVersion: profil.version,
     assetNodeId: corps.assetNodeId ?? null,
     parameterId: corps.parameterId ?? null,
     etapeProcessus: corps.etapeProcessus,
@@ -4080,8 +4196,8 @@ async function gererCreerEvaluationRiskAssessment(
     severiteInitiale: corps.severiteInitiale ?? null,
     occurrenceInitiale: corps.occurrenceInitiale ?? null,
     detectabiliteInitiale: corps.detectabiliteInitiale ?? null,
-    iprInitial: corps.iprInitial ?? null,
-    verdictInitial: corps.verdictInitial ?? null,
+    iprInitial,
+    verdictInitial,
     recommandation: null,
     responsable: null,
     dateCible: null,
@@ -4115,9 +4231,9 @@ interface SaisieActionResiduelleRiskAssessment {
  * Enregistre l'action corrective et l'évaluation résiduelle (deuxième
  * temps du cycle AMDEC) sans muter les champs de l'évaluation initiale —
  * même principe que `gererDesactiverCPP` : l'historique reste lisible tel
- * qu'il a été produit. Le calcul IPR résiduel/verdict reste côté store
- * frontend (`calculerIPR`/`evaluerVerdictRiskAssessment`, déjà testés) —
- * ce handler ne persiste que ce qu'on lui donne.
+ * qu'il a été produit. IPR et verdict résiduels recalculés ici avec
+ * l'échelle et le seuil de la méthode figée de l'évaluation ; méthode
+ * introuvable → aucun verdict (jamais « acceptable » par défaut).
  */
 async function gererEnregistrerActionResiduelleRiskAssessment(
   request: Request,
@@ -4144,6 +4260,26 @@ async function gererEnregistrerActionResiduelleRiskAssessment(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  const profilFige = (await ctx.riskAssessmentRepo.listerProfils(clientId)).find(
+    (p) => p.id === existant.methodProfileId,
+  )
+  const iprResiduel = calculerIpr(
+    corps.severiteResiduelle ?? null,
+    corps.occurrenceResiduelle ?? null,
+    corps.detectabiliteResiduelle ?? null,
+    profilFige ? { min: profilFige.echelleMin, max: profilFige.echelleMax } : { min: 1, max: 5 },
+  )
+  const verdictResiduel = verdictRisque(iprResiduel, profilFige?.seuilAction ?? null)
+  if (
+    valeurIncoherente(corps.iprResiduel, iprResiduel) ||
+    valeurIncoherente(corps.verdictResiduel, verdictResiduel)
+  ) {
+    return reponseJson(
+      { erreur: 'verdict_incoherent', ipr: iprResiduel, verdict: verdictResiduel },
+      409,
+      entetes,
+    )
+  }
 
   const maintenant = horodatage()
   const evaluationRisque: RiskAssessmentEnregistre = {
@@ -4155,8 +4291,8 @@ async function gererEnregistrerActionResiduelleRiskAssessment(
     severiteResiduelle: corps.severiteResiduelle ?? null,
     occurrenceResiduelle: corps.occurrenceResiduelle ?? null,
     detectabiliteResiduelle: corps.detectabiliteResiduelle ?? null,
-    iprResiduel: corps.iprResiduel ?? null,
-    verdictResiduel: corps.verdictResiduel ?? null,
+    iprResiduel,
+    verdictResiduel,
     updatedAt: maintenant,
     auditLog: [
       ...existant.auditLog,

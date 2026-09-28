@@ -41,6 +41,9 @@ export function evaluerVerdictACFC(
       if (conclusion === null) return null
       return conclusion === 'positif' ? 'critique' : 'non_critique'
     }
+    default:
+      // Règle inconnue : jamais un verdict deviné (audit m4).
+      return null
   }
 }
 

@@ -201,9 +201,6 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
     }
   }
 
-  function prochaineVersion(): string {
-    return `v${profils.value.length + 1}`
-  }
 
   async function creerNouvelleVersion(
     clientId: string,
@@ -215,7 +212,6 @@ export const useImpactAssessmentStore = defineStore('impactAssessment', () => {
     }))
     const { api, jeton } = await obtenirApi()
     const resultat = await api.creerProfilImpactAssessment(jeton, clientId, {
-      version: prochaineVersion(),
       source: input.source,
       origin: input.origin,
       questions,

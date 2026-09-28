@@ -246,9 +246,6 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
     }
   }
 
-  function prochaineVersion(): string {
-    return `v${profils.value.length + 1}`
-  }
 
   async function creerNouvelleVersion(
     clientId: string,
@@ -256,7 +253,6 @@ export const useRiskAssessmentStore = defineStore('riskAssessment', () => {
   ): Promise<MethodProfileRiskAssessment> {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.creerProfilRiskAssessment(jeton, clientId, {
-      version: prochaineVersion(),
       source: input.source,
       origin: input.origin,
       echelleMin: input.echelleMin,

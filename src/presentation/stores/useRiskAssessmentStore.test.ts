@@ -40,6 +40,36 @@ beforeEach(async () => {
   await creerClientDeTest('client-1')
   await creerClientDeTest('client-A')
   await creerClientDeTest('client-B')
+  // Le Worker refuse désormais un nœud ou un paramètre inexistant (audit m6).
+  const maintenant = new Date().toISOString()
+  await ctx.structureSystemeRepo.creerNoeud({
+    id: 'n1',
+    clientId: 'client-1',
+    workspaceId: null,
+    levelKey: 'equipement',
+    name: 'Autoclave',
+    code: 'AC-1',
+    parentId: null,
+    associatedNodes: [],
+    source: 'manuel',
+    qmsConnectorId: null,
+    periodicQualification: { applicable: false, deadline: null },
+    qualificationStatus: 'non_qualifie',
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  })
+  await ctx.parametersRepo.creerParametre({
+    id: 'param-1',
+    clientId: 'client-1',
+    assetNodeId: 'n1',
+    nom: 'Température',
+    description: '',
+    unite: '°C',
+    auditLog: [],
+    createdAt: maintenant,
+    updatedAt: maintenant,
+  })
 })
 
 afterEach(() => {

@@ -140,7 +140,8 @@ export interface EvaluationACFCWire {
 }
 
 export interface SaisieCreationProfilAcfcWire {
-  version: string
+  /** Ignoré : le numéro de version est attribué par le serveur (audit M7). */
+  version?: string
   source: string
   origin: string
   questions: QuestionACFCWire[]
@@ -263,7 +264,8 @@ export interface EvaluationImpactAssessmentWire {
 }
 
 export interface SaisieCreationProfilImpactAssessmentWire {
-  version: string
+  /** Ignoré : le numéro de version est attribué par le serveur (audit M7). */
+  version?: string
   source: string
   origin: string
   questions: QuestionImpactAssessmentWire[]
@@ -349,7 +351,8 @@ export interface RiskAssessmentWire {
 }
 
 export interface SaisieCreationProfilRiskAssessmentWire {
-  version: string
+  /** Ignoré : le numéro de version est attribué par le serveur (audit M7). */
+  version?: string
   source: string
   origin: string
   echelleMin: number

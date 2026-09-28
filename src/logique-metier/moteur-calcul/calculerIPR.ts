@@ -49,6 +49,7 @@ export function calculerIPR(
   return { calcule: true, valeur: severite * occurrence * detectabilite }
 }
 
+/** Entiers seulement (audit m5 : `NaN` et 2,5 passaient, `NaN` donnant « acceptable »). */
 function verifierPlage(valeur: number, champ: ChampIPR, echelle: EchelleIPR): ChampIPR | null {
-  return valeur < echelle.min || valeur > echelle.max ? champ : null
+  return !Number.isInteger(valeur) || valeur < echelle.min || valeur > echelle.max ? champ : null
 }

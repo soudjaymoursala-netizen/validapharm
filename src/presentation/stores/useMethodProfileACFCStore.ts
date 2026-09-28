@@ -198,9 +198,6 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
     }
   }
 
-  function prochaineVersion(): string {
-    return `v${profils.value.length + 1}`
-  }
 
   async function creerNouvelleVersion(
     clientId: string,
@@ -212,7 +209,6 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
     }))
     const { api, jeton } = await obtenirApi()
     const resultat = await api.creerProfilAcfc(jeton, clientId, {
-      version: prochaineVersion(),
       source: input.source,
       origin: input.origin,
       questions,

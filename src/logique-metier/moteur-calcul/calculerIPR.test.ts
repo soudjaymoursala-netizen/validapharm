@@ -59,3 +59,18 @@ describe('calculerIPR', () => {
     })
   })
 })
+
+describe('notes non entières (audit m5)', () => {
+  test('NaN ou 2,5 : IPR non calculé, jamais « acceptable »', () => {
+    expect(calculerIPR(Number.NaN, 5, 5)).toEqual({
+      calcule: false,
+      raison: 'valeur_hors_plage',
+      champ: 'severite',
+    })
+    expect(calculerIPR(5, 2.5, 5)).toEqual({
+      calcule: false,
+      raison: 'valeur_hors_plage',
+      champ: 'occurrence',
+    })
+  })
+})
