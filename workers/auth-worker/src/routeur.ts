@@ -144,7 +144,12 @@ import type {
   RiskAssessmentRepo,
 } from './repos/riskAssessmentRepo'
 import type { SectionEnregistree, SectionsRepo } from './repos/sectionsRepo'
-import { egalJson, preparerCreationSection, preparerRemplacementSection } from './integriteSection'
+import {
+  egalJson,
+  horodatageSuivant,
+  preparerCreationSection,
+  preparerRemplacementSection,
+} from './integriteSection'
 import type { StockageBinaireRepo } from './repos/stockageBinaireRepo'
 import type {
   CouvertureEnregistree,
@@ -460,6 +465,8 @@ const STATUTS_TEST_CANDIDATE = [
   'remplace',
 ] as const
 const SYSTEMES_LOCALISATION = ['github', 'drive', 'externe'] as const
+/** Système d'une localisation de preuve dont le fichier est conservé par le serveur (R2). */
+const SYSTEME_FICHIER_PREUVE = 'fichier'
 const TYPES_SOURCE = ['document', 'image'] as const
 const TYPES_METHOD_PROFILE_REFERENCE = ['acfc', 'impact_assessment'] as const
 const TYPES_CONNECTOR = [
@@ -1276,6 +1283,19 @@ async function routerRequeteInterne(request: Request, ctx: Contexte): Promise<Re
   if (matchExecutions && request.method === 'POST') {
     return gererDemarrerExecution(request, ctx, entetes, matchExecutions[1] as string)
   }
+  const matchCorrectionEtape = chemin.match(
+    /^\/clients\/([^/]+)\/executions\/([^/]+)\/etapes\/([^/]+)\/correction$/,
+  )
+  if (matchCorrectionEtape && request.method === 'POST') {
+    return gererCorrigerResultatEtape(
+      request,
+      ctx,
+      entetes,
+      matchCorrectionEtape[1] as string,
+      matchCorrectionEtape[2] as string,
+      matchCorrectionEtape[3] as string,
+    )
+  }
   const matchExecutionEtapes = chemin.match(/^\/clients\/([^/]+)\/executions\/([^/]+)\/etapes$/)
   if (matchExecutionEtapes && request.method === 'POST') {
     return gererEnregistrerResultatEtape(
@@ -1351,6 +1371,29 @@ async function routerRequeteInterne(request: Request, ctx: Contexte): Promise<Re
       entetes,
       matchEvidenceLocalisation[1] as string,
       matchEvidenceLocalisation[2] as string,
+    )
+  }
+  const matchFichierPreuve = chemin.match(/^\/clients\/([^/]+)\/evidences\/([^/]+)\/fichier$/)
+  if (matchFichierPreuve && request.method === 'POST') {
+    return gererJoindreFichierPreuve(
+      request,
+      ctx,
+      entetes,
+      matchFichierPreuve[1] as string,
+      matchFichierPreuve[2] as string,
+    )
+  }
+  const matchLireFichierPreuve = chemin.match(
+    /^\/clients\/([^/]+)\/evidences\/([^/]+)\/fichiers\/([^/]+)$/,
+  )
+  if (matchLireFichierPreuve && request.method === 'GET') {
+    return gererObtenirFichierPreuve(
+      request,
+      ctx,
+      entetes,
+      matchLireFichierPreuve[1] as string,
+      matchLireFichierPreuve[2] as string,
+      matchLireFichierPreuve[3] as string,
     )
   }
   const matchProvenanceLinks = chemin.match(/^\/clients\/([^/]+)\/provenance-links$/)
@@ -1718,6 +1761,16 @@ async function routerRequeteInterne(request: Request, ctx: Contexte): Promise<Re
       entetes,
       matchAjouterDependance[1] as string,
       matchAjouterDependance[2] as string,
+    )
+  }
+  const matchRetirerDependance = chemin.match(/^\/clients\/([^/]+)\/dependances\/([^/]+)$/)
+  if (matchRetirerDependance && request.method === 'DELETE') {
+    return gererRetirerDependance(
+      request,
+      ctx,
+      entetes,
+      matchRetirerDependance[1] as string,
+      matchRetirerDependance[2] as string,
     )
   }
   const matchMissionsMigrationLocale = chemin.match(
@@ -4890,6 +4943,12 @@ async function gererCreerEvenementQualityEvent(
 
 interface SaisieChangementStatutQualityEvent {
   statut?: string
+  motif?: string
+}
+
+/** Motif saisi (texte non vide après nettoyage), ou `null`. */
+function motifSaisi(motif: unknown): string | null {
+  return typeof motif === 'string' && motif.trim().length > 0 ? motif.trim() : null
 }
 
 async function gererChangerStatutQualityEvent(
@@ -4910,6 +4969,14 @@ async function gererChangerStatutQualityEvent(
   if (!corps?.statut || !(STATUTS_QUALITY_EVENT as readonly string[]).includes(corps.statut)) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  // Décision utilisateur du 29/09/2026 : tout changement de statut d'une
+  // anomalie exige un motif, conservé dans l'historique (auparavant : une
+  // clôture puis une réouverture sans aucune justification).
+  const motif = motifSaisi(corps.motif)
+  if (!motif) return reponseJson({ erreur: 'motif_requis' }, 400, entetes)
+  if (corps.statut === existant.statut) {
+    return reponseJson({ erreur: 'statut_inchange' }, 400, entetes)
+  }
 
   const maintenant = horodatage()
   const evenement: QualityEventEnregistre = {
@@ -4921,7 +4988,7 @@ async function gererChangerStatutQualityEvent(
       {
         timestamp: maintenant,
         actor: acteur.email,
-        action: `changement de statut : ${corps.statut}`,
+        action: `changement de statut : ${existant.statut} → ${corps.statut} — motif : ${motif}`,
       },
     ],
   }
@@ -5653,6 +5720,85 @@ async function gererEnregistrerResultatEtape(
   return reponseJson({ executionStep: etape }, 201, entetes)
 }
 
+interface SaisieCorrectionResultatEtape {
+  resultat?: string
+  observation?: string
+  motif?: string
+}
+
+/**
+ * Correction tracée d'un résultat d'étape (décision utilisateur du
+ * 29/09/2026) : tant que l'exécution n'est pas clôturée, un résultat peut
+ * être corrigé avec un motif obligatoire. Rien n'est effacé ni réécrit —
+ * un nouveau résultat est enregistré pour la même étape (le plus récent
+ * fait foi) et un événement d'exécution « correction » conserve l'ancienne
+ * valeur, la nouvelle, le motif, l'auteur et l'heure (ALCOA+).
+ */
+async function gererCorrigerResultatEtape(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  executionId: string,
+  executionStepId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+
+  const execution = await ctx.executionRepo.executionParId(executionId)
+  if (!execution || execution.clientId !== clientId) {
+    return reponseJson({ erreur: 'execution_introuvable' }, 404, entetes)
+  }
+  if (execution.statut === 'terminee') {
+    return reponseJson({ erreur: 'execution_deja_cloturee' }, 400, entetes)
+  }
+  const corrige = await ctx.executionRepo.executionStepParId(executionStepId)
+  if (!corrige || corrige.clientId !== clientId || corrige.executionId !== executionId) {
+    return reponseJson({ erreur: 'etape_execution_introuvable' }, 404, entetes)
+  }
+  const corps = await lireCorpsJson<SaisieCorrectionResultatEtape>(request)
+  if (
+    !corps?.resultat ||
+    !(RESULTATS_ETAPE_EXECUTION as readonly string[]).includes(corps.resultat) ||
+    typeof corps.observation !== 'string'
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const motif = motifSaisi(corps.motif)
+  if (!motif) return reponseJson({ erreur: 'motif_requis' }, 400, entetes)
+  // Seul le résultat en vigueur (le plus récent de cette étape) se corrige.
+  const resultatsEtape = (await ctx.executionRepo.listerExecutionSteps(clientId))
+    .filter((e) => e.executionId === executionId && e.testStepId === corrige.testStepId)
+    .sort((a, b) => (a.horodatage < b.horodatage ? -1 : a.horodatage > b.horodatage ? 1 : 0))
+  if (resultatsEtape[resultatsEtape.length - 1]?.id !== corrige.id) {
+    return reponseJson({ erreur: 'resultat_deja_corrige' }, 409, entetes)
+  }
+
+  const maintenant = horodatageSuivant(corrige.horodatage, horodatage())
+  const etape: ExecutionStepEnregistree = {
+    id: genererId(),
+    clientId,
+    executionId,
+    testStepId: corrige.testStepId,
+    resultat: corps.resultat,
+    observation: corps.observation,
+    horodatage: maintenant,
+  }
+  await ctx.executionRepo.creerExecutionStep(etape)
+  const evenement: ExecutionEventEnregistree = {
+    id: genererId(),
+    clientId,
+    executionId,
+    type: 'correction',
+    description: `Correction du résultat d'étape ${corrige.id} → ${etape.id} : ${corrige.resultat} → ${corps.resultat}. Motif : ${motif}`,
+    qualityEventId: null,
+    horodatage: maintenant,
+    actor: acteur.email,
+  }
+  await ctx.executionRepo.creerExecutionEvent(evenement)
+  return reponseJson({ executionStep: etape, executionEvent: evenement }, 201, entetes)
+}
+
 interface SaisieMesure {
   libelle?: string
   valeur?: string
@@ -5710,7 +5856,14 @@ const TYPES_EVENEMENT_EXECUTION = [
   'commentaire',
 ] as const
 
-/** `qualityEventId` référence optionnellement un `QualityEvent` déjà existant — jamais créé automatiquement ici. */
+/**
+ * `qualityEventId` référence optionnellement un `QualityEvent` existant.
+ * **(29/09/2026, décision utilisateur)** Une déviation consignée sans
+ * anomalie référencée crée automatiquement une entrée « Déviation » du
+ * journal d'anomalies, rattachée à l'actif de l'exécution et citant le
+ * test et l'exécution — auparavant il fallait tout ressaisir et la
+ * traçabilité se perdait (audit UX exécution #7).
+ */
 async function gererConsignerEvenement(
   request: Request,
   ctx: Contexte,
@@ -5737,6 +5890,44 @@ async function gererConsignerEvenement(
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
+  if (corps.qualityEventId) {
+    const referencee = await ctx.qualityEventRepo.evenementParId(corps.qualityEventId)
+    if (!referencee || referencee.clientId !== clientId) {
+      return reponseJson({ erreur: 'introuvable' }, 400, entetes)
+    }
+  }
+
+  const maintenant = horodatage()
+  let qualityEventId = corps.qualityEventId ?? null
+  let anomalie: QualityEventEnregistre | null = null
+  if (corps.type === 'deviation' && !qualityEventId) {
+    const test = await ctx.testDefinitionRepo.testParId(execution.testId)
+    const titreTest = test?.titre ?? execution.testId
+    anomalie = {
+      id: genererId(),
+      clientId,
+      type: 'deviation',
+      titre: `Déviation pendant l'exécution de « ${titreTest} »`,
+      description: `${corps.description}\n\nConsignée pendant l'exécution ${executionId} (test « ${titreTest} »).`,
+      origine: 'interne',
+      referenceExterne: null,
+      assetNodeId: execution.assetNodeId,
+      processId: null,
+      manufacturingContextId: null,
+      statut: 'ouvert',
+      auditLog: [
+        {
+          timestamp: maintenant,
+          actor: acteur.email,
+          action: `création (déviation consignée pendant l'exécution ${executionId})`,
+        },
+      ],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    }
+    await ctx.qualityEventRepo.creerEvenement(anomalie)
+    qualityEventId = anomalie.id
+  }
 
   const evenement: ExecutionEventEnregistree = {
     id: genererId(),
@@ -5744,12 +5935,12 @@ async function gererConsignerEvenement(
     executionId,
     type: corps.type,
     description: corps.description,
-    qualityEventId: corps.qualityEventId ?? null,
-    horodatage: horodatage(),
+    qualityEventId,
+    horodatage: maintenant,
     actor: acteur.email,
   }
   await ctx.executionRepo.creerExecutionEvent(evenement)
-  return reponseJson({ executionEvent: evenement }, 201, entetes)
+  return reponseJson({ executionEvent: evenement, anomalie }, 201, entetes)
 }
 
 interface SaisieClotureExecution {
@@ -5990,6 +6181,120 @@ async function gererAjouterLocalisation(
   }
   await ctx.evidenceRepo.creerEvidenceLocation(location)
   return reponseJson({ evidenceLocation: location }, 201, entetes)
+}
+
+/** Types de fichier acceptés comme preuve : photos, PDF, texte, exports tableur. */
+const TYPES_FICHIER_PREUVE = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+] as const
+
+function cleFichierPreuve(evidenceId: string, locationId: string): string {
+  return `evidences/${evidenceId}/${locationId}`
+}
+
+/**
+ * Pièce jointe d'une preuve (audit UX exécution #6 : sur tablette, impossible
+ * de joindre la photo d'un écran IHM — seule une référence GitHub saisie à
+ * la main était possible). Le serveur conserve le fichier, calcule son
+ * empreinte SHA-256 et l'horodate ; la localisation créée
+ * (`systeme: 'fichier'`) la cite. Jamais après la clôture de l'exécution.
+ */
+async function gererJoindreFichierPreuve(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  evidenceId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const preuve = await ctx.evidenceRepo.evidenceParId(evidenceId)
+  if (!preuve || preuve.clientId !== clientId) {
+    return reponseJson({ erreur: 'evidence_introuvable' }, 404, entetes)
+  }
+  const execution = await ctx.executionRepo.executionParId(preuve.executionId)
+  if (execution?.statut === 'terminee') {
+    return reponseJson({ erreur: 'execution_deja_cloturee' }, 400, entetes)
+  }
+  let formData: FormData
+  try {
+    formData = await request.formData()
+  } catch {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const fichier = formData.get('fichier')
+  if (
+    fichier === null ||
+    typeof fichier !== 'object' ||
+    typeof (fichier as Blob).arrayBuffer !== 'function'
+  ) {
+    return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  const blob = fichier as Blob & { name?: string }
+  if (blob.size === 0) return reponseJson({ erreur: 'contenu_vide' }, 400, entetes)
+  const refusTaille = refusTailleImport(blob, '')
+  if (refusTaille) return reponseJson({ erreur: refusTaille }, 413, entetes)
+  const typeContenu = (blob.type || 'application/octet-stream').split(';')[0]?.trim() ?? ''
+  if (!(TYPES_FICHIER_PREUVE as readonly string[]).includes(typeContenu)) {
+    return reponseJson({ erreur: 'type_fichier_refuse' }, 400, entetes)
+  }
+  const contenu = await blob.arrayBuffer()
+  const empreinte = [...new Uint8Array(await crypto.subtle.digest('SHA-256', contenu))]
+    .map((o) => o.toString(16).padStart(2, '0'))
+    .join('')
+  const nom = (blob.name ?? 'fichier').replace(/[\r\n]/g, ' ').slice(0, 200)
+
+  const location: EvidenceLocationEnregistree = {
+    id: genererId(),
+    clientId,
+    evidenceId,
+    systeme: SYSTEME_FICHIER_PREUVE,
+    reference: `${nom} · ${typeContenu} · ${blob.size} octets · SHA-256 ${empreinte} · déposé le ${horodatage()} par ${acteur.email}`,
+  }
+  await ctx.stockageBinaireRepo.enregistrer(
+    cleFichierPreuve(evidenceId, location.id),
+    contenu,
+    typeContenu,
+  )
+  await ctx.evidenceRepo.creerEvidenceLocation(location)
+  return reponseJson({ evidenceLocation: location }, 201, entetes)
+}
+
+async function gererObtenirFichierPreuve(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  evidenceId: string,
+  locationId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const location = (await ctx.evidenceRepo.listerEvidenceLocations(clientId)).find(
+    (l) => l.id === locationId && l.evidenceId === evidenceId,
+  )
+  if (!location || location.systeme !== SYSTEME_FICHIER_PREUVE) {
+    return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  }
+  const objet = await ctx.stockageBinaireRepo.lire(cleFichierPreuve(evidenceId, locationId))
+  if (!objet) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  return new Response(objet.contenu, {
+    status: 200,
+    headers: {
+      ...entetes,
+      'Content-Type': objet.typeContenu,
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Disposition': 'attachment',
+    },
+  })
 }
 
 interface SaisieDeclarationProvenance {
@@ -7431,9 +7736,35 @@ async function gererChangerStatutMission(
   if (!existante || existante.clientId !== clientId) {
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
-  const corps = await lireCorpsJson<{ statut?: string }>(request)
+  const corps = await lireCorpsJson<{ statut?: string; motif?: string }>(request)
   if (!corps?.statut || !(STATUTS_MISSION as readonly string[]).includes(corps.statut)) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  // (29/09/2026, décision utilisateur) Clôturer une mission dont des
+  // activités ne sont pas terminées reste possible mais exige un motif,
+  // tracé ; rouvrir une mission clôturée aussi.
+  const motif = motifSaisi(corps.motif)
+  let justification = ''
+  if (corps.statut === 'cloturee' && existante.statut !== 'cloturee') {
+    const ouvertes = (await ctx.missionRepo.listerActivities(clientId)).filter(
+      (a) => a.missionId === missionId && a.statut !== 'terminee',
+    )
+    if (ouvertes.length > 0 && !motif) {
+      return reponseJson(
+        {
+          erreur: 'motif_requis',
+          activitesOuvertes: ouvertes.map((a) => ({ id: a.id, titre: a.titre, statut: a.statut })),
+        },
+        400,
+        entetes,
+      )
+    }
+    if (ouvertes.length > 0) {
+      justification = ` malgré ${ouvertes.length} activité(s) non terminée(s) — motif : ${motif}`
+    }
+  } else if (existante.statut === 'cloturee' && corps.statut !== 'cloturee') {
+    if (!motif) return reponseJson({ erreur: 'motif_requis' }, 400, entetes)
+    justification = ` (réouverture) — motif : ${motif}`
   }
   const maintenant = horodatage()
   const miseAJour: MissionEnregistree = {
@@ -7445,12 +7776,21 @@ async function gererChangerStatutMission(
       {
         timestamp: maintenant,
         actor: acteur.email,
-        action: `changement de statut : ${corps.statut}`,
+        action: `changement de statut : ${corps.statut}${justification}`,
       },
     ],
   }
   await ctx.missionRepo.remplacerMission(miseAJour)
   return reponseJson({ mission: miseAJour }, 200, entetes)
+}
+
+/**
+ * Une mission clôturée est en lecture seule (audit UX exécution #9) : ni
+ * activité, ni dépendance, ni changement de statut d'activité tant qu'elle
+ * n'a pas été rouverte (avec motif).
+ */
+async function refusMissionCloturee(ctx: Contexte, missionId: string): Promise<boolean> {
+  return (await ctx.missionRepo.missionParId(missionId))?.statut === 'cloturee'
 }
 
 /** Association N:M idempotente — jamais une étape obligatoire. */
@@ -7511,6 +7851,9 @@ async function gererCreerActivity(
   if (mission?.clientId !== clientId) {
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
+  if (mission.statut === 'cloturee') {
+    return reponseJson({ erreur: 'mission_cloturee' }, 409, entetes)
+  }
   const maintenant = horodatage()
   const activity: ActivityEnregistree = {
     id: genererId(),
@@ -7540,9 +7883,39 @@ async function gererChangerStatutActivity(
   if (!existante || existante.clientId !== clientId) {
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
-  const corps = await lireCorpsJson<{ statut?: string }>(request)
+  const corps = await lireCorpsJson<{ statut?: string; motif?: string }>(request)
   if (!corps?.statut || !(STATUTS_ACTIVITY as readonly string[]).includes(corps.statut)) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
+  }
+  if (await refusMissionCloturee(ctx, existante.missionId)) {
+    return reponseJson({ erreur: 'mission_cloturee' }, 409, entetes)
+  }
+  // Terminer une activité dont un prérequis n'est pas terminé : possible,
+  // avec un motif tracé (même règle que la clôture de mission).
+  let justification = ''
+  if (corps.statut === 'terminee') {
+    const [dependances, activites] = await Promise.all([
+      ctx.missionRepo.listerDependencies(clientId),
+      ctx.missionRepo.listerActivities(clientId),
+    ])
+    const prerequisOuverts = dependances
+      .filter((d) => d.activitySourceId === activityId)
+      .map((d) => activites.find((a) => a.id === d.activityCibleId))
+      .filter((a): a is ActivityEnregistree => a !== undefined && a.statut !== 'terminee')
+    const motif = motifSaisi(corps.motif)
+    if (prerequisOuverts.length > 0 && !motif) {
+      return reponseJson(
+        {
+          erreur: 'prerequis_non_termines',
+          prerequis: prerequisOuverts.map((a) => ({ id: a.id, titre: a.titre, statut: a.statut })),
+        },
+        400,
+        entetes,
+      )
+    }
+    if (prerequisOuverts.length > 0) {
+      justification = ` malgré ${prerequisOuverts.length} prérequis non terminé(s) — motif : ${motif}`
+    }
   }
   const maintenant = horodatage()
   const miseAJour: ActivityEnregistree = {
@@ -7554,7 +7927,7 @@ async function gererChangerStatutActivity(
       {
         timestamp: maintenant,
         actor: acteur.email,
-        action: `changement de statut : ${corps.statut}`,
+        action: `changement de statut : ${corps.statut}${justification}`,
       },
     ],
   }
@@ -7588,6 +7961,9 @@ async function gererAjouterDependance(
   if (activiteSource?.clientId !== clientId || activiteCible?.clientId !== clientId) {
     return reponseJson({ erreur: 'introuvable' }, 404, entetes)
   }
+  if (await refusMissionCloturee(ctx, activiteSource.missionId)) {
+    return reponseJson({ erreur: 'mission_cloturee' }, 409, entetes)
+  }
   const existante = await ctx.missionRepo.dependencyExistante(
     activitySourceId,
     corps.activityCibleId,
@@ -7602,6 +7978,45 @@ async function gererAjouterDependance(
   }
   await ctx.missionRepo.creerDependency(dependency)
   return reponseJson({ dependency }, 201, entetes)
+}
+
+/** Retrait d'une dépendance déclarée par erreur (audit UX exécution #9), tracé dans l'activité dépendante. */
+async function gererRetirerDependance(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  clientId: string,
+  dependencyId: string,
+): Promise<Response> {
+  const acteur = await exigerAccesClient(request, ctx, entetes, clientId)
+  if (acteur instanceof Response) return acteur
+  const dependance = (await ctx.missionRepo.listerDependencies(clientId)).find(
+    (d) => d.id === dependencyId,
+  )
+  if (!dependance) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  const [source, cible] = await Promise.all([
+    ctx.missionRepo.activityParId(dependance.activitySourceId),
+    ctx.missionRepo.activityParId(dependance.activityCibleId),
+  ])
+  if (!source) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  if (await refusMissionCloturee(ctx, source.missionId)) {
+    return reponseJson({ erreur: 'mission_cloturee' }, 409, entetes)
+  }
+  await ctx.missionRepo.supprimerDependency(dependencyId)
+  const maintenant = horodatage()
+  await ctx.missionRepo.remplacerActivity({
+    ...source,
+    updatedAt: maintenant,
+    auditLog: [
+      ...source.auditLog,
+      {
+        timestamp: maintenant,
+        actor: acteur.email,
+        action: `dépendance retirée : ne dépend plus de « ${cible?.titre ?? dependance.activityCibleId} »`,
+      },
+    ],
+  })
+  return reponseJson({ ok: true }, 200, entetes)
 }
 
 interface SaisieMigrationMissions {

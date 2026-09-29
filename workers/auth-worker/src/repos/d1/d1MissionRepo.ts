@@ -165,6 +165,10 @@ export class D1MissionRepo implements MissionRepo {
       .run()
   }
 
+  async supprimerDependency(id: string): Promise<void> {
+    await this.db.prepare('DELETE FROM dependencies WHERE id = ?').bind(id).run()
+  }
+
   async dependencyExistante(
     activitySourceId: string,
     activityCibleId: string,

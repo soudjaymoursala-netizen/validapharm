@@ -42,6 +42,7 @@ const LIBELLES: Record<string, string> = {
   statut_invalide: 'statut inconnu',
   cle_invalide: 'paramètre inconnu',
   contenu_vide: 'le fichier est vide',
+  type_fichier_refuse: 'type de fichier non accepté (photo, PDF, texte, tableur ou document Word)',
 
   // Références
   introuvable: 'élément introuvable (supprimé ou inaccessible)',
@@ -89,6 +90,12 @@ const LIBELLES: Record<string, string> = {
   candidat_non_accepte: 'le candidat doit être accepté avant de créer le test',
   execution_deja_cloturee: 'cette exécution est déjà clôturée',
   resultat_etape_deja_enregistre: 'un résultat est déjà enregistré pour cette étape',
+  resultat_deja_corrige:
+    'ce résultat a déjà été corrigé : rechargez pour voir le résultat en vigueur',
+  statut_inchange: 'le statut est déjà celui demandé',
+  mission_cloturee: 'mission clôturée : rouvrez-la (avec un motif) avant de la modifier',
+  prerequis_non_termines:
+    'des activités prérequises ne sont pas terminées : un motif est obligatoire',
   deja_gele: 'ce plan est déjà gelé',
   non_valide: "ce plan n'est pas encore validé",
   donnees_non_pretes: 'les données de traçabilité ne sont pas prêtes',
