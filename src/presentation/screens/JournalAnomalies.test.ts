@@ -166,22 +166,59 @@ describe('JournalAnomalies', () => {
     await attendreQue(
       async () => (await ctx.qualityEventRepo.listerEvenements(CLIENT_ID)).length > 0,
     )
-    await attendreQue(() => wrapper.find('.liste-evenements select').exists())
+    const boutonCloturer = () =>
+      wrapper.findAll('.liste-evenements button').find((b) => b.text() === 'Clôturer…')
+    await attendreQue(() => boutonCloturer() !== undefined)
+
+    // Motif obligatoire (décision du 29/09/2026) : sans motif, rien ne part.
+    await boutonCloturer()?.trigger('click')
+    const confirmer = () =>
+      wrapper.findAll('.demande-motif button').find((b) => b.text() === 'Confirmer')
+    await confirmer()?.trigger('click')
+    expect(wrapper.find('.liste-evenements .bandeau-erreur').text()).toContain('motif')
 
     // Reproduit un événement supprimé/modifié entre-temps sur un autre
-    // poste — avant ce correctif, le changement de statut échouait en
-    // silence total, sans le moindre message, et le sélecteur affichait
-    // malgré tout le nouveau statut jamais persisté (mutation optimiste
-    // via `v-model` avant correctif).
+    // poste — le refus du serveur est affiché, jamais un échec silencieux.
     const evenementsStore = useQualityEventStore()
-    evenementsStore.changerStatut = vi.fn().mockResolvedValue(null)
-
-    const selectStatut = wrapper.find('.liste-evenements select')
-    await selectStatut.setValue('cloture')
-    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
-
-    expect(wrapper.find('.bandeau-erreur').text()).toContain('supprimé entre-temps')
+    evenementsStore.changerStatut = vi
+      .fn()
+      .mockRejectedValue(new Error('Statut non modifié : élément introuvable (introuvable)'))
+    await wrapper.find('.demande-motif textarea').setValue('CAPA vérifiée efficace')
+    await confirmer()?.trigger('click')
+    await attendreQue(() =>
+      wrapper.find('.liste-evenements .bandeau-erreur').text().includes('introuvable'),
+    )
     const evenements = await ctx.qualityEventRepo.listerEvenements(CLIENT_ID)
     expect(evenements[0]?.statut).toBe('ouvert')
+  })
+
+  test('clôture avec motif : statut changé, motif conservé dans l’historique affiché', async () => {
+    const wrapper = mount(JournalAnomalies, {
+      props: { clientId: CLIENT_ID },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await flushPromises()
+    await wrapper.find('select').setValue('capa')
+    await wrapper.find('input[type="text"]').setValue('CAPA étalonnage')
+    await wrapper.find('.formulaire').trigger('submit.prevent')
+    const boutonCloturer = () =>
+      wrapper.findAll('.liste-evenements button').find((b) => b.text() === 'Clôturer…')
+    await attendreQue(() => boutonCloturer() !== undefined)
+
+    await boutonCloturer()?.trigger('click')
+    await wrapper.find('.demande-motif textarea').setValue('Efficacité vérifiée')
+    await wrapper
+      .findAll('.demande-motif button')
+      .find((b) => b.text() === 'Confirmer')
+      ?.trigger('click')
+    await attendreQue(
+      async () => (await ctx.qualityEventRepo.listerEvenements(CLIENT_ID))[0]?.statut === 'cloture',
+    )
+    await attendreQue(() => wrapper.find('.historique').exists())
+    expect(wrapper.find('.historique').text()).toContain('motif : Efficacité vérifiée')
+    // Une anomalie clôturée se rouvre (avec motif), elle ne se « re-clôture » pas.
+    expect(wrapper.findAll('.liste-evenements button').some((b) => b.text() === 'Rouvrir…')).toBe(
+      true,
+    )
   })
 })

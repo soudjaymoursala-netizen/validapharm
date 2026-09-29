@@ -98,8 +98,37 @@ describe('useMissionStore — changement de statut', () => {
       description: '',
     })
     const miseAJour = await store.changerStatutMission('client-1', mission.id, 'cloturee')
-    expect(miseAJour?.statut).toBe('cloturee')
-    expect(miseAJour?.audit_log).toHaveLength(2)
+    if ('erreur' in miseAJour) throw new Error('clôture refusée à tort')
+    expect(miseAJour.statut).toBe('cloturee')
+    expect(miseAJour.audit_log).toHaveLength(2)
+  })
+
+  test('clôture avec une activité ouverte : motif exigé, activités ouvertes renvoyées ; accepté avec motif', async () => {
+    const store = useMissionStore()
+    await store.charger('client-1')
+    const mission = await store.creerMission('client-1', {
+      workspaceId: null,
+      assetNodeId: null,
+      titre: 'Mission B',
+      description: '',
+    })
+    await store.creerActivity('client-1', {
+      missionId: mission.id,
+      titre: 'Exécuter OQ',
+      description: '',
+    })
+    const refus = await store.changerStatutMission('client-1', mission.id, 'cloturee')
+    expect(refus).toMatchObject({
+      erreur: 'motif_requis',
+      activitesOuvertes: [{ titre: 'Exécuter OQ', statut: 'a_faire' }],
+    })
+    const cloture = await store.changerStatutMission(
+      'client-1',
+      mission.id,
+      'cloturee',
+      'OQ reportée',
+    )
+    expect('erreur' in cloture).toBe(false)
   })
 })
 
@@ -138,8 +167,9 @@ describe('useMissionStore — Activity rattachée à une Mission', () => {
       description: '',
     })
     const misAJour = await store.changerStatutActivity('client-1', activite.id, 'terminee')
-    expect(misAJour?.statut).toBe('terminee')
-    expect(misAJour?.audit_log).toHaveLength(2)
+    if ('erreur' in misAJour) throw new Error('changement refusé à tort')
+    expect(misAJour.statut).toBe('terminee')
+    expect(misAJour.audit_log).toHaveLength(2)
   })
 })
 
@@ -191,7 +221,22 @@ describe('useMissionStore — dépendances entre Activity (ordre attendu, jamais
     // protocole reste "a_faire" — aucune fonction de ce store n'empêche
     // pourtant de faire avancer l'activité dépendante.
     const misAJour = await store.changerStatutActivity('client-1', execution.id, 'en_cours')
-    expect(misAJour?.statut).toBe('en_cours')
+    expect('erreur' in misAJour ? null : misAJour.statut).toBe('en_cours')
+
+    // Terminer l'activité dépendante avant son prérequis : motif exigé
+    // (décision du 29/09/2026), accepté avec motif.
+    const refus = await store.changerStatutActivity('client-1', execution.id, 'terminee')
+    expect(refus).toMatchObject({
+      erreur: 'prerequis_non_termines',
+      prerequis: [{ id: protocole.id, statut: 'a_faire' }],
+    })
+    const avecMotif = await store.changerStatutActivity(
+      'client-1',
+      execution.id,
+      'terminee',
+      'Protocole validé hors outil',
+    )
+    expect('erreur' in avecMotif ? null : avecMotif.statut).toBe('terminee')
   })
 
   test('ajouter deux fois la même paire est idempotent', async () => {

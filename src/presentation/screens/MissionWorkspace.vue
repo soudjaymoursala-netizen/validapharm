@@ -114,13 +114,98 @@ onMounted(async () => {
   ])
 })
 
+// --- Statut de la mission (décision du 29/09/2026) ---
+// Clôturer malgré des activités non terminées, ou rouvrir une mission
+// clôturée : possible, avec un motif tracé. Une mission clôturée est en
+// lecture seule.
+const estCloturee = computed(() => mission.value?.statut === 'cloturee')
+const demandeMotifMission = ref<{
+  statut: Mission['statut']
+  activitesOuvertes: { id: string; titre: string; statut: string }[]
+} | null>(null)
+const motifMission = ref('')
+
 async function changerStatutMission(statut: Mission['statut']): Promise<void> {
   erreurStatut.value = null
-  const resultat = await missionStore.changerStatutMission(props.clientId, props.missionId, statut)
-  if (!resultat) {
-    erreurStatut.value =
-      'Impossible de changer le statut de la mission — elle a peut-être été modifiée ou supprimée entre-temps.'
+  if (estCloturee.value && statut !== 'cloturee') {
+    // Réouverture : motif demandé d'emblée.
+    demandeMotifMission.value = { statut, activitesOuvertes: [] }
+    return
   }
+  await envoyer(async () => {
+    const resultat = await missionStore.changerStatutMission(
+      props.clientId,
+      props.missionId,
+      statut,
+    )
+    if ('erreur' in resultat) {
+      demandeMotifMission.value = { statut, activitesOuvertes: resultat.activitesOuvertes }
+    }
+  })
+}
+
+async function confirmerStatutMission(): Promise<void> {
+  const demande = demandeMotifMission.value
+  if (!demande) return
+  if (motifMission.value.trim().length === 0) {
+    erreurStatut.value = 'Indiquez le motif : il sera conservé dans l’historique de la mission.'
+    return
+  }
+  erreurStatut.value = null
+  await envoyer(async () => {
+    const resultat = await missionStore.changerStatutMission(
+      props.clientId,
+      props.missionId,
+      demande.statut,
+      motifMission.value.trim(),
+    )
+    if (!('erreur' in resultat)) {
+      demandeMotifMission.value = null
+      motifMission.value = ''
+    }
+  })
+}
+
+// --- Activités : prérequis non terminés ---
+const demandeMotifActivite = ref<{
+  activityId: string
+  prerequis: { id: string; titre: string; statut: string }[]
+} | null>(null)
+const motifActivite = ref('')
+
+/** Prérequis d'une activité encore non terminés (badge « bloquée par »). */
+function prerequisOuverts(activityId: string): string[] {
+  return missionStore
+    .dependancesDe(activityId)
+    .map((d) => missionStore.activities.find((a) => a.id === d.activity_cible_id))
+    .filter((a) => a !== undefined && a.statut !== 'terminee')
+    .map((a) => a?.titre ?? '')
+}
+
+async function confirmerStatutActivite(): Promise<void> {
+  const demande = demandeMotifActivite.value
+  if (!demande) return
+  if (motifActivite.value.trim().length === 0) {
+    erreurStatut.value = 'Indiquez le motif : il sera conservé dans l’historique de l’activité.'
+    return
+  }
+  erreurStatut.value = null
+  await envoyer(async () => {
+    const resultat = await missionStore.changerStatutActivity(
+      props.clientId,
+      demande.activityId,
+      'terminee',
+      motifActivite.value.trim(),
+    )
+    if (!('erreur' in resultat)) {
+      demandeMotifActivite.value = null
+      motifActivite.value = ''
+    }
+  })
+}
+
+async function retirerDependance(dependencyId: string): Promise<void> {
+  await envoyer(() => missionStore.retirerDependance(props.clientId, dependencyId))
 }
 
 async function creerActivite(...args: Parameters<typeof creerActiviteSansGarde>): Promise<void> {
@@ -151,9 +236,8 @@ async function changerStatutActiviteSansGarde(activityId: string, statut: string
     activityId,
     statut as Parameters<typeof missionStore.changerStatutActivity>[2],
   )
-  if (!resultat) {
-    erreurStatut.value =
-      "Impossible de changer le statut de l'activité — elle a peut-être été modifiée ou supprimée entre-temps."
+  if ('erreur' in resultat) {
+    demandeMotifActivite.value = { activityId, prerequis: resultat.prerequis }
   }
 }
 
@@ -277,7 +361,10 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
       <h1>{{ mission.titre }} — {{ nomClient ?? props.clientId }}</h1>
       <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
       <select
+        :key="`statut-${mission.statut}-${demandeMotifMission ? 'motif' : ''}`"
         :value="mission.statut"
+        aria-label="Statut de la mission"
+        :disabled="envoiEnCours"
         @change="
           changerStatutMission(($event.target as HTMLSelectElement).value as Mission['statut'])
         "
@@ -288,36 +375,83 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
       </select>
     </header>
     <p v-if="erreurStatut" class="bandeau-erreur" role="alert">{{ erreurStatut }}</p>
+    <section v-if="demandeMotifMission" class="demande-motif" aria-labelledby="titre-motif-mission">
+      <h2 id="titre-motif-mission">
+        {{
+          demandeMotifMission.statut === 'cloturee'
+            ? 'Clôturer malgré des activités non terminées'
+            : 'Rouvrir la mission'
+        }}
+      </h2>
+      <ul v-if="demandeMotifMission.activitesOuvertes.length > 0">
+        <li v-for="a in demandeMotifMission.activitesOuvertes" :key="a.id">{{ a.titre }}</li>
+      </ul>
+      <label>
+        Motif (obligatoire, conservé dans l'historique)
+        <textarea v-model="motifMission" rows="2" required />
+      </label>
+      <div class="actions-motif">
+        <button type="button" @click="demandeMotifMission = null">Annuler</button>
+        <button type="button" :disabled="envoiEnCours" @click="confirmerStatutMission">
+          Confirmer
+        </button>
+      </div>
+    </section>
+    <p v-if="estCloturee" class="rappel-lecture-seule" role="status">
+      Mission clôturée : lecture seule. Pour la modifier, rouvrez-la (un motif sera demandé).
+    </p>
     <p>{{ mission.description }}</p>
 
     <section class="activites">
       <h2>Activités</h2>
-      <form class="formulaire-inline" @submit.prevent="creerActivite">
+      <form v-if="!estCloturee" class="formulaire-inline" @submit.prevent="creerActivite">
         <input
           v-model="nouvelleActivite.titre"
           type="text"
           placeholder="Titre de l'activité"
+          aria-label="Titre de la nouvelle activité"
           required
         />
-        <input v-model="nouvelleActivite.description" type="text" placeholder="Description" />
+        <input
+          v-model="nouvelleActivite.description"
+          type="text"
+          placeholder="Description"
+          aria-label="Description de la nouvelle activité"
+        />
         <button type="submit" :disabled="envoiEnCours">Ajouter</button>
       </form>
       <ul>
         <li v-for="activite in activites" :key="activite.id">
           <span>
             {{ activite.titre }}
+            <span
+              v-if="activite.statut !== 'terminee' && prerequisOuverts(activite.id).length > 0"
+              class="badge-bloquee"
+            >
+              Bloquée par {{ prerequisOuverts(activite.id).join(', ') }}
+            </span>
             <span v-if="missionStore.dependancesDe(activite.id).length > 0" class="meta">
               — dépend de :
-              {{
-                missionStore
-                  .dependancesDe(activite.id)
-                  .map((d) => titreActivite(d.activity_cible_id))
-                  .join(', ')
-              }}
+              <template v-for="d in missionStore.dependancesDe(activite.id)" :key="d.id">
+                {{ titreActivite(d.activity_cible_id) }}
+                <button
+                  v-if="!estCloturee"
+                  type="button"
+                  class="bouton-lien"
+                  :aria-label="`Retirer la dépendance de « ${activite.titre} » envers « ${titreActivite(d.activity_cible_id)} »`"
+                  :disabled="envoiEnCours"
+                  @click="retirerDependance(d.id)"
+                >
+                  retirer
+                </button>
+              </template>
             </span>
           </span>
           <select
+            :key="`${activite.id}-${activite.statut}-${demandeMotifActivite?.activityId === activite.id}`"
             :value="activite.statut"
+            :aria-label="`Statut de l'activité « ${activite.titre} »`"
+            :disabled="estCloturee || envoiEnCours"
             @change="changerStatutActivite(activite.id, ($event.target as HTMLSelectElement).value)"
           >
             <option value="a_faire">À faire</option>
@@ -327,17 +461,37 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
           </select>
         </li>
       </ul>
+      <section
+        v-if="demandeMotifActivite"
+        class="demande-motif"
+        aria-labelledby="titre-motif-activite"
+      >
+        <h3 id="titre-motif-activite">Terminer malgré des prérequis non terminés</h3>
+        <ul>
+          <li v-for="a in demandeMotifActivite.prerequis" :key="a.id">{{ a.titre }}</li>
+        </ul>
+        <label>
+          Motif (obligatoire, conservé dans l'historique)
+          <textarea v-model="motifActivite" rows="2" required />
+        </label>
+        <div class="actions-motif">
+          <button type="button" @click="demandeMotifActivite = null">Annuler</button>
+          <button type="button" :disabled="envoiEnCours" @click="confirmerStatutActivite">
+            Confirmer
+          </button>
+        </div>
+      </section>
       <form
-        v-if="activites.length > 1"
+        v-if="activites.length > 1 && !estCloturee"
         class="formulaire-inline"
         @submit.prevent="ajouterDependance"
       >
-        <select v-model="dependanceSourceId" required>
+        <select v-model="dependanceSourceId" aria-label="Activité dépendante" required>
           <option value="" disabled>Activité dépendante…</option>
           <option v-for="a in activites" :key="a.id" :value="a.id">{{ a.titre }}</option>
         </select>
         <span>dépend de</span>
-        <select v-model="dependanceCibleId" required>
+        <select v-model="dependanceCibleId" aria-label="Activité requise" required>
           <option value="" disabled>Activité requise…</option>
           <option v-for="a in activites" :key="a.id" :value="a.id">{{ a.titre }}</option>
         </select>
@@ -353,8 +507,8 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
           {{ titreQualityEvent(association.quality_event_id) }}
         </li>
       </ul>
-      <form class="formulaire-inline" @submit.prevent="associerQualityEvent">
-        <select v-model="qualityEventASsocierId" required>
+      <form v-if="!estCloturee" class="formulaire-inline" @submit.prevent="associerQualityEvent">
+        <select v-model="qualityEventASsocierId" aria-label="Événement qualité à associer" required>
           <option value="" disabled>Choisir un événement qualité…</option>
           <option
             v-for="evenement in qualityEventStore.evenements"
@@ -445,8 +599,22 @@ const LIBELLES_CONFIANCE: Record<EtatConfianceIA, string> = {
 
 header {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   justify-content: space-between;
   align-items: center;
+}
+
+/* Audit UX exécution #10 : la fiche débordait à 375 px (612 px de large). */
+@media (max-width: 600px) {
+  .mission-workspace {
+    padding: 1rem;
+  }
+
+  section li {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
 }
 
 .bandeau-erreur {
@@ -460,9 +628,55 @@ header {
 
 .formulaire-inline {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
   margin-bottom: 0.75rem;
+}
+
+.demande-motif {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--vp-attention);
+  border-radius: var(--vp-rayon);
+}
+
+.demande-motif label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.actions-motif {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.rappel-lecture-seule {
+  color: var(--vp-texte-secondaire);
+  font-style: italic;
+}
+
+.badge-bloquee {
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background-color: var(--vp-attention-fond-leger, transparent);
+  color: var(--vp-attention);
+  border: 1px solid var(--vp-attention);
+}
+
+.bouton-lien {
+  background: none;
+  border: none;
+  padding: 0 0.2rem;
+  color: var(--vp-marque);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .facette-narratif {

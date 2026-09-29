@@ -162,7 +162,7 @@ export function preparerCreationSection(
  * contrôle de version optimiste (`versionAttendue`) ne distinguerait plus
  * la seconde de la première.
  */
-function horodatageSuivant(precedent: string, maintenant: string): string {
+export function horodatageSuivant(precedent: string, maintenant: string): string {
   const t = Date.parse(precedent)
   return Number.isFinite(t) && Date.parse(maintenant) <= t
     ? new Date(t + 1).toISOString()

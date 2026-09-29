@@ -88,13 +88,63 @@ const filtreStatut = ref<QualityEvent['statut'] | ''>('')
 const evenementSourcePourReference = reactive<Record<string, string>>({})
 const erreurChangementStatut = reactive<Record<string, string>>({})
 
-async function changerStatut(evenementId: string, statut: QualityEvent['statut']): Promise<void> {
+// Changement de statut par actions explicites, toujours avec un motif
+// conservé dans l'historique (décision du 29/09/2026 ; audit UX exécution
+// #8 : un simple choix dans une liste clôturait, puis rouvrait, sans trace).
+const ACTIONS_STATUT: Record<
+  QualityEvent['statut'],
+  { statut: QualityEvent['statut']; libelle: string }[]
+> = {
+  ouvert: [
+    { statut: 'en_cours', libelle: 'Démarrer le traitement' },
+    { statut: 'cloture', libelle: 'Clôturer' },
+  ],
+  en_cours: [{ statut: 'cloture', libelle: 'Clôturer' }],
+  cloture: [{ statut: 'ouvert', libelle: 'Rouvrir' }],
+}
+const demandeStatut = ref<{
+  evenementId: string
+  statut: QualityEvent['statut']
+  libelle: string
+} | null>(null)
+const motifStatut = ref('')
+
+function demanderChangementStatut(
+  evenementId: string,
+  statut: QualityEvent['statut'],
+  libelle: string,
+): void {
   erreurChangementStatut[evenementId] = ''
-  const resultat = await evenementsStore.changerStatut(props.clientId, evenementId, statut)
-  if (!resultat) {
-    erreurChangementStatut[evenementId] =
-      'Impossible de changer le statut — cet événement a peut-être été supprimé entre-temps.'
+  demandeStatut.value = { evenementId, statut, libelle }
+  motifStatut.value = ''
+}
+
+async function confirmerChangementStatut(): Promise<void> {
+  const demande = demandeStatut.value
+  if (!demande) return
+  if (motifStatut.value.trim().length === 0) {
+    erreurChangementStatut[demande.evenementId] =
+      'Indiquez le motif : il sera conservé dans l’historique de l’événement.'
+    return
   }
+  await envoyer(async () => {
+    try {
+      await evenementsStore.changerStatut(
+        props.clientId,
+        demande.evenementId,
+        demande.statut,
+        motifStatut.value.trim(),
+      )
+      demandeStatut.value = null
+      motifStatut.value = ''
+    } catch (e) {
+      erreurChangementStatut[demande.evenementId] = e instanceof Error ? e.message : String(e)
+    }
+  })
+}
+
+function formaterHorodatageFr(iso: string): string {
+  return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 const formulaireComplet = computed(() => brouillon.type !== '' && brouillon.titre.trim().length > 0)
@@ -265,24 +315,53 @@ function titreEvenement(id: string): string {
               → {{ titreEvenement(r.quality_event_cible_id) }}
             </li>
           </ul>
+          <p v-if="e.audit_log[0]" class="meta">
+            Créé le {{ formaterHorodatageFr(e.audit_log[0].timestamp) }} par
+            {{ e.audit_log[0].actor }}
+          </p>
+          <details v-if="e.audit_log.length > 1" class="historique">
+            <summary>Historique ({{ e.audit_log.length }} entrées)</summary>
+            <ol>
+              <li v-for="(entree, index) in e.audit_log" :key="index">
+                {{ formaterHorodatageFr(entree.timestamp) }} — {{ entree.actor }} :
+                {{ entree.action }}
+              </li>
+            </ol>
+          </details>
           <p v-if="erreurChangementStatut[e.id]" class="bandeau-erreur" role="alert">
             {{ erreurChangementStatut[e.id] }}
           </p>
+          <div
+            v-if="demandeStatut && demandeStatut.evenementId === e.id"
+            class="demande-motif"
+            role="group"
+            :aria-label="`${demandeStatut.libelle} : motif`"
+          >
+            <label>
+              {{ demandeStatut.libelle }} — motif (obligatoire, conservé dans l'historique)
+              <textarea v-model="motifStatut" rows="2" />
+            </label>
+            <div class="actions-evenement">
+              <button type="button" @click="demandeStatut = null">Annuler</button>
+              <button type="button" :disabled="envoiEnCours" @click="confirmerChangementStatut">
+                Confirmer
+              </button>
+            </div>
+          </div>
           <div class="actions-evenement">
-            <select
-              :value="e.statut"
-              @change="
-                changerStatut(
-                  e.id,
-                  ($event.target as HTMLSelectElement).value as QualityEvent['statut'],
-                )
-              "
+            <button
+              v-for="action in ACTIONS_STATUT[e.statut]"
+              :key="action.statut"
+              type="button"
+              :disabled="envoiEnCours"
+              @click="demanderChangementStatut(e.id, action.statut, action.libelle)"
             >
-              <option v-for="(libelle, statut) in LIBELLES_STATUT" :key="statut" :value="statut">
-                {{ libelle }}
-              </option>
-            </select>
-            <select v-model="evenementSourcePourReference[e.id]">
+              {{ action.libelle }}…
+            </button>
+            <select
+              v-model="evenementSourcePourReference[e.id]"
+              :aria-label="`Événement à référencer depuis « ${e.titre} »`"
+            >
               <option value="">— référencer depuis —</option>
               <option
                 v-for="autre in evenementsStore.evenements.filter((a) => a.id !== e.id)"
@@ -292,7 +371,16 @@ function titreEvenement(id: string): string {
                 {{ autre.titre }}
               </option>
             </select>
-            <button type="button" :disabled="envoiEnCours" @click="creerReference(e.id)">
+            <button
+              type="button"
+              :disabled="envoiEnCours || !evenementSourcePourReference[e.id]"
+              :title="
+                evenementSourcePourReference[e.id]
+                  ? undefined
+                  : 'Choisissez d’abord l’événement à référencer'
+              "
+              @click="creerReference(e.id)"
+            >
               Référencer
             </button>
           </div>
@@ -304,6 +392,27 @@ function titreEvenement(id: string): string {
 </template>
 
 <style scoped>
+.demande-motif {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--vp-attention);
+  border-radius: 0.4rem;
+}
+
+.demande-motif label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.historique ol {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.85em;
+}
+
 .journal-anomalies {
   padding: 2rem;
   font-family: var(--vp-police);

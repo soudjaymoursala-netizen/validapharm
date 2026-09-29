@@ -4436,3 +4436,97 @@ inventés sèment désormais de vrais enregistrements
   prévoir après vérification des doublons existants en production.
 - Les points UX du §40.4 (projets/rédaction, évaluations,
   exécution/qualité, entrée/administration).
+
+> **(28/09/2026)** PR #99 fusionnée (`ea7a139`) ; code déployé vérifié
+> (`workers_get_worker_code` : `verdict_incoherent`, `refusReferences`,
+> `quota_ia_atteint`, `code_challenge`, `chainesEgalesTempsConstant`,
+> `resultat_etape_deja_enregistre`, `corps_trop_volumineux`,
+> `qualification_ia_modifiee` présents).
+
+## 43. Décisions utilisateur du 29/09/2026 sur l'ergonomie restante (§40.4)
+
+**Demande** : « Poses moi des questions pour ce qui reste » → questionnaire.
+
+| Question | Réponse de l'utilisateur |
+|---|---|
+| Section modifiée pendant sa vérification/approbation | **Modifier = retour automatique** en rédaction, avis du cycle effacés |
+| Résultat d'étape définitif au premier clic | **Correction tracée** (avant clôture, motif obligatoire, ancien résultat conservé) |
+| Mission clôturée avec activités ouvertes | **Avertir + motif** obligatoire, tracé |
+| Anomalies | **Motif obligatoire** à tout changement de statut + **déviation d'exécution → journal** automatiquement |
+| Export Word | **Vrai .docx**, libellés français, nom de fichier lisible |
+| Export CSV | **Format Excel français** (point-virgule + BOM UTF-8) |
+| Unicité des versions de méthode | **Vérifier puis appliquer** la migration en production |
+| Mise en œuvre | **Tout, une PR par domaine** (exécution/qualité, projets/rédaction, évaluations, entrée/administration), fusion quand la CI est verte |
+
+**Vérification préalable en production (lecture seule, 29/09/2026)** :
+aucun doublon (client, version) dans `method_profiles_acfc`,
+`method_profiles_impact_assessment`, `method_profiles_risk_assessment`
+(6 lignes lues) — la contrainte d'unicité peut être appliquée (PR
+« évaluations »).
+
+### 43.1 PR exécution / qualité
+
+**Serveur (aucune migration)** :
+- **Correction tracée d'un résultat d'étape**
+  (`POST /clients/:id/executions/:id/etapes/:etapeId/correction`) : motif
+  obligatoire, exécution non clôturée, seul le résultat en vigueur (le plus
+  récent de l'étape) se corrige (409 `resultat_deja_corrige`). Un nouveau
+  résultat est enregistré (horodatage strictement postérieur) et un
+  événement d'exécution `correction` garde ancien → nouveau, motif, auteur,
+  heure. Rien n'est effacé.
+- **Déviation → journal d'anomalies** : une déviation consignée sans
+  anomalie référencée crée une entrée « Déviation » (origine interne, actif
+  de l'exécution, texte citant le test et l'exécution) et la référence
+  (`qualityEventId`). Une anomalie référencée doit exister chez le client.
+- **Anomalies** : motif obligatoire à tout changement de statut
+  (`motif_requis`), historique « ancien → nouveau — motif : … »
+  (`statut_inchange` si rien ne change).
+- **Missions** : clôture avec activités non terminées → `motif_requis` +
+  liste `activitesOuvertes`, acceptée avec motif (tracé) ; réouverture
+  d'une mission clôturée avec motif ; mission clôturée en lecture seule
+  (409 `mission_cloturee` pour activité, dépendance, statut d'activité) ;
+  terminer une activité dont un prérequis n'est pas terminé →
+  `prerequis_non_termines` + liste, acceptée avec motif ; **retrait d'une
+  dépendance** (`DELETE /clients/:id/dependances/:id`, tracé dans
+  l'activité dépendante).
+- **Pièce jointe de preuve** (`POST /clients/:id/evidences/:id/fichier`,
+  lecture `GET …/fichiers/:locationId`) : photo, PDF, texte, CSV, xlsx,
+  docx (400 `type_fichier_refuse` sinon), ≤ 25 Mo, jamais après clôture ;
+  le serveur stocke le fichier (R2 `evidences/<preuve>/<localisation>`),
+  calcule le SHA-256 et crée une localisation `fichier` qui le cite (nom,
+  type, taille, empreinte, date, auteur). Téléchargement en
+  `nosniff` + `attachment`.
+
+**Interface** :
+- `ExecutionTests.vue` : chaque étape dans un `fieldset` numéroté avec
+  libellés visibles (résultat, observation, mesure, valeur, unité, type
+  d'événement, type de preuve, étape concernée, verdict) ; « Corriger… »
+  sur le résultat en vigueur (ancien barré « corrigé ») ; « Déclarer une
+  déviation » sur une étape non conforme (pré-remplit l'événement) ;
+  message « Déviation reportée au journal d'anomalies » avec lien ; mesure
+  numérique obligatoire (virgule acceptée, `inputmode="decimal"`) ;
+  « Photo ou fichier » (caméra sur tablette) et « Étape concernée » pour
+  une preuve, pièces jointes ouvertes depuis la liste ; clôture isolée
+  dans un encadré « action définitive » avec bouton danger ; incohérences
+  de clôture calculées sur les résultats en vigueur ; cibles tactiles
+  ≥ 40 px.
+- `JournalAnomalies.vue` : boutons d'action (« Démarrer le traitement… »,
+  « Clôturer… », « Rouvrir… ») avec motif obligatoire, historique
+  déroulant (qui, quand, quoi), auteur et date de création, « Référencer »
+  désactivé tant qu'aucun événement n'est choisi.
+- `MissionWorkspace.vue` : fenêtre de motif (clôture avec liste des
+  activités ouvertes, réouverture, activité terminée malgré ses
+  prérequis), badge « Bloquée par … », retrait de dépendance, mission
+  clôturée en lecture seule, libellés accessibles, plus de débordement à
+  375 px.
+
+**Vérification** : Worker 409 tests (+ correction tracée, déviation →
+journal, motif d'anomalie, missions/prérequis/dépendance, pièce jointe) ;
+front 1 625 tests (écran d'exécution avec sélecteurs stables, journal
+d'anomalies avec motif et historique, mission avec motif et lecture seule,
+stores). **Vérifié en réel** (Worker local, D1/R2 jetables) : correction
+201 avec « conforme → non_conforme. Motif : … » ; déviation → entrée
+« Déviation pendant l'exécution de « OQ-001 » » au journal ; changement de
+statut sans motif → 400 ; photo déposée (empreinte SHA-256) et relue à
+l'octet près depuis R2 ; mission clôturée avec activité ouverte → 400 +
+liste, puis 200 avec motif, puis ajout refusé (409).

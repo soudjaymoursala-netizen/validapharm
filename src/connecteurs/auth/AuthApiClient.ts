@@ -1288,7 +1288,14 @@ export interface SaisieCreationDocumentNormatif {
 }
 
 export type ResultatApi<T> =
-  { ok: true; donnees: T } | { ok: false; erreur: string; status: number }
+  | { ok: true; donnees: T }
+  | {
+      ok: false
+      erreur: string
+      status: number
+      /** Corps complet du refus (ex. `activitesOuvertes` d'un `motif_requis`), quand il en porte plus que le code. */
+      details?: Record<string, unknown>
+    }
 
 const DELAI_MAX_PAR_DEFAUT_MS = 15_000
 
@@ -2019,16 +2026,18 @@ export class AuthApiClient {
     })
   }
 
+  /** Motif obligatoire (décision du 29/09/2026), conservé dans l'historique de l'anomalie. */
   changerStatutQualityEvent(
     jeton: string,
     clientId: string,
     evenementId: string,
     statut: string,
+    motif: string,
   ): Promise<ResultatApi<{ evenement: QualityEventWire }>> {
     return this.requete(
       'PATCH',
       `/clients/${clientId}/quality-events/evenements/${evenementId}/statut`,
-      { jeton, body: { statut } },
+      { jeton, body: { statut, motif } },
     )
   }
 
@@ -2234,6 +2243,23 @@ export class AuthApiClient {
     })
   }
 
+  /** Correction tracée d'un résultat d'étape (motif obligatoire) — l'ancien résultat reste enregistré. */
+  corrigerResultatEtape(
+    jeton: string,
+    clientId: string,
+    executionId: string,
+    executionStepId: string,
+    saisie: { resultat: string; observation: string; motif: string },
+  ): Promise<
+    ResultatApi<{ executionStep: ExecutionStepWire; executionEvent: ExecutionEventWire }>
+  > {
+    return this.requete(
+      'POST',
+      `/clients/${clientId}/executions/${executionId}/etapes/${executionStepId}/correction`,
+      { jeton, body: saisie },
+    )
+  }
+
   ajouterMesure(
     jeton: string,
     clientId: string,
@@ -2251,7 +2277,9 @@ export class AuthApiClient {
     clientId: string,
     executionId: string,
     saisie: SaisieEvenementExecutionWire,
-  ): Promise<ResultatApi<{ executionEvent: ExecutionEventWire }>> {
+  ): Promise<
+    ResultatApi<{ executionEvent: ExecutionEventWire; anomalie?: QualityEventWire | null }>
+  > {
     return this.requete('POST', `/clients/${clientId}/executions/${executionId}/evenements`, {
       jeton,
       body: saisie,
@@ -2328,6 +2356,45 @@ export class AuthApiClient {
       jeton,
       body: saisie,
     })
+  }
+
+  /** Pièce jointe d'une preuve (photo, PDF…) : le serveur conserve le fichier et calcule son empreinte. */
+  joindreFichierPreuve(
+    jeton: string,
+    clientId: string,
+    evidenceId: string,
+    fichier: File,
+  ): Promise<ResultatApi<{ evidenceLocation: EvidenceLocationWire }>> {
+    const formData = new FormData()
+    formData.set('fichier', fichier)
+    return this.requeteFormData(
+      'POST',
+      `/clients/${clientId}/evidences/${evidenceId}/fichier`,
+      jeton,
+      formData,
+    )
+  }
+
+  /** Contenu d'une pièce jointe de preuve — jamais du JSON (même patron que `obtenirContenuDocumentProjet`). */
+  async obtenirFichierPreuve(
+    jeton: string,
+    clientId: string,
+    evidenceId: string,
+    locationId: string,
+  ): Promise<{ ok: true; blob: Blob } | { ok: false; erreur: string }> {
+    const reponse = await this.envoyer(
+      `${this.relayUrl}/clients/${clientId}/evidences/${evidenceId}/fichiers/${locationId}`,
+      { headers: { Authorization: `Bearer ${jeton}` } },
+    )
+    if (!reponse.ok) {
+      const corps = await reponse.json().catch(() => null)
+      const erreur =
+        corps && typeof corps === 'object' && 'erreur' in corps && typeof corps.erreur === 'string'
+          ? corps.erreur
+          : 'erreur_inconnue'
+      return { ok: false, erreur }
+    }
+    return { ok: true, blob: await reponse.blob() }
   }
 
   declarerProvenance(
@@ -2753,10 +2820,11 @@ export class AuthApiClient {
     clientId: string,
     missionId: string,
     statut: string,
+    motif?: string,
   ): Promise<ResultatApi<{ mission: MissionWire }>> {
     return this.requete('PATCH', `/clients/${clientId}/missions/${missionId}/statut`, {
       jeton,
-      body: { statut },
+      body: { statut, ...(motif ? { motif } : {}) },
     })
   }
 
@@ -2789,11 +2857,20 @@ export class AuthApiClient {
     clientId: string,
     activityId: string,
     statut: string,
+    motif?: string,
   ): Promise<ResultatApi<{ activity: ActivityWire }>> {
     return this.requete('PATCH', `/clients/${clientId}/activities/${activityId}/statut`, {
       jeton,
-      body: { statut },
+      body: { statut, ...(motif ? { motif } : {}) },
     })
+  }
+
+  retirerDependance(
+    jeton: string,
+    clientId: string,
+    dependencyId: string,
+  ): Promise<ResultatApi<{ ok: true }>> {
+    return this.requete('DELETE', `/clients/${clientId}/dependances/${dependencyId}`, { jeton })
   }
 
   ajouterDependance(
@@ -3698,7 +3775,12 @@ export class AuthApiClient {
         'erreur' in corps && typeof (corps as { erreur?: unknown }).erreur === 'string'
           ? (corps as { erreur: string }).erreur
           : 'erreur_inconnue'
-      return { ok: false, erreur, status: reponse.status }
+      return {
+        ok: false,
+        erreur,
+        status: reponse.status,
+        details: corps as Record<string, unknown>,
+      }
     }
     return { ok: true, donnees: corps as T }
   }

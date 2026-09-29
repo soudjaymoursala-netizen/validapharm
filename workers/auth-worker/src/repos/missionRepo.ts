@@ -70,6 +70,8 @@ export interface MissionRepo {
     activitySourceId: string,
     activityCibleId: string,
   ): Promise<DependencyEnregistree | null>
+  /** Retrait d'une dépendance déclarée par erreur (audit UX exécution #9) — tracé côté routeur. */
+  supprimerDependency(id: string): Promise<void>
 
   listerAssociationsMissionQualityEvent(
     clientId: string,
@@ -130,6 +132,10 @@ export class MissionRepoMemoire implements MissionRepo {
   async creerDependency(dependency: DependencyEnregistree): Promise<void> {
     if (this.dependencies.has(dependency.id)) return
     this.dependencies.set(dependency.id, dependency)
+  }
+
+  async supprimerDependency(id: string): Promise<void> {
+    this.dependencies.delete(id)
   }
 
   async dependencyExistante(

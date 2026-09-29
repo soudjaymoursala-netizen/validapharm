@@ -284,6 +284,40 @@ export const useEvidenceStore = defineStore('evidence', () => {
     return localisation
   }
 
+  /**
+   * Pièce jointe d'une preuve (photo, PDF…, audit UX exécution #6) : le
+   * serveur conserve le fichier, calcule son empreinte SHA-256 et crée la
+   * localisation `fichier` qui la cite.
+   */
+  async function joindreFichier(
+    clientId: string,
+    evidenceId: string,
+    fichier: File,
+  ): Promise<EvidenceLocation> {
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.joindreFichierPreuve(jeton, clientId, evidenceId, fichier)
+    if (!resultat.ok) {
+      throw new Error(`Fichier non joint : ${libelleErreurServeur(resultat.erreur)}`)
+    }
+    const localisation = evidenceLocationWireVersDomaine(resultat.donnees.evidenceLocation)
+    evidenceLocations.value = [...evidenceLocations.value, localisation]
+    return localisation
+  }
+
+  /** Contenu d'une pièce jointe, pour l'ouvrir ou l'enregistrer. */
+  async function obtenirFichier(
+    clientId: string,
+    evidenceId: string,
+    locationId: string,
+  ): Promise<Blob> {
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.obtenirFichierPreuve(jeton, clientId, evidenceId, locationId)
+    if (!resultat.ok) {
+      throw new Error(`Fichier indisponible : ${libelleErreurServeur(resultat.erreur)}`)
+    }
+    return resultat.blob
+  }
+
   /** Déclaration explicite, jamais déduite — idempotente, même logique que `declarerCouverture` (Phase 6a). */
   async function declarerProvenance(
     clientId: string,
@@ -331,6 +365,8 @@ export const useEvidenceStore = defineStore('evidence', () => {
     charger,
     enregistrerPreuve,
     ajouterLocalisation,
+    joindreFichier,
+    obtenirFichier,
     declarerProvenance,
     preuvesExecution,
     localisationsPreuve,

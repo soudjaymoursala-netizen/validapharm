@@ -3430,15 +3430,24 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
       },
     })
 
-    const changement = await requete(
-      ctx,
-      'PATCH',
-      `/clients/${clientId}/quality-events/evenements/${creation.corps.evenement.id}/statut`,
-      { jeton: admin.jeton, body: { statut: 'en_cours' } },
-    )
+    const chemin = `/clients/${clientId}/quality-events/evenements/${creation.corps.evenement.id}/statut`
+    // Décision du 29/09/2026 : motif obligatoire.
+    const sansMotif = await requete(ctx, 'PATCH', chemin, {
+      jeton: admin.jeton,
+      body: { statut: 'en_cours' },
+    })
+    expect([sansMotif.status, sansMotif.corps.erreur]).toEqual([400, 'motif_requis'])
+
+    const changement = await requete(ctx, 'PATCH', chemin, {
+      jeton: admin.jeton,
+      body: { statut: 'en_cours', motif: 'Analyse lancée par la QA' },
+    })
     expect(changement.status).toBe(200)
     expect(changement.corps.evenement.statut).toBe('en_cours')
     expect(changement.corps.evenement.auditLog).toHaveLength(2)
+    expect(changement.corps.evenement.auditLog[1]?.action).toBe(
+      'changement de statut : ouvert → en_cours — motif : Analyse lancée par la QA',
+    )
   })
 
   test('changer le statut d’un événement inexistant -> 404', async () => {
@@ -11499,5 +11508,307 @@ describe('quota du relais IA et tailles maximales (audit sécurité a1, m4)', ()
       texte: 'x'.repeat(2 * 1024 * 1024 + 1),
     })
     expect([status, corps.erreur]).toEqual([413, 'texte_trop_volumineux'])
+  })
+})
+
+describe('exécution et qualité : corrections tracées, anomalies, missions (décisions du 29/09/2026)', () => {
+  async function preparer() {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const jeton = admin.jeton
+    const client = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Client Q' } })
+    const clientId = client.corps.client.id as string
+    return { ctx, jeton, clientId }
+  }
+
+  async function executionOuverte(ctx: Contexte, jeton: string, clientId: string) {
+    const exigence = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/requirements`,
+      {
+        jeton,
+        body: { reference: 'REQ-1', titre: 'Débit', description: '' },
+      },
+    )
+    const objectif = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-objectives`,
+      {
+        jeton,
+        body: { requirementId: exigence.corps.requirement.id, titre: 'Obj', description: '' },
+      },
+    )
+    const candidat = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/test-definition/test-candidates`,
+      {
+        jeton,
+        body: { testObjectiveId: objectif.corps.testObjective.id, titre: 'C', description: '' },
+      },
+    )
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/test-candidates/${candidat.corps.testCandidate.id}/statut`,
+      { jeton, body: { statut: 'accepte' } },
+    )
+    const test = await requete(ctx, 'POST', `/clients/${clientId}/test-definition/tests`, {
+      jeton,
+      body: {
+        testCandidateId: candidat.corps.testCandidate.id,
+        titre: 'Test débit',
+        description: '',
+        etapes: [{ ordre: 1, action: 'Démarrer', resultatAttendu: 'Débit stable' }],
+      },
+    })
+    await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/test-definition/tests/${test.corps.test.id}/approuver`,
+      { jeton, body: { motDePasse: 'CoffreFort!2026' } },
+    )
+    const execution = await requete(ctx, 'POST', `/clients/${clientId}/executions`, {
+      jeton,
+      body: { testId: test.corps.test.id, assetNodeId: null },
+    })
+    return {
+      executionId: execution.corps.execution.id as string,
+      testStepId: test.corps.test.etapes[0]?.id as string,
+    }
+  }
+
+  test('résultat d’étape corrigé avec motif : ancien conservé, nouveau en vigueur, correction tracée', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const { executionId, testStepId } = await executionOuverte(ctx, jeton, clientId)
+    const premier = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${executionId}/etapes`,
+      {
+        jeton,
+        body: { testStepId, resultat: 'conforme', observation: '' },
+      },
+    )
+    const chemin = `/clients/${clientId}/executions/${executionId}/etapes/${premier.corps.executionStep.id}/correction`
+
+    const sansMotif = await requete(ctx, 'POST', chemin, {
+      jeton,
+      body: { resultat: 'non_conforme', observation: 'Débit instable' },
+    })
+    expect([sansMotif.status, sansMotif.corps.erreur]).toEqual([400, 'motif_requis'])
+
+    const correction = await requete(ctx, 'POST', chemin, {
+      jeton,
+      body: { resultat: 'non_conforme', observation: 'Débit instable', motif: 'Erreur de saisie' },
+    })
+    expect(correction.status).toBe(201)
+    expect(correction.corps.executionEvent.type).toBe('correction')
+    expect(correction.corps.executionEvent.description).toContain(
+      'conforme → non_conforme. Motif : Erreur de saisie',
+    )
+    // Le résultat corrigé ne se corrige plus : seul le résultat en vigueur le peut.
+    const doubleCorrection = await requete(ctx, 'POST', chemin, {
+      jeton,
+      body: { resultat: 'conforme', observation: '', motif: 'x' },
+    })
+    expect([doubleCorrection.status, doubleCorrection.corps.erreur]).toEqual([
+      409,
+      'resultat_deja_corrige',
+    ])
+
+    const liste = await requete(ctx, 'GET', `/clients/${clientId}/executions`, { jeton })
+    const resultats = liste.corps.executionSteps.filter(
+      (e: { testStepId: string }) => e.testStepId === testStepId,
+    )
+    expect(resultats.map((e: { resultat: string }) => e.resultat)).toEqual([
+      'conforme',
+      'non_conforme',
+    ])
+  })
+
+  test('déviation consignée pendant une exécution : entrée « Déviation » créée dans le journal d’anomalies', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const { executionId } = await executionOuverte(ctx, jeton, clientId)
+    const evenement = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/executions/${executionId}/evenements`,
+      { jeton, body: { type: 'deviation', description: 'Seuil d’alarme décalé' } },
+    )
+    expect(evenement.status).toBe(201)
+    const anomalieId = evenement.corps.executionEvent.qualityEventId
+    expect(anomalieId).toEqual(expect.any(String))
+    const journal = await requete(ctx, 'GET', `/clients/${clientId}/quality-events`, { jeton })
+    const anomalie = journal.corps.evenements.find((e: { id: string }) => e.id === anomalieId)
+    expect(anomalie).toMatchObject({ type: 'deviation', statut: 'ouvert', origine: 'interne' })
+    expect(anomalie?.titre).toBe("Déviation pendant l'exécution de « Test débit »")
+    expect(anomalie?.description).toContain(executionId)
+  })
+
+  test('mission : clôture avec activité ouverte → motif exigé ; clôturée → lecture seule ; réouverture avec motif', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const mission = await requete(ctx, 'POST', `/clients/${clientId}/missions`, {
+      jeton,
+      body: { titre: 'Requalification', description: '' },
+    })
+    const missionId = mission.corps.mission.id
+    const a1 = await requete(ctx, 'POST', `/clients/${clientId}/missions/${missionId}/activities`, {
+      jeton,
+      body: { titre: 'A1', description: '' },
+    })
+    const a2 = await requete(ctx, 'POST', `/clients/${clientId}/missions/${missionId}/activities`, {
+      jeton,
+      body: { titre: 'A2', description: '' },
+    })
+    const cheminStatut = `/clients/${clientId}/missions/${missionId}/statut`
+
+    // A2 dépend de A1 : la terminer avant A1 exige un motif.
+    const dependance = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/activities/${a2.corps.activity.id}/dependances`,
+      { jeton, body: { activityCibleId: a1.corps.activity.id } },
+    )
+    const sansMotif = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/activities/${a2.corps.activity.id}/statut`,
+      { jeton, body: { statut: 'terminee' } },
+    )
+    expect([sansMotif.status, sansMotif.corps.erreur]).toEqual([400, 'prerequis_non_termines'])
+    const retrait = await requete(
+      ctx,
+      'DELETE',
+      `/clients/${clientId}/dependances/${dependance.corps.dependency.id}`,
+      { jeton },
+    )
+    expect(retrait.status).toBe(200)
+    const sansPrerequis = await requete(
+      ctx,
+      'PATCH',
+      `/clients/${clientId}/activities/${a2.corps.activity.id}/statut`,
+      { jeton, body: { statut: 'terminee' } },
+    )
+    expect(sansPrerequis.status).toBe(200)
+
+    const refus = await requete(ctx, 'PATCH', cheminStatut, { jeton, body: { statut: 'cloturee' } })
+    expect(refus.status).toBe(400)
+    expect(refus.corps.erreur).toBe('motif_requis')
+    expect((refus.corps as unknown as { activitesOuvertes: unknown }).activitesOuvertes).toEqual([
+      { id: a1.corps.activity.id, titre: 'A1', statut: 'a_faire' },
+    ])
+    const cloture = await requete(ctx, 'PATCH', cheminStatut, {
+      jeton,
+      body: { statut: 'cloturee', motif: 'A1 reportée à la prochaine campagne' },
+    })
+    expect(cloture.status).toBe(200)
+    expect(cloture.corps.mission.auditLog.at(-1)?.action).toContain(
+      'malgré 1 activité(s) non terminée(s) — motif : A1 reportée',
+    )
+
+    const ajout = await requete(
+      ctx,
+      'POST',
+      `/clients/${clientId}/missions/${missionId}/activities`,
+      {
+        jeton,
+        body: { titre: 'A3', description: '' },
+      },
+    )
+    expect([ajout.status, ajout.corps.erreur]).toEqual([409, 'mission_cloturee'])
+
+    const reouvertureSansMotif = await requete(ctx, 'PATCH', cheminStatut, {
+      jeton,
+      body: { statut: 'en_cours' },
+    })
+    expect(reouvertureSansMotif.status).toBe(400)
+    const reouverture = await requete(ctx, 'PATCH', cheminStatut, {
+      jeton,
+      body: { statut: 'en_cours', motif: 'A1 finalement réalisable' },
+    })
+    expect(reouverture.status).toBe(200)
+  })
+})
+
+describe('preuve : pièce jointe conservée par le serveur (audit UX exécution #6)', () => {
+  test('photo jointe : empreinte SHA-256 calculée, fichier relu à l’identique ; type refusé ; jamais après clôture', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const jeton = admin.jeton
+    const client = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Client P' } })
+    const clientId = client.corps.client.id as string
+    // Exécution réelle non clôturée, rattachée directement pour ce test.
+    const maintenant = new Date().toISOString()
+    const execution = {
+      id: 'exec-1',
+      clientId,
+      testId: 'test-1',
+      assetNodeId: null,
+      executant: 'admin@pharmatech.example',
+      statut: 'en_cours',
+      verdict: null,
+      dateDebut: maintenant,
+      dateFin: null,
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    }
+    await ctx.executionRepo.creerExecution(execution)
+    const preuve = await requete(ctx, 'POST', `/clients/${clientId}/evidences`, {
+      jeton,
+      body: { executionId: 'exec-1', type: 'document', titre: 'Écran IHM', description: '' },
+    })
+    const evidenceId = preuve.corps.evidence.id as string
+
+    const envoyer = (contenu: Uint8Array, type: string, nom: string) => {
+      const formData = new FormData()
+      formData.set('fichier', new File([contenu as BlobPart], nom, { type }))
+      return routerRequete(
+        new Request(
+          `https://relais.workers.dev/clients/${clientId}/evidences/${evidenceId}/fichier`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${jeton}` },
+            body: formData,
+          },
+        ),
+        ctx,
+      )
+    }
+    const octets = new TextEncoder().encode('image-de-test')
+    const depot = await envoyer(octets, 'image/png', 'ihm.png')
+    expect(depot.status).toBe(201)
+    const { evidenceLocation } = (await depot.json()) as {
+      evidenceLocation: { id: string; systeme: string; reference: string }
+    }
+    const attendu = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))]
+      .map((o) => o.toString(16).padStart(2, '0'))
+      .join('')
+    expect(evidenceLocation.systeme).toBe('fichier')
+    expect(evidenceLocation.reference).toContain(
+      `ihm.png · image/png · 13 octets · SHA-256 ${attendu}`,
+    )
+
+    const relu = await routerRequete(
+      new Request(
+        `https://relais.workers.dev/clients/${clientId}/evidences/${evidenceId}/fichiers/${evidenceLocation.id}`,
+        { headers: { Authorization: `Bearer ${jeton}` } },
+      ),
+      ctx,
+    )
+    expect(relu.status).toBe(200)
+    expect(relu.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(new Uint8Array(await relu.arrayBuffer())).toEqual(octets)
+
+    const html = await envoyer(new TextEncoder().encode('<script>'), 'text/html', 'x.html')
+    expect(html.status).toBe(400)
+    expect(((await html.json()) as { erreur: string }).erreur).toBe('type_fichier_refuse')
+
+    await ctx.executionRepo.remplacerExecution({ ...execution, statut: 'terminee' })
+    const apresCloture = await envoyer(octets, 'image/png', 'ihm2.png')
+    expect(apresCloture.status).toBe(400)
   })
 })
