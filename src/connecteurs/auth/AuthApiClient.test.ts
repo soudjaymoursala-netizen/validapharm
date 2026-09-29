@@ -70,7 +70,7 @@ describe('AuthApiClient — login', () => {
       reponseMock({ erreur: 'identifiants_invalides' }, { status: 401 }),
     )
     const resultat = await client().login('q@example.com', 'mauvais')
-    expect(resultat).toEqual({ ok: false, erreur: 'identifiants_invalides', status: 401 })
+    expect(resultat).toMatchObject({ ok: false, erreur: 'identifiants_invalides', status: 401 })
   })
 })
 

@@ -4519,3 +4519,14 @@ aucun doublon (client, version) dans `method_profiles_acfc`,
   prérequis), badge « Bloquée par … », retrait de dépendance, mission
   clôturée en lecture seule, libellés accessibles, plus de débordement à
   375 px.
+
+**Vérification** : Worker 409 tests (+ correction tracée, déviation →
+journal, motif d'anomalie, missions/prérequis/dépendance, pièce jointe) ;
+front 1 625 tests (écran d'exécution avec sélecteurs stables, journal
+d'anomalies avec motif et historique, mission avec motif et lecture seule,
+stores). **Vérifié en réel** (Worker local, D1/R2 jetables) : correction
+201 avec « conforme → non_conforme. Motif : … » ; déviation → entrée
+« Déviation pendant l'exécution de « OQ-001 » » au journal ; changement de
+statut sans motif → 400 ; photo déposée (empreinte SHA-256) et relue à
+l'octet près depuis R2 ; mission clôturée avec activité ouverte → 400 +
+liste, puis 200 avec motif, puis ajout refusé (409).
