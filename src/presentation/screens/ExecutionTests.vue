@@ -84,7 +84,12 @@ const LIBELLES_TYPE_EVENEMENT: Record<TypeExecutionEvent, string> = {
   arret: 'Arrêt',
   externe: 'Externe',
   continuer: 'Continuer',
+  correction: 'Correction de résultat',
 }
+/** Types proposés à la saisie : la correction est créée par le serveur, jamais saisie à la main. */
+const TYPES_EVENEMENT_SAISISSABLES = Object.entries(LIBELLES_TYPE_EVENEMENT).filter(
+  ([code]) => code !== 'correction',
+) as [TypeExecutionEvent, string][]
 
 const LIBELLES_TYPE_PREUVE: Record<TypeEvidence, string> = {
   native: 'Native (observation directe)',
@@ -138,6 +143,10 @@ async function demarrerSansGarde(): Promise<void> {
 function testDe(executionId: string) {
   const execution = executionStore.executions.find((e) => e.id === executionId)
   return execution ? testStore.tests.find((t) => t.id === execution.test_id) : undefined
+}
+
+function numeroEtape(executionId: string, testStepId: string): number {
+  return (testDe(executionId)?.etapes ?? []).findIndex((e) => e.id === testStepId) + 1
 }
 
 // Signal purement informatif, jamais un blocage : clôturer après un « Arrêt »
@@ -195,6 +204,63 @@ async function enregistrerResultatSansGarde(
   }
 }
 
+// --- Correction tracée d'un résultat (décision du 29/09/2026) ---
+const correctionEnCours = ref<{
+  executionId: string
+  executionStepId: string
+  resultat: ResultatEtapeExecution | ''
+  observation: string
+  motif: string
+} | null>(null)
+
+function ouvrirCorrection(executionId: string, executionStepId: string): void {
+  const actuel = executionStore.executionSteps.find((e) => e.id === executionStepId)
+  correctionEnCours.value = {
+    executionId,
+    executionStepId,
+    resultat: '',
+    observation: actuel?.observation ?? '',
+    motif: '',
+  }
+}
+
+async function enregistrerCorrection(): Promise<void> {
+  const correction = correctionEnCours.value
+  if (!correction) return
+  if (!correction.resultat) {
+    erreurParExecution.value[correction.executionId] = 'Choisissez le résultat corrigé.'
+    return
+  }
+  if (correction.motif.trim().length === 0) {
+    erreurParExecution.value[correction.executionId] =
+      'Indiquez le motif de la correction : il est conservé dans l’enregistrement.'
+    return
+  }
+  erreurParExecution.value[correction.executionId] = ''
+  const resultat = correction.resultat
+  await envoyer(async () => {
+    await executionStore.corrigerResultatEtape(
+      props.clientId,
+      correction.executionId,
+      correction.executionStepId,
+      { resultat, observation: correction.observation.trim(), motif: correction.motif.trim() },
+    )
+    correctionEnCours.value = null
+  })
+}
+
+// --- Déviation depuis une étape non conforme (audit UX exécution #7) ---
+const champsDescriptionEvenement = ref<Record<string, HTMLInputElement | null>>({})
+
+function declarerDeviation(executionId: string, testStepId: string, observation: string): void {
+  const etape = testDe(executionId)?.etapes.find((e) => e.id === testStepId)
+  typeEvenementBrouillon.value[executionId] = 'deviation'
+  descriptionEvenementBrouillon.value[executionId] =
+    `Étape ${numeroEtape(executionId, testStepId)} non conforme (${etape?.action ?? ''})` +
+    (observation ? ` : ${observation}` : '')
+  champsDescriptionEvenement.value[executionId]?.focus()
+}
+
 // --- Mesures ---
 const mesuresBrouillon = ref<Record<string, { libelle: string; valeur: string; unite: string }>>({})
 
@@ -216,8 +282,17 @@ async function ajouterMesure(...args: Parameters<typeof ajouterMesureSansGarde>)
 
 async function ajouterMesureSansGarde(executionId: string, executionStepId: string): Promise<void> {
   const brouillon = mesuresBrouillon.value[executionStepId]
-  if (!brouillon || brouillon.libelle.trim().length === 0 || brouillon.valeur.trim().length === 0)
+  if (!brouillon || brouillon.libelle.trim().length === 0 || brouillon.valeur.trim().length === 0) {
+    erreurParExecution.value[executionId] = 'Renseignez le libellé et la valeur de la mesure.'
     return
+  }
+  // Valeur numérique (virgule française acceptée) — audit UX exécution #3 :
+  // « abc » était enregistré puis figé dans l'enregistrement immuable.
+  if (!/^-?\d+([.,]\d+)?$/.test(brouillon.valeur.trim())) {
+    erreurParExecution.value[executionId] =
+      'La valeur d’une mesure doit être un nombre (ex. 12,5 ou -3).'
+    return
+  }
   erreurParExecution.value[executionId] = ''
   const resultat = await executionStore.ajouterMesure(props.clientId, executionStepId, {
     libelle: brouillon.libelle.trim(),
@@ -232,8 +307,10 @@ async function ajouterMesureSansGarde(executionId: string, executionStepId: stri
 }
 
 // --- Événements d'exécution ---
-const typeEvenementBrouillon = ref<Record<string, TypeExecutionEvent>>({})
+const typeEvenementBrouillon = ref<Record<string, TypeExecutionEvent | ''>>({})
 const descriptionEvenementBrouillon = ref<Record<string, string>>({})
+/** Exécutions pour lesquelles une déviation vient d'être reportée au journal d'anomalies. */
+const deviationReportee = ref<Record<string, boolean>>({})
 
 async function consignerEvenement(
   ...args: Parameters<typeof consignerEvenementSansGarde>
@@ -242,7 +319,11 @@ async function consignerEvenement(
 }
 
 async function consignerEvenementSansGarde(executionId: string): Promise<void> {
-  const type = typeEvenementBrouillon.value[executionId] ?? 'commentaire'
+  const type = typeEvenementBrouillon.value[executionId]
+  if (!type) {
+    erreurParExecution.value[executionId] = "Choisissez le type d'événement."
+    return
+  }
   const description = descriptionEvenementBrouillon.value[executionId]?.trim()
   if (!description) {
     erreurParExecution.value[executionId] = "Décrivez l'événement avant de le consigner."
@@ -259,6 +340,7 @@ async function consignerEvenementSansGarde(executionId: string): Promise<void> {
     return
   }
   descriptionEvenementBrouillon.value[executionId] = ''
+  deviationReportee.value[executionId] = type === 'deviation' && resultat.quality_event_id !== null
 }
 
 // --- Preuves (Evidence) ---
@@ -266,6 +348,28 @@ const typePreuveBrouillon = ref<Record<string, TypeEvidence>>({})
 const titrePreuveBrouillon = ref<Record<string, string>>({})
 const descriptionPreuveBrouillon = ref<Record<string, string>>({})
 const referenceLocalisationBrouillon = ref<Record<string, string>>({})
+const etapePreuveBrouillon = ref<Record<string, string>>({})
+const fichierPreuveBrouillon = ref<Record<string, File | null>>({})
+const champsFichierPreuve = ref<Record<string, HTMLInputElement | null>>({})
+
+function choisirFichierPreuve(executionId: string, evenement: Event): void {
+  fichierPreuveBrouillon.value[executionId] =
+    (evenement.target as HTMLInputElement).files?.[0] ?? null
+}
+
+async function ouvrirFichierPreuve(evidenceId: string, locationId: string): Promise<void> {
+  await envoyer(async () => {
+    const blob = await evidenceStore.obtenirFichier(props.clientId, evidenceId, locationId)
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  })
+}
+
+/** Nom lisible d'une pièce jointe (référence : « nom · type · taille · SHA-256 … »). */
+function nomFichierPreuve(reference: string): string {
+  return reference.split(' · ')[0] ?? reference
+}
 
 async function enregistrerPreuve(
   ...args: Parameters<typeof enregistrerPreuveSansGarde>
@@ -282,7 +386,7 @@ async function enregistrerPreuveSansGarde(executionId: string): Promise<void> {
   }
   erreurParExecution.value[executionId] = ''
   const resultat = await evidenceStore.enregistrerPreuve(props.clientId, executionId, {
-    executionStepId: null,
+    executionStepId: etapePreuveBrouillon.value[executionId] || null,
     type,
     titre,
     description: descriptionPreuveBrouillon.value[executionId]?.trim() ?? '',
@@ -308,9 +412,25 @@ async function enregistrerPreuveSansGarde(executionId: string): Promise<void> {
       }
     }
   }
+  const fichier = fichierPreuveBrouillon.value[executionId]
+  if (fichier) {
+    try {
+      await evidenceStore.joindreFichier(props.clientId, resultat.id, fichier)
+    } catch (e) {
+      // La preuve est enregistrée ; seul le fichier a échoué : le brouillon
+      // reste pour permettre de le rejoindre.
+      erreurParExecution.value[executionId] =
+        `Preuve enregistrée, mais ${e instanceof Error ? e.message : String(e)}`
+      return
+    }
+  }
   titrePreuveBrouillon.value[executionId] = ''
   descriptionPreuveBrouillon.value[executionId] = ''
   referenceLocalisationBrouillon.value[executionId] = ''
+  etapePreuveBrouillon.value[executionId] = ''
+  fichierPreuveBrouillon.value[executionId] = null
+  const champ = champsFichierPreuve.value[executionId]
+  if (champ) champ.value = ''
 }
 
 // --- Clôture ---
@@ -332,7 +452,7 @@ async function cloturerSansGarde(executionId: string): Promise<void> {
   const sansResultat = nombreEtapesSansResultat(executionId)
   if (sansResultat > 0) alertes.push(`${sansResultat} étape(s) sans résultat`)
   const nonConformes = executionStore
-    .etapesExecution(executionId)
+    .resultatsEnVigueur(executionId)
     .filter((e) => e.resultat === 'non_conforme').length
   const deviations = executionStore
     .evenementsExecution(executionId)
@@ -440,137 +560,306 @@ async function signerCloture(motDePasse: string): Promise<void> {
         </p>
 
         <h4>Étapes</h4>
-        <ul class="liste-etapes">
-          <li v-for="etape in testDe(execution.id)?.etapes ?? []" :key="etape.id">
-            <p>
-              {{ etape.action }} — <em>attendu : {{ etape.resultat_attendu }}</em>
-            </p>
-            <template
-              v-if="
-                !executionStore
-                  .etapesExecution(execution.id)
-                  .some((e) => e.test_step_id === etape.id)
-              "
-            >
-              <select v-model="resultatsBrouillon[cleEtape(execution.id, etape.id)]">
-                <option value="">— choisir —</option>
-                <option
-                  v-for="(libelle, code) in LIBELLES_RESULTAT_ETAPE"
-                  :key="code"
-                  :value="code"
-                >
-                  {{ libelle }}
-                </option>
-              </select>
-              <input
-                v-model="observationsBrouillon[cleEtape(execution.id, etape.id)]"
-                type="text"
-                placeholder="Observation"
-              />
-              <button type="button" @click="enregistrerResultat(execution.id, etape.id)">
-                Enregistrer le résultat
-              </button>
-            </template>
-            <template v-else>
-              <p
-                v-for="es in executionStore
-                  .etapesExecution(execution.id)
-                  .filter((e) => e.test_step_id === etape.id)"
-                :key="es.id"
-                class="resultat-enregistre"
-              >
-                Résultat : <strong>{{ LIBELLES_RESULTAT_ETAPE[es.resultat] }}</strong>
-                <span v-if="es.observation"> — {{ es.observation }}</span>
-                <span v-if="executionStore.mesuresEtape(es.id).length > 0" class="mesures">
-                  Mesures :
-                  <span v-for="m in executionStore.mesuresEtape(es.id)" :key="m.id">
-                    {{ m.libelle }} = {{ m.valeur }}{{ m.unite ? ` ${m.unite}` : '' }};
-                  </span>
-                </span>
-                <span class="ajout-mesure">
-                  <input
-                    v-model="mesureBrouillon(es.id).libelle"
-                    type="text"
-                    placeholder="Libellé mesure"
-                  />
-                  <input v-model="mesureBrouillon(es.id).valeur" type="text" placeholder="Valeur" />
-                  <input v-model="mesureBrouillon(es.id).unite" type="text" placeholder="Unité" />
-                  <button type="button" @click="ajouterMesure(execution.id, es.id)">
-                    + Mesure
+        <ol class="liste-etapes">
+          <li v-for="(etape, index) in testDe(execution.id)?.etapes ?? []" :key="etape.id">
+            <fieldset class="etape">
+              <legend>
+                Étape {{ index + 1 }} : {{ etape.action }} —
+                <em>attendu : {{ etape.resultat_attendu }}</em>
+              </legend>
+              <template v-if="executionStore.resultatsEtape(execution.id, etape.id).length === 0">
+                <div class="ligne-formulaire">
+                  <label>
+                    Résultat de l'étape {{ index + 1 }}
+                    <select v-model="resultatsBrouillon[cleEtape(execution.id, etape.id)]">
+                      <option value="">— choisir —</option>
+                      <option
+                        v-for="(libelle, code) in LIBELLES_RESULTAT_ETAPE"
+                        :key="code"
+                        :value="code"
+                      >
+                        {{ libelle }}
+                      </option>
+                    </select>
+                  </label>
+                  <label>
+                    Observation
+                    <input
+                      v-model="observationsBrouillon[cleEtape(execution.id, etape.id)]"
+                      type="text"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    :disabled="envoiEnCours"
+                    @click="enregistrerResultat(execution.id, etape.id)"
+                  >
+                    Enregistrer le résultat
                   </button>
-                </span>
-              </p>
-            </template>
+                </div>
+              </template>
+              <template v-else>
+                <div
+                  v-for="(es, rang) in executionStore.resultatsEtape(execution.id, etape.id)"
+                  :key="es.id"
+                  :class="[
+                    'resultat-enregistre',
+                    {
+                      'resultat-corrige':
+                        rang < executionStore.resultatsEtape(execution.id, etape.id).length - 1,
+                    },
+                  ]"
+                >
+                  <p>
+                    <template
+                      v-if="rang < executionStore.resultatsEtape(execution.id, etape.id).length - 1"
+                    >
+                      <s>{{ LIBELLES_RESULTAT_ETAPE[es.resultat] }}</s>
+                      <span class="meta"> (corrigé)</span>
+                    </template>
+                    <template v-else>
+                      Résultat : <strong>{{ LIBELLES_RESULTAT_ETAPE[es.resultat] }}</strong>
+                    </template>
+                    <span v-if="es.observation"> — {{ es.observation }}</span>
+                    <span class="meta"> · {{ formaterHorodatage(es.horodatage) }}</span>
+                  </p>
+                  <p v-if="executionStore.mesuresEtape(es.id).length > 0" class="mesures">
+                    Mesures :
+                    <span v-for="m in executionStore.mesuresEtape(es.id)" :key="m.id">
+                      {{ m.libelle }} = {{ m.valeur }}{{ m.unite ? ` ${m.unite}` : '' }} ;
+                    </span>
+                  </p>
+                  <template
+                    v-if="rang === executionStore.resultatsEtape(execution.id, etape.id).length - 1"
+                  >
+                    <div class="actions-etape">
+                      <button
+                        type="button"
+                        :disabled="envoiEnCours"
+                        @click="ouvrirCorrection(execution.id, es.id)"
+                      >
+                        Corriger…
+                      </button>
+                      <button
+                        v-if="es.resultat === 'non_conforme'"
+                        type="button"
+                        @click="declarerDeviation(execution.id, etape.id, es.observation)"
+                      >
+                        Déclarer une déviation
+                      </button>
+                    </div>
+                    <div
+                      v-if="correctionEnCours && correctionEnCours.executionStepId === es.id"
+                      class="correction"
+                      role="group"
+                      :aria-label="`Correction du résultat de l'étape ${index + 1}`"
+                    >
+                      <label>
+                        Résultat corrigé
+                        <select v-model="correctionEnCours.resultat">
+                          <option value="">— choisir —</option>
+                          <option
+                            v-for="(libelle, code) in LIBELLES_RESULTAT_ETAPE"
+                            :key="code"
+                            :value="code"
+                          >
+                            {{ libelle }}
+                          </option>
+                        </select>
+                      </label>
+                      <label>
+                        Observation
+                        <input v-model="correctionEnCours.observation" type="text" />
+                      </label>
+                      <label>
+                        Motif de la correction (obligatoire, conservé dans l'enregistrement)
+                        <input v-model="correctionEnCours.motif" type="text" />
+                      </label>
+                      <div class="actions-etape">
+                        <button type="button" @click="correctionEnCours = null">Annuler</button>
+                        <button
+                          type="button"
+                          :disabled="envoiEnCours"
+                          @click="enregistrerCorrection"
+                        >
+                          Enregistrer la correction
+                        </button>
+                      </div>
+                    </div>
+                    <div
+                      class="ajout-mesure"
+                      role="group"
+                      :aria-label="`Mesure de l'étape ${index + 1}`"
+                    >
+                      <label>
+                        Mesure
+                        <input v-model="mesureBrouillon(es.id).libelle" type="text" />
+                      </label>
+                      <label>
+                        Valeur
+                        <input
+                          v-model="mesureBrouillon(es.id).valeur"
+                          type="text"
+                          inputmode="decimal"
+                        />
+                      </label>
+                      <label>
+                        Unité
+                        <input v-model="mesureBrouillon(es.id).unite" type="text" />
+                      </label>
+                      <button
+                        type="button"
+                        class="bouton-mesure"
+                        :disabled="envoiEnCours"
+                        @click="ajouterMesure(execution.id, es.id)"
+                      >
+                        + Mesure
+                      </button>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </fieldset>
           </li>
-        </ul>
+        </ol>
 
         <h4>Événement</h4>
-        <div class="ligne-formulaire">
-          <select v-model="typeEvenementBrouillon[execution.id]">
-            <option v-for="(libelle, code) in LIBELLES_TYPE_EVENEMENT" :key="code" :value="code">
-              {{ libelle }}
-            </option>
-          </select>
-          <input
-            v-model="descriptionEvenementBrouillon[execution.id]"
-            type="text"
-            placeholder="Description"
-          />
-          <button type="button" @click="consignerEvenement(execution.id)">Consigner</button>
+        <div class="ligne-formulaire ligne-evenement">
+          <label>
+            Type d'événement
+            <select v-model="typeEvenementBrouillon[execution.id]">
+              <option value="">— choisir —</option>
+              <option
+                v-for="[code, libelle] in TYPES_EVENEMENT_SAISISSABLES"
+                :key="code"
+                :value="code"
+              >
+                {{ libelle }}
+              </option>
+            </select>
+          </label>
+          <label class="champ-large">
+            Description de l'événement
+            <input
+              :ref="
+                (el) => (champsDescriptionEvenement[execution.id] = el as HTMLInputElement | null)
+              "
+              v-model="descriptionEvenementBrouillon[execution.id]"
+              type="text"
+            />
+          </label>
+          <button type="button" :disabled="envoiEnCours" @click="consignerEvenement(execution.id)">
+            Consigner
+          </button>
         </div>
+        <p v-if="deviationReportee[execution.id]" class="confirmation" role="status">
+          Déviation reportée au
+          <RouterLink :to="{ name: 'journal-anomalies', params: { clientId: props.clientId } }">
+            journal d'anomalies
+          </RouterLink>
+          .
+        </p>
         <ul v-if="executionStore.evenementsExecution(execution.id).length > 0">
           <li v-for="ev in executionStore.evenementsExecution(execution.id)" :key="ev.id">
             {{ LIBELLES_TYPE_EVENEMENT[ev.type] }} — {{ ev.description }}
+            <span class="meta">({{ ev.actor }}, {{ formaterHorodatage(ev.horodatage) }})</span>
           </li>
         </ul>
 
         <h4>Preuves</h4>
-        <div class="ligne-formulaire">
-          <select v-model="typePreuveBrouillon[execution.id]">
-            <option v-for="(libelle, code) in LIBELLES_TYPE_PREUVE" :key="code" :value="code">
-              {{ libelle }}
-            </option>
-          </select>
-          <input v-model="titrePreuveBrouillon[execution.id]" type="text" placeholder="Titre" />
-          <input
-            v-model="descriptionPreuveBrouillon[execution.id]"
-            type="text"
-            placeholder="Description"
-          />
-          <input
-            v-if="typePreuveBrouillon[execution.id] === 'document'"
-            v-model="referenceLocalisationBrouillon[execution.id]"
-            type="text"
-            placeholder="Référence GitHub (chemin/commit)"
-          />
-          <button type="button" @click="enregistrerPreuve(execution.id)">
+        <div class="ligne-formulaire ligne-preuve">
+          <label>
+            Type de preuve
+            <select v-model="typePreuveBrouillon[execution.id]">
+              <option v-for="(libelle, code) in LIBELLES_TYPE_PREUVE" :key="code" :value="code">
+                {{ libelle }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Étape concernée
+            <select v-model="etapePreuveBrouillon[execution.id]">
+              <option value="">— toute l'exécution —</option>
+              <option
+                v-for="es in executionStore.resultatsEnVigueur(execution.id)"
+                :key="es.id"
+                :value="es.id"
+              >
+                Étape {{ numeroEtape(execution.id, es.test_step_id) }}
+              </option>
+            </select>
+          </label>
+          <label>
+            Titre de la preuve
+            <input v-model="titrePreuveBrouillon[execution.id]" type="text" />
+          </label>
+          <label>
+            Description
+            <input v-model="descriptionPreuveBrouillon[execution.id]" type="text" />
+          </label>
+          <label>
+            Photo ou fichier (facultatif)
+            <input
+              :ref="(el) => (champsFichierPreuve[execution.id] = el as HTMLInputElement | null)"
+              type="file"
+              accept="image/*,application/pdf,text/plain,text/csv,.xlsx,.docx"
+              capture="environment"
+              @change="choisirFichierPreuve(execution.id, $event)"
+            />
+          </label>
+          <label v-if="typePreuveBrouillon[execution.id] === 'document'">
+            Référence GitHub (chemin/commit, facultatif)
+            <input v-model="referenceLocalisationBrouillon[execution.id]" type="text" />
+          </label>
+          <button type="button" :disabled="envoiEnCours" @click="enregistrerPreuve(execution.id)">
             Enregistrer la preuve
           </button>
         </div>
         <ul v-if="evidenceStore.preuvesExecution(execution.id).length > 0">
           <li v-for="preuve in evidenceStore.preuvesExecution(execution.id)" :key="preuve.id">
             {{ preuve.titre }} ({{ LIBELLES_TYPE_PREUVE[preuve.type] }})
-            <span v-for="loc in evidenceStore.localisationsPreuve(preuve.id)" :key="loc.id">
-              — {{ loc.reference }}
-            </span>
+            <template v-for="loc in evidenceStore.localisationsPreuve(preuve.id)" :key="loc.id">
+              <button
+                v-if="loc.systeme === 'fichier'"
+                type="button"
+                class="bouton-lien"
+                :title="loc.reference"
+                @click="ouvrirFichierPreuve(preuve.id, loc.id)"
+              >
+                {{ nomFichierPreuve(loc.reference) }}
+              </button>
+              <span v-else> — {{ loc.reference }}</span>
+            </template>
           </li>
         </ul>
 
-        <h4>Clôture</h4>
-        <p v-if="nombreEtapesSansResultat(execution.id) > 0" class="avertissement" role="status">
-          ⚠ {{ nombreEtapesSansResultat(execution.id) }} étape(s) sans résultat enregistré — la
-          clôture reste possible (ex. après un arrêt), mais ces étapes resteront vides dans
-          l'enregistrement immuable.
-        </p>
-        <div class="ligne-formulaire">
-          <select v-model="verdictBrouillon[execution.id]">
-            <option value="">— choisir —</option>
-            <option v-for="(libelle, code) in LIBELLES_VERDICT" :key="code" :value="code">
-              {{ libelle }}
-            </option>
-          </select>
-          <button type="button" @click="cloturer(execution.id)">Clôturer l'exécution</button>
-        </div>
+        <section class="bloc-cloture" aria-label="Clôture de l'exécution">
+          <h4>Clôture — action définitive</h4>
+          <p v-if="nombreEtapesSansResultat(execution.id) > 0" class="avertissement" role="status">
+            ⚠ {{ nombreEtapesSansResultat(execution.id) }} étape(s) sans résultat enregistré — la
+            clôture reste possible (ex. après un arrêt), mais ces étapes resteront vides dans
+            l'enregistrement immuable.
+          </p>
+          <div class="ligne-formulaire">
+            <label>
+              Verdict final
+              <select v-model="verdictBrouillon[execution.id]">
+                <option value="">— choisir —</option>
+                <option v-for="(libelle, code) in LIBELLES_VERDICT" :key="code" :value="code">
+                  {{ libelle }}
+                </option>
+              </select>
+            </label>
+            <button
+              type="button"
+              class="bouton-danger"
+              :disabled="envoiEnCours"
+              @click="cloturer(execution.id)"
+            >
+              Clôturer l'exécution…
+            </button>
+          </div>
+        </section>
       </article>
     </section>
 
@@ -598,12 +887,18 @@ async function signerCloture(motDePasse: string): Promise<void> {
               {{ etape.action }} — <em>attendu : {{ etape.resultat_attendu }}</em>
             </p>
             <p
-              v-for="es in executionStore
-                .etapesExecution(execution.id)
-                .filter((e) => e.test_step_id === etape.id)"
+              v-for="(es, rang) in executionStore.resultatsEtape(execution.id, etape.id)"
               :key="es.id"
             >
-              Résultat : <strong>{{ LIBELLES_RESULTAT_ETAPE[es.resultat] }}</strong>
+              <template
+                v-if="rang < executionStore.resultatsEtape(execution.id, etape.id).length - 1"
+              >
+                <s>{{ LIBELLES_RESULTAT_ETAPE[es.resultat] }}</s>
+                <span class="meta">(corrigé)</span>
+              </template>
+              <template v-else>
+                Résultat : <strong>{{ LIBELLES_RESULTAT_ETAPE[es.resultat] }}</strong>
+              </template>
               <span v-if="es.observation"> — {{ es.observation }}</span>
               <span v-if="executionStore.mesuresEtape(es.id).length > 0" class="mesures">
                 — Mesures :
@@ -640,9 +935,18 @@ async function signerCloture(motDePasse: string): Promise<void> {
             <li v-for="preuve in evidenceStore.preuvesExecution(execution.id)" :key="preuve.id">
               {{ preuve.titre }} ({{ LIBELLES_TYPE_PREUVE[preuve.type] }})
               <span v-if="preuve.description"> — {{ preuve.description }}</span>
-              <span v-for="loc in evidenceStore.localisationsPreuve(preuve.id)" :key="loc.id">
-                — {{ loc.reference }}
-              </span>
+              <template v-for="loc in evidenceStore.localisationsPreuve(preuve.id)" :key="loc.id">
+                <button
+                  v-if="loc.systeme === 'fichier'"
+                  type="button"
+                  class="bouton-lien"
+                  :title="loc.reference"
+                  @click="ouvrirFichierPreuve(preuve.id, loc.id)"
+                >
+                  {{ nomFichierPreuve(loc.reference) }}
+                </button>
+                <span v-else> — {{ loc.reference }}</span>
+              </template>
             </li>
           </ul>
         </template>
@@ -733,9 +1037,94 @@ select {
   gap: 0.25rem;
 }
 
-.ajout-mesure {
+.resultat-enregistre p {
+  margin: 0;
+}
+
+.resultat-corrige {
+  color: var(--vp-texte-secondaire);
+}
+
+fieldset.etape {
+  border: 1px solid var(--vp-bordure, #ddd);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.75rem;
+}
+
+fieldset.etape legend {
+  font-weight: 600;
+  padding: 0 0.3rem;
+}
+
+.ligne-formulaire label,
+.ajout-mesure label,
+.correction label {
+  font-size: 0.85em;
+}
+
+.champ-large {
+  flex: 1 1 14rem;
+}
+
+.ajout-mesure,
+.actions-etape {
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 0.4rem;
+}
+
+.bouton-mesure {
+  white-space: nowrap;
+}
+
+.correction {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--vp-attention);
+  border-radius: 0.4rem;
+}
+
+.bloc-cloture {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--vp-danger);
+  border-radius: 0.5rem;
+}
+
+.bloc-cloture h4 {
+  margin-top: 0;
+}
+
+.bouton-danger {
+  background-color: var(--vp-danger);
+  color: #fff;
+  border: 1px solid var(--vp-danger);
+  border-radius: 0.3rem;
+  padding: 0.45rem 0.9rem;
+  font-weight: 600;
+}
+
+.bouton-lien {
+  background: none;
+  border: none;
+  padding: 0 0.25rem;
+  color: var(--vp-marque);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.confirmation {
+  color: var(--vp-succes);
+}
+
+/* Audit UX exécution #22 : cibles tactiles confortables sur tablette. */
+.carte-execution button,
+.carte-execution select,
+.carte-execution input {
+  min-height: 2.5rem;
 }
 
 .bandeau-erreur {

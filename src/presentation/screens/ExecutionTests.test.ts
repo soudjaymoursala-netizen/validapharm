@@ -156,7 +156,7 @@ describe('ExecutionTests', () => {
     expect((await ctx.executionRepo.listerMeasurements(CLIENT_ID))[0]?.valeur).toBe('15.4')
 
     // Preuve native
-    const zonePreuve = wrapper.find('.carte-execution').findAll('.ligne-formulaire')[1]
+    const zonePreuve = wrapper.find('.carte-execution .ligne-preuve')
     const inputsPreuve = zonePreuve?.findAll('input[type="text"]') ?? []
     await inputsPreuve[0]?.setValue('Observation directe du cycle')
     await zonePreuve?.find('button').trigger('click')
@@ -169,7 +169,7 @@ describe('ExecutionTests', () => {
     expect((await ctx.evidenceRepo.listerEvidences(CLIENT_ID))[0]?.type).toBe('native')
 
     // Clôture avec verdict explicite — jamais déduit des résultats d'étape
-    const zoneCloture = wrapper.find('.carte-execution').findAll('.ligne-formulaire').at(-1)
+    const zoneCloture = wrapper.find('.carte-execution .bloc-cloture')
     await zoneCloture?.find('select').setValue('conforme')
     await zoneCloture?.find('button').trigger('click')
     // Clôture signée (décision du 26/09/2026) : fenêtre de signature.
@@ -242,7 +242,7 @@ describe('ExecutionTests — mutations non vérifiées', () => {
   test('une clôture bloquée (déjà clôturée entre-temps) affiche un message, ne casse pas silencieusement', async () => {
     const { wrapper } = await demarrerExecutionDeTest()
 
-    const zoneCloture = wrapper.find('.carte-execution').findAll('.ligne-formulaire').at(-1)
+    const zoneCloture = wrapper.find('.carte-execution .bloc-cloture')
     await zoneCloture?.find('select').setValue('conforme')
 
     // Reproduit une clôture déjà effectuée depuis un autre poste (garde-fou

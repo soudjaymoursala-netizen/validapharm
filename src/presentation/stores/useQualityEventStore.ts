@@ -202,14 +202,24 @@ export const useQualityEventStore = defineStore('qualityEvent', () => {
     return evenement
   }
 
+  /** Motif obligatoire (décision du 29/09/2026), conservé dans l'historique de l'anomalie. */
   async function changerStatut(
     clientId: string,
     evenementId: string,
     statut: QualityEvent['statut'],
-  ): Promise<QualityEvent | null> {
+    motif: string,
+  ): Promise<QualityEvent> {
     const { api, jeton } = await obtenirApi()
-    const resultat = await api.changerStatutQualityEvent(jeton, clientId, evenementId, statut)
-    if (!resultat.ok) return null
+    const resultat = await api.changerStatutQualityEvent(
+      jeton,
+      clientId,
+      evenementId,
+      statut,
+      motif,
+    )
+    if (!resultat.ok) {
+      throw new Error(`Statut non modifié : ${libelleErreurServeur(resultat.erreur)}`)
+    }
     const evenement = evenementWireVersDomaine(resultat.donnees.evenement)
     evenements.value = evenements.value.map((e) => (e.id === evenementId ? evenement : e))
     return evenement

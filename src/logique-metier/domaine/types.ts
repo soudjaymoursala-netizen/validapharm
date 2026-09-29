@@ -1225,6 +1225,8 @@ export type TypeExecutionEvent =
   | 'arret'
   | 'externe'
   | 'commentaire'
+  /** Correction tracée d'un résultat d'étape (créée par le serveur, jamais saisie à la main). */
+  | 'correction'
 
 export interface ExecutionEvent {
   id: string
@@ -1268,7 +1270,7 @@ export interface Evidence {
  * actée : dépôt Git dédié = source de vérité, Drive =
  * miroir. Ne peut exister que pour une `Evidence` de type `document`.
  */
-export type SystemeEvidenceLocation = 'github' | 'drive' | 'externe'
+export type SystemeEvidenceLocation = 'github' | 'drive' | 'externe' | 'fichier'
 
 export interface EvidenceLocation {
   id: string

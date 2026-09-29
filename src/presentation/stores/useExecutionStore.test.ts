@@ -7,6 +7,7 @@ import {
   reinitialiserAuthDeTest,
 } from '../../test-utils/fauxWorkerAuth'
 import { useExecutionStore } from './useExecutionStore'
+import { useQualityEventStore } from './useQualityEventStore'
 import { useTestDefinitionStore } from './useTestDefinitionStore'
 
 let demonter: () => void
@@ -254,13 +255,74 @@ describe('useExecutionStore — garde-fous', () => {
     })
     if ('erreur' in execution) throw new Error('unreachable')
 
+    const anomalie = await useQualityEventStore().creerEvenement('client-1', {
+      type: 'deviation',
+      titre: 'Écart déjà déclaré',
+      description: '',
+      origine: 'interne',
+      referenceExterne: null,
+      assetNodeId: null,
+      processId: null,
+      manufacturingContextId: null,
+    })
     const evenement = await store.consignerEvenement('client-1', execution.id, {
       type: 'deviation',
       description: 'Écart constaté',
-      qualityEventId: 'qe-existant-123',
+      qualityEventId: anomalie.id,
     })
     if ('erreur' in evenement) throw new Error('unreachable')
-    expect(evenement.quality_event_id).toBe('qe-existant-123')
+    expect(evenement.quality_event_id).toBe(anomalie.id)
+  })
+
+  test('une déviation sans anomalie référencée crée une entrée du journal d’anomalies (décision du 29/09/2026)', async () => {
+    const test = await creerTestApprouve('client-1')
+    const store = useExecutionStore()
+    const execution = await store.demarrerExecution('client-1', {
+      testId: test.id,
+      assetNodeId: null,
+    })
+    if ('erreur' in execution) throw new Error('unreachable')
+    const evenement = await store.consignerEvenement('client-1', execution.id, {
+      type: 'deviation',
+      description: 'Seuil décalé',
+      qualityEventId: null,
+    })
+    if ('erreur' in evenement) throw new Error('unreachable')
+    expect(evenement.quality_event_id).toEqual(expect.any(String))
+    const journal = useQualityEventStore()
+    await journal.charger('client-1')
+    expect(journal.evenements.find((e) => e.id === evenement.quality_event_id)?.type).toBe(
+      'deviation',
+    )
+  })
+
+  test('correction tracée d’un résultat d’étape : ancien conservé, nouveau en vigueur', async () => {
+    const test = await creerTestApprouve('client-1')
+    const store = useExecutionStore()
+    const execution = await store.demarrerExecution('client-1', {
+      testId: test.id,
+      assetNodeId: null,
+    })
+    if ('erreur' in execution) throw new Error('unreachable')
+    const etapeTest = test.etapes[0]
+    if (!etapeTest) throw new Error('test sans étape')
+    const premier = await store.enregistrerResultatEtape('client-1', execution.id, {
+      testStepId: etapeTest.id,
+      resultat: 'conforme',
+      observation: '',
+    })
+    if ('erreur' in premier) throw new Error('unreachable')
+    await store.corrigerResultatEtape('client-1', execution.id, premier.id, {
+      resultat: 'non_conforme',
+      observation: 'Instable',
+      motif: 'Erreur de saisie',
+    })
+    expect(store.resultatsEtape(execution.id, etapeTest.id).map((e) => e.resultat)).toEqual([
+      'conforme',
+      'non_conforme',
+    ])
+    expect(store.resultatsEnVigueur(execution.id).map((e) => e.resultat)).toEqual(['non_conforme'])
+    expect(store.evenementsExecution(execution.id).at(-1)?.type).toBe('correction')
   })
 })
 

@@ -103,9 +103,14 @@ describe('useQualityEventStore — changement de statut', () => {
       processId: null,
       manufacturingContextId: null,
     })
-    const misAJour = await store.changerStatut('client-1', evenement.id, 'cloture')
-    expect(misAJour?.statut).toBe('cloture')
-    expect(misAJour?.audit_log).toHaveLength(2)
+    // Motif obligatoire (décision du 29/09/2026), conservé dans l'historique.
+    await expect(store.changerStatut('client-1', evenement.id, 'cloture', '  ')).rejects.toThrow(
+      'motif_requis',
+    )
+    const misAJour = await store.changerStatut('client-1', evenement.id, 'cloture', 'CAPA efficace')
+    expect(misAJour.statut).toBe('cloture')
+    expect(misAJour.audit_log).toHaveLength(2)
+    expect(misAJour.audit_log[1]?.action).toContain('motif : CAPA efficace')
   })
 })
 
@@ -165,8 +170,8 @@ describe('useQualityEventStore — références optionnelles entre événements 
       processId: null,
       manufacturingContextId: null,
     })
-    const cloturee = await store.changerStatut('client-1', deviation.id, 'cloture')
-    expect(cloturee?.statut).toBe('cloture')
+    const cloturee = await store.changerStatut('client-1', deviation.id, 'cloture', 'Traitée')
+    expect(cloturee.statut).toBe('cloture')
     expect(store.referencesDepuis(deviation.id)).toHaveLength(0)
   })
 

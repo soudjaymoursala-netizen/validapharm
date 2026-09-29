@@ -273,14 +273,36 @@ export const useMissionStore = defineStore('mission', () => {
     return mission
   }
 
+  /**
+   * Clôturer une mission dont des activités restent ouvertes, ou rouvrir une
+   * mission clôturée, exige un motif (décision du 29/09/2026). Sans motif, le
+   * serveur répond `motif_requis` avec la liste des activités ouvertes :
+   * renvoyée telle quelle pour que l'écran la montre.
+   */
   async function changerStatutMission(
     clientId: string,
     missionId: string,
     statut: StatutMission,
-  ): Promise<Mission | null> {
+    motif?: string,
+  ): Promise<
+    | Mission
+    | { erreur: 'motif_requis'; activitesOuvertes: { id: string; titre: string; statut: string }[] }
+  > {
     const { api, jeton } = await obtenirApi()
-    const resultat = await api.changerStatutMission(jeton, clientId, missionId, statut)
-    if (!resultat.ok) return null
+    const resultat = await api.changerStatutMission(jeton, clientId, missionId, statut, motif)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'motif_requis') {
+        return {
+          erreur: 'motif_requis',
+          activitesOuvertes: (resultat.details?.activitesOuvertes ?? []) as {
+            id: string
+            titre: string
+            statut: string
+          }[],
+        }
+      }
+      throw new Error(`Statut non modifié : ${libelleErreurServeur(resultat.erreur)}`)
+    }
     const miseAJour = missionWireVersDomaine(resultat.donnees.mission)
     missions.value = missions.value.map((m) => (m.id === missionId ? miseAJour : m))
     return miseAJour
@@ -329,24 +351,53 @@ export const useMissionStore = defineStore('mission', () => {
     return activite
   }
 
+  /** Terminer une activité dont un prérequis n'est pas terminé exige un motif (tracé). */
   async function changerStatutActivity(
     clientId: string,
     activityId: string,
     statut: StatutActivity,
-  ): Promise<Activity | null> {
+    motif?: string,
+  ): Promise<
+    | Activity
+    | {
+        erreur: 'prerequis_non_termines'
+        prerequis: { id: string; titre: string; statut: string }[]
+      }
+  > {
     const { api, jeton } = await obtenirApi()
-    const resultat = await api.changerStatutActivity(jeton, clientId, activityId, statut)
-    if (!resultat.ok) return null
+    const resultat = await api.changerStatutActivity(jeton, clientId, activityId, statut, motif)
+    if (!resultat.ok) {
+      if (resultat.erreur === 'prerequis_non_termines') {
+        return {
+          erreur: 'prerequis_non_termines',
+          prerequis: (resultat.details?.prerequis ?? []) as {
+            id: string
+            titre: string
+            statut: string
+          }[],
+        }
+      }
+      throw new Error(`Statut non modifié : ${libelleErreurServeur(resultat.erreur)}`)
+    }
     const miseAJour = activityWireVersDomaine(resultat.donnees.activity)
     activities.value = activities.value.map((a) => (a.id === activityId ? miseAJour : a))
     return miseAJour
   }
 
+  /** Retrait d'une dépendance déclarée par erreur (tracé côté serveur dans l'activité dépendante). */
+  async function retirerDependance(clientId: string, dependencyId: string): Promise<void> {
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.retirerDependance(jeton, clientId, dependencyId)
+    if (!resultat.ok) {
+      throw new Error(`Dépendance non retirée : ${libelleErreurServeur(resultat.erreur)}`)
+    }
+    dependencies.value = dependencies.value.filter((d) => d.id !== dependencyId)
+  }
+
   /**
    * Dépendance `Activity → Activity` (ordre attendu) — jamais un verrou
-   * bloquant : aucune fonction de ce store n'empêche de changer le statut
-   * d'une `Activity` dont une dépendance n'est pas encore `terminee`, même
-   * discipline déjà appliquée à `QualityEvent`/`Connector`.
+   * bloquant : terminer une activité dont un prérequis n'est pas terminé
+   * reste possible, avec un motif tracé (décision du 29/09/2026).
    */
   async function ajouterDependance(
     clientId: string,
@@ -391,6 +442,7 @@ export const useMissionStore = defineStore('mission', () => {
     creerActivity,
     changerStatutActivity,
     ajouterDependance,
+    retirerDependance,
     dependancesDe,
   }
 })

@@ -392,6 +392,8 @@ export const useExecutionStore = defineStore('execution', () => {
     }
     const evenement = executionEventWireVersDomaine(resultat.donnees.executionEvent)
     executionEvents.value = [...executionEvents.value, evenement]
+    // Une déviation crée désormais une entrée du journal d'anomalies côté
+    // serveur (décision du 29/09/2026) : le journal sera relu à son ouverture.
     return evenement
   }
 
@@ -429,6 +431,52 @@ export const useExecutionStore = defineStore('execution', () => {
     return executionSteps.value.filter((e) => e.execution_id === executionId)
   }
 
+  /**
+   * Résultats d'une étape, du plus ancien au plus récent : le dernier fait
+   * foi, les précédents ont été corrigés (décision du 29/09/2026, correction
+   * tracée) et restent affichés, barrés.
+   */
+  function resultatsEtape(executionId: string, testStepId: string): ExecutionStep[] {
+    return etapesExecution(executionId)
+      .filter((e) => e.test_step_id === testStepId)
+      .sort((a, b) => (a.horodatage < b.horodatage ? -1 : a.horodatage > b.horodatage ? 1 : 0))
+  }
+
+  /** Résultat en vigueur (le plus récent) de chaque étape renseignée. */
+  function resultatsEnVigueur(executionId: string): ExecutionStep[] {
+    const parEtape = new Map<string, ExecutionStep>()
+    for (const e of etapesExecution(executionId)) {
+      const actuel = parEtape.get(e.test_step_id)
+      if (!actuel || e.horodatage > actuel.horodatage) parEtape.set(e.test_step_id, e)
+    }
+    return [...parEtape.values()]
+  }
+
+  /** Correction tracée : motif obligatoire, l'ancien résultat reste enregistré. */
+  async function corrigerResultatEtape(
+    clientId: string,
+    executionId: string,
+    executionStepId: string,
+    input: { resultat: ResultatEtapeExecution; observation: string; motif: string },
+  ): Promise<ExecutionStep> {
+    const { api, jeton } = await obtenirApi()
+    const resultat = await api.corrigerResultatEtape(
+      jeton,
+      clientId,
+      executionId,
+      executionStepId,
+      input,
+    )
+    if (!resultat.ok) {
+      throw new Error(`Correction non enregistrée : ${libelleErreurServeur(resultat.erreur)}`)
+    }
+    const etape = executionStepWireVersDomaine(resultat.donnees.executionStep)
+    const evenement = executionEventWireVersDomaine(resultat.donnees.executionEvent)
+    executionSteps.value = [...executionSteps.value, etape]
+    executionEvents.value = [...executionEvents.value, evenement]
+    return etape
+  }
+
   function mesuresEtape(executionStepId: string): Measurement[] {
     return measurements.value.filter((m) => m.execution_step_id === executionStepId)
   }
@@ -450,6 +498,9 @@ export const useExecutionStore = defineStore('execution', () => {
     consignerEvenement,
     cloturerExecution,
     etapesExecution,
+    resultatsEtape,
+    resultatsEnVigueur,
+    corrigerResultatEtape,
     mesuresEtape,
     evenementsExecution,
   }

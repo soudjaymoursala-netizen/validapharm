@@ -400,14 +400,37 @@ describe('MissionWorkspace — changements de statut non vérifiés', () => {
   test('un échec de changement de statut de mission affiche un message, ne casse pas silencieusement', async () => {
     const wrapper = await monter()
     const missionStore = useMissionStore()
-    missionStore.changerStatutMission = vi.fn().mockResolvedValue(null)
+    missionStore.changerStatutMission = vi
+      .fn()
+      .mockRejectedValue(new Error('Statut non modifié : élément introuvable (introuvable)'))
 
-    await wrapper.find('header select').setValue('cloturee')
+    await wrapper.find('header select').setValue('en_cours')
     await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
 
-    expect(wrapper.find('.bandeau-erreur').text()).toContain(
-      'Impossible de changer le statut de la mission',
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('Statut non modifié')
+  })
+
+  test('clôture avec une activité ouverte : motif demandé avec la liste, puis mission en lecture seule', async () => {
+    const wrapper = await monter()
+    const formulaireActivite = wrapper.find('section.activites form')
+    await formulaireActivite.find('input[type="text"]').setValue('Exécuter OQ')
+    await formulaireActivite.trigger('submit.prevent')
+    await attendreQue(async () => (await ctx.missionRepo.listerActivities(CLIENT_ID)).length === 1)
+
+    await wrapper.find('header select').setValue('cloturee')
+    await attendreQue(() => wrapper.find('.demande-motif').exists())
+    expect(wrapper.find('.demande-motif').text()).toContain('Exécuter OQ')
+
+    await wrapper.find('.demande-motif textarea').setValue('OQ reportée à la campagne suivante')
+    await wrapper
+      .findAll('.demande-motif button')
+      .find((b) => b.text() === 'Confirmer')
+      ?.trigger('click')
+    await attendreQue(
+      async () => (await ctx.missionRepo.missionParId(MISSION_ID))?.statut === 'cloturee',
     )
+    await attendreQue(() => wrapper.find('.rappel-lecture-seule').exists())
+    expect(wrapper.find('section.activites form').exists()).toBe(false)
   })
 
   test("un échec de changement de statut d'activité affiche un message, ne casse pas silencieusement", async () => {
@@ -419,7 +442,9 @@ describe('MissionWorkspace — changements de statut non vérifiés', () => {
     await attendreQue(() => wrapper.find('section.activites li select').exists())
 
     const missionStore = useMissionStore()
-    missionStore.changerStatutActivity = vi.fn().mockResolvedValue(null)
+    missionStore.changerStatutActivity = vi
+      .fn()
+      .mockRejectedValue(new Error('Statut non modifié : élément introuvable (introuvable)'))
 
     // Un seul déclenchement de `setValue` suivi d'un `attendreQue` séparé
     // s'est révélé intermittent en CI (jamais reproduit en local malgré
@@ -434,8 +459,6 @@ describe('MissionWorkspace — changements de statut non vérifiés', () => {
       return wrapper.find('.bandeau-erreur').exists()
     })
 
-    expect(wrapper.find('.bandeau-erreur').text()).toContain(
-      "Impossible de changer le statut de l'activité",
-    )
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('Statut non modifié')
   })
 })
