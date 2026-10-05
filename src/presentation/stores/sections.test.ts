@@ -11,6 +11,7 @@ import {
 import { useAuthStore } from './useAuthStore'
 import { useProjectsStore } from './useProjectsStore'
 import {
+  avisDuCycleCourant,
   sectionDomaineVersWire,
   sectionWireVersDomaine,
   useSectionsStore,
@@ -375,6 +376,42 @@ describe("useSectionsStore — cycle complet jusqu'à valide_en_interne", () => 
     // Verrouillée : toute nouvelle transition est refusée.
     const tentative = await sections.transmettreApprobation(section.id)
     expect(tentative).toEqual({ ok: false, raisonTransition: 'section_verrouillee' })
+  })
+})
+
+describe('useSectionsStore — contenu modifié en cours de cycle (décision du 29/09/2026)', () => {
+  test('une modification en vérification renvoie en rédaction et écarte les avis du cycle', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await seedSection({
+      ...section,
+      workflow: { authors: ['user-1'], reviewers: [], approver_final: 'user-2' },
+    })
+    expect(await sections.engagerVerification(section.id)).toEqual({ ok: true })
+    await sections.ajouterAvisRelecteur(section.id, 'Favorable')
+
+    await sections.mettreAJourValeurs(section.id, { description_procede: 'Texte corrigé' })
+
+    const apres = await obtenirSectionDeTest(section.id)
+    expect(apres?.status).toBe('brouillon_aide')
+    expect(apres?.audit_log.at(-1)?.action).toBe(
+      'retour en rédaction : contenu modifié pendant la vérification',
+    )
+    expect(apres?.workflow.reviewers).toHaveLength(1)
+    expect(apres && avisDuCycleCourant(apres)).toEqual([])
+    // Un nouvel engagement exige un nouvel avis avant l'approbation.
+    expect(await sections.engagerVerification(section.id)).toEqual({ ok: true })
+    expect(await sections.transmettreApprobation(section.id)).toEqual({
+      ok: false,
+      raisonTransition: 'avis_manquant',
+    })
+  })
+
+  test('référence et version modifiables, même règle de retour en rédaction', async () => {
+    const { sections, section } = await creerProjetEtSection('contexte_procede')
+    await sections.mettreAJourMeta(section.id, { ref: 'CP-001', version: '1.0' })
+    const apres = await obtenirSectionDeTest(section.id)
+    expect(apres?.meta).toMatchObject({ ref: 'CP-001', version: '1.0', titre: 'OQ ligne A12' })
+    expect(apres?.status).toBe('brouillon_aide')
   })
 })
 

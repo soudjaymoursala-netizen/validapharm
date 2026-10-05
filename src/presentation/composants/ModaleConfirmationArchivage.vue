@@ -11,6 +11,7 @@
 // `POST /auth/verify-password`) — un seul système d'identité désormais,
 // jamais deux mécanismes de mot de passe parallèles.
 import { computed, ref } from 'vue'
+import { usePiegeFocus } from '../composables/usePiegeFocus'
 import { useAuthStore } from '../stores/useAuthStore'
 
 const props = withDefaults(
@@ -28,6 +29,10 @@ const props = withDefaults(
   },
 )
 const emit = defineEmits<{ confirme: [identiteDeclaree: string]; annule: [] }>()
+
+// Focus dans la fenêtre, Échap pour fermer, retour au déclencheur (constat 15).
+const fenetre = ref<HTMLElement | null>(null)
+usePiegeFocus(fenetre, () => emit('annule'))
 
 const messageAffiche = computed(() => props.message.replace('{nom}', props.nom))
 
@@ -62,15 +67,15 @@ async function confirmer(): Promise<void> {
 </script>
 
 <template>
-  <div class="fond-modale" role="dialog" aria-modal="true">
-    <div class="modale">
-      <h2>{{ titre }}</h2>
+  <div class="fond-modale" role="dialog" aria-modal="true" aria-labelledby="titre-modale">
+    <div ref="fenetre" class="modale">
+      <h2 id="titre-modale">{{ titre }}</h2>
 
       <p>{{ messageAffiche }}</p>
       <form class="formulaire" @submit.prevent="confirmer">
         <label>
           Retapez le nom pour confirmer
-          <input v-model="nomSaisi" type="text" required autofocus />
+          <input v-model="nomSaisi" type="text" required />
         </label>
         <label>
           Votre mot de passe

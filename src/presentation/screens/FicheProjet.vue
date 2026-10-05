@@ -69,6 +69,8 @@ const erreurTelechargementDocument = ref<string | null>(null)
 const nouvelUtilisateurPartage = ref('')
 const nouveauNiveauPartage = ref<'lecture' | 'édition'>('lecture')
 const erreurAction = ref<string | null>(null)
+const messagePartage = ref<string | null>(null)
+const partageSansCompte = ref(false)
 
 /**
  * Toutes les mutations de statut/partage du projet ci-dessous renvoient une
@@ -131,8 +133,15 @@ async function ajouterPartageSansGarde(): Promise<void> {
     erreurAction.value = libelleErreurAction(resultat)
     return
   }
-  projet.value = resultat
+  projet.value = resultat.projet
   nouvelUtilisateurPartage.value = ''
+  // Confirmation visible, et avertissement si l'adresse n'a pas de compte
+  // (audit UX du 25/09/2026, constat 21 : ajout silencieux, même pour une
+  // adresse inconnue).
+  messagePartage.value = resultat.compteExistant
+    ? `Projet partagé avec ${userId} (${nouveauNiveauPartage.value}).`
+    : `Partage enregistré pour ${userId}, mais aucun compte n'utilise encore cette adresse : vérifiez-la, ou demandez à un administrateur de créer le compte.`
+  partageSansCompte.value = !resultat.compteExistant
 }
 
 async function retirerPartage(...args: Parameters<typeof retirerPartageSansGarde>): Promise<void> {
@@ -352,8 +361,12 @@ async function telechargerDocumentSansGarde(document: {
 }
 
 /** Pré-remplit et ouvre le formulaire depuis un clic sur une étape non démarrée du pipeline. */
+/** Depuis le pipeline : formulaire prérempli (gabarit et titre), prêt à valider (constat 16). */
 function demarrerEtape(templateType: TemplateType): void {
   nouveauTemplateType.value = templateType
+  if (nouveauTitre.value.trim().length === 0 && projet.value) {
+    nouveauTitre.value = `${LIBELLES_GABARIT[templateType]} — ${projet.value.name}`
+  }
   formulaireOuvert.value = true
 }
 
@@ -378,13 +391,13 @@ async function ajouterSectionSansGarde(depuisDocument = false): Promise<void> {
   })
   formulaireOuvert.value = false
   nouveauTitre.value = ''
-  if (depuisDocument) {
-    await router.push({
-      name: 'editeur-section',
-      params: { projectId: props.projectId, sectionId: section.id },
-      query: { demarrage: 'adaptation' },
-    })
-  }
+  // Toujours vers l'éditeur de la nouvelle section (constat 16 : la section
+  // vierge restait 1 500 px plus bas, sans message).
+  await router.push({
+    name: 'editeur-section',
+    params: { projectId: props.projectId, sectionId: section.id },
+    ...(depuisDocument ? { query: { demarrage: 'adaptation' } } : {}),
+  })
 }
 
 /**
@@ -445,10 +458,20 @@ async function importerFichierSansGarde(evenement: Event): Promise<void> {
       </div>
       <div v-if="peutModifier" class="entete-projet__actions">
         <template v-if="projet.statut === 'actif'">
-          <button type="button" class="bouton-secondaire" @click="suspendreProjet">
+          <button
+            type="button"
+            class="bouton-secondaire"
+            title="Met le projet en pause : il est signalé « Suspendu » dans les listes, rien n'est supprimé, et « Reprendre » le réactive."
+            aria-describedby="aide-suspendre"
+            @click="suspendreProjet"
+          >
             <IconeSvg nom="horloge" :taille="15" />
             Suspendre
           </button>
+          <span id="aide-suspendre" class="visuellement-masque">
+            Met le projet en pause : il est signalé « Suspendu » dans les listes, rien n'est
+            supprimé, et « Reprendre » le réactive.
+          </span>
           <button type="button" class="bouton-archiver" @click="modaleArchivageOuverte = true">
             <IconeSvg nom="archive" :taille="15" />
             Archiver ce projet
@@ -483,85 +506,13 @@ async function importerFichierSansGarde(evenement: Event): Promise<void> {
       conservées (ALCOA+).
     </p>
 
-    <section class="carte contexte">
-      <h2 class="carte__titre-discret">Contexte</h2>
-      <dl>
-        <dt>Contexte</dt>
-        <dd>{{ projet.context || '—' }}</dd>
-        <dt>Portée incluse</dt>
-        <dd>{{ projet.scope_in || '—' }}</dd>
-        <dt>Portée exclue</dt>
-        <dd>{{ projet.scope_out || '—' }}</dd>
-      </dl>
-    </section>
-
-    <section class="carte phase-projet">
-      <h2 class="carte__titre-discret">Phase du cycle de vie</h2>
-      <p class="rappel">
-        Où en est ce projet dans le cycle de vie de l'actif qu'il qualifie — sans rapport avec
-        l'avancement des sections (une revue périodique en phase Opération peut très bien contenir
-        des sections en cours de rédaction).
-      </p>
-      <select
-        :value="projet.phase"
-        :disabled="!peutModifier"
-        class="selecteur-phase"
-        @change="changerPhase"
-      >
-        <option v-for="(libelle, valeur) in LIBELLES_PHASE" :key="valeur" :value="valeur">
-          {{ libelle }}
-        </option>
-      </select>
-    </section>
-
-    <section class="carte partage">
-      <h2 class="carte__titre-discret">Partage</h2>
-      <p class="rappel">
-        Lecture ouverte à toute personne ayant accès au client du projet (et aux personnes
-        partagées). Seuls le créateur, les personnes partagées en édition et les administrateurs
-        peuvent modifier ce projet, ses sections et ses documents ; seuls le créateur et les
-        administrateurs peuvent gérer le partage — règles appliquées par le serveur.
-      </p>
-      <p v-if="peutModifier && !peutGererPartage" class="rappel">
-        Vous êtes partagé en édition : vous pouvez modifier le contenu, mais seul le créateur ou un
-        administrateur peut ajouter ou retirer des personnes.
-      </p>
-      <p class="meta-proprietaire">Créé par : {{ projet.owner_id }}</p>
-      <ul v-if="projet.shared_with.length > 0" class="liste-partages">
-        <li v-for="partage in projet.shared_with" :key="partage.user_id">
-          {{ partage.user_id }} — {{ partage.access_level }}
-          <button
-            v-if="peutGererPartage"
-            type="button"
-            class="bouton-texte-danger"
-            @click="retirerPartage(partage.user_id)"
-          >
-            Retirer
-          </button>
-        </li>
-      </ul>
-      <p v-else class="etat-vide">Pas encore partagé avec personne d'autre.</p>
-      <form v-if="peutGererPartage" class="formulaire-partage" @submit.prevent="ajouterPartage">
-        <input
-          v-model="nouvelUtilisateurPartage"
-          type="email"
-          placeholder="email@exemple.com"
-          required
-        />
-        <select v-model="nouveauNiveauPartage">
-          <option value="lecture">lecture</option>
-          <option value="édition">édition</option>
-        </select>
-        <button type="submit" :disabled="envoiEnCours" class="bouton-secondaire">Partager</button>
-      </form>
-    </section>
-
     <section class="carte pipeline">
       <h2 class="carte__titre-discret">Progression du dossier de qualification</h2>
       <PipelineQualification
         :sections="sections"
         :langue="projet.language_default"
         :project-id="props.projectId"
+        :peut-modifier="peutModifier"
         @demarrer-etape="demarrerEtape"
       />
     </section>
@@ -575,7 +526,12 @@ async function importerFichierSansGarde(evenement: Event): Promise<void> {
             Importer une section (JSON)
             <input type="file" accept="application/json" @change="importerFichier" />
           </label>
-          <button type="button" class="bouton-principal" @click="formulaireOuvert = true">
+          <button
+            type="button"
+            class="bouton-principal"
+            :aria-expanded="formulaireOuvert"
+            @click="formulaireOuvert = true"
+          >
             <IconeSvg nom="plus" :taille="15" />
             Ajouter une section
           </button>
@@ -611,7 +567,7 @@ async function importerFichierSansGarde(evenement: Event): Promise<void> {
         </label>
         <p class="rappel-choix">
           « Vierge » démarre d'un modèle vide. « À partir d'un document » vous amène directement au
-          panneau qui adapte un protocole/exemple existant au contexte de ce projet (§4.1bis).
+          panneau qui adapte un protocole/exemple existant au contexte de ce projet.
         </p>
         <div class="actions">
           <button type="button" class="bouton-secondaire" @click="formulaireOuvert = false">
@@ -724,7 +680,7 @@ async function importerFichierSansGarde(evenement: Event): Promise<void> {
     </section>
 
     <section v-if="ecartsStructurels.length > 0" class="carte analyse-structurelle">
-      <h2 class="carte__titre-discret">Analyse structurelle du dossier (§4.8)</h2>
+      <h2 class="carte__titre-discret">Analyse structurelle du dossier</h2>
       <p class="rappel">
         Constats déterministes, jamais un verdict de conformité — à vérifier par l'utilisateur.
       </p>
@@ -742,6 +698,96 @@ async function importerFichierSansGarde(evenement: Event): Promise<void> {
         </li>
       </ul>
     </section>
+    <details class="carte carte-repliable contexte">
+      <summary class="carte__titre-discret">Contexte et portée</summary>
+      <dl>
+        <dt>Contexte</dt>
+        <dd>{{ projet.context || '—' }}</dd>
+        <dt>Portée incluse</dt>
+        <dd>{{ projet.scope_in || '—' }}</dd>
+        <dt>Portée exclue</dt>
+        <dd>{{ projet.scope_out || '—' }}</dd>
+      </dl>
+    </details>
+
+    <section class="carte phase-projet">
+      <h2 class="carte__titre-discret">Phase du cycle de vie</h2>
+      <p class="rappel">
+        Où en est ce projet dans le cycle de vie de l'actif qu'il qualifie — sans rapport avec
+        l'avancement des sections (une revue périodique en phase Opération peut très bien contenir
+        des sections en cours de rédaction).
+      </p>
+      <select
+        :value="projet.phase"
+        aria-label="Phase du cycle de vie"
+        :disabled="!peutModifier"
+        class="selecteur-phase"
+        @change="changerPhase"
+      >
+        <option v-for="(libelle, valeur) in LIBELLES_PHASE" :key="valeur" :value="valeur">
+          {{ libelle }}
+        </option>
+      </select>
+    </section>
+
+    <details class="carte carte-repliable partage" :open="partageSansCompte">
+      <summary class="carte__titre-discret">
+        Partage ({{ projet.shared_with.length }}
+        {{ projet.shared_with.length > 1 ? 'personnes' : 'personne' }})
+      </summary>
+      <p class="rappel">
+        Lecture ouverte à toute personne ayant accès au client du projet (et aux personnes
+        partagées). Seuls le créateur, les personnes partagées en édition et les administrateurs
+        peuvent modifier ce projet, ses sections et ses documents ; seuls le créateur et les
+        administrateurs peuvent gérer le partage — règles appliquées par le serveur.
+      </p>
+      <p v-if="peutModifier && !peutGererPartage" class="rappel">
+        Vous êtes partagé en édition : vous pouvez modifier le contenu, mais seul le créateur ou un
+        administrateur peut ajouter ou retirer des personnes.
+      </p>
+      <p class="meta-proprietaire">Créé par : {{ projet.owner_id }}</p>
+      <ul v-if="projet.shared_with.length > 0" class="liste-partages">
+        <li v-for="partage in projet.shared_with" :key="partage.user_id">
+          {{ partage.user_id }} — {{ partage.access_level === 'édition' ? 'Édition' : 'Lecture' }}
+          <button
+            v-if="peutGererPartage"
+            type="button"
+            class="bouton-texte-danger"
+            @click="retirerPartage(partage.user_id)"
+          >
+            Retirer
+          </button>
+        </li>
+      </ul>
+      <p v-else class="etat-vide">Pas encore partagé avec personne d'autre.</p>
+      <form v-if="peutGererPartage" class="formulaire-partage" @submit.prevent="ajouterPartage">
+        <label>
+          Adresse e-mail de la personne
+          <input
+            v-model="nouvelUtilisateurPartage"
+            type="email"
+            placeholder="email@exemple.com"
+            required
+            @input="messagePartage = null"
+          />
+        </label>
+        <label>
+          Niveau d'accès
+          <select v-model="nouveauNiveauPartage">
+            <option value="lecture">Lecture</option>
+            <option value="édition">Édition</option>
+          </select>
+        </label>
+        <button type="submit" :disabled="envoiEnCours" class="bouton-secondaire">Partager</button>
+      </form>
+      <p
+        v-if="messagePartage"
+        :class="partageSansCompte ? 'bandeau-avertissement' : 'bandeau-succes'"
+        role="status"
+      >
+        {{ messagePartage }}
+      </p>
+    </details>
 
     <ModaleConfirmationArchivage
       v-if="modaleArchivageOuverte"
@@ -1162,9 +1208,56 @@ button {
   margin-top: 0.5rem;
 }
 
-.formulaire-partage input {
+.formulaire-partage label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.formulaire-partage label:first-child {
   flex: 1;
   min-width: 12rem;
+}
+
+.formulaire-partage button {
+  align-self: flex-end;
+}
+
+.carte-repliable > summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.carte-repliable[open] > summary {
+  margin-bottom: 0.75rem;
+}
+
+.bandeau-avertissement,
+.bandeau-succes {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--vp-rayon);
+  border: 1px solid;
+}
+
+.bandeau-avertissement {
+  border-color: var(--vp-attention);
+  background-color: var(--vp-attention-fond-leger);
+}
+
+.bandeau-succes {
+  border-color: var(--vp-succes);
+  background-color: var(--vp-succes-fond-leger);
+}
+
+.visuellement-masque {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .guide-demarrage__titre {

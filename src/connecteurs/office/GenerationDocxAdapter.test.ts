@@ -50,6 +50,9 @@ const donneesMinimales: DonneesExportGabarit = {
   historique_revisions: [
     { version: '0.2', date: '2026-02-01', auteur: 'alice', motif: 'correction' },
   ],
+  avis_relecture: [],
+  approuve_par: '',
+  date_approbation: '',
 }
 
 describe('genererDocxPersonnalise', () => {

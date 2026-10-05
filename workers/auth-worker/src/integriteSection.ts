@@ -87,15 +87,28 @@ function tableau<T>(valeur: T[] | null | undefined): T[] | null {
   return Array.isArray(valeur) ? valeur : null
 }
 
+/** Préfixe de l'entrée d'audit posée quand un contenu modifié en cours de cycle renvoie la section en rédaction. */
+export const ACTION_RETOUR_REDACTION = 'retour en rédaction'
+
+/** Statuts du cycle de relecture pendant lesquels une modification du contenu renvoie la section en rédaction. */
+const STATUTS_CYCLE = ['en_verification', 'en_approbation']
+
 /**
- * Horodatage du dernier rejet (entrée d'audit `rejet : …`) — les avis de
- * relecture antérieurs appartiennent au cycle rejeté et ne comptent plus
+ * Horodatage de la dernière fin de cycle : rejet (entrée `rejet : …`) ou
+ * retour automatique en rédaction après une modification du contenu
+ * (`retour en rédaction : …`, décision du 29/09/2026). Les avis de
+ * relecture antérieurs appartiennent au cycle clos et ne comptent plus
  * pour transmettre à nouveau à l'approbation.
  */
 export function dernierRejet(auditLog: EntreeAuditSection[]): string | null {
   let dernier: string | null = null
   for (const e of auditLog) {
-    if (typeof e.action === 'string' && e.action.startsWith('rejet')) dernier = e.timestamp
+    if (
+      typeof e.action === 'string' &&
+      (e.action.startsWith('rejet') || e.action.startsWith(ACTION_RETOUR_REDACTION))
+    ) {
+      dernier = e.timestamp
+    }
   }
   return dernier
 }
@@ -103,6 +116,15 @@ export function dernierRejet(auditLog: EntreeAuditSection[]): string | null {
 export function avisDuCycleCourant(section: Pick<SectionEnregistree, 'workflow' | 'auditLog'>) {
   const rejet = dernierRejet(section.auditLog)
   return section.workflow.reviewers.filter((r) => rejet === null || r.date > rejet)
+}
+
+/** Contenu du livrable : ce que les relecteurs ont relu (valeurs, tableaux, en-tête). */
+function contenuModifie(existante: SectionEnregistree, corps: SectionEnregistree): boolean {
+  return (
+    !egalJson(existante.values, corps.values) ||
+    !egalJson(existante.tables, corps.tables) ||
+    !egalJson(existante.meta, corps.meta)
+  )
 }
 
 /**
@@ -272,6 +294,41 @@ export function preparerRemplacementSection(
     revisions,
     auditLog,
     updatedAt: maintenant,
+  }
+
+  // Contenu modifié pendant la vérification ou l'approbation (décision du
+  // 29/09/2026) : la section revient d'elle-même en rédaction et les avis
+  // du cycle ne comptent plus — jamais un avis affiché comme portant sur un
+  // contenu qu'il n'a pas relu.
+  // Un rejet explicite suit sa propre règle (motif obligatoire) plus bas.
+  const estRejetExplicite = nouvellesEntrees.some((e) => e.action.startsWith('rejet'))
+  if (
+    STATUTS_CYCLE.includes(existante.status) &&
+    !estRejetExplicite &&
+    contenuModifie(existante, corps)
+  ) {
+    if (corps.status !== existante.status && corps.status !== 'brouillon_aide') {
+      return { ok: false, erreur: 'transition_invalide' }
+    }
+    const dejaTrace = nouvellesEntrees.some((e) => e.action.startsWith(ACTION_RETOUR_REDACTION))
+    const etape = existante.status === 'en_verification' ? 'la vérification' : "l'approbation"
+    return {
+      ok: true,
+      section: {
+        ...section,
+        status: 'brouillon_aide',
+        auditLog: dejaTrace
+          ? auditLog
+          : [
+              ...auditLog,
+              {
+                timestamp: maintenant,
+                actor: acteur.email,
+                action: `${ACTION_RETOUR_REDACTION} : contenu modifié pendant ${etape}`,
+              },
+            ],
+      },
+    }
   }
 
   if (corps.status !== existante.status) {

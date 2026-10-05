@@ -10087,7 +10087,11 @@ async function gererPartagerProjet(
     ],
   }
   await ctx.projectsRepo.remplacerProjet(projetMisAJour)
-  return reponseJson({ projet: projetMisAJour }, 200, entetes)
+  // Le partage reste enregistré (le compte peut être créé ensuite), mais
+  // l'écran prévient qu'aucun compte n'utilise encore cette adresse (audit
+  // UX du 25/09/2026, constat 21). Réservé à qui gère le partage du projet.
+  const compteExistant = (await ctx.utilisateursRepo.parEmail(corps.userId)) !== null
+  return reponseJson({ projet: projetMisAJour, compteExistant }, 200, entetes)
 }
 
 async function gererRetirerPartageProjet(

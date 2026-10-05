@@ -3352,7 +3352,7 @@ export class AuthApiClient {
     id: string,
     userId: string,
     accessLevel: 'lecture' | 'édition',
-  ): Promise<ResultatApi<{ projet: ProjectWire }>> {
+  ): Promise<ResultatApi<{ projet: ProjectWire; compteExistant?: boolean }>> {
     return this.requete('POST', `/projects/${id}/partage`, { jeton, body: { userId, accessLevel } })
   }
 

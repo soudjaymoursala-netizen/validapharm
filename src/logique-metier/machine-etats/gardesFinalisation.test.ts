@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   evaluerGardesFinalisation,
+  liensRequis,
   motifDeForcageValide,
   type ContexteGardeFinalisation,
 } from './gardesFinalisation'
@@ -113,5 +114,24 @@ describe('motifDeForcageValide', () => {
     expect(motifDeForcageValide(undefined)).toBe(false)
     expect(motifDeForcageValide('')).toBe(false)
     expect(motifDeForcageValide('   ')).toBe(false)
+  })
+})
+
+describe('liensRequis', () => {
+  test("IQ : plan de métrologie dès l'entrée en vérification", () => {
+    expect(liensRequis('iq')).toEqual([
+      { code: 'U-02', typeCible: 'plan_metrologie', pointDeControle: 'entree_en_verification' },
+    ])
+  })
+
+  test('OQ : contexte procédé à la vérification, plan de maintenance à la validation', () => {
+    expect(liensRequis('oq').map((l) => [l.typeCible, l.pointDeControle])).toEqual([
+      ['contexte_procede', 'entree_en_verification'],
+      ['plan_maintenance', 'cloture_valide_en_interne'],
+    ])
+  })
+
+  test('URS : aucun prérequis', () => {
+    expect(liensRequis('urs')).toEqual([])
   })
 })

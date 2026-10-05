@@ -89,3 +89,39 @@ export function evaluerGardesFinalisation(
 export function motifDeForcageValide(motif: string | undefined): boolean {
   return motif !== undefined && motif.trim().length > 0
 }
+
+/** Type de section que chaque garde-fou attend en lien. */
+const CIBLE_PAR_GARDE: Record<MessageBlocageFinalisation, TemplateType> = {
+  'U-01': 'contexte_procede',
+  'U-02': 'plan_metrologie',
+  'U-03': 'plan_maintenance',
+}
+
+export interface LienRequis {
+  code: MessageBlocageFinalisation
+  typeCible: TemplateType
+  pointDeControle: PointDeControle
+}
+
+/**
+ * Liens qu'un type de section devra porter, et à quelle étape — déduits des
+ * règles ci-dessus (jamais une seconde liste à tenir à jour). Sert à
+ * afficher les prérequis dès le brouillon (audit UX du 25/09/2026,
+ * constat 12 : le blocage n'apparaissait qu'en engageant le cycle).
+ */
+export function liensRequis(templateType: TemplateType): LienRequis[] {
+  const sansAucunLien: ContexteGardeFinalisation = {
+    templateType,
+    aLienVersContextProcede: false,
+    aLienVersPlanMetrologie: false,
+    aLienVersPlanMaintenance: false,
+  }
+  return (['entree_en_verification', 'cloture_valide_en_interne'] as const).flatMap(
+    (pointDeControle) =>
+      evaluerGardesFinalisation(sansAucunLien, pointDeControle).map((code) => ({
+        code,
+        typeCible: CIBLE_PAR_GARDE[code],
+        pointDeControle,
+      })),
+  )
+}

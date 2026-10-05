@@ -78,4 +78,43 @@ describe('PipelineQualification', () => {
       expect(wrapper.text()).not.toContain('Plan de maintenance')
     },
   )
+
+  test('lecteur : aucune action « Créer cette section », étapes vides non cliquables', () => {
+    const wrapper = mount(PipelineQualification, {
+      props: { sections: [], langue: 'fr', projectId: 'p1', peutModifier: false },
+      global: { plugins: [routeurDeTest()] },
+    })
+    expect(wrapper.text()).not.toContain('Créer cette section')
+    expect(wrapper.findAll('.etapes button')).toHaveLength(0)
+  })
+
+  test('statut complet, jamais abrégé, pour une étape validée', async () => {
+    const projets = useProjectsStore()
+    const sections = useSectionsStore()
+    const projet = await projets.creerProjet({
+      name: 'P',
+      context: '',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+    })
+    const section = await sections.creerSection({
+      project_id: projet.id,
+      template_type: 'urs',
+      language: 'fr',
+      titre: 'URS',
+      owner_id: 'user-1',
+    })
+    const wrapper = mount(PipelineQualification, {
+      props: {
+        sections: [{ ...section, status: 'valide_en_interne' }],
+        langue: 'fr',
+        projectId: projet.id,
+      },
+      global: { plugins: [routeurDeTest()] },
+    })
+    expect(wrapper.text()).toContain('Validé en interne — pas une signature électronique opposable')
+  })
 })

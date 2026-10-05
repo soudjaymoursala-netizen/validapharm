@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import {
@@ -49,21 +49,32 @@ async function attendreQue(condition: () => boolean): Promise<void> {
 }
 
 let demonter: () => void
+// Pinia explicite : une action restée en vol d'un test précédent rappelle
+// `setActivePinia` avec son propre pinia (où `partagerProjet` est simulé).
+let pinia: Pinia
 
 beforeEach(async () => {
-  setActivePinia(createPinia())
+  pinia = createPinia()
+  setActivePinia(pinia)
   await reinitialiserAuthDeTest()
   demonter = installerFauxWorkerAuth().demonter
   await connecterAdminDeTest()
 })
 
-afterEach(() => {
+// Laisse se terminer les écritures déclenchées par l'écran (chargements,
+// redirection) avant de passer au test suivant : sinon elles rappellent
+// `setActivePinia` sur le pinia de ce test, sans session.
+afterEach(async () => {
+  for (let tour = 0; tour < 5; tour++) {
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
   demonter()
 })
 
 describe('FicheProjet — mutations de statut/partage non vérifiées', () => {
   test('un échec de suspension (déjà suspendu) affiche un message, ne casse pas silencieusement', async () => {
-    const projetsStore = useProjectsStore()
+    const projetsStore = useProjectsStore(pinia)
     const projet = await projetsStore.creerProjet({
       name: 'Projet Test',
       context: '',
@@ -78,7 +89,7 @@ describe('FicheProjet — mutations de statut/partage non vérifiées', () => {
     await router.push({ name: 'fiche-projet', params: { projectId: projet.id } })
     const wrapper = mount(FicheProjet, {
       props: { projectId: projet.id },
-      global: { plugins: [router] },
+      global: { plugins: [router, pinia] },
     })
     await attendreQue(() => wrapper.text().includes('Projet Test'))
 
@@ -98,7 +109,7 @@ describe('FicheProjet — mutations de statut/partage non vérifiées', () => {
   })
 
   test("un échec de partage (projet introuvable) affiche un message, garde la saisie de l'utilisateur", async () => {
-    const projetsStore = useProjectsStore()
+    const projetsStore = useProjectsStore(pinia)
     const projet = await projetsStore.creerProjet({
       name: 'Projet Test',
       context: '',
@@ -113,7 +124,7 @@ describe('FicheProjet — mutations de statut/partage non vérifiées', () => {
     await router.push({ name: 'fiche-projet', params: { projectId: projet.id } })
     const wrapper = mount(FicheProjet, {
       props: { projectId: projet.id },
-      global: { plugins: [router] },
+      global: { plugins: [router, pinia] },
     })
     await attendreQue(() => wrapper.text().includes('Projet Test'))
 
@@ -127,5 +138,67 @@ describe('FicheProjet — mutations de statut/partage non vérifiées', () => {
     expect(
       wrapper.find<HTMLInputElement>('.formulaire-partage input[type="email"]').element.value,
     ).toBe('collegue@exemple.com')
+  })
+
+  test('partage avec une adresse sans compte : enregistré, mais un avertissement le signale', async () => {
+    const projetsStore = useProjectsStore(pinia)
+    const projet = await projetsStore.creerProjet({
+      name: 'Projet Test',
+      context: '',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+    })
+    const router = routeurDeTest()
+    await router.push({ name: 'fiche-projet', params: { projectId: projet.id } })
+    const wrapper = mount(FicheProjet, {
+      props: { projectId: projet.id },
+      global: { plugins: [router, pinia] },
+    })
+    await attendreQue(() => wrapper.text().includes('Projet Test'))
+
+    await wrapper.find('.formulaire-partage input[type="email"]').setValue('inconnu@exemple.com')
+    await wrapper.find('.formulaire-partage').trigger('submit.prevent')
+
+    await attendreQue(() => wrapper.find('.partage .bandeau-avertissement').exists())
+
+    expect(wrapper.find('.partage .bandeau-avertissement').text()).toContain(
+      "aucun compte n'utilise encore cette adresse",
+    )
+    expect(wrapper.find('.liste-partages').text()).toContain('inconnu@exemple.com')
+  })
+})
+
+describe('FicheProjet — création de section', () => {
+  test('une section vierge créée ouvre directement son éditeur', async () => {
+    const projetsStore = useProjectsStore(pinia)
+    const projet = await projetsStore.creerProjet({
+      name: 'Projet Test',
+      context: '',
+      scope_in: '',
+      scope_out: '',
+      deadline: null,
+      language_default: 'fr',
+      client_id: null,
+    })
+    const router = routeurDeTest()
+    await router.push({ name: 'fiche-projet', params: { projectId: projet.id } })
+    const wrapper = mount(FicheProjet, {
+      props: { projectId: projet.id },
+      global: { plugins: [router, pinia] },
+    })
+    await attendreQue(() => wrapper.text().includes('Projet Test'))
+
+    // Depuis le pipeline : gabarit et titre préremplis.
+    const etapeUrs = wrapper.findAll('.etapes button').find((b) => b.text().includes('URS'))
+    await etapeUrs?.trigger('click')
+    const titre = wrapper.find<HTMLInputElement>('.formulaire-section input[type="text"]')
+    expect(titre.element.value).toBe('URS — Projet Test')
+
+    await wrapper.find('.formulaire-section').trigger('submit.prevent')
+    await attendreQue(() => router.currentRoute.value.name === 'editeur-section')
+    expect(router.currentRoute.value.params.projectId).toBe(projet.id)
   })
 })
