@@ -78,6 +78,8 @@ const LIBELLES: Record<string, string> = {
   // Règles métier
   verdict_incoherent:
     'le verdict ne correspond pas aux réponses : rechargez la page (méthode ou calcul modifié entre-temps)',
+  conclusion_incoherente:
+    'la conclusion ne correspond pas à la grille de décision : rechargez la page avant de réessayer',
   version_methode_incoherente:
     'la version de méthode a changé entre-temps : rechargez la page avant de réessayer',
   reponses_invalides: 'réponses incompatibles avec la méthode',

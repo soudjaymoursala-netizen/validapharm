@@ -1,6 +1,9 @@
 import { signerJwt, verifierJwt } from './jwt'
 import {
+  COMPLEXITES,
+  VERSION_GRILLE_STRATEGIE,
   calculerIpr,
+  conclusionStrategie,
   reponsesValides,
   refusBornesAmdec,
   verdictAcfc,
@@ -3505,7 +3508,25 @@ async function gererCreerProfilAcfc(
   if (!profil) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
 
   await ctx.acfcRepo.creerProfil(profil)
+  if (!(await profilEnregistre(ctx.acfcRepo, clientId, profil.id))) {
+    return reponseJson({ erreur: 'conflit_version' }, 409, entetes)
+  }
   return reponseJson({ profil }, 201, entetes)
+}
+
+/**
+ * Vrai si le profil a bien été inséré : deux créations simultanées pour le
+ * même client calculent la même version suivante, et l'index unique
+ * (client, version) de la migration 0030 ignore la seconde — elle reçoit
+ * alors 409 `conflit_version` (recharger, puis réessayer) au lieu d'un
+ * faux succès.
+ */
+async function profilEnregistre(
+  repo: { listerProfils(clientId: string): Promise<Array<{ id: string }>> },
+  clientId: string,
+  id: string,
+): Promise<boolean> {
+  return (await repo.listerProfils(clientId)).some((p) => p.id === id)
 }
 
 interface SaisieCreationEvaluationAcfc {
@@ -3515,6 +3536,9 @@ interface SaisieCreationEvaluationAcfc {
   nomElement?: string
   reponses?: Record<string, string>
   verdict?: string | null
+  /** Complexité choisie (catalogue / spécifique) ; la conclusion est recalculée par le serveur. */
+  complexite?: string | null
+  conclusion?: string | null
 }
 
 async function gererCreerEvaluationAcfc(
@@ -3531,7 +3555,8 @@ async function gererCreerEvaluationAcfc(
     !corps?.methodProfileId ||
     !corps.nomElement ||
     !corps.reponses ||
-    horsDomaine(corps.verdict, VERDICTS_ACFC)
+    horsDomaine(corps.verdict, VERDICTS_ACFC) ||
+    horsDomaine(corps.complexite, COMPLEXITES)
   ) {
     return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
   }
@@ -3553,6 +3578,13 @@ async function gererCreerEvaluationAcfc(
   if (valeurIncoherente(corps.verdict, verdict)) {
     return reponseJson({ erreur: 'verdict_incoherent', verdict }, 409, entetes)
   }
+  // Conclusion de stratégie : toujours celle de la grille du serveur
+  // (constat UX 3 : affichée à l'écran, jamais enregistrée jusqu'ici).
+  const complexite = corps.complexite ?? null
+  const conclusion = conclusionStrategie(verdict, complexite)
+  if (valeurIncoherente(corps.conclusion, conclusion)) {
+    return reponseJson({ erreur: 'conclusion_incoherente', conclusion }, 409, entetes)
+  }
 
   const maintenant = horodatage()
   const evaluation: EvaluationACFCEnregistree = {
@@ -3564,6 +3596,9 @@ async function gererCreerEvaluationAcfc(
     nomElement: corps.nomElement,
     reponses: corps.reponses,
     verdict,
+    complexite: conclusion === null ? null : complexite,
+    conclusion,
+    versionGrille: conclusion === null ? null : VERSION_GRILLE_STRATEGIE,
     auditLog: [{ timestamp: maintenant, actor: acteur.email, action: 'création' }],
     createdAt: maintenant,
     updatedAt: maintenant,
@@ -4008,6 +4043,9 @@ async function gererCreerProfilImpactAssessment(
   if (!profilImpact) return reponseJson({ erreur: 'corps_invalide' }, 400, entetes)
 
   await ctx.impactAssessmentRepo.creerProfil(profilImpact)
+  if (!(await profilEnregistre(ctx.impactAssessmentRepo, clientId, profilImpact.id))) {
+    return reponseJson({ erreur: 'conflit_version' }, 409, entetes)
+  }
   return reponseJson({ profilImpact }, 201, entetes)
 }
 
@@ -4298,6 +4336,9 @@ async function gererCreerProfilRiskAssessment(
     createdAt: maintenant,
   }
   await ctx.riskAssessmentRepo.creerProfil(profilRisque)
+  if (!(await profilEnregistre(ctx.riskAssessmentRepo, clientId, profilRisque.id))) {
+    return reponseJson({ erreur: 'conflit_version' }, 409, entetes)
+  }
   return reponseJson({ profilRisque }, 201, entetes)
 }
 

@@ -37,6 +37,10 @@ export interface EvaluationACFCEnregistree {
   nomElement: string
   reponses: Record<string, string>
   verdict: string | null
+  /** Conclusion de stratégie (complexité × verdict, grille versionnée) — `null` si la complexité n'a pas été choisie. */
+  complexite?: string | null
+  conclusion?: string | null
+  versionGrille?: string | null
   auditLog: EntreeJournalAuditEnregistree[]
   createdAt: string
   updatedAt: string
@@ -66,7 +70,12 @@ export class ACFCRepoMemoire implements ACFCRepo {
   }
 
   async creerProfil(profil: MethodProfileACFCEnregistre): Promise<void> {
+    // Même règle que l'index unique (client, version) de la migration 0030.
     if (this.profils.has(profil.id)) return
+    const versionPrise = [...this.profils.values()].some(
+      (p) => p.clientId === profil.clientId && p.version === profil.version,
+    )
+    if (versionPrise) return
     this.profils.set(profil.id, profil)
   }
 

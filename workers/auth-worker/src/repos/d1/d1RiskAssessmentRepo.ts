@@ -70,7 +70,7 @@ export class D1RiskAssessmentRepo implements RiskAssessmentRepo {
         `INSERT INTO method_profiles_risk_assessment
           (id, client_id, version, effective_date, source, origin, echelle_min, echelle_max, seuil_action, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO NOTHING`,
+         ON CONFLICT DO NOTHING`,
       )
       .bind(
         p.id,

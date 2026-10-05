@@ -62,6 +62,29 @@ export function verdictAcfc(
   return conclusion === 'positif' ? 'critique' : 'non_critique'
 }
 
+/**
+ * Grille de décision de la stratégie de qualification — copie serveur de
+ * `logique-metier/strategie-qualification/grilleDecision.ts` (test de
+ * parité). Toute combinaison non couverte donne `autre`, jamais une
+ * conclusion devinée.
+ */
+export const VERSION_GRILLE_STRATEGIE = '0.2.0-provisoire'
+export const COMPLEXITES = ['catalogue', 'specifique'] as const
+const GRILLE_STRATEGIE: Record<string, string> = {
+  non_critique_catalogue: 'revue_documentaire',
+  non_critique_specifique: 'fat',
+  critique_catalogue: 'iq_oq',
+  critique_specifique: 'iq_oq_pq',
+}
+
+export function conclusionStrategie(
+  verdict: 'critique' | 'non_critique' | null,
+  complexite: string | null,
+): string | null {
+  if (verdict === null || complexite === null) return null
+  return GRILLE_STRATEGIE[`${verdict}_${complexite}`] ?? 'autre'
+}
+
 export function verdictImpact(
   questionIds: readonly string[],
   reponses: Readonly<Record<string, string>>,
