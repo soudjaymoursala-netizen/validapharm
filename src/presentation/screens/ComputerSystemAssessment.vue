@@ -68,6 +68,20 @@ const pertinenceEresPart11 = ref<boolean | null>(null)
 const justificationPertinence = ref('')
 const evaluationEnregistree = ref(false)
 
+/** Ce qui manque, dit en clair près du bouton désactivé (constat 20). */
+const champsManquants = computed(() => {
+  const liste: string[] = []
+  if (nomSysteme.value.trim().length === 0) liste.push('le nom du système')
+  if (categorieGamp5.value === null) liste.push('la catégorie GAMP 5')
+  if (justificationCategorie.value.trim().length === 0)
+    liste.push('la justification de la catégorie')
+  if (pertinenceGxp.value === null) liste.push('la pertinence GxP')
+  if (pertinenceEresPart11.value === null) liste.push('la pertinence ERES / Part 11')
+  if (justificationPertinence.value.trim().length === 0)
+    liste.push('la justification de la pertinence')
+  return liste
+})
+
 const formulaireComplet = computed(
   () =>
     nomSysteme.value.trim().length > 0 &&
@@ -167,6 +181,9 @@ function nouvelleEvaluation(): void {
             Enregistrer cette évaluation
           </button>
         </div>
+        <p v-if="champsManquants.length > 0" class="rappel-manquants">
+          Pour enregistrer, il manque : {{ champsManquants.join(', ') }}.
+        </p>
       </form>
     </section>
 
@@ -277,5 +294,10 @@ button:disabled {
   border: 1px solid var(--vp-bordure);
   border-radius: var(--vp-rayon);
   padding: 0.5rem 0.75rem;
+}
+.rappel-manquants {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--vp-texte-secondaire);
 }
 </style>

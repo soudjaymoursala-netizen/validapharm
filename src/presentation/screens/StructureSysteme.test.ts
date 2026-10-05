@@ -18,6 +18,7 @@ function routeurDeTest() {
     history: createMemoryHistory(),
     routes: [
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
+      { path: '/clients/:clientId', name: 'fiche-client', component: { template: '<div />' } },
       {
         path: '/clients/:clientId/structure-systeme',
         name: 'structure-systeme',
@@ -131,6 +132,59 @@ describe('StructureSysteme — chargement normal', () => {
     await attendreQue(() => wrapper.text().includes('Site Nord'))
     expect(wrapper.text()).toContain('Site Nord')
     expect(wrapper.text()).toContain('Site (site)')
+  })
+})
+
+describe('StructureSysteme — arbre et codes', () => {
+  test('nœuds rangés en arbre sous leur parent, niveau en toutes lettres, code proposé selon le motif', async () => {
+    await preremplirHierarchieServeur(ctx)
+    const maintenant = new Date().toISOString()
+    await ctx.structureSystemeRepo.creerNoeud({
+      id: 'noeud-ligne',
+      clientId: CLIENT_ID,
+      workspaceId: null,
+      levelKey: 'site',
+      name: 'A — Ligne de remplissage',
+      code: 'S-7',
+      parentId: 'noeud-site-nord',
+      associatedNodes: [],
+      source: 'manuel',
+      qmsConnectorId: null,
+      periodicQualification: { applicable: false, deadline: null },
+      qualificationStatus: 'non_qualifie',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    })
+    const router = routeurDeTest()
+    await router.push({ name: 'structure-systeme', params: { clientId: CLIENT_ID } })
+    const wrapper = mount(StructureSysteme, {
+      props: { clientId: CLIENT_ID },
+      global: { plugins: [router] },
+    })
+    await attendreQue(() => wrapper.findAll('.noeud-arbre').length === 2)
+
+    // L'enfant suit son parent (alphabétiquement il passerait avant).
+    const lignes = wrapper.findAll('.noeud-arbre')
+    expect(lignes[0]?.text()).toContain('Site Nord')
+    expect(lignes[1]?.text()).toContain('A — Ligne de remplissage')
+    expect(lignes[1]?.attributes('style')).toContain('--profondeur: 1')
+    expect(lignes[0]?.text()).toContain('Site')
+    expect(lignes[0]?.text()).not.toContain('site)')
+
+    // Le sélecteur « Nouveau parent » part du parent actuel.
+    const selecteur = lignes[1]?.find('.reparentage select')
+    expect((selecteur?.element as HTMLSelectElement).value).toBe('noeud-site-nord')
+    expect(lignes[1]?.find('.reparentage button').attributes('aria-label')).toBe(
+      'Reparenter A — Ligne de remplissage',
+    )
+
+    // Motif « S-{n} » : numéro suivant le plus grand existant (S-7).
+    await wrapper.find('.bloc-noeuds form select').setValue('site')
+    expect(
+      (wrapper.findAll('.bloc-noeuds form input[type="text"]')[1]?.element as HTMLInputElement)
+        .value,
+    ).toBe('S-8')
   })
 })
 

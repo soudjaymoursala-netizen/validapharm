@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formaterDateFr } from '../i18n/formaterDate'
 // Suivi de périodicité (tâche #31/#117) — tableau agrégé, tous nœuds
 // confondus d'un client, des actifs soumis à requalification périodique.
 // Comble un vrai manque trouvé en lisant `StructureSysteme.vue` : le seul
@@ -69,13 +70,17 @@ const compteurs = computed(() => {
   return total
 })
 
+function jours(n: number): string {
+  return `${n} jour${n > 1 ? 's' : ''}`
+}
+
+/** Date au format français et pluriel juste (constats 21 et 14). */
 function texteEcheance(ligne: LigneSuivi): string {
   const deadline = ligne.noeud.periodic_qualification.deadline
   if (!deadline || ligne.joursRestants === null) return 'Échéance non renseignée'
-  if (ligne.joursRestants < 0) {
-    return `${deadline} — en retard de ${Math.abs(ligne.joursRestants)} jour(s)`
-  }
-  return `${deadline} — dans ${ligne.joursRestants} jour(s)`
+  const date = formaterDateFr(deadline)
+  if (ligne.joursRestants < 0) return `${date} — en retard de ${jours(-ligne.joursRestants)}`
+  return `${date} — dans ${jours(ligne.joursRestants)}`
 }
 </script>
 
@@ -230,14 +235,18 @@ function texteEcheance(ligne: LigneSuivi): string {
   border-radius: 999px;
 }
 
+/* Texte principal sur fond teinté, bordure de couleur : contraste ≥ 4,5:1
+   (constat 22 : rouge sur rose pâle à 4,41:1). */
 .badge--en_retard {
-  color: var(--vp-danger);
+  color: var(--vp-texte-principal);
   background-color: var(--vp-danger-fond-leger);
+  border: 1px solid var(--vp-danger);
 }
 
 .badge--proche_echeance {
-  color: var(--vp-attention);
+  color: var(--vp-texte-principal);
   background-color: var(--vp-attention-fond-leger);
+  border: 1px solid var(--vp-attention);
 }
 
 .badge--echeance_non_renseignee {

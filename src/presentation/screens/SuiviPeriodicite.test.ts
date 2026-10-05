@@ -133,7 +133,8 @@ describe('SuiviPeriodicite', () => {
 
     const noms = wrapper.findAll('.ligne-suivi__entete strong').map((el) => el.text())
     expect(noms).toEqual(['Autoclave AUT-042', 'Isolateur ISO-01', 'Presse P-200'])
-    expect(wrapper.text()).toContain('en retard de 1 jour(s)')
+    expect(wrapper.text()).toContain('en retard de 1 jour')
+    expect(wrapper.text()).not.toContain('jour(s)')
   })
 
   test('échéance non renseignée affichée distinctement', async () => {
