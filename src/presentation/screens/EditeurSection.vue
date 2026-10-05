@@ -10,6 +10,7 @@ import { useRoute } from 'vue-router'
 import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
 import { GabaritDocxInvalideError } from '../../connecteurs/office/erreurs'
 import { genererDocxPersonnalise } from '../../connecteurs/office/GenerationDocxAdapter'
+import { genererDocxParDefaut } from '../../connecteurs/office/genererDocxParDefaut'
 import { extraireTextePdf } from '../../connecteurs/pdf/PdfNatifAdapter'
 import type {
   EtatConfianceIA,
@@ -20,7 +21,7 @@ import type {
 import { construireDonneesExportGabarit } from '../../logique-metier/export/donneesExportGabarit'
 import { genererExportCSV } from '../../logique-metier/export/genererExportCSV'
 import { genererExportJSON } from '../../logique-metier/export/genererExportJSON'
-import { genererExportWord } from '../../logique-metier/export/genererExportWord'
+import { nomFichierExport } from '../../logique-metier/export/valeursExport'
 import { verifierBlocageExport } from '../../logique-metier/export/verifierBlocageExport'
 import { obtenirDefinitionGabarit } from '../../logique-metier/gabarits/catalogue'
 import type { ChampTableauDynamique } from '../../logique-metier/gabarits/definitionGabarit'
@@ -424,12 +425,12 @@ const tableauxExportables = computed<ChampTableauDynamique[]>(() => {
   )
 })
 
-function telechargerFichier(nomFichier: string, contenu: string, typeMime: string): void {
+function telechargerFichier(nom: string, contenu: string | ArrayBuffer, typeMime: string): void {
   const blob = new Blob([contenu], { type: typeMime })
   const url = URL.createObjectURL(blob)
   const lien = document.createElement('a')
   lien.href = url
-  lien.download = nomFichier
+  lien.download = nom
   lien.click()
   URL.revokeObjectURL(url)
 }
@@ -440,24 +441,36 @@ async function journaliserEtReinitialiser(): Promise<void> {
   await recharger()
 }
 
+/** Nom de fichier lisible : référence (ou type de livrable), titre et version — jamais l'identifiant technique. */
+function nomFichier(extension: string, suffixe?: string): string {
+  const s = section.value
+  if (!s) return `export.${extension}`
+  return nomFichierExport(
+    {
+      prefixe: s.meta.ref || LIBELLES_GABARIT[s.template_type],
+      titre: s.meta.titre,
+      version: s.meta.version,
+      suffixe,
+    },
+    extension,
+  )
+}
+
+const TYPE_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
 async function exporterJSON(): Promise<void> {
   if (!section.value) return
-  telechargerFichier(
-    `${section.value.meta.ref || section.value.id}.json`,
-    genererExportJSON(section.value),
-    'application/json',
-  )
+  telechargerFichier(nomFichier('json'), genererExportJSON(section.value), 'application/json')
   await journaliserEtReinitialiser()
 }
 
 async function exporterWord(): Promise<void> {
   if (!section.value) return
-  const html = genererExportWord(section.value, definitionGabarit.value, section.value.language)
-  telechargerFichier(
-    `${section.value.meta.ref || section.value.id}.doc`,
-    html,
-    'application/msword',
+  const docx = genererDocxParDefaut(
+    construireDonneesExportGabarit(section.value, definitionGabarit.value, section.value.language),
+    section.value.language,
   )
+  telechargerFichier(nomFichier('docx'), docx, TYPE_DOCX)
   await journaliserEtReinitialiser()
 }
 
@@ -519,15 +532,7 @@ async function exporterWordGabaritClient(): Promise<void> {
       section.value.language,
     )
     const docx = await genererDocxPersonnalise(gabarit.fichier, donnees)
-    const blob = new Blob([docx], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    })
-    const url = URL.createObjectURL(blob)
-    const lien = document.createElement('a')
-    lien.href = url
-    lien.download = `${section.value.meta.ref || section.value.id}.docx`
-    lien.click()
-    URL.revokeObjectURL(url)
+    telechargerFichier(nomFichier('docx', gabarit.nom), docx, TYPE_DOCX)
     await journaliserEtReinitialiser()
   } catch (e) {
     erreurGabaritExport.value =
@@ -545,9 +550,9 @@ async function exporterCSV(champ: ChampTableauDynamique): Promise<void> {
     section.value.language,
   )
   telechargerFichier(
-    `${section.value.meta.ref || section.value.id}-${champ.field_key}.csv`,
+    nomFichier('csv', champ.labels[section.value.language] ?? champ.labels.fr),
     csv,
-    'text/csv',
+    'text/csv;charset=utf-8',
   )
   await journaliserEtReinitialiser()
 }
@@ -1298,7 +1303,7 @@ async function ajouterAvisRelecteur(): Promise<void> {
 
         <div v-else class="actions-export">
           <button type="button" @click="exporterJSON">Exporter en JSON</button>
-          <button type="button" @click="exporterWord">Exporter en Word (.doc)</button>
+          <button type="button" @click="exporterWord">Exporter en Word (.docx)</button>
           <button type="button" @click="imprimer">Imprimer / Exporter en PDF</button>
           <button
             v-for="champ in tableauxExportables"

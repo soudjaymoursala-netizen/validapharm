@@ -1,6 +1,13 @@
 import type { ColonneTableau } from '../gabarits/definitionGabarit'
 import type { Langue } from '../domaine/types'
 import { evaluerColonneCalculee } from '../gabarits/evaluerColonneCalculee'
+import { valeurLisible } from './valeursExport'
+
+/** Marque d'ordre des octets UTF-8 : sans elle, Excel lit le fichier en Windows-1252 et casse les accents. */
+const BOM_UTF8 = '\uFEFF'
+
+/** Séparateur attendu par Excel réglé en français (la virgule y est le séparateur décimal). */
+const SEPARATEUR = ';'
 
 /**
  * Export CSV d'un tableau dynamique ("export CSV/XLSX
@@ -18,6 +25,10 @@ import { evaluerColonneCalculee } from '../gabarits/evaluerColonneCalculee'
  * En-têtes = libellés des colonnes (pas les `field_key` techniques) —
  * un fichier destiné à un humain, pas une réimportation programmatique
  * (celle-ci passe par le JSON complet, `genererExportJSON.ts`).
+ *
+ * Format « Excel français » (décision du 29/09/2026) : séparateur `;`,
+ * BOM UTF-8, valeurs de liste en toutes lettres, dates et nombres au
+ * format de la langue du livrable — ouvert tel quel par un double clic.
  */
 export function genererExportCSV(
   colonnes: readonly ColonneTableau[],
@@ -36,14 +47,14 @@ export function genererExportCSV(
         colonne.type === 'nombre' && colonne.formule !== undefined
           ? evaluerColonneCalculee(colonne, colonnes, ligne)
           : ligne[colonne.field_key]
-      return echapperCellule(String(valeur ?? ''))
+      return echapperCellule(valeurLisible(colonne, valeur, langue))
     }),
   )
-  return [entetes, ...rangees].map((rangee) => rangee.join(',')).join('\r\n')
+  return BOM_UTF8 + [entetes, ...rangees].map((rangee) => rangee.join(SEPARATEUR)).join('\r\n')
 }
 
 function echapperCellule(valeur: string): string {
-  if (/[",\r\n]/.test(valeur)) {
+  if (/[";\r\n]/.test(valeur)) {
     return `"${valeur.replaceAll('"', '""')}"`
   }
   return valeur

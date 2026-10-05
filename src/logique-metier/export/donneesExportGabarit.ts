@@ -2,6 +2,7 @@ import type { Langue, Section } from '../domaine/types'
 import type { DefinitionGabarit } from '../gabarits/definitionGabarit'
 import { evaluerColonneCalculee } from '../gabarits/evaluerColonneCalculee'
 import { libelleStatut } from '../i18n/libellesStatut'
+import { dateHeureLisible, recapitulatifWorkflow, valeurLisible } from './valeursExport'
 
 /**
  * Données d'export construites une seule fois et consommées par **tous**
@@ -25,6 +26,9 @@ export interface DonneesExportGabaritTableau {
   libelle: string
   entetes: string
   lignes: string[]
+  /** Même contenu, cellule par cellule — pour les générateurs qui produisent un vrai tableau. */
+  colonnes: string[]
+  cellules: string[][]
 }
 
 export interface DonneesExportGabaritSection {
@@ -45,6 +49,11 @@ export interface DonneesExportGabarit {
   contenu_generique: string | null
   sections: DonneesExportGabaritSection[]
   historique_revisions: Array<{ version: string; date: string; auteur: string; motif: string }>
+  /** Avis de relecture, du plus ancien au plus récent ; `cycle` précise s'il porte sur le contenu actuel. */
+  avis_relecture: Array<{ relecteur: string; avis: string; date: string; cycle: string }>
+  /** Personne et date de l'approbation effective ; vides tant que la section n'est pas validée. */
+  approuve_par: string
+  date_approbation: string
 }
 
 export function construireDonneesExportGabarit(
@@ -52,6 +61,7 @@ export function construireDonneesExportGabarit(
   definition: DefinitionGabarit | undefined,
   langue: Langue,
 ): DonneesExportGabarit {
+  const recap = recapitulatifWorkflow(section)
   return {
     titre: section.meta.titre,
     reference: section.meta.ref,
@@ -69,10 +79,18 @@ export function construireDonneesExportGabarit(
     sections: definition === undefined ? [] : construireSections(section, definition, langue),
     historique_revisions: section.revisions.map((r) => ({
       version: r.version,
-      date: r.date,
+      date: dateHeureLisible(r.date, langue),
       auteur: r.auteur,
       motif: r.motif,
     })),
+    avis_relecture: recap.avis.map((a) => ({
+      relecteur: a.relecteur,
+      avis: a.avis,
+      date: dateHeureLisible(a.date, langue),
+      cycle: a.cycleCourant ? 'cycle en cours' : 'cycle clos (contenu modifié ou rejeté depuis)',
+    })),
+    approuve_par: recap.approbation?.par ?? '',
+    date_approbation: recap.approbation ? dateHeureLisible(recap.approbation.date, langue) : '',
   }
 }
 
@@ -90,33 +108,34 @@ function construireSections(
         const lignes = (section.tables[champ.field_key] ?? []) as Array<
           Record<string, string | number | null>
         >
+        const colonnes = champ.colonnes.map((c) => c.labels[langue] ?? c.labels.fr)
+        const cellules = lignes.map((ligne) =>
+          champ.colonnes.map((c) => {
+            // Colonne calculée (ex. IPR) : jamais persistée
+            // (`ligne[c.field_key]` vaut toujours `null`) — recalculée
+            // ici comme le fait `RenduGabarit.vue` à l'écran, sinon le
+            // livrable exporté affiche une cellule vide là où l'écran
+            // montre une valeur (bug réel trouvé en testant un export
+            // Word réel : colonne IPR vide dans le document produit).
+            const valeur =
+              c.type === 'nombre' && c.formule !== undefined
+                ? evaluerColonneCalculee(c, champ.colonnes, ligne)
+                : ligne[c.field_key]
+            return valeurLisible(c, valeur, langue)
+          }),
+        )
         tableaux.push({
           libelle,
-          entetes: champ.colonnes.map((c) => c.labels[langue] ?? c.labels.fr).join(' | '),
-          lignes: lignes.map((ligne) =>
-            champ.colonnes
-              .map((c) => {
-                // Colonne calculée (ex. IPR) : jamais persistée
-                // (`ligne[c.field_key]` vaut toujours `null`) — recalculée
-                // ici comme le fait `RenduGabarit.vue` à l'écran, sinon le
-                // livrable exporté affiche une cellule vide là où l'écran
-                // montre une valeur (bug réel trouvé en testant un export
-                // Word réel : colonne IPR vide dans le document produit).
-                const valeur =
-                  c.type === 'nombre' && c.formule !== undefined
-                    ? evaluerColonneCalculee(c, champ.colonnes, ligne)
-                    : ligne[c.field_key]
-                return String(valeur ?? '')
-              })
-              .join(' | '),
-          ),
+          entetes: colonnes.join(' | '),
+          lignes: cellules.map((rangee) => rangee.join(' | ')),
+          colonnes,
+          cellules,
         })
         continue
       }
-      const valeur = section.values[champ.field_key]
       champs.push({
         libelle,
-        valeur: valeur === null || valeur === undefined ? '' : String(valeur),
+        valeur: valeurLisible(champ, section.values[champ.field_key], langue),
       })
     }
     return { titre: s.labels[langue] ?? s.labels.fr, champs, tableaux }

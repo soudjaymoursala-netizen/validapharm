@@ -31,26 +31,26 @@ describe('genererExportCSV', () => {
       ],
       'fr',
     )
-    expect(csv).toBe('Danger,Sévérité\r\nPanne capteur,4\r\nFuite,2')
+    expect(csv).toBe('\uFEFFDanger;Sévérité\r\nPanne capteur;4\r\nFuite;2')
   })
 
   test('libellé en langue demandée (anglais)', () => {
     const csv = genererExportCSV(colonnes(), [], 'en')
-    expect(csv).toBe('Hazard,Severity')
+    expect(csv).toBe('\uFEFFHazard;Severity')
   })
 
-  test('échappe les valeurs contenant une virgule, un guillemet ou un retour à la ligne', () => {
+  test('échappe les valeurs contenant un point-virgule, un guillemet ou un retour à la ligne', () => {
     const csv = genererExportCSV(
       colonnes(),
-      [{ danger: 'Fuite, "grave"\nurgent', severite: 5 }],
+      [{ danger: 'Fuite; "grave", urgent\nà traiter', severite: 5 }],
       'fr',
     )
-    expect(csv).toBe('Danger,Sévérité\r\n"Fuite, ""grave""\nurgent",5')
+    expect(csv).toBe('\uFEFFDanger;Sévérité\r\n"Fuite; ""grave"", urgent\nà traiter";5')
   })
 
   test('valeur null ou absente -> cellule vide, jamais "null"', () => {
     const csv = genererExportCSV(colonnes(), [{ danger: null, severite: null }], 'fr')
-    expect(csv).toBe('Danger,Sévérité\r\n,')
+    expect(csv).toBe('\uFEFFDanger;Sévérité\r\n;')
   })
 
   test("colonne calculée (IPR) : recalculée pour l'export, jamais vide malgré une valeur brute null non persistée", () => {
@@ -96,7 +96,39 @@ describe('genererExportCSV', () => {
       'fr',
     )
     expect(csv).toBe(
-      'Danger,Sévérité,Occurrence,Détectabilité,IPR\r\nSonde mal positionnée,5,2,3,30',
+      '\uFEFFDanger;Sévérité;Occurrence;Détectabilité;IPR\r\nSonde mal positionnée;5;2;3;30',
     )
+  })
+
+  test('valeurs de liste en toutes lettres, dates et décimales au format français', () => {
+    const colonnesTypees: ColonneTableau[] = [
+      {
+        field_key: 'priorite',
+        labels: { fr: 'Priorité', en: 'Priority', de: 'Priorität' },
+        type: 'liste',
+        required: true,
+        options: [{ valeur: 'must', labels: { fr: 'Doit (Must)', en: 'Must', de: 'Muss' } }],
+      },
+      {
+        field_key: 'echeance',
+        labels: { fr: 'Échéance', en: 'Due', de: 'Frist' },
+        type: 'date',
+        required: false,
+      },
+      {
+        field_key: 'temperature',
+        labels: { fr: 'Température (°C)', en: 'Temperature', de: 'Temperatur' },
+        type: 'nombre',
+        required: false,
+        min: 0,
+        max: 200,
+      },
+    ]
+    const csv = genererExportCSV(
+      colonnesTypees,
+      [{ priorite: 'must', echeance: '2026-10-05', temperature: 121.5 }],
+      'fr',
+    )
+    expect(csv).toBe('\uFEFFPriorité;Échéance;Température (°C)\r\nDoit (Must);05/10/2026;121,5')
   })
 })

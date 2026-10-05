@@ -195,17 +195,58 @@ export function messageRefusEcritureSection(code: string): string {
   )
 }
 
+/** Préfixe de l'entrée d'historique posée quand une modification du contenu renvoie la section en rédaction (même valeur côté Worker). */
+export const ACTION_RETOUR_REDACTION = 'retour en rédaction'
+
+/** Vrai pendant la vérification et l'approbation : modifier le contenu renvoie alors la section en rédaction. */
+export function estEnCycleDeRelecture(section: Pick<Section, 'status'>): boolean {
+  return section.status === 'en_verification' || section.status === 'en_approbation'
+}
+
 /**
  * Avis de relecture du cycle en cours — ceux donnés après le dernier rejet
- * (entrée d'historique `rejet : …`). Même règle que `avisDuCycleCourant`
- * côté Worker (`integriteSection.ts`).
+ * (entrée d'historique `rejet : …`) ou le dernier retour automatique en
+ * rédaction (`retour en rédaction : …`). Même règle que
+ * `avisDuCycleCourant` côté Worker (`integriteSection.ts`).
  */
 export function avisDuCycleCourant(section: Pick<Section, 'workflow' | 'audit_log'>) {
   let dernierRejet: string | null = null
   for (const entree of section.audit_log) {
-    if (entree.action.startsWith('rejet')) dernierRejet = entree.timestamp
+    if (entree.action.startsWith('rejet') || entree.action.startsWith(ACTION_RETOUR_REDACTION)) {
+      dernierRejet = entree.timestamp
+    }
   }
   return section.workflow.reviewers.filter((r) => dernierRejet === null || r.date > dernierRejet)
+}
+
+/**
+ * Applique une modification du contenu : pendant la vérification ou
+ * l'approbation, la section revient en rédaction et les avis du cycle ne
+ * comptent plus (décision du 29/09/2026). Le Worker applique la même règle
+ * de toute façon ; la poser ici garde l'écran cohérent dès la réponse.
+ */
+function avecModificationContenu(
+  section: Section,
+  modification: Partial<Pick<Section, 'values' | 'tables'>>,
+  maintenant: string,
+  acteur: string,
+): Section {
+  const entrees = [{ timestamp: maintenant, actor: acteur, action: 'modification' }]
+  if (estEnCycleDeRelecture(section)) {
+    const etape = section.status === 'en_verification' ? 'la vérification' : "l'approbation"
+    entrees.push({
+      timestamp: maintenant,
+      actor: acteur,
+      action: `${ACTION_RETOUR_REDACTION} : contenu modifié pendant ${etape}`,
+    })
+  }
+  return {
+    ...section,
+    ...modification,
+    status: estEnCycleDeRelecture(section) ? 'brouillon_aide' : section.status,
+    updated_at: maintenant,
+    audit_log: [...section.audit_log, ...entrees],
+  }
 }
 
 export const useSectionsStore = defineStore('sections', () => {
@@ -679,15 +720,7 @@ export const useSectionsStore = defineStore('sections', () => {
     await modifierSection(sectionId, (section, maintenant) =>
       section.status === 'valide_en_interne'
         ? null
-        : {
-            ...section,
-            values,
-            updated_at: maintenant,
-            audit_log: [
-              ...section.audit_log,
-              { timestamp: maintenant, actor: acteurCourant(), action: 'modification' },
-            ],
-          },
+        : avecModificationContenu(section, { values }, maintenant, acteurCourant()),
     )
   }
 
@@ -705,15 +738,12 @@ export const useSectionsStore = defineStore('sections', () => {
     await modifierSection(sectionId, (section, maintenant) =>
       section.status === 'valide_en_interne'
         ? null
-        : {
-            ...section,
-            tables: { ...section.tables, [cleTable]: lignes },
-            updated_at: maintenant,
-            audit_log: [
-              ...section.audit_log,
-              { timestamp: maintenant, actor: acteurCourant(), action: 'modification' },
-            ],
-          },
+        : avecModificationContenu(
+            section,
+            { tables: { ...section.tables, [cleTable]: lignes } },
+            maintenant,
+            acteurCourant(),
+          ),
     )
   }
 
