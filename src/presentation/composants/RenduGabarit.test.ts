@@ -184,13 +184,38 @@ describe('RenduGabarit — saisie en cours préservée (audit UX du 26/09/2026)'
         verrouille: false,
       },
     })
-    const [ref, description] = wrapper.findAll('tbody input')
+    // Colonnes texte sans longueur maximale : zones de saisie multilignes.
+    const [ref, description] = wrapper.findAll('tbody textarea')
     await ref?.setValue('URS-002')
     await ref?.trigger('change')
     // L'utilisateur tape déjà dans la cellule suivante…
     await description?.setValue('Traçab')
     // …quand la sauvegarde de la première revient (nouveau rendu du parent).
     await wrapper.setProps({ tables: { exigences: [{ ref: 'URS-002', description: null }] } })
-    expect((wrapper.findAll('tbody input')[1]?.element as HTMLInputElement).value).toBe('Traçab')
+    expect((wrapper.findAll('tbody textarea')[1]?.element as HTMLTextAreaElement).value).toBe(
+      'Traçab',
+    )
+  })
+
+  test('chaque cellule porte un nom accessible : colonne et numéro de ligne', () => {
+    const wrapper = mount(RenduGabarit, {
+      props: {
+        definition: definitionTexte,
+        values: {},
+        tables: {
+          exigences: [
+            { ref: null, description: null },
+            { ref: null, description: null },
+          ],
+        },
+        langue: 'fr',
+        verrouille: false,
+      },
+    })
+    const noms = wrapper.findAll('tbody textarea').map((c) => c.attributes('aria-label'))
+    expect(noms).toEqual(expect.arrayContaining(['Description, ligne 2']))
+    expect(wrapper.findAll('.bouton-supprimer')[1]?.attributes('aria-label')).toBe(
+      'Supprimer la ligne 2',
+    )
   })
 })

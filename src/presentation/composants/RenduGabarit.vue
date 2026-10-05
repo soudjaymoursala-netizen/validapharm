@@ -182,6 +182,16 @@ function saisirCellule(
   emit('maj-table', champTable.field_key, lignes)
 }
 
+/** Texte court mais potentiellement long (description d'exigence…) : zone de saisie sur plusieurs lignes plutôt qu'une ligne qui coupe le texte (audit UX du 25/09/2026, constat 10). */
+function estTexteLong(colonne: ColonneTableau): boolean {
+  return colonne.type === 'texte_court' && (colonne.longueur_max ?? Infinity) > 80
+}
+
+/** Nom accessible d'une cellule : colonne et numéro de ligne (constat 22). */
+function libelleCellule(colonne: ColonneTableau, index: number): string {
+  return `${libelle(colonne.labels)}, ligne ${index + 1}`
+}
+
 function valeurCalculee(
   colonne: ChampNombre,
   champTable: DefinitionChamp,
@@ -203,20 +213,31 @@ function valeurCalculee(
 
       <div v-for="champ in section.fields" :key="champ.field_key" class="champ">
         <template v-if="champ.type === 'tableau_dynamique'">
-          <p class="libelle-champ">{{ libelle(champ.labels) }}</p>
-          <div class="table-scroll">
+          <p v-if="libelle(champ.labels) !== libelle(section.labels)" class="libelle-champ">
+            {{ libelle(champ.labels) }}
+          </p>
+          <div
+            class="table-scroll"
+            role="region"
+            tabindex="0"
+            :aria-label="`Tableau ${libelle(champ.labels)} (défilement horizontal possible)`"
+          >
             <table>
               <thead>
                 <tr>
                   <th v-for="colonne in champ.colonnes" :key="colonne.field_key">
                     {{ libelle(colonne.labels) }}
                   </th>
-                  <th v-if="!verrouille"></th>
+                  <th v-if="!verrouille"><span class="visuellement-masque">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(ligne, index) in lignesTable(champ.field_key)" :key="index">
-                  <td v-for="colonne in champ.colonnes" :key="colonne.field_key">
+                  <td
+                    v-for="colonne in champ.colonnes"
+                    :key="colonne.field_key"
+                    :data-libelle="libelle(colonne.labels)"
+                  >
                     <template v-if="colonne.type === 'nombre' && colonne.formule">
                       {{ valeurCalculee(colonne, champ, ligne) ?? '—' }}
                     </template>
@@ -224,7 +245,7 @@ function valeurCalculee(
                       <select
                         :value="ligne[colonne.field_key] ?? ''"
                         :disabled="verrouille"
-                        :aria-label="libelle(colonne.labels)"
+                        :aria-label="libelleCellule(colonne, index)"
                         @change="
                           (e: Event) =>
                             saisirCellule(
@@ -252,6 +273,40 @@ function valeurCalculee(
                         {{ erreurs[cleErreurCellule(champ.field_key, index, colonne.field_key)] }}
                       </p>
                     </template>
+                    <template v-else-if="estTexteLong(colonne)">
+                      <textarea
+                        :value="ligne[colonne.field_key] ?? ''"
+                        rows="2"
+                        class="cellule-texte"
+                        :disabled="verrouille"
+                        :aria-label="libelleCellule(colonne, index)"
+                        @input="
+                          (e: Event) =>
+                            brouillonCellule(
+                              champ.field_key,
+                              index,
+                              colonne.field_key,
+                              (e.target as HTMLTextAreaElement).value,
+                            )
+                        "
+                        @change="
+                          (e: Event) =>
+                            saisirCellule(
+                              champ,
+                              colonne,
+                              index,
+                              (e.target as HTMLTextAreaElement).value,
+                            )
+                        "
+                      />
+                      <p
+                        v-if="erreurs[cleErreurCellule(champ.field_key, index, colonne.field_key)]"
+                        class="erreur"
+                        role="alert"
+                      >
+                        {{ erreurs[cleErreurCellule(champ.field_key, index, colonne.field_key)] }}
+                      </p>
+                    </template>
                     <template v-else>
                       <input
                         :value="ligne[colonne.field_key] ?? ''"
@@ -263,7 +318,7 @@ function valeurCalculee(
                               : 'text'
                         "
                         :disabled="verrouille"
-                        :aria-label="libelle(colonne.labels)"
+                        :aria-label="libelleCellule(colonne, index)"
                         @input="
                           (e: Event) =>
                             colonne.type !== 'nombre' &&
@@ -293,8 +348,15 @@ function valeurCalculee(
                       </p>
                     </template>
                   </td>
-                  <td v-if="!verrouille">
-                    <button type="button" @click="supprimerLigne(champ, index)">Supprimer</button>
+                  <td v-if="!verrouille" class="cellule-action">
+                    <button
+                      type="button"
+                      class="bouton-supprimer"
+                      :aria-label="`Supprimer la ligne ${index + 1}`"
+                      @click="supprimerLigne(champ, index)"
+                    >
+                      Supprimer
+                    </button>
                   </td>
                 </tr>
               </tbody>
@@ -391,13 +453,98 @@ select {
   font-family: inherit;
 }
 
+/* Ombres de défilement : visibles seulement quand du contenu dépasse à
+   gauche ou à droite (constat 10 : défilement horizontal « discret »). */
 .table-scroll {
   overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--vp-fond-page) 30%, transparent) left / 2.5rem 100%,
+    linear-gradient(to left, var(--vp-fond-page) 30%, transparent) right / 2.5rem 100%,
+    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.18), transparent) left / 0.9rem 100%,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.18), transparent) right / 0.9rem 100%;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
+
+.table-scroll:focus-visible {
+  outline: 2px solid var(--vp-marque);
+  outline-offset: 2px;
 }
 
 table {
   border-collapse: collapse;
   width: 100%;
+}
+
+.cellule-texte {
+  min-width: 16rem;
+  width: 100%;
+  resize: vertical;
+  field-sizing: content;
+  min-height: 2.5rem;
+}
+
+.cellule-action {
+  white-space: nowrap;
+}
+
+.bouton-supprimer {
+  background-color: transparent;
+  color: var(--vp-danger);
+  border: 1px solid var(--vp-danger);
+  margin-top: 0;
+}
+
+.visuellement-masque {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Téléphone : chaque ligne devient une carte, une cellule par ligne avec
+   son libellé (le tableau ne déborde plus de l'écran). */
+@media (max-width: 40rem) {
+  table,
+  tbody,
+  tr,
+  td {
+    display: block;
+    width: 100%;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tr {
+    border: 1px solid var(--vp-bordure);
+    border-radius: var(--vp-rayon);
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+  }
+
+  td {
+    border: 0;
+    padding: 0.35rem 0;
+  }
+
+  td[data-libelle]::before {
+    content: attr(data-libelle);
+    display: block;
+    font-weight: 600;
+    font-size: 0.85em;
+    margin-bottom: 0.2rem;
+  }
+
+  td input,
+  td select,
+  td textarea {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 th,

@@ -6,7 +6,7 @@
 // logique-metier/gabarits/catalogue/index.ts). Transitions de statut avec
 // garde-fous fidèles, sauvegarde automatique.
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { extraireTexteDocx } from '../../connecteurs/office/DocxNatifAdapter'
 import { GabaritDocxInvalideError } from '../../connecteurs/office/erreurs'
 import { genererDocxPersonnalise } from '../../connecteurs/office/GenerationDocxAdapter'
@@ -21,7 +21,9 @@ import type {
 import { construireDonneesExportGabarit } from '../../logique-metier/export/donneesExportGabarit'
 import { genererExportCSV } from '../../logique-metier/export/genererExportCSV'
 import { genererExportJSON } from '../../logique-metier/export/genererExportJSON'
-import { nomFichierExport } from '../../logique-metier/export/valeursExport'
+import { nomFichierExport, recapitulatifWorkflow } from '../../logique-metier/export/valeursExport'
+import { aLienVersTypeSection } from '../../logique-metier/detection-liens/aLienVersTypeSection'
+import { liensRequis } from '../../logique-metier/machine-etats/gardesFinalisation'
 import { verifierBlocageExport } from '../../logique-metier/export/verifierBlocageExport'
 import { obtenirDefinitionGabarit } from '../../logique-metier/gabarits/catalogue'
 import type { ChampTableauDynamique } from '../../logique-metier/gabarits/definitionGabarit'
@@ -30,6 +32,7 @@ import {
   type FormulationFaibleParChamp,
 } from '../../logique-metier/qualite-redaction/detecterFormulationsFaibles'
 import { construireObjectifAssistantSection } from '../../logique-metier/raisonnement/assistantSection'
+import PastilleStatutSection from '../composants/PastilleStatutSection.vue'
 import RenduGabarit from '../composants/RenduGabarit.vue'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { peutModifierSection } from '../../logique-metier/permissions/permissionsProjet'
@@ -48,7 +51,9 @@ import { useProjectsStore } from '../stores/useProjectsStore'
 import { useReasoningEngineStore } from '../stores/useReasoningEngineStore'
 import ModaleSignature from '../composants/ModaleSignature.vue'
 import {
+  ACTION_RETOUR_REDACTION,
   avisDuCycleCourant,
+  estEnCycleDeRelecture,
   useSectionsStore,
   type ResultatActionSection,
 } from '../stores/useSectionsStore'
@@ -145,6 +150,65 @@ function dateLisible(iso: string): string {
     ? iso
     : date.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 }
+/**
+ * Étapes du cycle de vie, affichées en tête de l'éditeur (audit UX du
+ * 25/09/2026, constat 11 : le statut n'était qu'une ligne de texte grise,
+ * sans étapes ni action suivante).
+ */
+const ETAPES_CYCLE = [
+  { statuts: ['brouillon_aide', 'propose_par_ia_non_valide'], libelle: 'Rédaction' },
+  { statuts: ['en_verification'], libelle: 'Vérification' },
+  { statuts: ['en_approbation'], libelle: 'Approbation' },
+  { statuts: ['valide_en_interne'], libelle: 'Validée en interne' },
+] as const
+const indexEtapeCourante = computed(() =>
+  ETAPES_CYCLE.findIndex((e) =>
+    (e.statuts as readonly string[]).includes(section.value?.status ?? ''),
+  ),
+)
+const PROCHAINE_ETAPE: Record<Section['status'], string> = {
+  brouillon_aide:
+    'Rédigez le contenu, désignez l’approbateur final, puis engagez le cycle de vérification.',
+  propose_par_ia_non_valide:
+    'Relisez chaque partie proposée par l’IA, cochez-la, puis validez la section.',
+  en_verification:
+    'Les relecteurs donnent leur avis, puis la section est transmise à l’approbation (ou renvoyée en rédaction).',
+  en_approbation:
+    'L’approbateur final approuve (signature par mot de passe) ou renvoie en rédaction.',
+  valide_en_interne: 'Section validée et verrouillée : les exports restent disponibles.',
+}
+const enCycleDeRelecture = computed(() =>
+  section.value ? estEnCycleDeRelecture(section.value) : false,
+)
+/** Dernier retour automatique en rédaction (contenu modifié pendant le cycle), s'il est l'événement de cycle le plus récent. */
+const retourAutomatique = computed(() => {
+  if (section.value?.status !== 'brouillon_aide') return null
+  const entrees = section.value.audit_log
+  for (let i = entrees.length - 1; i >= 0; i--) {
+    const entree = entrees[i]
+    if (!entree) continue
+    if (entree.action.startsWith(ACTION_RETOUR_REDACTION)) return entree
+    if (entree.action.startsWith('rejet') || entree.action.startsWith('changement_statut')) {
+      return null
+    }
+  }
+  return null
+})
+const recapitulatif = computed(() =>
+  section.value ? recapitulatifWorkflow(section.value) : undefined,
+)
+
+/**
+ * L'IA est utilisable si le relais du serveur est configuré, ou si le
+ * fournisseur choisi est local (constat 24 : l'utilisateur ne l'apprenait
+ * qu'après avoir tout rempli).
+ */
+const iaDisponible = computed(
+  () =>
+    configStore.config?.ai_provider === 'local' || relaisStore.accesRelais().relayUrl !== undefined,
+)
+const panneauIAOuvert = ref(route.query.demarrage === 'adaptation')
+
 const sectionCibleLienId = ref('')
 const procedureLienId = ref('')
 const noeudLienId = ref('')
@@ -305,6 +369,60 @@ async function lierSectionSelectionnee(): Promise<void> {
   }
 }
 
+/**
+ * Prérequis de liaison (garde-fous U-01 à U-03), affichés dès le brouillon
+ * avec une action directe pour chacun (constat 12) : lier une section
+ * existante du bon type, ou la créer et la lier en un clic.
+ */
+const prerequis = computed(() => {
+  if (!section.value || !projet.value) return []
+  const sectionsDuProjet = sectionsStore.sectionsParProjet[props.projectId] ?? []
+  return liensRequis(section.value.template_type).map((lien) => ({
+    ...lien,
+    satisfait: aLienVersTypeSection(
+      props.sectionId,
+      lien.typeCible,
+      projet.value?.links ?? [],
+      sectionsDuProjet,
+    ),
+    candidates: sectionsLiablesRestantes.value.filter((s) => s.template_type === lien.typeCible),
+  }))
+})
+const prerequisSelection = ref<Record<string, string>>({})
+const sectionCreeeId = ref<string | null>(null)
+const prerequisEnCours = ref(false)
+
+async function lierPrerequis(typeCible: string): Promise<void> {
+  const cible = prerequisSelection.value[typeCible]
+  if (!cible) return
+  sectionCibleLienId.value = cible
+  await lierSectionSelectionnee()
+  prerequisSelection.value = { ...prerequisSelection.value, [typeCible]: '' }
+}
+
+async function creerEtLierPrerequis(typeCible: Section['template_type']): Promise<void> {
+  if (!projet.value || prerequisEnCours.value) return
+  erreurLienSection.value = null
+  prerequisEnCours.value = true
+  try {
+    const creee = await sectionsStore.creerSection({
+      project_id: props.projectId,
+      template_type: typeCible,
+      language: projet.value.language_default,
+      titre: `${LIBELLES_GABARIT[typeCible]} — ${projet.value.name}`,
+      owner_id: projetsStore.identiteCourante,
+    })
+    await projetsStore.ajouterLien(props.projectId, props.sectionId, creee.id)
+    projet.value = await projetsStore.obtenirProjet(props.projectId)
+    sectionCreeeId.value = creee.id
+  } catch (e) {
+    erreurLienSection.value =
+      e instanceof Error ? e.message : 'La section n’a pas pu être créée et liée.'
+  } finally {
+    prerequisEnCours.value = false
+  }
+}
+
 async function delierSection(autreSectionId: string): Promise<void> {
   erreurLienSection.value = null
   try {
@@ -401,6 +519,27 @@ async function majValeursGabarit(valeurs: Record<string, string | number | null>
   // pourrait être en retard d'un aller-retour de sauvegarde (course
   // trouvée en navigateur entre deux champs modifiés rapidement).
   await sauvegarder(() => sectionsStore.mettreAJourValeurs(props.sectionId, valeurs))
+  await recharger()
+}
+
+const referenceSaisie = ref('')
+const versionSaisie = ref('')
+watch(
+  () => [section.value?.meta.ref, section.value?.meta.version],
+  () => {
+    referenceSaisie.value = section.value?.meta.ref ?? ''
+    versionSaisie.value = section.value?.meta.version ?? ''
+  },
+  { immediate: true },
+)
+
+/** Référence et version du livrable (constat 8 : « Référence : — » dans le Word, sans champ pour la saisir). */
+async function majIdentification(): Promise<void> {
+  if (!section.value) return
+  const ref = referenceSaisie.value.trim()
+  const version = versionSaisie.value.trim()
+  if (ref === section.value.meta.ref && version === section.value.meta.version) return
+  await sauvegarder(() => sectionsStore.mettreAJourMeta(props.sectionId, { ref, version }))
   await recharger()
 }
 
@@ -842,11 +981,31 @@ async function ajouterAvisRelecteur(): Promise<void> {
     >
       Fiche projet
     </RouterLink>
-    <h1>{{ section.meta.titre }}</h1>
-    <p class="meta">
-      {{ LIBELLES_GABARIT[section.template_type] }} — statut :
-      <strong>{{ libelleStatut(section.status, section.language) }}</strong>
-    </p>
+    <header class="entete-section">
+      <div class="ligne-titre">
+        <h1>{{ section.meta.titre }}</h1>
+        <PastilleStatutSection :statut="section.status" :langue="section.language" />
+      </div>
+      <p class="meta">
+        {{ LIBELLES_GABARIT[section.template_type] }}
+        <template v-if="section.meta.ref"> · Référence {{ section.meta.ref }}</template>
+        <template v-if="section.meta.version"> · Version {{ section.meta.version }}</template>
+      </p>
+      <ol class="etapes-cycle no-print" aria-label="Cycle de vie de la section">
+        <li
+          v-for="(etape, index) in ETAPES_CYCLE"
+          :key="etape.libelle"
+          :class="{
+            'etape-faite': index < indexEtapeCourante,
+            'etape-courante': index === indexEtapeCourante,
+          }"
+          :aria-current="index === indexEtapeCourante ? 'step' : undefined"
+        >
+          {{ etape.libelle }}
+        </li>
+      </ol>
+      <p class="prochaine-etape no-print">{{ PROCHAINE_ETAPE[section.status] }}</p>
+    </header>
 
     <p
       v-if="etatSauvegarde !== 'inactif'"
@@ -865,6 +1024,19 @@ async function ajouterAvisRelecteur(): Promise<void> {
     <p v-if="lectureSeule" class="bandeau-lecture-seule no-print" role="status">
       Lecture seule : seuls le créateur du projet, les personnes partagées en édition et les
       administrateurs peuvent modifier ou exporter cette section.
+    </p>
+
+    <p v-if="retourAutomatique" class="bandeau-info no-print" role="status">
+      La section est revenue en rédaction le {{ dateLisible(retourAutomatique.timestamp) }} ({{
+        retourAutomatique.action.replace(`${ACTION_RETOUR_REDACTION} : `, '')
+      }}, par {{ retourAutomatique.actor }}) : les avis précédents ne comptent plus. Engagez à
+      nouveau le cycle une fois le contenu prêt.
+    </p>
+    <p v-if="enCycleDeRelecture && !lectureSeule" class="bandeau-avertissement no-print">
+      Section
+      {{ section.status === 'en_verification' ? 'en vérification' : 'en approbation' }} : toute
+      modification du contenu (y compris la référence ou la version) la renverra en rédaction, et
+      les avis de ce cycle ne compteront plus.
     </p>
 
     <!-- Désactive d'un coup tous les contrôles d'édition pour un lecteur :
@@ -894,6 +1066,27 @@ async function ajouterAvisRelecteur(): Promise<void> {
         </ul>
       </details>
 
+      <div v-if="section.status !== 'valide_en_interne'" class="identification no-print">
+        <label>
+          Référence du livrable
+          <input
+            v-model="referenceSaisie"
+            type="text"
+            placeholder="ex. URS-AUT-001"
+            @change="majIdentification"
+          />
+        </label>
+        <label>
+          Version
+          <input
+            v-model="versionSaisie"
+            type="text"
+            placeholder="ex. 1.0"
+            @change="majIdentification"
+          />
+        </label>
+      </div>
+
       <RenduGabarit
         v-if="definitionGabarit"
         :key="section.id"
@@ -910,115 +1103,6 @@ async function ajouterAvisRelecteur(): Promise<void> {
         Contenu
         <textarea v-model="contenu" :disabled="section.status === 'valide_en_interne'" rows="10" />
       </label>
-
-      <section
-        v-if="section.status === 'brouillon_aide' && definitionGabarit && projet?.client_id"
-        class="generation-brouillon no-print"
-      >
-        <h2>Génération de brouillon par adaptation (§4.1bis)</h2>
-        <p class="rappel">
-          Adapte un document de référence (structure, langage, raisonnement) au contexte du nouveau
-          cas — le résultat reste au statut « proposé par IA — non validé » tant que chaque section
-          du gabarit n'a pas été relue explicitement.
-        </p>
-
-        <fieldset class="choix-reference">
-          <label>
-            <input v-model="modeReference" type="radio" value="coller" />
-            Coller le texte
-          </label>
-          <label>
-            <input v-model="modeReference" type="radio" value="uploader" />
-            Uploader un fichier (.docx, .pdf)
-          </label>
-        </fieldset>
-
-        <label v-if="modeReference === 'coller'">
-          Texte du document de référence
-          <textarea v-model="texteDocumentReference" rows="6" />
-        </label>
-        <template v-else>
-          <label class="bouton-fichier">
-            Choisir un fichier (.docx, .pdf)
-            <input type="file" accept=".docx,.pdf" @change="importerFichierReference" />
-          </label>
-          <p v-if="enExtractionReference">Extraction du texte en cours…</p>
-          <p v-if="erreurExtractionReference" class="bandeau-erreur" role="alert">
-            {{ erreurExtractionReference }}
-          </p>
-          <p v-if="nomDocumentReference && !enExtractionReference">
-            Fichier chargé : « {{ nomDocumentReference }} » ({{ texteDocumentReference.length }}
-            caractères extraits)
-          </p>
-        </template>
-
-        <label v-if="modeReference === 'coller'">
-          Nom du document de référence
-          <input v-model="nomDocumentReference" type="text" placeholder="ex. IQ ligne A11 (2024)" />
-        </label>
-
-        <label>
-          Contexte du nouveau cas
-          <textarea v-model="contexteNouveauCas" rows="3" />
-        </label>
-
-        <label class="confirmation-droit-usage">
-          <input v-model="confirmationDroitUsage" type="checkbox" />
-          {{
-            messageSysteme('U-07', section.language, {
-              titre: nomDocumentReference || 'ce document',
-            })
-          }}
-        </label>
-
-        <p v-if="erreurGeneration" class="bandeau-erreur" role="alert">{{ erreurGeneration }}</p>
-
-        <button
-          type="button"
-          :disabled="
-            enGeneration || texteDocumentReference.trim().length === 0 || !confirmationDroitUsage
-          "
-          @click="genererBrouillon"
-        >
-          {{ enGeneration ? 'Génération en cours…' : 'Générer le brouillon' }}
-        </button>
-      </section>
-
-      <section v-if="projet?.client_id" class="assistant-section no-print">
-        <h2>Assistant contextuel</h2>
-        <p class="rappel">
-          Pose une question sur cette section précise — l'assistant voit son contenu actuel et
-          dispose des mêmes outils de traçabilité que le Reasoning Engine (§4.21). Fournisseur
-          actuel :
-          {{ nomFournisseurActuel }}. Jamais une écriture automatique dans la section — une réponse,
-          jamais une action.
-        </p>
-        <ul v-if="historiqueAssistant.length > 0" class="historique-assistant">
-          <li v-for="(echange, index) in historiqueAssistant" :key="index">
-            <p class="question-assistant"><strong>Vous :</strong> {{ echange.question }}</p>
-            <p class="reponse-assistant">
-              <strong>Assistant :</strong> {{ echange.reponse }}
-              <span class="badge-confiance">{{
-                LIBELLES_CONFIANCE_ASSISTANT[echange.etatConfiance]
-              }}</span>
-            </p>
-          </li>
-        </ul>
-        <p v-if="erreurAssistant" class="bandeau-erreur" role="alert">{{ erreurAssistant }}</p>
-        <form class="formulaire-assistant" @submit.prevent="poserQuestionAssistant">
-          <textarea
-            v-model="questionAssistant"
-            rows="2"
-            placeholder="ex. Quels risques ne sont pas encore couverts par un test pour cet actif ?"
-          />
-          <button
-            type="submit"
-            :disabled="assistantEnCours || questionAssistant.trim().length === 0"
-          >
-            {{ assistantEnCours ? 'Réflexion en cours…' : 'Poser la question' }}
-          </button>
-        </form>
-      </section>
 
       <section v-if="section.status === 'propose_par_ia_non_valide'" class="revue-ia no-print">
         <h2>Revue du brouillon proposé par IA</h2>
@@ -1046,144 +1130,99 @@ async function ajouterAvisRelecteur(): Promise<void> {
         </fieldset>
       </section>
 
-      <section class="liens-sections no-print">
-        <h2>Liens vers d'autres sections</h2>
+      <section
+        v-if="prerequis.length > 0 && section.status !== 'valide_en_interne'"
+        class="prerequis no-print"
+      >
+        <h2>Liens requis</h2>
         <p class="rappel">
-          Un lien vers la section requise (ex. Contexte procédé pour l'OQ/PQ, Plan de métrologie
-          pour l'IQ) est la façon normale de satisfaire un garde-fou de finalisation — « Forcer »
-          reste réservé aux exceptions justifiées.
+          Ce type de livrable doit être relié aux sections ci-dessous. Sans lien, l'étape indiquée
+          reste bloquée (sauf forçage motivé).
         </p>
         <p v-if="erreurLienSection" class="bandeau-erreur" role="alert">{{ erreurLienSection }}</p>
-        <ul v-if="sectionsLiees.length > 0" class="liste-liens">
-          <li v-for="s in sectionsLiees" :key="s.id">
-            {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
-            <button
-              v-if="section.status !== 'valide_en_interne'"
-              type="button"
-              @click="delierSection(s.id)"
-            >
-              Délier
-            </button>
+        <ul class="liste-prerequis">
+          <li
+            v-for="lien in prerequis"
+            :key="lien.code"
+            :class="lien.satisfait ? 'prerequis-ok' : 'prerequis-manquant'"
+          >
+            <span class="etat-prerequis">
+              {{ lien.satisfait ? '✓ Lié' : '✗ Manquant' }} :
+              <strong>{{ LIBELLES_GABARIT[lien.typeCible] }}</strong>
+              <span class="rappel">
+                (requis pour
+                {{
+                  lien.pointDeControle === 'entree_en_verification'
+                    ? 'engager la vérification'
+                    : 'approuver'
+                }})
+              </span>
+            </span>
+            <span v-if="!lien.satisfait && !lectureSeule" class="actions-prerequis">
+              <template v-if="lien.candidates.length > 0">
+                <select
+                  v-model="prerequisSelection[lien.typeCible]"
+                  :aria-label="`Section ${LIBELLES_GABARIT[lien.typeCible]} à lier`"
+                >
+                  <option value="">— choisir une section existante —</option>
+                  <option v-for="c in lien.candidates" :key="c.id" :value="c.id">
+                    {{ c.meta.titre }}
+                  </option>
+                </select>
+                <button
+                  type="button"
+                  :disabled="!prerequisSelection[lien.typeCible]"
+                  @click="lierPrerequis(lien.typeCible)"
+                >
+                  Lier
+                </button>
+              </template>
+              <button
+                type="button"
+                :disabled="prerequisEnCours"
+                @click="creerEtLierPrerequis(lien.typeCible)"
+              >
+                Créer la section {{ LIBELLES_GABARIT[lien.typeCible] }} et la lier
+              </button>
+            </span>
           </li>
         </ul>
-        <p v-else>Aucun lien pour l'instant.</p>
-        <div v-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
-          <label>
-            Lier à
-            <select v-model="sectionCibleLienId" :disabled="sectionsLiablesRestantes.length === 0">
-              <option value="">— choisir une section —</option>
-              <option v-for="s in sectionsLiablesRestantes" :key="s.id" :value="s.id">
-                {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
-              </option>
-            </select>
-          </label>
-          <button type="button" :disabled="!sectionCibleLienId" @click="lierSectionSelectionnee">
-            Lier
-          </button>
-        </div>
-      </section>
-
-      <section class="liens-structurels no-print">
-        <h2>Liens structurels (procédure, actif)</h2>
-        <p class="rappel">
-          Liens réels (tâche #118), retrouvables depuis la fiche procédure ou le dossier vivant de
-          l'actif — jamais un simple texte d'audit.
+        <p v-if="sectionCreeeId" class="bandeau-succes" role="status">
+          Section créée et liée.
+          <RouterLink
+            :to="{
+              name: 'editeur-section',
+              params: { projectId: props.projectId, sectionId: sectionCreeeId },
+            }"
+          >
+            L'ouvrir
+          </RouterLink>
         </p>
-        <!-- `procedureStore`/`structureStore` se chargent en fin de chaîne
-           séquentielle dans `onMounted` — sans cette garde, un lien
-           structurel bel et bien enregistré s'affichait comme absent
-           pendant ce court instant (`procedureLiee`/`noeudLie` restent
-           `null` tant que ces stores n'ont pas fini de charger), un vrai
-           flash de contenu trompeur (bug réel trouvé le 13/09/2026). -->
-        <p v-if="chargementInitial" class="etat-vide">Chargement…</p>
-        <template v-else>
-          <div class="lien-structurel">
-            <template v-if="procedureLiee">
-              <span
-                >Procédure :
-                <strong
-                  >{{ procedureLiee.reference }} v{{ procedureLiee.numero_version }} —
-                  {{ procedureLiee.titre }}</strong
-                ></span
-              >
-              <span v-if="procedureStore.remplaceePar(procedureLiee)" class="alerte-obsolete">
-                ⚠ Révision obsolète — remplacée par la v{{
-                  procedureStore.remplaceePar(procedureLiee)
-                }}
-              </span>
-              <button
-                v-if="section.status !== 'valide_en_interne'"
-                type="button"
-                @click="delierProcedure"
-              >
-                Délier
-              </button>
-            </template>
-            <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
-              <label>
-                Lier à une procédure
-                <select v-model="procedureLienId">
-                  <option value="">— choisir —</option>
-                  <option v-for="p in procedureStore.procedures" :key="p.id" :value="p.id">
-                    {{ p.reference }} v{{ p.numero_version }} — {{ p.titre
-                    }}{{ procedureStore.remplaceePar(p) ? ' (obsolète)' : '' }}
-                  </option>
-                </select>
-              </label>
-              <button type="button" :disabled="!procedureLienId" @click="lierProcedureSelectionnee">
-                Lier
-              </button>
-            </div>
-            <p v-else>Aucune procédure liée.</p>
-          </div>
-          <div class="lien-structurel">
-            <template v-if="noeudLie">
-              <span
-                >Actif :
-                <RouterLink
-                  v-if="projet?.client_id"
-                  :to="{
-                    name: 'dossier-vivant-actif',
-                    params: { clientId: projet.client_id, noeudId: noeudLie.id },
-                  }"
-                >
-                  {{ noeudLie.name }} ({{ noeudLie.code }})
-                </RouterLink>
-                <template v-else>{{ noeudLie.name }} ({{ noeudLie.code }})</template></span
-              >
-              <button
-                v-if="section.status !== 'valide_en_interne'"
-                type="button"
-                @click="delierAssetNode"
-              >
-                Délier
-              </button>
-            </template>
-            <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
-              <label>
-                Lier à un nœud Structure Système
-                <select v-model="noeudLienId">
-                  <option value="">— choisir —</option>
-                  <option v-for="n in structureStore.noeuds" :key="n.id" :value="n.id">
-                    {{ n.name }} ({{ n.code }})
-                  </option>
-                </select>
-              </label>
-              <button type="button" :disabled="!noeudLienId" @click="lierAssetNodeSelectionne">
-                Lier
-              </button>
-            </div>
-            <p v-else>Aucun actif lié.</p>
-          </div>
-        </template>
       </section>
 
       <section class="workflow no-print">
-        <h2>Workflow</h2>
-        <p>
-          Approbateur final :
-          <strong>{{ section.workflow.approver_final ?? 'non renseigné' }}</strong>
-        </p>
+        <h2>Rédaction, relecture et approbation</h2>
+        <!-- Récapitulatif conservé après la validation (constat 13 : toutes
+             les traces du workflow disparaissaient de l'écran). -->
+        <dl v-if="recapitulatif" class="recapitulatif-workflow">
+          <dt>Rédaction</dt>
+          <dd>{{ recapitulatif.redacteurs.join(', ') || 'non renseignée' }}</dd>
+          <dt>Approbateur final</dt>
+          <dd>
+            {{ recapitulatif.approbateurDesigne ?? 'non désigné' }}
+            <template v-if="recapitulatif.approbation">
+              — a approuvé le {{ dateLisible(recapitulatif.approbation.date) }}
+              <template
+                v-if="
+                  recapitulatif.approbation.par.toLowerCase() !==
+                  (recapitulatif.approbateurDesigne ?? '').toLowerCase()
+                "
+              >
+                (approbation donnée par {{ recapitulatif.approbation.par }})
+              </template>
+            </template>
+          </dd>
+        </dl>
         <div
           v-if="section.status !== 'valide_en_interne' && !lectureSeule"
           class="ligne-formulaire"
@@ -1201,13 +1240,20 @@ async function ajouterAvisRelecteur(): Promise<void> {
           <button type="button" @click="nouvelApprobateur = emailCourant">Moi-même</button>
         </div>
 
-        <p>Avis de relecture : {{ section.workflow.reviewers.length }}</p>
+        <p>
+          Avis de relecture : {{ avisCycleCourant.size }} sur ce cycle<template
+            v-if="section.workflow.reviewers.length > avisCycleCourant.size"
+          >
+            ({{ section.workflow.reviewers.length - avisCycleCourant.size }} d'un cycle
+            clos)</template
+          >
+        </p>
         <ul v-if="section.workflow.reviewers.length > 0" class="liste-avis">
           <li v-for="(avis, index) in section.workflow.reviewers" :key="index">
             {{ avis.user_id }} — {{ avis.avis }}
             <span class="date-avis">({{ dateLisible(avis.date) }})</span>
             <span v-if="!avisCycleCourant.has(avis)" class="avis-perime">
-              — cycle rejeté, ne compte plus
+              — cycle clos (rejet ou contenu modifié depuis), ne compte plus
             </span>
           </li>
         </ul>
@@ -1264,26 +1310,33 @@ async function ajouterAvisRelecteur(): Promise<void> {
         </template>
 
         <template v-else-if="section.status === 'en_verification'">
-          <button type="button" @click="transmettreApprobation">Transmettre à l'approbation</button>
-          <label>
-            Motif de rejet
-            <input v-model="motifRejet" type="text" />
-          </label>
-          <button type="button" class="bouton-danger" @click="rejeter">Rejeter</button>
+          <div class="decision-positive">
+            <button type="button" @click="transmettreApprobation">
+              Transmettre à l'approbation
+            </button>
+          </div>
         </template>
 
         <template v-else-if="section.status === 'en_approbation'">
-          <button type="button" :disabled="!peutApprouver" @click="approuver">Approuver</button>
-          <p v-if="!peutApprouver" class="rappel">
-            Seul l'approbateur désigné ({{ section.workflow.approver_final ?? 'non renseigné' }}) ou
-            un administrateur peut approuver.
-          </p>
+          <div class="decision-positive">
+            <button type="button" :disabled="!peutApprouver" @click="approuver">Approuver…</button>
+            <p v-if="!peutApprouver" class="rappel">
+              Seul l'approbateur désigné ({{ section.workflow.approver_final ?? 'non renseigné' }})
+              ou un administrateur peut approuver.
+            </p>
+          </div>
+        </template>
+
+        <!-- Rejet séparé de l'action positive (constat 7) : deux décisions
+             opposées ne partagent plus la même ligne. -->
+        <fieldset v-if="enCycleDeRelecture" class="bloc-rejet">
+          <legend>Renvoyer en rédaction</legend>
           <label>
-            Motif de rejet
+            Motif du rejet (obligatoire)
             <input v-model="motifRejet" type="text" />
           </label>
           <button type="button" class="bouton-danger" @click="rejeter">Rejeter</button>
-        </template>
+        </fieldset>
 
         <p v-else-if="section.status === 'valide_en_interne'" class="verrouille">
           Section verrouillée (validée en interne — pas une signature électronique opposable). Son
@@ -1354,6 +1407,281 @@ async function ajouterAvisRelecteur(): Promise<void> {
           </div>
         </div>
       </section>
+      <details
+        v-if="projet?.client_id && section.status !== 'valide_en_interne'"
+        class="panneau-replie outils-ia no-print"
+        :open="panneauIAOuvert"
+        @toggle="panneauIAOuvert = ($event.target as HTMLDetailsElement).open"
+      >
+        <summary>Aide à la rédaction par l'IA</summary>
+        <p v-if="!iaDisponible" class="bandeau-avertissement" role="status">
+          L'assistant IA n'est pas configuré : renseignez le relais IA dans
+          <RouterLink to="/configuration">Configuration</RouterLink> pour
+          utiliser la génération de brouillon et l'assistant.
+        </p>
+        <fieldset class="zone-ia" :disabled="!iaDisponible">
+          <section
+            v-if="section.status === 'brouillon_aide' && definitionGabarit && projet?.client_id"
+            class="generation-brouillon no-print"
+          >
+            <h3>Génération de brouillon par adaptation</h3>
+            <p class="rappel">
+              Adapte un document de référence (structure, langage, raisonnement) au contexte du
+              nouveau cas — le résultat reste au statut « proposé par IA — non validé » tant que
+              chaque section du gabarit n'a pas été relue explicitement.
+            </p>
+
+            <fieldset class="choix-reference">
+              <label>
+                <input v-model="modeReference" type="radio" value="coller" />
+                Coller le texte
+              </label>
+              <label>
+                <input v-model="modeReference" type="radio" value="uploader" />
+                Uploader un fichier (.docx, .pdf)
+              </label>
+            </fieldset>
+
+            <label v-if="modeReference === 'coller'">
+              Texte du document de référence
+              <textarea v-model="texteDocumentReference" rows="6" />
+            </label>
+            <template v-else>
+              <label class="bouton-fichier">
+                Choisir un fichier (.docx, .pdf)
+                <input type="file" accept=".docx,.pdf" @change="importerFichierReference" />
+              </label>
+              <p v-if="enExtractionReference">Extraction du texte en cours…</p>
+              <p v-if="erreurExtractionReference" class="bandeau-erreur" role="alert">
+                {{ erreurExtractionReference }}
+              </p>
+              <p v-if="nomDocumentReference && !enExtractionReference">
+                Fichier chargé : « {{ nomDocumentReference }} » ({{ texteDocumentReference.length }}
+                caractères extraits)
+              </p>
+            </template>
+
+            <label v-if="modeReference === 'coller'">
+              Nom du document de référence
+              <input
+                v-model="nomDocumentReference"
+                type="text"
+                placeholder="ex. IQ ligne A11 (2024)"
+              />
+            </label>
+
+            <label>
+              Contexte du nouveau cas
+              <textarea v-model="contexteNouveauCas" rows="3" />
+            </label>
+
+            <label class="confirmation-droit-usage">
+              <input v-model="confirmationDroitUsage" type="checkbox" />
+              {{
+                messageSysteme('U-07', section.language, {
+                  titre: nomDocumentReference || 'ce document',
+                })
+              }}
+            </label>
+
+            <p v-if="erreurGeneration" class="bandeau-erreur" role="alert">
+              {{ erreurGeneration }}
+            </p>
+
+            <button
+              type="button"
+              :disabled="
+                enGeneration ||
+                texteDocumentReference.trim().length === 0 ||
+                !confirmationDroitUsage
+              "
+              @click="genererBrouillon"
+            >
+              {{ enGeneration ? 'Génération en cours…' : 'Générer le brouillon' }}
+            </button>
+          </section>
+
+          <section v-if="projet?.client_id" class="assistant-section no-print">
+            <h3>Assistant contextuel</h3>
+            <p class="rappel">
+              Pose une question sur cette section précise — l'assistant voit son contenu actuel et
+              dispose des mêmes outils de traçabilité que le moteur de raisonnement. Fournisseur
+              actuel :
+              {{ nomFournisseurActuel }}. Jamais une écriture automatique dans la section — une
+              réponse, jamais une action.
+            </p>
+            <ul v-if="historiqueAssistant.length > 0" class="historique-assistant">
+              <li v-for="(echange, index) in historiqueAssistant" :key="index">
+                <p class="question-assistant"><strong>Vous :</strong> {{ echange.question }}</p>
+                <p class="reponse-assistant">
+                  <strong>Assistant :</strong> {{ echange.reponse }}
+                  <span class="badge-confiance">{{
+                    LIBELLES_CONFIANCE_ASSISTANT[echange.etatConfiance]
+                  }}</span>
+                </p>
+              </li>
+            </ul>
+            <p v-if="erreurAssistant" class="bandeau-erreur" role="alert">{{ erreurAssistant }}</p>
+            <form class="formulaire-assistant" @submit.prevent="poserQuestionAssistant">
+              <textarea
+                v-model="questionAssistant"
+                rows="2"
+                placeholder="ex. Quels risques ne sont pas encore couverts par un test pour cet actif ?"
+              />
+              <button
+                type="submit"
+                :disabled="assistantEnCours || questionAssistant.trim().length === 0"
+              >
+                {{ assistantEnCours ? 'Réflexion en cours…' : 'Poser la question' }}
+              </button>
+            </form>
+          </section>
+        </fieldset>
+      </details>
+
+      <details class="panneau-replie outils-liens no-print">
+        <summary>Liens vers d'autres sections, la procédure et l'actif</summary>
+        <section class="liens-sections no-print">
+          <h3>Sections liées</h3>
+          <p class="rappel">
+            Un lien vers la section requise (ex. Contexte procédé pour l'OQ/PQ, Plan de métrologie
+            pour l'IQ) est la façon normale de satisfaire un garde-fou de finalisation — « Forcer »
+            reste réservé aux exceptions justifiées.
+          </p>
+          <p v-if="erreurLienSection" class="bandeau-erreur" role="alert">
+            {{ erreurLienSection }}
+          </p>
+          <ul v-if="sectionsLiees.length > 0" class="liste-liens">
+            <li v-for="s in sectionsLiees" :key="s.id">
+              {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
+              <button
+                v-if="section.status !== 'valide_en_interne'"
+                type="button"
+                @click="delierSection(s.id)"
+              >
+                Délier
+              </button>
+            </li>
+          </ul>
+          <p v-else>Aucun lien pour l'instant.</p>
+          <div v-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+            <label>
+              Lier à
+              <select
+                v-model="sectionCibleLienId"
+                :disabled="sectionsLiablesRestantes.length === 0"
+              >
+                <option value="">— choisir une section —</option>
+                <option v-for="s in sectionsLiablesRestantes" :key="s.id" :value="s.id">
+                  {{ s.meta.titre }} ({{ LIBELLES_GABARIT[s.template_type] }})
+                </option>
+              </select>
+            </label>
+            <button type="button" :disabled="!sectionCibleLienId" @click="lierSectionSelectionnee">
+              Lier
+            </button>
+          </div>
+        </section>
+
+        <section class="liens-structurels no-print">
+          <h3>Procédure et actif liés</h3>
+          <p class="rappel">
+            Liens retrouvables depuis la fiche procédure ou le dossier vivant de l'actif — jamais un
+            simple texte d'audit.
+          </p>
+          <!-- `procedureStore`/`structureStore` se chargent en fin de chaîne
+           séquentielle dans `onMounted` — sans cette garde, un lien
+           structurel bel et bien enregistré s'affichait comme absent
+           pendant ce court instant (`procedureLiee`/`noeudLie` restent
+           `null` tant que ces stores n'ont pas fini de charger), un vrai
+           flash de contenu trompeur (bug réel trouvé le 13/09/2026). -->
+          <p v-if="chargementInitial" class="etat-vide">Chargement…</p>
+          <template v-else>
+            <div class="lien-structurel">
+              <template v-if="procedureLiee">
+                <span
+                  >Procédure :
+                  <strong
+                    >{{ procedureLiee.reference }} v{{ procedureLiee.numero_version }} —
+                    {{ procedureLiee.titre }}</strong
+                  ></span
+                >
+                <span v-if="procedureStore.remplaceePar(procedureLiee)" class="alerte-obsolete">
+                  ⚠ Révision obsolète — remplacée par la v{{
+                    procedureStore.remplaceePar(procedureLiee)
+                  }}
+                </span>
+                <button
+                  v-if="section.status !== 'valide_en_interne'"
+                  type="button"
+                  @click="delierProcedure"
+                >
+                  Délier
+                </button>
+              </template>
+              <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+                <label>
+                  Lier à une procédure
+                  <select v-model="procedureLienId">
+                    <option value="">— choisir —</option>
+                    <option v-for="p in procedureStore.procedures" :key="p.id" :value="p.id">
+                      {{ p.reference }} v{{ p.numero_version }} — {{ p.titre
+                      }}{{ procedureStore.remplaceePar(p) ? ' (obsolète)' : '' }}
+                    </option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  :disabled="!procedureLienId"
+                  @click="lierProcedureSelectionnee"
+                >
+                  Lier
+                </button>
+              </div>
+              <p v-else>Aucune procédure liée.</p>
+            </div>
+            <div class="lien-structurel">
+              <template v-if="noeudLie">
+                <span
+                  >Actif :
+                  <RouterLink
+                    v-if="projet?.client_id"
+                    :to="{
+                      name: 'dossier-vivant-actif',
+                      params: { clientId: projet.client_id, noeudId: noeudLie.id },
+                    }"
+                  >
+                    {{ noeudLie.name }} ({{ noeudLie.code }})
+                  </RouterLink>
+                  <template v-else>{{ noeudLie.name }} ({{ noeudLie.code }})</template></span
+                >
+                <button
+                  v-if="section.status !== 'valide_en_interne'"
+                  type="button"
+                  @click="delierAssetNode"
+                >
+                  Délier
+                </button>
+              </template>
+              <div v-else-if="section.status !== 'valide_en_interne'" class="ligne-formulaire">
+                <label>
+                  Lier à un nœud Structure Système
+                  <select v-model="noeudLienId">
+                    <option value="">— choisir —</option>
+                    <option v-for="n in structureStore.noeuds" :key="n.id" :value="n.id">
+                      {{ n.name }} ({{ n.code }})
+                    </option>
+                  </select>
+                </label>
+                <button type="button" :disabled="!noeudLienId" @click="lierAssetNodeSelectionne">
+                  Lier
+                </button>
+              </div>
+              <p v-else>Aucun actif lié.</p>
+            </div>
+          </template>
+        </section>
+      </details>
     </fieldset>
     <ModaleSignature
       v-if="signatureSection && section"
@@ -1401,17 +1729,255 @@ async function ajouterAvisRelecteur(): Promise<void> {
   border-radius: 4px;
 }
 
+/* Largeur portée à l'espace disponible (constat 10 : colonne bloquée à
+   640 px, tableau dynamique tronqué alors que 400 px restaient vides). */
 .editeur-section {
   padding: 2rem;
   font-family: var(--vp-police);
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 40rem;
+  max-width: 72rem;
+  min-width: 0;
+}
+
+.entete-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--vp-bordure);
+}
+
+.ligne-titre {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.ligne-titre h1 {
+  margin: 0;
 }
 
 .meta {
+  margin: 0;
   color: var(--vp-texte-secondaire);
+}
+
+.etapes-cycle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: etape;
+}
+
+.etapes-cycle li {
+  counter-increment: etape;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--vp-bordure);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--vp-texte-secondaire);
+}
+
+.etapes-cycle li::before {
+  content: counter(etape) '. ';
+}
+
+.etapes-cycle li.etape-faite {
+  color: var(--vp-succes);
+  border-color: var(--vp-succes);
+}
+
+.etapes-cycle li.etape-faite::before {
+  content: '✓ ';
+}
+
+.etapes-cycle li.etape-courante {
+  color: var(--vp-texte-principal);
+  border-color: var(--vp-marque);
+  background-color: var(--vp-marque-fond-leger);
+  font-weight: var(--vp-poids-semibold);
+}
+
+.prochaine-etape {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.bandeau-info,
+.bandeau-avertissement,
+.bandeau-succes {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--vp-rayon);
+  border: 1px solid;
+}
+
+.bandeau-info {
+  border-color: var(--vp-info);
+  background-color: var(--vp-info-fond-leger);
+}
+
+.bandeau-avertissement {
+  border-color: var(--vp-attention);
+  background-color: var(--vp-attention-fond-leger);
+}
+
+.bandeau-succes {
+  border-color: var(--vp-succes);
+  background-color: var(--vp-succes-fond-leger);
+}
+
+.identification {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.identification label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.prerequis {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.prerequis h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.liste-prerequis {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.liste-prerequis li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.prerequis-ok .etat-prerequis {
+  color: var(--vp-succes);
+}
+
+.prerequis-manquant .etat-prerequis {
+  color: var(--vp-danger);
+}
+
+.actions-prerequis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.recapitulatif-workflow {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+
+.recapitulatif-workflow dt {
+  font-weight: var(--vp-poids-semibold);
+}
+
+.recapitulatif-workflow dd {
+  margin: 0;
+}
+
+.bloc-rejet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  border: 1px solid var(--vp-danger);
+  border-radius: var(--vp-rayon);
+  padding: 0.75rem 1rem;
+}
+
+.bloc-rejet legend {
+  padding: 0 0.25rem;
+  color: var(--vp-danger);
+  font-weight: var(--vp-poids-semibold);
+}
+
+.bloc-rejet label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1 1 16rem;
+}
+
+/* Panneaux d'aide (IA, liens) repliés : le contenu du livrable et le
+   workflow passent en premier (constat 11). */
+.panneau-replie {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.panneau-replie > summary {
+  cursor: pointer;
+  font-weight: var(--vp-poids-semibold);
+}
+
+.panneau-replie[open] > summary {
+  margin-bottom: 0.75rem;
+}
+
+.zone-ia {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.liens-sections,
+.liens-structurels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.generation-brouillon h3,
+.assistant-section h3,
+.liens-sections h3,
+.liens-structurels h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+@media (max-width: 40rem) {
+  .editeur-section {
+    padding: 1rem;
+  }
 }
 
 .champ-contenu {

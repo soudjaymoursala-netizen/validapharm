@@ -227,7 +227,7 @@ export function avisDuCycleCourant(section: Pick<Section, 'workflow' | 'audit_lo
  */
 function avecModificationContenu(
   section: Section,
-  modification: Partial<Pick<Section, 'values' | 'tables'>>,
+  modification: Partial<Pick<Section, 'values' | 'tables' | 'meta'>>,
   maintenant: string,
   acteur: string,
 ): Section {
@@ -725,6 +725,26 @@ export const useSectionsStore = defineStore('sections', () => {
   }
 
   /**
+   * Référence et version du livrable (en-tête de l'export). Partie du
+   * contenu relu : même règle de retour en rédaction que les valeurs.
+   */
+  async function mettreAJourMeta(
+    sectionId: string,
+    meta: Pick<Section['meta'], 'ref' | 'version'>,
+  ): Promise<void> {
+    await modifierSection(sectionId, (section, maintenant) =>
+      section.status === 'valide_en_interne'
+        ? null
+        : avecModificationContenu(
+            section,
+            { meta: { ...section.meta, ...meta } },
+            maintenant,
+            acteurCourant(),
+          ),
+    )
+  }
+
+  /**
    * Sauvegarde automatique locale des lignes d'un tableau dynamique
    * — même discipline que `mettreAJourValeurs` (verrouillage,
    * piste d'audit), pour la partie `Section.tables` du modèle pivot plutôt
@@ -1006,6 +1026,7 @@ export const useSectionsStore = defineStore('sections', () => {
     lierAssetNode,
     mettreAJourValeurs,
     mettreAJourTable,
+    mettreAJourMeta,
     assignerApprobateurFinal,
     ajouterAvisRelecteur,
     engagerVerification,
