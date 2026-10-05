@@ -87,7 +87,7 @@ export function construireDonneesExportGabarit(
       relecteur: a.relecteur,
       avis: a.avis,
       date: dateHeureLisible(a.date, langue),
-      cycle: a.cycleCourant ? 'cycle en cours' : 'cycle clos (contenu modifié ou rejeté depuis)',
+      cycle: a.cycleCourant ? 'cycle en cours' : 'cycle clos : contenu modifié ou rejeté depuis',
     })),
     approuve_par: recap.approbation?.par ?? '',
     date_approbation: recap.approbation ? dateHeureLisible(recap.approbation.date, langue) : '',

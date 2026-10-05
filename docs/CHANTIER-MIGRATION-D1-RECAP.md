@@ -4530,3 +4530,110 @@ stores). **Vérifié en réel** (Worker local, D1/R2 jetables) : correction
 statut sans motif → 400 ; photo déposée (empreinte SHA-256) et relue à
 l'octet près depuis R2 ; mission clôturée avec activité ouverte → 400 +
 liste, puis 200 avec motif, puis ajout refusé (409).
+
+> **(05/10/2026)** PR #100 fusionnée (`f9a524d`, squash) après CI verte ;
+> branche réalignée sur `main`.
+
+### 43.2 PR projets / rédaction
+
+Points UX 5 et 8 à 25 du rapport `ux-projets-redaction.md` (les points 1 à
+4, 6 et 7 étaient déjà traités au §40). **Aucune migration D1.**
+
+**Serveur** (`integriteSection.ts`, routeur) :
+- **Contenu modifié pendant la vérification ou l'approbation** (décision
+  « Modifier = retour auto ») : si les valeurs, les tableaux ou l'en-tête
+  (référence, titre, version) changent, la section revient d'elle-même en
+  `brouillon_aide`, avec l'entrée d'historique « retour en rédaction :
+  contenu modifié pendant la vérification » (ou « l'approbation »).
+  `dernierRejet` traite cette entrée comme une fin de cycle : les avis
+  antérieurs restent dans l'historique mais ne comptent plus. Contenu
+  modifié **et** transmission dans la même écriture : 409
+  `transition_invalide`. Un rejet explicite garde sa règle (motif
+  obligatoire).
+- **Partage de projet** : la réponse indique `compteExistant` (adresse
+  connue ou non) ; le partage reste enregistré.
+
+**Exports** :
+- **Vrai `.docx`** (`connecteurs/office/genererDocxParDefaut.ts`, paquet
+  OOXML écrit avec `pizzip`, déjà présent) : remplace le « HTML encapsulé
+  en `.doc` » (`genererExportWord.ts` supprimé). Titre, référence,
+  version, statut complet, encadré de responsabilité si validé, tableau
+  « Rédaction, relecture et approbation » (rédacteurs, chaque avis avec
+  date et cycle, approbateur désigné, qui a approuvé et quand), contenu
+  avec de vrais tableaux Word (ligne d'en-tête répétée), historique des
+  révisions. Langue du document déclarée (fr-FR/en-GB/de-DE).
+- **Valeurs lisibles** (`logique-metier/export/valeursExport.ts`) :
+  option de liste en toutes lettres (« Doit (Must) » au lieu de `must`),
+  dates `jj/mm/aaaa`, décimales à virgule, horodatages à l'heure de Paris
+  — partagé par le Word, le gabarit client et le CSV.
+- **CSV « Excel français »** : séparateur `;`, BOM UTF-8.
+- **Noms de fichiers** : `{référence ou type}_{titre}_v{version}.docx`
+  (ex. `URS-AUT-001_URS-Qualification-autoclave-A1_v1.0.docx`), le CSV
+  suffixé du nom du tableau, le gabarit client de son nom.
+
+**Éditeur de section** :
+- En-tête : titre, pastille de statut, référence et version, étapes du
+  cycle (Rédaction → Vérification → Approbation → Validée en interne,
+  `aria-current="step"`) et prochaine action en une phrase.
+- Champs **Référence** et **Version** (`mettreAJourMeta`).
+- Bandeau d'avertissement en vérification/approbation (« toute
+  modification renverra la section en rédaction ») ; bandeau
+  d'information après un retour automatique (quand, par qui, pourquoi).
+- **Liens requis** affichés dès le brouillon (`liensRequis`, déduit des
+  garde-fous U-01 à U-03) : lié / manquant, à quelle étape, et pour chacun
+  « Lier » (sections existantes du bon type) ou « Créer la section … et
+  la lier » en un clic.
+- Bloc « Rédaction, relecture et approbation » conservé après la
+  validation (qui a rédigé, approbateur, approuvé le … par …) ; avis
+  comptés « sur ce cycle » / « d'un cycle clos ».
+- Rejet isolé dans un encadré « Renvoyer en rédaction », séparé de
+  l'action positive ; « Approuver… » ouvre la signature.
+- Panneaux IA et liens repliés sous le contenu ; si l'IA n'est pas
+  configurée, bandeau avec lien vers Configuration et champs désactivés
+  avant toute saisie.
+- Références internes (§4.1bis, §4.21, §4.8, tâche #118) retirées.
+- Colonne élargie (72 rem) ; tableau dynamique : descriptions sur
+  plusieurs lignes, champs à la largeur de leur colonne, ombres de
+  défilement, une carte par ligne à 375 px, cellules nommées
+  « {colonne}, ligne {n} », « Supprimer la ligne {n} » ; titre en double
+  (« Exigences / Exigences ») supprimé.
+
+**Fiche projet, pipeline, modales, assistant, tableau de bord** :
+- Pipeline : pour un lecteur, plus de « Créer cette section » ni d'étape
+  cliquable ; libellé de statut complet partout ; passage à la ligne
+  (liste verticale sur téléphone) au lieu d'être coupé.
+- Fiche : Progression et Sections juste sous l'en-tête ; Contexte et
+  Partage repliés ; depuis le pipeline, gabarit et titre préremplis ;
+  section vierge créée → ouverture directe de l'éditeur ; « Suspendre »
+  expliqué ; partage avec libellés visibles, confirmation, et
+  avertissement si aucun compte n'utilise l'adresse.
+- Contrastes : bouton principal survolé/ouvert lisible ; boutons
+  désactivés en gris neutre lisible (règle globale `tokens.css`).
+- Modales d'archivage, de suppression et de signature
+  (`usePiegeFocus`) : focus sur le premier champ, Tab confiné, Échap
+  ferme, retour au déclencheur.
+- Assistant guidé : intitulés sous les pastilles, `aria-current`, encadré
+  des sources de contexte vides avec liens (nouvel onglet) et « Passer
+  les étapes sans données ».
+- Nouveau projet : astérisque et `aria-required`, message en français
+  sous le champ, champ Échéance.
+
+**Vérification** : lint, typage et build propres ; 178 fichiers de tests,
+1 645 tests (+ retour automatique serveur et store, liens requis,
+`.docx` relu par `pizzip`/`docxtemplater`, CSV, pipeline lecteur, fiche :
+partage sans compte et redirection, focus des modales, cellules
+nommées). **Vérifié en réel** (Worker et front locaux, D1/R2 jetables,
+Chromium) : nom de projet vide → message français ; échéance affichée ;
+URS prérempli depuis le pipeline puis éditeur ouvert ; saisie en rafale
+intacte après rechargement ; engagement, avis, puis modification →
+retour en rédaction avec bandeau et avis « cycle clos » ; `.docx`
+téléchargé `URS-AUT-001_URS-Qualification-autoclave-A1_v1.0.docx`, relu
+par python-docx (libellés en toutes lettres, avis et approbateur) ; CSV
+avec BOM et `;` ; modale d'archivage : focus dedans, Échap, focus rendu
+au bouton ; partage à une adresse inconnue → avertissement ; aucun
+débordement à 375 px. LibreOffice est inutilisable dans ce conteneur
+(échoue aussi sur un simple `.txt`) : l'ouverture dans Word reste à
+confirmer par un utilisateur.
+
+Reste pour la PR « entrée et administration » : bouton de menu flottant
+qui recouvre le contenu à 375 px (point 25), avec le tiroir mobile.

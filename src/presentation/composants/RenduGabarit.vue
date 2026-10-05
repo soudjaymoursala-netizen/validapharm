@@ -476,6 +476,16 @@ table {
   width: 100%;
 }
 
+/* Les champs suivent la largeur de leur colonne (au lieu de la largeur
+   native d'un champ, ~20 caractères) : le tableau tient plus souvent sans
+   défilement. */
+td input,
+td select {
+  width: 100%;
+  min-width: 6rem;
+  box-sizing: border-box;
+}
+
 .cellule-texte {
   min-width: 16rem;
   width: 100%;
@@ -512,7 +522,11 @@ table {
   tr,
   td {
     display: block;
-    width: 100%;
+  }
+
+  tr,
+  td {
+    box-sizing: border-box;
   }
 
   thead {
@@ -544,6 +558,7 @@ table {
   td textarea {
     width: 100%;
     min-width: 0;
+    box-sizing: border-box;
   }
 }
 

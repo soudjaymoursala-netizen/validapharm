@@ -282,7 +282,7 @@ describe('genererDocxParDefaut', () => {
       'fr',
     )
     expect(xml).toContain('bob@ex.com')
-    expect(xml).toContain('Favorable (cycle en cours)')
+    expect(xml).toContain('Favorable — cycle en cours')
     expect(xml).toContain('qa@ex.com')
     expect(xml).toContain('21/09/2026 11:30')
     expect(xml).toContain('Approuvé — validé en interne')

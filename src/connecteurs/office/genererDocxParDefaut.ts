@@ -55,7 +55,7 @@ function documentXml(d: DonneesExportGabarit): string {
           'Relecteur',
           a.relecteur,
           a.date,
-          `${a.avis} (${a.cycle})`,
+          `${a.avis} — ${a.cycle}`,
         ]),
         [
           'Approbateur final',
