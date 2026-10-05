@@ -7,10 +7,15 @@
 // (1) retaper le nom, (2) justification obligatoire non vide, (3) mot de
 // passe re-vérifié.
 import { ref } from 'vue'
+import { usePiegeFocus } from '../composables/usePiegeFocus'
 import { useAuthStore } from '../stores/useAuthStore'
 
 const props = defineProps<{ nom: string }>()
 const emit = defineEmits<{ confirme: [justification: string, motDePasse: string]; annule: [] }>()
+
+// Focus dans la fenêtre, Échap pour fermer, retour au déclencheur (constat 15).
+const fenetre = ref<HTMLElement | null>(null)
+usePiegeFocus(fenetre, () => emit('annule'))
 
 const authStore = useAuthStore()
 const nomSaisi = ref('')
@@ -47,9 +52,9 @@ async function confirmer(): Promise<void> {
 </script>
 
 <template>
-  <div class="fond-modale" role="dialog" aria-modal="true">
-    <div class="modale">
-      <h2>Suppression définitive</h2>
+  <div class="fond-modale" role="dialog" aria-modal="true" aria-labelledby="titre-modale">
+    <div ref="fenetre" class="modale">
+      <h2 id="titre-modale">Suppression définitive</h2>
       <p class="bandeau-erreur" role="alert">
         Action <strong>irréversible</strong> — « {{ nom }} » sera définitivement supprimé, jamais
         restaurable. Seul un client <strong>sans aucune donnée</strong> peut l'être : s'il en a
@@ -59,7 +64,7 @@ async function confirmer(): Promise<void> {
       <form class="formulaire" @submit.prevent="confirmer">
         <label>
           Retapez le nom pour confirmer
-          <input v-model="nomSaisi" type="text" required autofocus />
+          <input v-model="nomSaisi" type="text" required />
         </label>
         <label>
           Justification (obligatoire)

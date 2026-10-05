@@ -5,7 +5,8 @@
  * même de l'action — jamais seulement dans le navigateur. Le parent envoie
  * l'action avec le mot de passe et renvoie un éventuel refus dans `erreur`.
  */
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ref } from 'vue'
+import { usePiegeFocus } from '../composables/usePiegeFocus'
 
 const props = defineProps<{
   titre: string
@@ -20,21 +21,12 @@ const props = defineProps<{
 const emit = defineEmits<{ confirme: [motDePasse: string]; annule: [] }>()
 
 const motDePasse = ref('')
-const champ = ref<HTMLInputElement | null>(null)
+const fenetre = ref<HTMLElement | null>(null)
 
-// Échap ferme la fenêtre où que soit le focus (il peut avoir quitté la
-// fenêtre, par exemple quand le bouton se désactive pendant la vérification).
-function surTouche(evenement: KeyboardEvent): void {
-  if (evenement.key === 'Escape') emit('annule')
-}
-
-onMounted(async () => {
-  window.addEventListener('keydown', surTouche)
-  await nextTick()
-  champ.value?.focus()
-})
-
-onBeforeUnmount(() => window.removeEventListener('keydown', surTouche))
+// Focus sur le mot de passe, Tab gardé dans la fenêtre, Échap ferme où que
+// soit le focus (il peut l'avoir quittée quand le bouton se désactive
+// pendant la vérification), retour au déclencheur à la fermeture.
+usePiegeFocus(fenetre, () => emit('annule'))
 
 function confirmer(): void {
   if (motDePasse.value.length === 0 || props.enCours) return
@@ -44,20 +36,20 @@ function confirmer(): void {
 
 <template>
   <div class="fond-modale">
-    <div class="modale" role="dialog" aria-modal="true" aria-labelledby="titre-signature">
+    <div
+      ref="fenetre"
+      class="modale"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="titre-signature"
+    >
       <h2 id="titre-signature">{{ titre }}</h2>
       <p class="signification">{{ signification }}</p>
       <p v-if="avertissement" class="avertissement" role="alert">{{ avertissement }}</p>
       <form class="formulaire" @submit.prevent="confirmer">
         <label>
           Votre mot de passe (signature)
-          <input
-            ref="champ"
-            v-model="motDePasse"
-            type="password"
-            required
-            autocomplete="current-password"
-          />
+          <input v-model="motDePasse" type="password" required autocomplete="current-password" />
         </label>
         <p v-if="erreur" class="erreur" role="alert">{{ erreur }}</p>
         <div class="actions">

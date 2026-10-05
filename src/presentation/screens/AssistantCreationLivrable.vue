@@ -129,14 +129,76 @@ onMounted(async () => {
   chargementTermine.value = true
 })
 
-function suivant(): void {
-  const i = indexEtape.value
-  const prochaine = ETAPES[i + 1]
-  if (prochaine) etapeCourante.value = prochaine
+/** Intitulés courts sous chaque pastille (audit UX du 25/09/2026, constat 23 : pastilles muettes). */
+const LIBELLES_ETAPE: Record<Etape, string> = {
+  type: 'Type',
+  contexte: 'Contexte',
+  architecture: 'Architecture',
+  process: 'Process',
+  procedure: 'Procédure',
+  risques: 'Risques',
+  methode: 'Méthode',
+  precedents: 'Précédents',
+  generation: 'Rédaction',
+}
+
+/**
+ * Sources de contexte encore vides pour ce client, avec l'écran où les
+ * renseigner — regroupées plutôt que six clics « Suivant » sur des étapes
+ * qui disent chacune « Aucun … pour l'instant » (constat 23).
+ */
+const etapesVides = computed(() => {
+  const clientId = projet.value?.client_id
+  const lien = (chemin: string) =>
+    clientId ? router.resolve(`/clients/${clientId}/${chemin}`).href : null
+  const vides: Array<{ etape: Etape; libelle: string; href: string | null }> = []
+  if (structureStore.noeuds.length === 0) {
+    vides.push({
+      etape: 'architecture',
+      libelle: 'Structure Système',
+      href: lien('structure-systeme'),
+    })
+  }
+  if (processStore.processes.length === 0) {
+    vides.push({ etape: 'process', libelle: 'Process', href: lien('process') })
+  }
+  if (procedureStore.procedures.length === 0) {
+    vides.push({ etape: 'procedure', libelle: 'Procédures', href: lien('procedures') })
+  }
+  if (riskStore.evaluations.length === 0) {
+    vides.push({
+      etape: 'risques',
+      libelle: 'Évaluations de risque (AMDEC)',
+      href: lien('risk-assessment'),
+    })
+  }
+  if (!methodStore.profilActif && !riskStore.profilActif) {
+    vides.push({
+      etape: 'methode',
+      libelle: 'Méthodes ACFC / AMDEC',
+      href: lien('impact-assessment'),
+    })
+  }
+  return vides
+})
+const ignorerEtapesVides = ref(false)
+
+function estIgnoree(etape: Etape): boolean {
+  return ignorerEtapesVides.value && etapesVides.value.some((v) => v.etape === etape)
+}
+
+async function suivant(): Promise<void> {
+  let i = indexEtape.value + 1
+  while (ETAPES[i] && estIgnoree(ETAPES[i] as Etape)) i++
+  const prochaine = ETAPES[i]
+  if (!prochaine) return
+  if (prochaine === 'precedents') await chargerPrecedents()
+  etapeCourante.value = prochaine
 }
 function precedent(): void {
-  const i = indexEtape.value
-  const precedente = ETAPES[i - 1]
+  let i = indexEtape.value - 1
+  while (i > 0 && estIgnoree(ETAPES[i] as Etape)) i--
+  const precedente = ETAPES[i]
   if (precedente) etapeCourante.value = precedente
 }
 
@@ -182,8 +244,7 @@ async function allerAPrecedents(
 }
 
 async function allerAPrecedentsSansGarde(): Promise<void> {
-  await chargerPrecedents()
-  suivant()
+  await suivant()
 }
 
 function libelleProcedure(procedureId: string): string {
@@ -265,18 +326,43 @@ async function genererLivrableSansGarde(depuisDocument: boolean): Promise<void> 
       amener à la rédaction — rien n'est jamais généré automatiquement sans revue humaine.
     </p>
 
-    <ol class="fil-etapes">
+    <ol class="fil-etapes" aria-label="Étapes de l'assistant">
       <li
         v-for="(etape, i) in ETAPES"
         :key="etape"
-        :class="{ actif: i === indexEtape, complete: i < indexEtape }"
+        :class="{ actif: i === indexEtape, complete: i < indexEtape, ignoree: estIgnoree(etape) }"
+        :aria-current="i === indexEtape ? 'step' : undefined"
       >
-        {{ i + 1 }}
+        <span class="fil-etapes__numero" aria-hidden="true">{{ i + 1 }}</span>
+        <span class="fil-etapes__libelle">{{ LIBELLES_ETAPE[etape] }}</span>
       </li>
     </ol>
 
     <section v-if="etapeCourante === 'type'" class="carte etape">
       <h2>1. Quel type de livrable ?</h2>
+      <div v-if="chargementTermine && etapesVides.length > 0" class="sources-vides" role="note">
+        <p>
+          {{ etapesVides.length }}
+          {{
+            etapesVides.length > 1
+              ? 'sources de contexte sont vides'
+              : 'source de contexte est vide'
+          }}
+          pour ce client :
+        </p>
+        <ul>
+          <li v-for="v in etapesVides" :key="v.etape">
+            {{ v.libelle }}
+            <a v-if="v.href" :href="v.href" target="_blank" rel="noopener">
+              renseigner (nouvel onglet)
+            </a>
+          </li>
+        </ul>
+        <label class="case">
+          <input v-model="ignorerEtapesVides" type="checkbox" />
+          Passer les étapes sans données
+        </label>
+      </div>
       <label>
         Titre du livrable
         <input v-model="titreLivrable" type="text" required placeholder="ex. OQ Malaxeur M-300" />
@@ -472,13 +558,24 @@ async function genererLivrableSansGarde(depuisDocument: boolean): Promise<void> 
 
 .fil-etapes {
   display: flex;
-  gap: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
 .fil-etapes li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 4.5rem;
+  font-size: 0.75rem;
+  color: var(--vp-texte-secondaire);
+}
+
+.fil-etapes__numero {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 50%;
@@ -487,19 +584,46 @@ async function genererLivrableSansGarde(depuisDocument: boolean): Promise<void> 
   align-items: center;
   justify-content: center;
   font-size: 0.8rem;
-  color: var(--vp-texte-secondaire);
 }
 
-.fil-etapes li.complete {
+.fil-etapes li.complete .fil-etapes__numero {
   background-color: var(--vp-marque-fond-leger);
   border-color: var(--vp-marque);
   color: var(--vp-marque);
 }
 
 .fil-etapes li.actif {
+  color: var(--vp-texte-principal);
+  font-weight: var(--vp-poids-semibold);
+}
+
+.fil-etapes li.actif .fil-etapes__numero {
   border-color: var(--vp-marque);
   color: var(--vp-marque);
-  font-weight: var(--vp-poids-semibold);
+}
+
+.fil-etapes li.ignoree {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.sources-vides {
+  border: 1px solid var(--vp-attention);
+  background-color: var(--vp-attention-fond-leger);
+  border-radius: var(--vp-rayon);
+  padding: 0.75rem 1rem;
+}
+
+.sources-vides p,
+.sources-vides ul {
+  margin: 0 0 0.5rem;
+}
+
+.sources-vides .case {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .carte {

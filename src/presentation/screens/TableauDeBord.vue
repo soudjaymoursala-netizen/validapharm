@@ -115,14 +115,25 @@ async function creerProjet(...args: Parameters<typeof creerProjetSansGarde>): Pr
   await envoyer(() => creerProjetSansGarde(...args))
 }
 
+/** Message en français, sous le champ (constat 25 : seule la bulle native, dans la langue du navigateur). */
+const erreurNomProjet = ref<string | null>(null)
+
 async function creerProjetSansGarde(): Promise<void> {
-  if (brouillon.name.trim().length === 0) return
-  const projet = await projetsStore.creerProjet({ ...brouillon })
+  if (brouillon.name.trim().length === 0) {
+    erreurNomProjet.value = 'Le nom du projet est obligatoire.'
+    return
+  }
+  erreurNomProjet.value = null
+  const projet = await projetsStore.creerProjet({
+    ...brouillon,
+    deadline: brouillon.deadline || null,
+  })
   formulaireOuvert.value = false
   brouillon.name = ''
   brouillon.context = ''
   brouillon.scope_in = ''
   brouillon.scope_out = ''
+  brouillon.deadline = null
   await router.push({ name: 'fiche-projet', params: { projectId: projet.id } })
 }
 
@@ -248,10 +259,32 @@ function nomClient(clientId: string | null): string | null {
       <RouterLink :to="{ name: 'tableau-de-bord' }">Voir tous les projets</RouterLink>
     </div>
 
-    <form v-if="formulaireOuvert" class="carte formulaire-projet" @submit.prevent="creerProjet">
+    <form
+      v-if="formulaireOuvert"
+      class="carte formulaire-projet"
+      novalidate
+      @submit.prevent="creerProjet"
+    >
+      <p class="rappel-obligatoire"><span aria-hidden="true">*</span> champ obligatoire</p>
       <label>
-        Nom du projet
-        <input v-model="brouillon.name" type="text" required autofocus />
+        <span>Nom du projet <span class="marque-obligatoire" aria-hidden="true">*</span></span>
+        <input
+          v-model="brouillon.name"
+          type="text"
+          required
+          aria-required="true"
+          :aria-invalid="erreurNomProjet ? 'true' : undefined"
+          aria-describedby="erreur-nom-projet"
+          autofocus
+          @input="erreurNomProjet = null"
+        />
+        <span v-if="erreurNomProjet" id="erreur-nom-projet" class="erreur-champ" role="alert">
+          {{ erreurNomProjet }}
+        </span>
+      </label>
+      <label>
+        Échéance (facultative)
+        <input v-model="brouillon.deadline" type="date" />
       </label>
       <label>
         Client
@@ -641,5 +674,19 @@ button {
 .liste-projets--archives li a:hover {
   color: var(--vp-marque);
   text-decoration: underline;
+}
+.rappel-obligatoire {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--vp-texte-secondaire);
+}
+
+.marque-obligatoire {
+  color: var(--vp-danger);
+}
+
+.erreur-champ {
+  color: var(--vp-danger);
+  font-size: 0.85rem;
 }
 </style>
