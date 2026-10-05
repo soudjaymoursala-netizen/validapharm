@@ -27,6 +27,17 @@ function routeurDeTest() {
         name: 'gestion-clients',
         component: { template: '<div />' },
       },
+      { path: '/clients/:clientId', name: 'fiche-client', component: { template: '<div />' } },
+      {
+        path: '/clients/:clientId/risk-assessment',
+        name: 'risk-assessment-amdec',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/clients/:clientId/structure-systeme/:noeudId/dossier-vivant',
+        name: 'dossier-vivant-actif',
+        component: { template: '<div />' },
+      },
     ],
   })
 }
@@ -133,6 +144,7 @@ describe('AssistantStrategieQualification — évaluation ACFC non vérifiée', 
       await question.find('input[value="non"]').setValue(true)
     }
     await attendreQue(() => wrapper.find('.resultat-partiel').exists())
+    await wrapper.find('input[name="complexite"][value="catalogue"]').setValue(true)
 
     // Reproduit une réponse métier réelle (méthode ACFC réinitialisée ou
     // supprimée entre le chargement du formulaire et la soumission, sur un
@@ -152,5 +164,40 @@ describe('AssistantStrategieQualification — évaluation ACFC non vérifiée', 
       "Impossible d'enregistrer l'évaluation",
     )
     expect(wrapper.find('.confirmation').exists()).toBe(false)
+  })
+
+  test('la conclusion (complexité × verdict) est enregistrée et reprise dans l’historique', async () => {
+    await creerProfilDeTest()
+    const wrapper = await monter()
+
+    await wrapper.find('.nom-element input[type="text"]').setValue('Autoclave A1')
+    const questions = wrapper.findAll('.liste-questions li')
+    await questions[0]?.find('input[value="oui"]').setValue(true)
+    await questions[1]?.find('input[value="non"]').setValue(true)
+    await attendreQue(() => wrapper.find('.bloc-complexite').exists())
+
+    const enregistrer = () =>
+      wrapper.findAll('button').find((b) => b.text() === 'Enregistrer cette évaluation')
+    // Sans complexité : bouton désactivé, et ce qui manque est dit.
+    expect(enregistrer()?.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.bloc-enregistrement').text()).toContain('la complexité')
+
+    await wrapper.find('input[name="complexite"][value="specifique"]').setValue(true)
+    await enregistrer()?.trigger('click')
+    await attendreQue(() => wrapper.find('.confirmation').exists())
+
+    const methodeStore = useMethodProfileACFCStore()
+    expect(methodeStore.evaluations.at(-1)).toMatchObject({
+      verdict: 'critique',
+      complexite: 'specifique',
+      conclusion: 'iq_oq_pq',
+      version_grille: '0.2.0-provisoire',
+    })
+    await attendreQue(() => wrapper.find('.historique-acfc table').exists())
+    expect(wrapper.find('.historique-acfc').text()).toContain('IQ+OQ+PQ')
+    // Figé après enregistrement : la complexité ne se modifie plus.
+    expect(
+      wrapper.find('input[name="complexite"][value="catalogue"]').attributes('disabled'),
+    ).toBeDefined()
   })
 })

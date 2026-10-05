@@ -16,6 +16,17 @@ function routeurDeTest() {
     history: createMemoryHistory(),
     routes: [
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
+      { path: '/clients/:clientId', name: 'fiche-client', component: { template: '<div />' } },
+      {
+        path: '/clients/:clientId/strategie-qualification',
+        name: 'assistant-strategie-qualification',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/clients/:clientId/structure-systeme/:noeudId/dossier-vivant',
+        name: 'dossier-vivant-actif',
+        component: { template: '<div />' },
+      },
       {
         path: '/clients/:clientId/impact-assessment',
         name: 'impact-assessment',
@@ -228,5 +239,22 @@ describe('ImpactAssessment', () => {
     await questionsNouvelles[1]?.find('input[value="inconnu"]').setValue(true)
     await flushPromises()
     expect(wrapper.find('.resultat-partiel').text()).toContain('Direct Impact')
+
+    // « Réévaluer » depuis l'historique : nouvelle entrée préremplie, seule
+    // la réponse « Inconnu » reste à donner.
+    await attendreQue(() => wrapper.find('.bloc-historique table').exists())
+    await wrapper
+      .findAll('.bloc-historique button')
+      .find((b) => b.text() === 'Réévaluer (nouvelle entrée)')
+      ?.trigger('click')
+    await flushPromises()
+    expect((wrapper.find('.nom-element input').element as HTMLInputElement).value).toBe(
+      'Balance B-12',
+    )
+    const reprises = wrapper.findAll('.liste-questions li')
+    expect((reprises[0]?.find('input[value="non"]').element as HTMLInputElement).checked).toBe(true)
+    expect(reprises[1]?.findAll('input').some((r) => (r.element as HTMLInputElement).checked)).toBe(
+      false,
+    )
   })
 })

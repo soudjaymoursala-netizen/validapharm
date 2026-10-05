@@ -12,6 +12,7 @@
 // fabriquée par défaut : tant qu'un client n'a rien configuré, l'écran le
 // dit explicitement plutôt que de proposer une grille inventée.
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useMethodProfileACFCStore } from '../stores/useMethodProfileACFCStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
@@ -26,7 +27,9 @@ import {
   VERSION_GRILLE_STRATEGIE_QUALIFICATION,
   type NiveauComplexite,
 } from '../../logique-metier/strategie-qualification/grilleDecision'
-import { libelleVerdictAcfc } from '../i18n/libellesVerdictQuestionnaire'
+import { libelleVerdictAcfc, tonVerdictAcfc } from '../i18n/libellesVerdictQuestionnaire'
+import { formaterDateFr } from '../i18n/formaterDate'
+import BadgeVerdict from '../composants/BadgeVerdict.vue'
 import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
@@ -49,6 +52,7 @@ async function envoyer(action: () => Promise<unknown>): Promise<void> {
   }
 }
 
+const route = useRoute()
 const nomClient = ref<string | null>(null)
 const formulaireConfigOuvert = ref(false)
 const enChargement = ref(true)
@@ -60,6 +64,15 @@ onMounted(async () => {
     await methodeStore.charger(props.clientId)
     await structureStore.charger(props.clientId)
     if (!methodeStore.profilActif) formulaireConfigOuvert.value = true
+    // Arrivée depuis l'Impact Assessment ou le Dossier vivant (constat 17) :
+    // système et nœud préremplis, jamais ressaisis.
+    if (typeof route.query.element === 'string') nomElement.value = route.query.element
+    if (
+      typeof route.query.noeud === 'string' &&
+      structureStore.noeuds.some((n) => n.id === route.query.noeud)
+    ) {
+      assetNodeIdSelectionne.value = route.query.noeud
+    }
   } finally {
     enChargement.value = false
   }
@@ -111,12 +124,54 @@ async function enregistrerNouvelleVersion(
   await envoyer(() => enregistrerNouvelleVersionSansGarde(...args))
 }
 
+/** Refus de la configuration expliqué (constat 20 : rien ne s'affichait sans question). */
+const erreurConfig = ref<string | null>(null)
+
+/**
+ * Nouvelle version préremplie avec la version active (constat 8 : tout
+ * était à ressaisir pour corriger une coquille, au risque de s'écarter du
+ * « mot pour mot »).
+ */
+function ouvrirNouvelleVersion(): void {
+  const actif = methodeStore.profilActif
+  if (actif) {
+    brouillonQuestions.splice(
+      0,
+      brouillonQuestions.length,
+      ...actif.questions.map((q) => q.texte.fr ?? ''),
+    )
+    brouillonSource.value = actif.source
+    brouillonOrigin.value = actif.origin
+  }
+  erreurConfig.value = null
+  formulaireConfigOuvert.value = true
+}
+
+const LIBELLES_ORIGINE: Record<OrigineMethodeACFC, string> = {
+  procedure_client: 'Procédure client',
+  defini_utilisateur: "Défini avec l'utilisateur",
+  baseline_validapharm: 'Baseline ValidaPharm',
+}
+
+/** Versions de la méthode, de la plus récente à la plus ancienne. */
+const versionsMethode = computed(() =>
+  [...methodeStore.profils].sort((a, b) => b.created_at.localeCompare(a.created_at)),
+)
+
 async function enregistrerNouvelleVersionSansGarde(): Promise<void> {
   const questions = brouillonQuestions
     .map((texte) => texte.trim())
     .filter((texte) => texte.length > 0)
     .map((texte) => ({ texte }))
-  if (questions.length === 0 || brouillonSource.value.trim().length === 0) return
+  erreurConfig.value = null
+  if (brouillonSource.value.trim().length === 0) {
+    erreurConfig.value = 'Indiquez la source de la méthode (procédure, réunion…).'
+    return
+  }
+  if (questions.length === 0) {
+    erreurConfig.value = 'Saisissez au moins une question.'
+    return
+  }
 
   await methodeStore.creerNouvelleVersion(props.clientId, {
     questions,
@@ -167,13 +222,25 @@ async function enregistrerEvaluation(
   await envoyer(() => enregistrerEvaluationSansGarde(...args))
 }
 
+/** Ce qui manque encore pour enregistrer, dit en clair (constat 20). */
+const manquants = computed(() => {
+  const liste: string[] = []
+  if (nomElement.value.trim().length === 0) liste.push('le composant ou la fonction évalué')
+  if (!complet.value) liste.push('une réponse à chaque question')
+  if (verdict.value && complexite.value === null) liste.push('la complexité (étape 2)')
+  return liste
+})
+
 async function enregistrerEvaluationSansGarde(): Promise<void> {
-  if (!complet.value || nomElement.value.trim().length === 0) return
+  if (manquants.value.length > 0) return
   erreurEvaluation.value = null
   const resultat = await methodeStore.creerEvaluation(props.clientId, {
     nomElement: nomElement.value.trim(),
     assetNodeId: assetNodeIdSelectionne.value || null,
     reponses: { ...reponses },
+    // La conclusion (complexité × verdict) est enregistrée avec l'évaluation
+    // (constat 3 : elle était affichée puis perdue).
+    complexite: verdict.value ? complexite.value : null,
   })
   if ('erreur' in resultat) {
     erreurEvaluation.value =
@@ -198,6 +265,21 @@ const conclusion = computed(() =>
   verdict.value ? determinerConclusion(verdict.value, complexite.value) : null,
 )
 
+/** Évaluations enregistrées, des plus récentes aux plus anciennes (constat 4). */
+const historique = computed(() =>
+  [...methodeStore.evaluations]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map((e) => ({
+      ...e,
+      noeud: structureStore.noeuds.find((n) => n.id === e.asset_node_id) ?? null,
+    })),
+)
+
+function libelleConclusion(code: string | null): string {
+  if (!code) return '—'
+  return LIBELLES_CONCLUSION[code as keyof typeof LIBELLES_CONCLUSION] ?? code
+}
+
 function recharger(): void {
   window.location.reload()
 }
@@ -205,7 +287,12 @@ function recharger(): void {
 
 <template>
   <main class="assistant-strategie">
-    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
+    <RouterLink
+      :to="{ name: 'fiche-client', params: { clientId: props.clientId } }"
+      class="lien-retour"
+    >
+      {{ nomClient ?? 'Fiche client' }}
+    </RouterLink>
     <h1>Stratégie de qualification — {{ nomClient ?? props.clientId }}</h1>
     <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
     <p class="bandeau-disclaimer">Aide à la décision, non une décision de qualification.</p>
@@ -224,6 +311,10 @@ function recharger(): void {
           défaut — saisissez les questions réelles de la procédure du client, mot pour mot.
         </p>
         <form class="formulaire" @submit.prevent="enregistrerNouvelleVersion">
+          <p v-if="methodeStore.profilActif" class="rappel">
+            Prérempli avec la version {{ methodeStore.profilActif.version }} : corrigez ce qui doit
+            l'être. La version actuelle reste conservée telle quelle.
+          </p>
           <label
             >Source (ex. "Procédure interne QD-00098219", "Défini avec le client le ...")
             <input v-model="brouillonSource" type="text" required />
@@ -265,6 +356,7 @@ function recharger(): void {
             </div>
             <button type="button" @click="ajouterLigneQuestion">+ Ajouter une question</button>
           </fieldset>
+          <p v-if="erreurConfig" class="bandeau-erreur" role="alert">{{ erreurConfig }}</p>
           <div class="actions">
             <button
               v-if="methodeStore.profilActif"
@@ -279,15 +371,36 @@ function recharger(): void {
       </section>
 
       <template v-else>
-        <section class="bloc-criticite">
-          <h2>
-            1. Évaluation ACFC — {{ methodeStore.profilActif.source }} ({{
-              methodeStore.profilActif.version
-            }})
-          </h2>
-          <button type="button" class="lien-config" @click="formulaireConfigOuvert = true">
-            Configurer une nouvelle version des questions
+        <details class="methode-active">
+          <summary>
+            Méthode {{ methodeStore.profilActif.version }} — source :
+            {{ methodeStore.profilActif.source }}
+          </summary>
+          <dl>
+            <dt>Origine</dt>
+            <dd>{{ LIBELLES_ORIGINE[methodeStore.profilActif.origin] }}</dd>
+            <dt>En vigueur depuis</dt>
+            <dd>{{ formaterDateFr(methodeStore.profilActif.effective_date) }}</dd>
+          </dl>
+          <ol class="questions-methode">
+            <li v-for="q in methodeStore.profilActif.questions" :key="q.id">{{ q.texte.fr }}</li>
+          </ol>
+          <template v-if="versionsMethode.length > 1">
+            <p class="rappel">Versions précédentes (conservées, jamais modifiées) :</p>
+            <ul class="versions-precedentes">
+              <li v-for="v in versionsMethode.slice(1)" :key="v.id">
+                {{ v.version }} — {{ v.source }} ({{ formaterDateFr(v.effective_date) }},
+                {{ v.questions.length }} question{{ v.questions.length > 1 ? 's' : '' }})
+              </li>
+            </ul>
+          </template>
+          <button type="button" class="lien-config" @click="ouvrirNouvelleVersion">
+            Corriger ou compléter : nouvelle version préremplie
           </button>
+        </details>
+
+        <section class="bloc-criticite">
+          <h2>1. Criticité (ACFC)</h2>
           <label class="nom-element">
             Composant/fonction évalué
             <input
@@ -308,10 +421,10 @@ function recharger(): void {
           </label>
           <ul class="liste-questions">
             <li v-for="question in methodeStore.profilActif.questions" :key="question.id">
-              <p class="texte-question">{{ question.texte.fr }}</p>
               <!-- Figé une fois l'évaluation enregistrée : le verdict affiché
                    doit toujours être celui enregistré (audit UX du 26/09/2026). -->
-              <div class="reponses-question" role="radiogroup" :aria-label="question.texte.fr">
+              <fieldset class="reponses-question">
+                <legend class="texte-question">{{ question.texte.fr }}</legend>
                 <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet'] as const" :key="opt">
                   <input
                     v-model="reponses[question.id]"
@@ -322,44 +435,45 @@ function recharger(): void {
                   />
                   {{ LIBELLES_REPONSE[opt] }}
                 </label>
-              </div>
+              </fieldset>
             </li>
           </ul>
           <p v-if="complet" class="resultat-partiel" role="status">
             Verdict ACFC :
-            <strong>{{ libelleVerdictAcfc(verdict) }}</strong>
+            <BadgeVerdict :ton="tonVerdictAcfc(verdict)" :texte="libelleVerdictAcfc(verdict)" />
           </p>
           <p v-if="complet && verdict === null" class="rappel">
             Aucune réponse « Oui » et au moins une réponse « Inconnu » : pas de verdict, donc pas de
             stratégie de qualification tant que l'inconnu n'est pas levé. L'évaluation peut être
             enregistrée « à compléter ».
           </p>
-          <button
-            v-if="complet && !evaluationEnregistree"
-            type="button"
-            @click="enregistrerEvaluation"
-          >
-            Enregistrer cette évaluation
-          </button>
-          <p v-if="evaluationEnregistree" class="confirmation" role="status">
-            Évaluation enregistrée.
-          </p>
-          <button v-if="evaluationEnregistree" type="button" @click="nouvelleEvaluation">
-            Nouvelle évaluation
-          </button>
-          <p v-if="erreurEvaluation" class="bandeau-erreur" role="alert">{{ erreurEvaluation }}</p>
         </section>
 
         <section v-if="verdict" class="bloc-complexite">
-          <h2>2. Évaluation de la complexité</h2>
-          <label>
-            <input v-model="complexite" type="radio" value="catalogue" />
-            Catalogue — système sans adaptation particulière du fournisseur
-          </label>
-          <label>
-            <input v-model="complexite" type="radio" value="specifique" />
-            Spécifique — système fait à façon ou hautement configuré
-          </label>
+          <h2>2. Complexité</h2>
+          <fieldset class="reponses-question">
+            <legend class="rappel">Le système est-il standard ou fait à façon ?</legend>
+            <label>
+              <input
+                v-model="complexite"
+                type="radio"
+                name="complexite"
+                value="catalogue"
+                :disabled="evaluationEnregistree"
+              />
+              Catalogue — système sans adaptation particulière du fournisseur
+            </label>
+            <label>
+              <input
+                v-model="complexite"
+                type="radio"
+                name="complexite"
+                value="specifique"
+                :disabled="evaluationEnregistree"
+              />
+              Spécifique — système fait à façon ou hautement configuré
+            </label>
+          </fieldset>
         </section>
 
         <section v-if="conclusion" class="bloc-conclusion">
@@ -368,6 +482,89 @@ function recharger(): void {
           <p class="version-grille">
             Version de la table de décision : {{ VERSION_GRILLE_STRATEGIE_QUALIFICATION }}
           </p>
+        </section>
+
+        <!-- Enregistrement après la complexité : la conclusion part avec
+             l'évaluation (constat 3). -->
+        <section v-if="complet" class="bloc-enregistrement">
+          <template v-if="!evaluationEnregistree">
+            <button
+              type="button"
+              :disabled="envoiEnCours || manquants.length > 0"
+              @click="enregistrerEvaluation"
+            >
+              Enregistrer cette évaluation
+            </button>
+            <p v-if="manquants.length > 0" class="rappel">
+              Pour enregistrer, il manque : {{ manquants.join(', ') }}.
+            </p>
+          </template>
+          <template v-else>
+            <p class="confirmation" role="status">
+              Évaluation enregistrée{{ conclusion ? ', avec sa conclusion' : '' }}.
+            </p>
+            <p v-if="verdict === 'critique'" class="etape-suivante">
+              Étape suivante :
+              <RouterLink
+                :to="{
+                  name: 'risk-assessment-amdec',
+                  params: { clientId: props.clientId },
+                  query: assetNodeIdSelectionne ? { noeud: assetNodeIdSelectionne } : {},
+                }"
+              >
+                analyser les risques (AMDEC) de ce système
+              </RouterLink>
+            </p>
+            <button type="button" @click="nouvelleEvaluation">Nouvelle évaluation</button>
+          </template>
+          <p v-if="erreurEvaluation" class="bandeau-erreur" role="alert">{{ erreurEvaluation }}</p>
+        </section>
+
+        <section class="historique-acfc">
+          <h2>Évaluations enregistrées</h2>
+          <p v-if="historique.length === 0" class="etat-vide">
+            Aucune évaluation ACFC pour ce client pour l'instant.
+          </p>
+          <div v-else class="table-defilante">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Élément</th>
+                  <th scope="col">Nœud</th>
+                  <th scope="col">Méthode</th>
+                  <th scope="col">Verdict</th>
+                  <th scope="col">Conclusion</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="e in historique" :key="e.id">
+                  <td>{{ formaterDateFr(e.created_at) }}</td>
+                  <td>{{ e.nom_element }}</td>
+                  <td>
+                    <RouterLink
+                      v-if="e.noeud"
+                      :to="{
+                        name: 'dossier-vivant-actif',
+                        params: { clientId: props.clientId, noeudId: e.noeud.id },
+                      }"
+                    >
+                      {{ e.noeud.name }}
+                    </RouterLink>
+                    <template v-else>—</template>
+                  </td>
+                  <td>{{ e.method_profile_version }}</td>
+                  <td>
+                    <BadgeVerdict
+                      :ton="tonVerdictAcfc(e.verdict)"
+                      :texte="libelleVerdictAcfc(e.verdict)"
+                    />
+                  </td>
+                  <td>{{ libelleConclusion(e.conclusion) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
       </template>
     </template>
@@ -381,7 +578,7 @@ function recharger(): void {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 40rem;
+  max-width: 52rem;
 }
 
 .bandeau-disclaimer {
@@ -577,5 +774,59 @@ button:disabled {
 .version-grille {
   color: var(--vp-texte-secondaire);
   font-size: 0.85em;
+}
+.methode-active {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.75rem 1rem;
+}
+
+.methode-active summary {
+  cursor: pointer;
+  font-weight: var(--vp-poids-semibold);
+}
+
+.methode-active dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+}
+
+.methode-active dd {
+  margin: 0;
+}
+
+.historique-acfc h2,
+.bloc-enregistrement h2 {
+  font-size: 1.05rem;
+}
+
+.table-defilante {
+  overflow-x: auto;
+}
+
+.table-defilante table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.table-defilante th,
+.table-defilante td {
+  border-bottom: 1px solid var(--vp-bordure);
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.reponses-question {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.reponses-question legend {
+  padding: 0;
+  margin-bottom: 0.35rem;
 }
 </style>

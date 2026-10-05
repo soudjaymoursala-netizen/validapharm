@@ -515,6 +515,14 @@ export interface EvaluationACFC {
   nom_element: string
   reponses: Record<string, ReponseQuestionACFC>
   verdict: 'critique' | 'non_critique' | null
+  /**
+   * Conclusion de stratégie (complexité × verdict, grille versionnée),
+   * enregistrée avec l'évaluation depuis le 05/10/2026 — `null` pour les
+   * évaluations antérieures ou sans complexité choisie.
+   */
+  complexite: 'catalogue' | 'specifique' | null
+  conclusion: string | null
+  version_grille: string | null
   audit_log: EntreeJournalAudit[]
   created_at: string
   updated_at: string

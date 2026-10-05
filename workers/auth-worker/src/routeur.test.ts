@@ -966,6 +966,7 @@ interface EvaluationACFCJson {
   nomElement: string
   reponses: Record<string, string>
   verdict: string | null
+  conclusion?: string | null
   auditLog: { timestamp: string; actor: string; action: string }[]
   createdAt: string
   updatedAt: string
@@ -11169,7 +11170,7 @@ describe('verdicts d’évaluation recalculés par le serveur (audit du 25/09/20
       versionGrille: '0.2.0-provisoire',
     })
     const relue = await requete(ctx, 'GET', `/clients/${clientId}/acfc`, { jeton })
-    expect(relue.corps.evaluations[0].conclusion).toBe('iq_oq_pq')
+    expect(relue.corps.evaluations[0]?.conclusion).toBe('iq_oq_pq')
 
     const falsifiee = await envoyer({ ...base, complexite: 'catalogue', conclusion: 'iq' })
     expect(falsifiee.status).toBe(409)

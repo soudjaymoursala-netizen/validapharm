@@ -1,3 +1,7 @@
+import {
+  determinerConclusion,
+  type NiveauComplexite,
+} from '../../logique-metier/strategie-qualification/grilleDecision'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type {
@@ -41,6 +45,9 @@ export function evaluationAcfcWireVersDomaine(wire: EvaluationACFCWire): Evaluat
     nom_element: wire.nomElement,
     reponses: wire.reponses as Record<string, ReponseQuestionACFC>,
     verdict: wire.verdict as EvaluationACFC['verdict'],
+    complexite: (wire.complexite ?? null) as EvaluationACFC['complexite'],
+    conclusion: wire.conclusion ?? null,
+    version_grille: wire.versionGrille ?? null,
     audit_log: wire.auditLog,
     created_at: wire.createdAt,
     updated_at: wire.updatedAt,
@@ -71,6 +78,9 @@ function evaluationAcfcDomaineVersWire(e: EvaluationACFC): EvaluationACFCWire {
     nomElement: e.nom_element,
     reponses: e.reponses,
     verdict: e.verdict,
+    complexite: e.complexite,
+    conclusion: e.conclusion,
+    versionGrille: e.version_grille,
     auditLog: e.audit_log,
     createdAt: e.created_at,
     updatedAt: e.updated_at,
@@ -91,6 +101,8 @@ export interface NouvelleEvaluationInput {
   nomElement: string
   assetNodeId: string | null
   reponses: Record<string, ReponseQuestionACFC>
+  /** Complexité choisie : la conclusion (grille de décision) est enregistrée avec l'évaluation. */
+  complexite?: NiveauComplexite | null
 }
 
 /**
@@ -248,6 +260,9 @@ export const useMethodProfileACFCStore = defineStore('methodProfileACFC', () => 
       nomElement: input.nomElement,
       reponses: input.reponses,
       verdict,
+      complexite: input.complexite ?? null,
+      conclusion:
+        verdict && input.complexite ? determinerConclusion(verdict, input.complexite) : null,
     })
     if (!resultat.ok)
       throw new Error(

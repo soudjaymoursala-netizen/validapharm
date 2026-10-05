@@ -16,3 +16,18 @@ export function libelleVerdictAcfc(verdict: EvaluationACFC['verdict']): string {
   if (verdict === null) return LIBELLE_VERDICT_A_COMPLETER
   return verdict === 'critique' ? 'Critique' : 'Non critique'
 }
+
+/** Ton du badge de verdict : action à mener, favorable, ou à compléter (jamais deviné). */
+export function tonVerdictAcfc(
+  verdict: EvaluationACFC['verdict'],
+): 'action' | 'favorable' | 'a_completer' {
+  if (verdict === null) return 'a_completer'
+  return verdict === 'critique' ? 'action' : 'favorable'
+}
+
+export function tonVerdictImpact(
+  verdict: EvaluationImpactAssessment['verdict'],
+): 'action' | 'favorable' | 'a_completer' {
+  if (verdict === null) return 'a_completer'
+  return verdict === 'impact_direct' ? 'action' : 'favorable'
+}
