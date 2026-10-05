@@ -38,8 +38,23 @@ import { useQualityEventStore } from '../stores/useQualityEventStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import { sectionWireVersDomaine } from '../stores/useSectionsStore'
 import { LIBELLES_STATUT_QUALIFICATION } from '../../logique-metier/i18n/libellesStatutQualification'
-import { libelleVerdictAcfc, libelleVerdictImpact } from '../i18n/libellesVerdictQuestionnaire'
+import {
+  libelleVerdictAcfc,
+  libelleVerdictImpact,
+  tonVerdictAcfc,
+  tonVerdictImpact,
+} from '../i18n/libellesVerdictQuestionnaire'
 import { formaterDateFr } from '../i18n/formaterDate'
+import { useParameterStore } from '../stores/useParameterStore'
+import { useProcessContextStore } from '../stores/useProcessContextStore'
+import { evaluerPeriodicite } from '../../logique-metier/structure-systeme/statutPeriodicite'
+import {
+  LIBELLES_CONCLUSION,
+  type ConclusionStrategieQualification,
+} from '../../logique-metier/strategie-qualification/grilleDecision'
+import type { VerdictRiskAssessment } from '../../logique-metier/domaine/types'
+import BadgeVerdict from '../composants/BadgeVerdict.vue'
+import IconeSvg from '../composants/IconeSvg.vue'
 
 const props = defineProps<{ clientId: string; noeudId: string }>()
 
@@ -51,6 +66,8 @@ const csvStore = useCSVAssessmentStore()
 const riskStore = useRiskAssessmentStore()
 const missionStore = useMissionStore()
 const qualityEventStore = useQualityEventStore()
+const parameterStore = useParameterStore()
+const processStore = useProcessContextStore()
 
 const nomClient = ref<string | null>(null)
 const sectionsLiees = ref<Section[]>([])
@@ -78,6 +95,8 @@ onMounted(async () => {
       riskStore.charger(props.clientId),
       missionStore.charger(props.clientId),
       qualityEventStore.charger(props.clientId),
+      parameterStore.charger(props.clientId),
+      processStore.charger(props.clientId),
       chargerSectionsLiees(),
     ])
   } finally {
@@ -108,6 +127,69 @@ const evenementsQualite = computed(() =>
     .sort((a, b) => b.created_at.localeCompare(a.created_at)),
 )
 const chaineTechnique = computed(() => structureStore.chaineTechniqueDepuisNoeud(props.noeudId))
+
+/** Libellé du niveau (« Équipement »), jamais la clé brute (constat 12). */
+const libelleNiveau = computed(() => {
+  const cle = noeud.value?.level_key
+  const niveau = structureStore.schema?.levels.find((l) => l.key === cle)
+  return niveau?.label.fr ?? cle ?? ''
+})
+
+/**
+ * Même calcul que la Structure Système et le Suivi de périodicité
+ * (constat 7 : seule fiche muette sur une requalification en retard).
+ */
+const periodicite = computed(() =>
+  noeud.value
+    ? evaluerPeriodicite(noeud.value.periodic_qualification, new Date().toISOString())
+    : null,
+)
+
+const LIBELLES_VERDICT_RISQUE: Record<VerdictRiskAssessment, string> = {
+  acceptable: 'Acceptable',
+  action_requise: 'Action requise',
+}
+function tonRisque(verdict: VerdictRiskAssessment | null): 'action' | 'favorable' | 'a_completer' {
+  if (verdict === null) return 'a_completer'
+  return verdict === 'action_requise' ? 'action' : 'favorable'
+}
+function libelleRisque(verdict: VerdictRiskAssessment | null): string {
+  return verdict ? LIBELLES_VERDICT_RISQUE[verdict] : 'Non calculé'
+}
+function libelleConclusion(code: string | null): string | null {
+  return code ? (LIBELLES_CONCLUSION[code as ConclusionStrategieQualification] ?? code) : null
+}
+
+/** Paramètres rattachés à l'actif, avec leur dernière classification (constat 6). */
+const parametresRattaches = computed(() =>
+  parameterStore.parametres
+    .filter((p) => p.asset_node_id === props.noeudId)
+    .map((p) => {
+      const classification = [...parameterStore.classifications]
+        .filter((c) => c.parameter_id === p.id)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+      const cpp = parameterStore.cppsActifs.some((c) => c.parameter_id === p.id)
+      return { ...p, niveau: classification?.niveau ?? null, cpp }
+    }),
+)
+
+/** Fonctions portées par l'actif, et les processus qu'elles servent (constat 24). */
+const fonctionsPortees = computed(() => {
+  const idsFonctions = new Set(
+    processStore.associationsFonctionAssetNode
+      .filter((a) => a.asset_node_id === props.noeudId)
+      .map((a) => a.function_id),
+  )
+  return processStore.fonctions
+    .filter((fn) => idsFonctions.has(fn.id))
+    .map((fn) => ({
+      ...fn,
+      processes: processStore.associationsFonctionProcess
+        .filter((a) => a.function_id === fn.id)
+        .map((a) => processStore.processes.find((p) => p.id === a.process_id)?.nom)
+        .filter((nom): nom is string => typeof nom === 'string'),
+    }))
+})
 
 const LIBELLES_TYPE_RELATION: Record<string, string> = {
   controle_par: 'est contrôlé par',
@@ -149,23 +231,50 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
           <dt>Code</dt>
           <dd>{{ noeud.code }}</dd>
           <dt>Niveau</dt>
-          <dd>{{ noeud.level_key }}</dd>
+          <dd>{{ libelleNiveau }}</dd>
           <dt>Statut de qualification</dt>
           <dd>{{ LIBELLES_STATUT_QUALIFICATION[noeud.qualification_status] }}</dd>
           <dt v-if="noeud.periodic_qualification.applicable">Échéance de requalification</dt>
           <dd v-if="noeud.periodic_qualification.applicable">
             {{ formaterDateFr(noeud.periodic_qualification.deadline) || 'non renseignée' }}
+            <span v-if="periodicite?.statut === 'en_retard'" class="badge-periodicite en-retard">
+              <IconeSvg nom="alerte-triangle" :taille="14" />
+              Requalification en retard de {{ -(periodicite.joursRestants ?? 0) }} jour{{
+                -(periodicite.joursRestants ?? 0) > 1 ? 's' : ''
+              }}
+            </span>
+            <span
+              v-else-if="periodicite?.statut === 'proche_echeance'"
+              class="badge-periodicite proche"
+            >
+              <IconeSvg nom="horloge" :taille="14" />
+              Échéance dans {{ periodicite.joursRestants }} jour{{
+                (periodicite.joursRestants ?? 0) > 1 ? 's' : ''
+              }}
+            </span>
           </dd>
         </dl>
       </section>
 
       <section class="bloc-chaine">
         <h2>Chaîne technique</h2>
-        <ol v-if="chaineTechnique.length > 0">
-          <li v-for="etape in chaineTechnique" :key="etape.relation.id">
-            {{ LIBELLES_TYPE_RELATION[etape.relation.type_relation] }} {{ etape.noeud.name }}
-          </li>
-        </ol>
+        <!-- Le nœud de départ est nommé, chaque maillon mène à son dossier (constat 19). -->
+        <p v-if="chaineTechnique.length > 0" class="chaine">
+          <strong>{{ noeud.name }}</strong>
+          <template v-for="etape in chaineTechnique" :key="etape.relation.id">
+            <span class="chaine__relation">
+              → {{ LIBELLES_TYPE_RELATION[etape.relation.type_relation] }} →
+            </span>
+            <RouterLink
+              :to="{
+                name: 'dossier-vivant-actif',
+                params: { clientId: props.clientId, noeudId: etape.noeud.id },
+              }"
+            >
+              {{ etape.noeud.name }}
+            </RouterLink>
+          </template>
+        </p>
         <p v-else class="etat-vide">Aucune relation technique sortante déclarée.</p>
       </section>
 
@@ -184,23 +293,128 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
         </p>
         <ul v-else class="liste-evaluations">
           <li v-for="e in evaluationsACFC" :key="e.id">
-            ACFC — {{ e.nom_element }} : {{ libelleVerdictAcfc(e.verdict) }} ({{
-              formaterDateFr(e.created_at)
-            }})
+            <RouterLink
+              :to="{
+                name: 'assistant-strategie-qualification',
+                params: { clientId: props.clientId },
+              }"
+            >
+              ACFC — {{ e.nom_element }}
+            </RouterLink>
+            <BadgeVerdict :ton="tonVerdictAcfc(e.verdict)" :texte="libelleVerdictAcfc(e.verdict)" />
+            <span v-if="libelleConclusion(e.conclusion)" class="meta">
+              Stratégie : {{ libelleConclusion(e.conclusion) }}
+            </span>
+            <span class="meta">{{ formaterDateFr(e.created_at) }}</span>
           </li>
           <li v-for="e in evaluationsImpact" :key="e.id">
-            Impact Assessment — {{ e.nom_element }} :
-            {{ libelleVerdictImpact(e.verdict) }}
-            ({{ formaterDateFr(e.created_at) }})
+            <RouterLink :to="{ name: 'impact-assessment', params: { clientId: props.clientId } }">
+              Impact Assessment — {{ e.nom_element }}
+            </RouterLink>
+            <BadgeVerdict
+              :ton="tonVerdictImpact(e.verdict)"
+              :texte="libelleVerdictImpact(e.verdict)"
+            />
+            <span class="meta">{{ formaterDateFr(e.created_at) }}</span>
           </li>
           <li v-for="e in evaluationsCSV" :key="e.id">
-            Computer System Assessment — {{ e.nom_systeme }} : Catégorie GAMP
-            {{ e.categorie_gamp5 }} ({{ formaterDateFr(e.created_at) }})
+            <RouterLink :to="{ name: 'csv-assessment', params: { clientId: props.clientId } }">
+              Computer System Assessment — {{ e.nom_systeme }}
+            </RouterLink>
+            <span>Catégorie GAMP {{ e.categorie_gamp5 }}</span>
+            <span class="meta">{{ formaterDateFr(e.created_at) }}</span>
           </li>
           <li v-for="e in evaluationsRisque" :key="e.id">
-            Risk Assessment / AMDEC ({{ formaterDateFr(e.created_at) }})
+            <RouterLink
+              :to="{ name: 'risk-assessment-amdec', params: { clientId: props.clientId } }"
+            >
+              AMDEC — {{ e.mode_defaillance }}
+            </RouterLink>
+            <span>
+              IPR initial {{ e.ipr_initial ?? '—' }}
+              <BadgeVerdict
+                :ton="tonRisque(e.verdict_initial)"
+                :texte="libelleRisque(e.verdict_initial)"
+              />
+              <template v-if="e.ipr_residuel !== null">
+                → IPR résiduel {{ e.ipr_residuel }}
+                <BadgeVerdict
+                  :ton="tonRisque(e.verdict_residuel)"
+                  :texte="libelleRisque(e.verdict_residuel)"
+                />
+              </template>
+            </span>
+            <span class="meta">{{ formaterDateFr(e.created_at) }}</span>
           </li>
         </ul>
+        <!-- Enchaînement : évaluer cet actif, nœud prérempli (constat 17). -->
+        <p class="evaluer-actif">
+          Évaluer cet actif :
+          <RouterLink
+            :to="{
+              name: 'impact-assessment',
+              params: { clientId: props.clientId },
+              query: { noeud: props.noeudId, element: noeud.name },
+            }"
+            >Impact</RouterLink
+          >
+          ·
+          <RouterLink
+            :to="{
+              name: 'assistant-strategie-qualification',
+              params: { clientId: props.clientId },
+              query: { noeud: props.noeudId, element: noeud.name },
+            }"
+            >ACFC</RouterLink
+          >
+          ·
+          <RouterLink :to="{ name: 'csv-assessment', params: { clientId: props.clientId } }"
+            >CSV</RouterLink
+          >
+          ·
+          <RouterLink
+            :to="{
+              name: 'risk-assessment-amdec',
+              params: { clientId: props.clientId },
+              query: { noeud: props.noeudId },
+            }"
+            >AMDEC</RouterLink
+          >
+        </p>
+      </section>
+
+      <section class="bloc-parametres">
+        <h2>Paramètres rattachés</h2>
+        <ul v-if="parametresRattaches.length > 0" class="liste-evaluations">
+          <li v-for="p in parametresRattaches" :key="p.id">
+            <RouterLink
+              :to="{ name: 'parametres-critiques', params: { clientId: props.clientId } }"
+            >
+              {{ p.nom }}
+            </RouterLink>
+            <span v-if="p.unite" class="meta">({{ p.unite }})</span>
+            <span v-if="p.niveau" class="etiquette">
+              {{ p.niveau === 'critique' ? 'Critique' : 'Important' }}
+            </span>
+            <span v-if="p.cpp" class="etiquette">CPP</span>
+          </li>
+        </ul>
+        <p v-else class="etat-vide">Aucun paramètre rattaché à cet actif pour l'instant.</p>
+      </section>
+
+      <section class="bloc-fonctions">
+        <h2>Fonctions portées</h2>
+        <ul v-if="fonctionsPortees.length > 0" class="liste-evaluations">
+          <li v-for="fn in fonctionsPortees" :key="fn.id">
+            <RouterLink :to="{ name: 'gestion-process', params: { clientId: props.clientId } }">
+              {{ fn.nom }}
+            </RouterLink>
+            <span v-if="fn.processes.length > 0" class="meta">
+              Processus : {{ fn.processes.join(', ') }}
+            </span>
+          </li>
+        </ul>
+        <p v-else class="etat-vide">Aucune fonction rattachée à cet actif pour l'instant.</p>
       </section>
 
       <section class="bloc-missions">
@@ -275,7 +489,7 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 40rem;
+  max-width: 52rem;
 }
 
 .bandeau-disclaimer {
@@ -309,6 +523,13 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
   gap: 0.4rem;
 }
 
+.liste-evaluations li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+}
+
 .liste-evaluations li,
 .liste-missions li,
 .liste-livrables li,
@@ -338,5 +559,51 @@ const LIBELLES_STATUT_QUALITY_EVENT: Record<string, string> = {
 .rappel {
   color: var(--vp-texte-secondaire);
   font-size: 0.9em;
+}
+.badge-periodicite {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 0.85rem;
+  font-weight: var(--vp-poids-semibold);
+}
+
+.badge-periodicite.en-retard {
+  color: var(--vp-danger);
+  background-color: var(--vp-danger-fond-leger);
+}
+
+.badge-periodicite.proche {
+  color: var(--vp-texte-principal);
+  border-color: var(--vp-attention);
+  background-color: var(--vp-attention-fond-leger);
+}
+
+.chaine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.chaine__relation {
+  color: var(--vp-texte-secondaire);
+  font-size: 0.9em;
+}
+
+.evaluer-actif {
+  margin: 0.75rem 0 0;
+}
+
+.etiquette {
+  padding: 0 0.45rem;
+  border: 1px solid var(--vp-bordure-forte);
+  border-radius: var(--vp-rayon-sm);
+  font-size: 0.8rem;
 }
 </style>

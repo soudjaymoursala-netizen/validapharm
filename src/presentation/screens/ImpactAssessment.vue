@@ -10,6 +10,7 @@
 // fabriquée par défaut, verdict strictement binaire
 // (Direct Impact / Not Direct Impact — pas de niveau "impact indirect").
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useImpactAssessmentStore } from '../stores/useImpactAssessmentStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
@@ -30,6 +31,7 @@ const clientsStore = useClientsStore()
 const methodeStore = useImpactAssessmentStore()
 const structureStore = useStructureSystemeStore()
 
+const route = useRoute()
 const nomClient = ref<string | null>(null)
 const formulaireConfigOuvert = ref(false)
 const chargementInitial = ref(true)
@@ -41,6 +43,14 @@ onMounted(async () => {
     await methodeStore.charger(props.clientId)
     await structureStore.charger(props.clientId)
     if (!methodeStore.profilActif) formulaireConfigOuvert.value = true
+    // Arrivée depuis le Dossier vivant (constat 17) : actif prérempli.
+    if (typeof route.query.element === 'string') nomElement.value = route.query.element
+    if (
+      typeof route.query.noeud === 'string' &&
+      structureStore.noeuds.some((n) => n.id === route.query.noeud)
+    ) {
+      assetNodeIdSelectionne.value = route.query.noeud
+    }
   } finally {
     chargementInitial.value = false
   }

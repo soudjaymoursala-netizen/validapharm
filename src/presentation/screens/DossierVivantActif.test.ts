@@ -66,6 +66,15 @@ function routeurDeTest() {
     history: createMemoryHistory(),
     routes: [
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
+      ...[
+        ['dossier-vivant-actif', '/clients/:clientId/structure-systeme/:noeudId/dossier-vivant'],
+        ['assistant-strategie-qualification', '/clients/:clientId/strategie-qualification'],
+        ['impact-assessment', '/clients/:clientId/impact-assessment'],
+        ['csv-assessment', '/clients/:clientId/csv-assessment'],
+        ['risk-assessment-amdec', '/clients/:clientId/risk-assessment'],
+        ['parametres-critiques', '/clients/:clientId/parametres-critiques'],
+        ['gestion-process', '/clients/:clientId/process'],
+      ].map(([name, path]) => ({ name, path, component: { template: '<div />' } })),
       {
         path: '/clients/:clientId/structure-systeme',
         name: 'structure-systeme',
@@ -296,5 +305,73 @@ describe('DossierVivantActif', () => {
     await attendreQue(() => wrapper.text().includes('Nœud introuvable'))
 
     expect(wrapper.text()).toContain('Nœud introuvable')
+  })
+
+  test('signale une requalification en retard et détaille le résultat AMDEC, avec des liens', async () => {
+    const maintenant = new Date().toISOString()
+    await seedNoeud({
+      id: 'noeud-iso',
+      clientId: CLIENT_ID,
+      workspaceId: null,
+      levelKey: 'equipement',
+      name: 'Isolateur ISO-01',
+      code: 'ISO-01',
+      parentId: null,
+      associatedNodes: [],
+      source: 'manuel',
+      qmsConnectorId: null,
+      periodicQualification: { applicable: true, deadline: '2026-01-15' },
+      qualificationStatus: 'qualifie',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    })
+    await ctx.riskAssessmentRepo.creerEvaluation({
+      id: 'amdec-1',
+      clientId: CLIENT_ID,
+      methodProfileId: 'profil',
+      methodProfileVersion: 'v1',
+      assetNodeId: 'noeud-iso',
+      parameterId: null,
+      etapeProcessus: 'Remplissage',
+      modeDefaillance: 'Fuite du gant',
+      effetDefaillance: '',
+      causePotentielle: '',
+      controleActuel: '',
+      severiteInitiale: 5,
+      occurrenceInitiale: 3,
+      detectabiliteInitiale: 3,
+      iprInitial: 45,
+      verdictInitial: 'action_requise',
+      recommandation: 'Test d’étanchéité quotidien',
+      responsable: null,
+      dateCible: null,
+      actionsMenees: null,
+      severiteResiduelle: 5,
+      occurrenceResiduelle: 1,
+      detectabiliteResiduelle: 2,
+      iprResiduel: 10,
+      verdictResiduel: 'acceptable',
+      auditLog: [],
+      createdAt: maintenant,
+      updatedAt: maintenant,
+    })
+
+    const wrapper = mount(DossierVivantActif, {
+      props: { clientId: CLIENT_ID, noeudId: 'noeud-iso' },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await attendreQue(() => wrapper.text().includes('Fuite du gant'))
+
+    expect(wrapper.find('.badge-periodicite.en-retard').text()).toContain(
+      'Requalification en retard',
+    )
+    const texte = wrapper.find('.bloc-evaluations').text()
+    expect(texte).toContain('IPR initial 45')
+    expect(texte).toContain('Action requise')
+    expect(texte).toContain('IPR résiduel 10')
+    expect(texte).toContain('Acceptable')
+    // Chaque évaluation et chaque action « Évaluer cet actif » est un lien.
+    expect(wrapper.findAll('.bloc-evaluations a').length).toBeGreaterThanOrEqual(5)
   })
 })
