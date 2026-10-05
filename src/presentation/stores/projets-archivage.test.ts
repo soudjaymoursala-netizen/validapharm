@@ -208,8 +208,12 @@ describe('useProjectsStore — partage de projet', () => {
     expect('erreur' in resultat).toBe(false)
     if ('erreur' in resultat) return
 
-    expect(resultat.shared_with).toEqual([{ user_id: 'bob@ex.com', access_level: 'édition' }])
-    expect(resultat.audit_log.at(-1)?.action).toContain('partage_ajoute')
+    expect(resultat.projet.shared_with).toEqual([
+      { user_id: 'bob@ex.com', access_level: 'édition' },
+    ])
+    expect(resultat.projet.audit_log.at(-1)?.action).toContain('partage_ajoute')
+    // Aucun compte n'utilise cette adresse : l'écran pourra prévenir.
+    expect(resultat.compteExistant).toBe(false)
   })
 
   test('partagerProjet deux fois pour le même utilisateur met à jour le niveau, jamais un doublon', async () => {
@@ -220,7 +224,9 @@ describe('useProjectsStore — partage de projet', () => {
     const resultat = await store.partagerProjet(projet.id, 'bob@ex.com', 'édition')
     if ('erreur' in resultat) throw new Error('unreachable')
 
-    expect(resultat.shared_with).toEqual([{ user_id: 'bob@ex.com', access_level: 'édition' }])
+    expect(resultat.projet.shared_with).toEqual([
+      { user_id: 'bob@ex.com', access_level: 'édition' },
+    ])
   })
 
   test('retirerPartage retire un utilisateur, le projet reste lisible (statut inchangé)', async () => {

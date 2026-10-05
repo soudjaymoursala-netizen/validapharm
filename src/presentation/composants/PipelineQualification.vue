@@ -16,11 +16,16 @@ import type { Langue, Section, TemplateType } from '../../logique-metier/domaine
 import { libelleStatut } from '../../logique-metier/i18n/libellesStatut'
 import IconeSvg from './IconeSvg.vue'
 
-const props = defineProps<{
-  sections: Section[]
-  langue: Langue
-  projectId: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    sections: Section[]
+    langue: Langue
+    projectId: string
+    /** Faux pour un lecteur : aucune action de création proposée (audit UX du 25/09/2026, constat 14). */
+    peutModifier?: boolean
+  }>(),
+  { peutModifier: true },
+)
 
 const emit = defineEmits<{ 'demarrer-etape': [templateType: TemplateType] }>()
 
@@ -85,10 +90,10 @@ function classeEtape(etape: EtapeCalculee): string {
   return 'en-cours'
 }
 
+/** Libellé de statut commun, jamais abrégé (constat 18 : « Validée en interne » tronqué ici, complet ailleurs). */
 function libelleCourtStatut(etape: EtapeCalculee): string {
   if (etape.statutRepresentatif === null) return 'Non démarrée'
-  if (etape.statutRepresentatif === 'valide_en_interne') return 'Validée en interne'
-  return libelleStatut(etape.statutRepresentatif, props.langue).split(' — ')[0] ?? ''
+  return libelleStatut(etape.statutRepresentatif, props.langue)
 }
 </script>
 
@@ -103,12 +108,10 @@ function libelleCourtStatut(etape: EtapeCalculee): string {
           <template v-if="etapeRecommandee.sections.length === 0">
             n'a pas encore été créée pour ce projet.
           </template>
-          <template v-else>
-            est {{ libelleCourtStatut(etapeRecommandee).toLowerCase() }}.
-          </template>
+          <template v-else> : {{ libelleCourtStatut(etapeRecommandee) }}. </template>
         </p>
       </div>
-      <template v-if="etapeRecommandee.sections.length === 0">
+      <template v-if="etapeRecommandee.sections.length === 0 && peutModifier">
         <button
           type="button"
           class="bouton-demarrer"
@@ -118,7 +121,7 @@ function libelleCourtStatut(etape: EtapeCalculee): string {
         </button>
       </template>
       <RouterLink
-        v-else
+        v-else-if="etapeRecommandee.sections.length > 0"
         class="bouton-demarrer"
         :to="{
           name: 'editeur-section',
@@ -155,14 +158,19 @@ function libelleCourtStatut(etape: EtapeCalculee): string {
           <span class="etape__statut">{{ libelleCourtStatut(etape) }}</span>
         </RouterLink>
         <button
-          v-else
+          v-else-if="peutModifier"
           type="button"
           class="etape__contenu etape__contenu--vide"
+          :aria-label="`${etape.libelle} : non démarrée — créer cette section`"
           @click="emit('demarrer-etape', etape.type)"
         >
           <span class="etape__libelle">{{ etape.libelle }}</span>
           <span class="etape__statut">Non démarrée</span>
         </button>
+        <span v-else class="etape__contenu etape__contenu--vide">
+          <span class="etape__libelle">{{ etape.libelle }}</span>
+          <span class="etape__statut">Non démarrée</span>
+        </span>
       </li>
     </ol>
 
@@ -244,13 +252,14 @@ function libelleCourtStatut(etape: EtapeCalculee): string {
   background-color: var(--vp-marque-survol);
 }
 
+/* Passe à la ligne plutôt que d'être coupé à droite (constat 19). */
 .etapes {
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
-  overflow-x: auto;
-  gap: 0;
+  flex-wrap: wrap;
+  row-gap: 1rem;
 }
 
 .etapes li {
@@ -258,9 +267,9 @@ function libelleCourtStatut(etape: EtapeCalculee): string {
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex: 1;
+  flex: 1 1 6.5rem;
   min-width: 6.5rem;
-  padding-top: 0.25rem;
+  padding: 0.25rem 0.25rem 0;
 }
 
 .etape__connecteur {
@@ -329,6 +338,38 @@ function libelleCourtStatut(etape: EtapeCalculee): string {
 .etape__statut {
   font-size: 0.72rem;
   color: var(--vp-texte-secondaire);
+}
+
+/* Téléphone : liste verticale, sans connecteurs horizontaux. */
+@media (max-width: 40rem) {
+  .etapes {
+    flex-direction: column;
+    row-gap: 0.5rem;
+  }
+
+  .etapes li {
+    flex-direction: row;
+    gap: 0.75rem;
+    flex-basis: auto;
+  }
+
+  .etape__connecteur {
+    display: none;
+  }
+
+  .etape__contenu {
+    margin-top: 0;
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .bandeau-recommandation {
+    flex-wrap: wrap;
+  }
+
+  .bouton-demarrer {
+    margin-left: 0;
+  }
 }
 
 .plans-support {

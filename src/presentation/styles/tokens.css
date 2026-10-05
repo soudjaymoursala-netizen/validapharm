@@ -332,9 +332,25 @@ button:hover:not(:disabled) {
   color: var(--vp-marque);
 }
 
-button:disabled {
-  opacity: 0.6;
+/* Désactivé : gris neutre lisible plutôt qu'une couleur de marque pâlie
+   par l'opacité (audit UX du 25/09/2026, constat 20 : texte blanc sur
+   violet pâle, sous 4,5:1). `:disabled` répété pour l'emporter sur les
+   règles scoped des écrans (`.bouton-principal[data-v-…]`). */
+button:disabled:disabled {
+  opacity: 1;
   cursor: not-allowed;
+  background-color: var(--vp-fond-page);
+  border-color: var(--vp-bordure);
+  color: var(--vp-texte-secondaire);
+}
+
+/* Bouton principal survolé ou ouvert : le texte reste clair sur le fond de
+   marque (la règle de survol générique ci-dessus le passait en bleu sur
+   bleu, constat 20). */
+.bouton-principal:hover:not(:disabled),
+.bouton-principal[aria-expanded='true'],
+.bouton-principal:focus-visible {
+  color: var(--vp-marque-bouton-texte);
 }
 
 button[type='submit'] {

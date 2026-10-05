@@ -238,7 +238,7 @@ export const useProjectsStore = defineStore('projects', () => {
     projectId: string,
     userId: string,
     accessLevel: NiveauAccesPartage,
-  ): Promise<Project | ErreurPartageProjet> {
+  ): Promise<{ projet: Project; compteExistant: boolean } | ErreurPartageProjet> {
     const { api, jeton } = await obtenirApi()
     const resultat = await api.partagerProjet(jeton, projectId, userId, accessLevel)
     if (!resultat.ok) {
@@ -248,7 +248,8 @@ export const useProjectsStore = defineStore('projects', () => {
     const projetMisAJour = projetWireVersDomaine(resultat.donnees.projet)
     const index = projects.value.findIndex((p) => p.id === projectId)
     if (index !== -1) projects.value[index] = projetMisAJour
-    return projetMisAJour
+    // Absent d'un ancien Worker : on ne prévient pas à tort.
+    return { projet: projetMisAJour, compteExistant: resultat.donnees.compteExistant ?? true }
   }
 
   /** Retire un partage existant — le projet reste lisible par tous, seul le droit d'édition change. */
