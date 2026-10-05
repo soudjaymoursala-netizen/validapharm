@@ -37,7 +37,7 @@ import RenduGabarit from '../composants/RenduGabarit.vue'
 import { identifiantActeurCourant } from '../identite/identiteLocale'
 import { peutModifierSection } from '../../logique-metier/permissions/permissionsProjet'
 import { useAuthStore } from '../stores/useAuthStore'
-import { libelleStatut, messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
+import { messageSysteme, type CodeMessageSysteme } from '../i18n/messages'
 import { adaptateurAvecBascule, construireAdaptateursIA } from '../stores/construireAdaptateursIA'
 import { LIBELLES_GABARIT } from '../i18n/libellesGabarit'
 import { useClientConfigStore } from '../stores/useClientConfigStore'
@@ -1416,8 +1416,8 @@ async function ajouterAvisRelecteur(): Promise<void> {
         <summary>Aide à la rédaction par l'IA</summary>
         <p v-if="!iaDisponible" class="bandeau-avertissement" role="status">
           L'assistant IA n'est pas configuré : renseignez le relais IA dans
-          <RouterLink to="/configuration">Configuration</RouterLink> pour
-          utiliser la génération de brouillon et l'assistant.
+          <RouterLink to="/configuration">Configuration</RouterLink> pour utiliser la génération de
+          brouillon et l'assistant.
         </p>
         <fieldset class="zone-ia" :disabled="!iaDisponible">
           <section
