@@ -66,15 +66,17 @@ function routeurDeTest() {
     history: createMemoryHistory(),
     routes: [
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
-      ...[
-        ['dossier-vivant-actif', '/clients/:clientId/structure-systeme/:noeudId/dossier-vivant'],
-        ['assistant-strategie-qualification', '/clients/:clientId/strategie-qualification'],
-        ['impact-assessment', '/clients/:clientId/impact-assessment'],
-        ['csv-assessment', '/clients/:clientId/csv-assessment'],
-        ['risk-assessment-amdec', '/clients/:clientId/risk-assessment'],
-        ['parametres-critiques', '/clients/:clientId/parametres-critiques'],
-        ['gestion-process', '/clients/:clientId/process'],
-      ].map(([name, path]) => ({ name, path, component: { template: '<div />' } })),
+      ...(
+        [
+          ['dossier-vivant-actif', '/clients/:clientId/structure-systeme/:noeudId/dossier-vivant'],
+          ['assistant-strategie-qualification', '/clients/:clientId/strategie-qualification'],
+          ['impact-assessment', '/clients/:clientId/impact-assessment'],
+          ['csv-assessment', '/clients/:clientId/csv-assessment'],
+          ['risk-assessment-amdec', '/clients/:clientId/risk-assessment'],
+          ['parametres-critiques', '/clients/:clientId/parametres-critiques'],
+          ['gestion-process', '/clients/:clientId/process'],
+        ] as const
+      ).map(([name, path]) => ({ name, path, component: { template: '<div />' } })),
       {
         path: '/clients/:clientId/structure-systeme',
         name: 'structure-systeme',
