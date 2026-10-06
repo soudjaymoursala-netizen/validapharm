@@ -17,6 +17,8 @@ const erreur = ref<string | null>(null)
 // Refus d'une action sur un compte existant (rôle, statut) — affiché
 // au-dessus de la liste, jamais dans le formulaire de création fermé.
 const erreurAction = ref<string | null>(null)
+// Retour après une modification réussie (audit UX entrée #4).
+const messageSucces = ref<string | null>(null)
 // Échec du chargement de la liste (audit UX entrée #2 : liste vide sans
 // message, exception non gérée au montage).
 const erreurChargement = ref<string | null>(null)
@@ -81,6 +83,7 @@ async function creerUtilisateur(): Promise<void> {
     erreur.value = LIBELLES_ERREUR[resultat.erreur] ?? 'Erreur inattendue.'
     return
   }
+  messageSucces.value = null
   lienEmis.value = {
     titre: `Compte créé pour ${resultat.donnees.utilisateur.email}`,
     email: resultat.donnees.utilisateur.email,
@@ -108,9 +111,22 @@ async function modifier(
   const api = await authStore.client()
   if (!api || !authStore.jeton) return
   erreurAction.value = null
+  messageSucces.value = null
   const resultat = await api.modifierUtilisateur(authStore.jeton, u.id, changements)
   await charger()
-  if (!resultat.ok) erreurAction.value = LIBELLES_ERREUR[resultat.erreur] ?? 'Erreur inattendue.'
+  if (!resultat.ok) {
+    erreurAction.value = LIBELLES_ERREUR[resultat.erreur] ?? 'Erreur inattendue.'
+    return
+  }
+  const quoi =
+    changements.statut === 'desactive'
+      ? 'désactivé'
+      : changements.statut === 'actif'
+        ? 'réactivé'
+        : changements.role === 'admin'
+          ? 'promu administrateur'
+          : 'rétrogradé en utilisateur'
+  messageSucces.value = `Compte de ${u.prenom} ${u.nom} ${quoi}.`
 }
 
 async function basculerRole(u: UtilisateurWire): Promise<void> {
@@ -262,6 +278,7 @@ async function copierLien(): Promise<void> {
     </section>
 
     <p v-if="erreurAction" class="bandeau-erreur" role="alert">{{ erreurAction }}</p>
+    <p v-if="messageSucces" class="bandeau-succes" role="status">{{ messageSucces }}</p>
     <p v-if="erreurChargement" class="bandeau-erreur" role="alert">
       {{ erreurChargement }} <button type="button" @click="charger">Réessayer</button>
     </p>
@@ -281,7 +298,11 @@ async function copierLien(): Promise<void> {
           <button type="button" @click="basculerRole(u)">
             {{ u.role === 'admin' ? 'Rétrograder' : 'Promouvoir admin' }}
           </button>
-          <button type="button" class="bouton-danger" @click="basculerStatut(u)">
+          <button
+            type="button"
+            :class="{ 'bouton-danger': u.statut === 'actif' }"
+            @click="basculerStatut(u)"
+          >
             {{ u.statut === 'actif' ? 'Désactiver' : 'Réactiver' }}
           </button>
         </div>
@@ -291,6 +312,15 @@ async function copierLien(): Promise<void> {
 </template>
 
 <style scoped>
+.bandeau-succes {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--vp-succes);
+  border-radius: var(--vp-rayon);
+  background-color: var(--vp-succes-fond-leger);
+  color: var(--vp-succes);
+}
+
 .lien-emis {
   display: flex;
   flex-direction: column;

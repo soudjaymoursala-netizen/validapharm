@@ -21,6 +21,7 @@ function routeurDeTest() {
     routes: [
       { path: '/recherche', name: 'recherche-globale', component: RechercheGlobale },
       { path: '/clients/:clientId', name: 'fiche-client', component: { template: '<div />' } },
+      { path: '/projets/:projectId', name: 'fiche-projet', component: { template: '<div />' } },
       {
         path: '/projets/:projectId/sections/:sectionId',
         name: 'editeur-section',

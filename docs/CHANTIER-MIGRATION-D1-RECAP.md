@@ -4736,3 +4736,52 @@ proposé « EQ-2 » ; aucun débordement à 375 px ; aucune erreur console.
 
 Reste (mineur) : astérisques des champs obligatoires de l'écran
 Paramètres critiques ; historique CSV sous forme de tableau.
+
+### 43.4 PR entrée / administration
+
+**Production (06/10/2026)** : migration 0030 appliquée sur la base D1
+`validapharm-auth` (3 index uniques + 3 colonnes de `evaluations_acfc`)
+après contrôle sans doublon (client, version) dans les 3 tables ; PR #102
+fusionnée ensuite, code déployé vérifié (`workers_get_worker_code` :
+`conclusion_incoherente`, `conflit_version`, colonnes `complexite`,
+`conclusion`, `version_grille`). Cette PR n'a **aucune migration**.
+
+**Serveur** : création d'un client refusée en 409 `nom_deja_utilise` si un
+client actif visible porte déjà le même nom (casse, accents et espaces
+ignorés).
+
+**Interface** :
+- Titre d'onglet par route (`meta.titre`, « Mes clients — ValidaPharm »),
+  lien d'évitement « Aller au contenu », focus sur le titre après un
+  changement d'écran (pas pour un simple paramètre de requête).
+- Tiroir mobile : navigation `inert` tant qu'il est fermé, Échap le referme
+  et rend le focus au bouton, barre supérieure fixe avec le titre de page
+  (le bouton ne recouvre plus le contenu, point 25).
+- Barre latérale : épinglage visible au focus clavier et sur écran tactile,
+  `aria-pressed` et info-bulle sur les modes, rôle affiché, cible
+  « Se déconnecter » agrandie.
+- Comptes : message de succès (`role="status"`) après désactivation,
+  réactivation, promotion ou rétrogradation ; « Réactiver » n'est plus
+  stylé comme une action dangereuse.
+- Clients : doublon expliqué, fiche ouverte après création, « Archiver » en
+  bouton secondaire, date d'archivage lisible.
+- Recherche : les projets sont trouvés, compteur annoncé (`role="status"`),
+  pistes si aucun résultat.
+- Connexion : message sans jargon, focus et `aria-invalid` après erreur,
+  « Afficher le mot de passe ».
+- Accès refusé à `/admin/utilisateurs` : message sur l'accueil.
+- Pluriels corrects (`i18n/pluriel.ts`) sur l'accueil, le tableau de bord
+  et la recherche ; note de feuille de route retirée de Paramètres.
+- Contrastes : `--vp-danger` foncé en clair (#b91c1c) et éclairci en sombre
+  (#f87171), couleur de marque éclaircie en sombre (#a99fff).
+
+**Vérification** : typage, lint, format et build propres ; 1 657 tests
+(+ doublon de client, Échap/lien d'évitement, titres de toutes les routes,
+pluriel). **Non vérifié dans un navigateur réel** (aucun parcours
+Chromium à 375 px dans cette PR).
+
+**Reste (hors de cette PR)** : fil d'Ariane et gabarit de page commun
+(#18), icônes distinctes (#13), configuration « Connexions & serveurs »
+(#12), règles de mot de passe affichées (#21), accueil en grille (#25),
+ligne projet mobile (#23).
+

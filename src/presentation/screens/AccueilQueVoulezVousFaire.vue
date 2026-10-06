@@ -20,6 +20,7 @@
 // - "Mes projets" : les projets actifs les plus récents.
 // - "Raccourcis épinglés" (§5 du parcours) : `useEpinglageStore`.
 import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import type { Project } from '../../logique-metier/domaine/types'
 import { useClientActifStore } from '../stores/useClientActifStore'
 import { useClientsStore } from '../stores/useClientsStore'
@@ -36,6 +37,7 @@ const epinglageStore = useEpinglageStore()
 const sectionsStore = useSectionsStore()
 const sourceIntelligenceStore = useSourceIntelligenceStore()
 
+const route = useRoute()
 const chargementTermine = ref(false)
 const erreurChargementClients = ref<string | null>(null)
 const nbInformationsAValider = ref(0)
@@ -127,6 +129,10 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
 
 <template>
   <main class="accueil">
+    <p v-if="route.query.acces === 'admin'" class="accueil__refus" role="alert">
+      Accès réservé aux administrateurs : la gestion des comptes n'est pas disponible avec votre
+      profil.
+    </p>
     <h1>Que voulez-vous faire ?</h1>
     <p class="accueil__sous-titre">
       Choisissez une action pour démarrer, ou reprenez là où vous en étiez.
@@ -146,8 +152,8 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
         <span class="accueil__reprise-texte">
           {{ nomClient(dernierProjetActif.client_id) ?? 'Sans client' }}
           <template v-if="sectionsDernierProjet && sectionsDernierProjet.total > 0">
-            — {{ sectionsDernierProjet.validees }}/{{ sectionsDernierProjet.total }} section(s)
-            validée(s)
+            — {{ sectionsDernierProjet.validees }}/{{ sectionsDernierProjet.total }}
+            {{ sectionsDernierProjet.total < 2 ? 'section validée' : 'sections validées' }}
           </template>
         </span>
       </span>
@@ -191,7 +197,11 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
             }"
             class="accueil__ligne-stat"
           >
-            <span>Information(s) extraite(s) non validée(s)</span>
+            <span>{{
+              nbInformationsAValider < 2
+                ? 'Information extraite non validée'
+                : 'Informations extraites non validées'
+            }}</span>
             <strong>{{ nbInformationsAValider }}</strong>
           </RouterLink>
           <RouterLink
@@ -202,7 +212,7 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
             }"
             class="accueil__ligne-stat"
           >
-            <span>Conflit(s) non résolu(s)</span>
+            <span>{{ nbConflitsOuverts < 2 ? 'Conflit non résolu' : 'Conflits non résolus' }}</span>
             <strong>{{ nbConflitsOuverts }}</strong>
           </RouterLink>
         </template>
@@ -272,6 +282,15 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
 </template>
 
 <style scoped>
+.accueil__refus {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--vp-danger);
+  border-radius: var(--vp-rayon);
+  background-color: var(--vp-danger-fond-leger);
+  color: var(--vp-danger);
+}
+
 .accueil {
   max-width: 1080px;
   margin: 0 auto;

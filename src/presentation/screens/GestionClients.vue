@@ -12,12 +12,14 @@
 // retapé + vraie session). Suppression **définitive** (admin
 // uniquement, justification obligatoire) : voir `ModaleSuppressionDefinitive.vue` — jamais pour un rôle non-admin.
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import ModaleConfirmationArchivage from '../composants/ModaleConfirmationArchivage.vue'
 import ModaleSuppressionDefinitive from '../composants/ModaleSuppressionDefinitive.vue'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import type { Client, SecteurClient } from '../../logique-metier/domaine/types'
 
+const router = useRouter()
 const store = useClientsStore()
 const authStore = useAuthStore()
 const formulaireOuvert = ref(false)
@@ -42,6 +44,8 @@ const LIBELLES_SECTEUR: Record<SecteurClient, string> = {
 // chaque action ci-dessous).
 const LIBELLES_ERREUR: Record<string, string> = {
   nom_obligatoire: "Le nom de l'entreprise est obligatoire.",
+  nom_deja_utilise:
+    'Un client actif porte déjà ce nom. Ouvrez-le depuis la liste, ou précisez le nom (site, ville).',
   deja_archive: 'Ce client a déjà été archivé entre-temps (probablement depuis un autre onglet).',
   deja_actif: 'Ce client a déjà été désarchivé entre-temps (probablement depuis un autre onglet).',
   non_autorise: "Vous n'avez pas les droits nécessaires pour cette action.",
@@ -83,9 +87,18 @@ async function creerClient(): Promise<void> {
     }
     formulaireOuvert.value = false
     brouillon.value = { name: '', adresse: '', secteur: '', details: '' }
+    // Retour visible (audit UX entrée #7) : on ouvre la fiche du client créé.
+    await router.push({ name: 'fiche-client', params: { clientId: resultat.id } })
   } catch (e) {
     erreurCreation.value = libelleErreur(e)
   }
+}
+
+const formatDate = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })
+function libelleArchivage(client: Client): string {
+  const date = client.archived_at ? new Date(client.archived_at) : null
+  const quand = date && !Number.isNaN(date.getTime()) ? ` le ${formatDate.format(date)}` : ''
+  return `archivé${quand}${client.archived_by ? ` par ${client.archived_by}` : ''}`
 }
 
 async function confirmerArchivage(): Promise<void> {
@@ -217,7 +230,7 @@ async function confirmerSuppressionDefinitive(
       <ul v-if="afficherArchives" class="liste-clients liste-clients--archives">
         <li v-for="client in store.clientsArchives" :key="client.id">
           {{ client.name }}
-          <span class="meta">archivé le {{ client.archived_at }} par {{ client.archived_by }}</span>
+          <span class="meta">{{ libelleArchivage(client) }}</span>
           <div class="actions-archive">
             <button type="button" @click="desarchiver(client)">Désarchiver</button>
             <button
@@ -374,17 +387,15 @@ header {
    ne change pas entre thèmes clair/sombre (contrairement à `--vp-marque`),
    d'où le blanc fixe plutôt qu'un token de thème. */
 .bouton-archiver {
-  background-color: var(--vp-danger);
-  color: white;
-  border: none;
+  background-color: transparent;
+  color: var(--vp-danger);
+  border: 1px solid var(--vp-bordure);
   flex-shrink: 0;
 }
 
 .bouton-archiver:hover:not(:disabled) {
-  background-color: var(--vp-danger);
-  color: white;
-  border-color: transparent;
-  filter: brightness(0.9);
+  background-color: var(--vp-danger-fond-leger);
+  border-color: var(--vp-danger);
 }
 
 .actions-archive {

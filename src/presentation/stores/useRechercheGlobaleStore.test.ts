@@ -135,7 +135,11 @@ describe('useRechercheGlobaleStore — rechercherPourClient (tâche #116)', () =
     const resultats = await rechercheStore.rechercherPourClient(clientId, 'presse')
 
     const types = resultats.map((r) => r.type).sort()
-    expect(types).toEqual(['connaissance', 'procedure', 'section'])
+    expect(types).toEqual(['connaissance', 'procedure', 'projet', 'section'])
+    expect(resultats.find((r) => r.type === 'projet')?.route).toEqual({
+      name: 'fiche-projet',
+      params: { projectId: expect.any(String) },
+    })
     expect(resultats.find((r) => r.type === 'section')?.titre).toBe('OQ presse P-200')
     expect(resultats.find((r) => r.type === 'procedure')?.titre).toContain('PQ-COMPRESSION')
     expect(resultats.find((r) => r.type === 'connaissance')?.titre).toBe('Pression maximale presse')

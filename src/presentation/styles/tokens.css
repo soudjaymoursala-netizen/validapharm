@@ -111,7 +111,7 @@
   --vp-succes-fond-leger: #ecfdf3;
   --vp-attention: #b45309;
   --vp-attention-fond-leger: #fffbeb;
-  --vp-danger: #dc2626;
+  --vp-danger: #b91c1c;
   --vp-danger-fond-leger: #fef2f2;
   --vp-info: #2563eb;
   --vp-info-fond-leger: #eff6ff;
@@ -169,7 +169,7 @@
   /* Marque (indigo éclairci pour le contraste sur fond sombre — voir note
      de tête sur `--vp-marque-bouton-texte`, contraste vérifié : #8b7fff
      sur fond page sombre = 5.79:1 en tant que texte/icône). */
-  --vp-marque: #8b7fff;
+  --vp-marque: #a99fff;
   --vp-marque-survol: #a79cff;
   --vp-marque-fond-leger: #262a44;
   --vp-marque-bouton-texte: #14152a;
@@ -195,6 +195,7 @@
      danger/info) restent identiques au thème clair (reconnaissance). */
   --vp-succes-fond-leger: #0f2b1c;
   --vp-attention-fond-leger: #2e2408;
+  --vp-danger: #f87171;
   --vp-danger-fond-leger: #2e1414;
   --vp-info-fond-leger: #101f36;
 }
@@ -208,7 +209,7 @@
     --vp-fond-carte: #1c1d2a;
     --vp-texte-principal: #f1f2f8;
     --vp-texte-secondaire: #a3a6bd;
-    --vp-marque: #8b7fff;
+    --vp-marque: #a99fff;
     --vp-marque-survol: #a79cff;
     --vp-marque-fond-leger: #262a44;
     --vp-marque-bouton-texte: #14152a;
@@ -221,6 +222,7 @@
     --vp-ombre-lg: 0 28px 64px -14px rgba(0, 0, 0, 0.6), 0 10px 24px -8px rgba(0, 0, 0, 0.4);
     --vp-succes-fond-leger: #0f2b1c;
     --vp-attention-fond-leger: #2e2408;
+    --vp-danger: #f87171;
     --vp-danger-fond-leger: #2e1414;
     --vp-info-fond-leger: #101f36;
   }

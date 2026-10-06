@@ -117,3 +117,34 @@ describe('CoquilleApplication — erreurs non gérées affichées (audit M1)', (
     expect(wrapper.find('.erreurs-globales').exists()).toBe(false)
   })
 })
+
+describe('CoquilleApplication — accessibilité de la navigation', () => {
+  test('Échap referme le tiroir mobile et rend le focus au bouton', async () => {
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(CoquilleApplication, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    })
+
+    await wrapper.find('.coquille-application__bouton-menu').trigger('click')
+    expect(wrapper.find('.sidebar').classes()).toContain('sidebar--ouverte')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.sidebar').classes()).not.toContain('sidebar--ouverte')
+    expect(document.activeElement).toBe(wrapper.find('.coquille-application__bouton-menu').element)
+    wrapper.unmount()
+  })
+
+  test('propose un lien « Aller au contenu » vers la zone principale', async () => {
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(CoquilleApplication, { global: { plugins: [router] } })
+
+    const lien = wrapper.find('.lien-evitement')
+    expect(lien.attributes('href')).toBe('#contenu-principal')
+    expect(wrapper.find('#contenu-principal').exists()).toBe(true)
+  })
+})

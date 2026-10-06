@@ -132,11 +132,11 @@ describe('AccueilQueVoulezVousFaire — Continuer mon travail', () => {
     const router = routeurDeTest()
     await router.push('/')
     const wrapper = mount(AccueilQueVoulezVousFaire, { global: { plugins: [router] } })
-    await attendreQue(() => wrapper.text().includes('section(s) validée(s)'))
+    await attendreQue(() => wrapper.text().includes('sections validées'))
 
     expect(wrapper.text()).toContain('Continuer mon travail')
     expect(wrapper.text()).toContain('Qualification STICK002')
-    expect(wrapper.text()).toContain('1/2 section(s) validée(s)')
+    expect(wrapper.text()).toContain('1/2 sections validées')
   })
 })
 
@@ -229,9 +229,9 @@ describe('AccueilQueVoulezVousFaire — À vérifier', () => {
     const router = routeurDeTest()
     await router.push('/')
     const wrapper = mount(AccueilQueVoulezVousFaire, { global: { plugins: [router] } })
-    await attendreQue(() => wrapper.text().includes('Conflit(s) non résolu(s)'))
+    await attendreQue(() => wrapper.text().includes('Conflit non résolu'))
 
-    expect(wrapper.text()).toContain('Information(s) extraite(s) non validée(s)')
+    expect(wrapper.text()).toContain('Informations extraites non validées')
   })
 
   test('avec un client actif, les deux lignes mènent vers Source Intelligence de ce client', async () => {
@@ -244,15 +244,15 @@ describe('AccueilQueVoulezVousFaire — À vérifier', () => {
     const router = routeurDeTest()
     await router.push('/')
     const wrapper = mount(AccueilQueVoulezVousFaire, { global: { plugins: [router] } })
-    await attendreQue(() => wrapper.text().includes('Conflit(s) non résolu(s)'))
+    await attendreQue(() => wrapper.text().includes('Conflit non résolu'))
 
     // Avant ce correctif, seule la ligne "informations non validées" était
     // un lien — "conflits non résolus" restait un texte statique alors que
     // le même écran (Source Intelligence du client actif) permet de
     // résoudre les deux, incohérence corrigée ici.
     const lignes = wrapper.findAll('.accueil__ligne-stat')
-    const ligneInfos = lignes.find((l) => l.text().includes('Information(s)'))
-    const ligneConflits = lignes.find((l) => l.text().includes('Conflit(s)'))
+    const ligneInfos = lignes.find((l) => l.text().includes('Information extraite'))
+    const ligneConflits = lignes.find((l) => l.text().includes('Conflit non résolu'))
 
     expect(ligneInfos?.element.tagName).toBe('A')
     expect(ligneInfos?.attributes('href')).toBe('/clients/client-1/ingestion-documentaire')
