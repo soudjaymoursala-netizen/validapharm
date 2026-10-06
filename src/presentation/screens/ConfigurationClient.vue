@@ -222,7 +222,7 @@ async function testerConnexionAuthentification(): Promise<void> {
 <template>
   <main class="configuration-client">
     <RouterLink :to="{ name: 'tableau-de-bord' }" class="lien-retour">Tableau de bord</RouterLink>
-    <h1>Configuration client</h1>
+    <h1>Connexions et serveurs</h1>
 
     <section class="bloc-github">
       <h2>Dépôt GitHub dédié</h2>
@@ -303,6 +303,8 @@ async function testerConnexionAuthentification(): Promise<void> {
             v-model="brouillonRelais.relayUrl"
             type="url"
             required
+            pattern="https?://.+"
+            title="L'adresse doit commencer par https:// (ou http://)"
             placeholder="https://relais.exemple.workers.dev"
           />
         </label>
@@ -368,6 +370,8 @@ async function testerConnexionAuthentification(): Promise<void> {
             v-model="brouillonAuthentification.relayUrl"
             type="url"
             required
+            pattern="https?://.+"
+            title="L'adresse doit commencer par https:// (ou http://)"
             placeholder="https://auth.exemple.workers.dev"
           />
         </label>

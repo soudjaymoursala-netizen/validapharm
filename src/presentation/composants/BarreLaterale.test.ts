@@ -144,8 +144,8 @@ describe('BarreLaterale — groupes de navigation', () => {
     expect(wrapper.text()).toContain('Paramètres')
     expect(wrapper.text()).toContain('Guides & normes')
     expect(wrapper.text()).toContain('Mes clients')
-    expect(wrapper.text()).toContain('Tous mes projets')
-    expect(wrapper.text()).toContain('Configuration GitHub')
+    expect(wrapper.text()).toContain('Mes projets')
+    expect(wrapper.text()).toContain('Connexions et serveurs')
   })
 
   test("aucun client mémorisé : invite à en choisir un plutôt qu'un lien cassé", async () => {
@@ -238,7 +238,7 @@ describe('BarreLaterale — bascule Mode Expert / Assistant', () => {
     // configuration avancée.
     expect(wrapper.text()).toContain('Exigences et tests')
     expect(wrapper.text()).toContain('Connecteurs QMS')
-    expect(wrapper.text()).toContain('Configuration GitHub')
+    expect(wrapper.text()).toContain('Connexions et serveurs')
 
     const boutonAssistant = wrapper.findAll('button').find((b) => b.text() === 'Mode Assistant')
     await boutonAssistant?.trigger('click')
@@ -252,7 +252,7 @@ describe('BarreLaterale — bascule Mode Expert / Assistant', () => {
     // n'est pas réactivé (aucun changement de comportement caché).
     expect(wrapper.text()).not.toContain('Exigences et tests')
     expect(wrapper.text()).not.toContain('Connecteurs QMS')
-    expect(wrapper.text()).not.toContain('Configuration GitHub')
+    expect(wrapper.text()).not.toContain('Connexions et serveurs')
 
     // Réversible : retour au Mode Expert restaure l'accès complet.
     const boutonExpert = wrapper.findAll('button').find((b) => b.text() === 'Mode Expert')

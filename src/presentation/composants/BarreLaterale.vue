@@ -458,7 +458,7 @@ function basculerEpinglage(outil: OutilClient): void {
         </RouterLink>
         <RouterLink v-if="modeStore.mode === 'expert'" :to="{ name: 'configuration-client' }">
           <IconeSvg nom="engrenage" :taille="16" />
-          Configuration GitHub
+          Connexions et serveurs
         </RouterLink>
         <RouterLink v-if="authStore.estAdmin" :to="{ name: 'admin-utilisateurs' }">
           <IconeSvg nom="utilisateur" :taille="16" />
@@ -474,7 +474,7 @@ function basculerEpinglage(outil: OutilClient): void {
         </RouterLink>
         <RouterLink :to="{ name: 'tableau-de-bord' }">
           <IconeSvg nom="dossier" :taille="16" />
-          Tous mes projets
+          Mes projets
         </RouterLink>
       </div>
 
@@ -908,10 +908,17 @@ function basculerEpinglage(outil: OutilClient): void {
     transform: translateX(-100%);
     transition: transform var(--vp-transition);
     z-index: 60;
-    box-shadow: var(--vp-ombre-lg);
+  }
+
+  /* L'ombre n'existe que tiroir ouvert : fermé, elle débordait en bande grise
+     sur le bord gauche de l'écran. */
+  /* Le bouton « × » (fixe, en haut à gauche) ne doit pas recouvrir le logo. */
+  .sidebar__marque {
+    padding-left: 3.25rem;
   }
 
   .sidebar--ouverte {
+    box-shadow: var(--vp-ombre-lg);
     transform: translateX(0);
   }
 
