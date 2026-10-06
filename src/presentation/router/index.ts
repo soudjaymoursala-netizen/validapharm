@@ -18,6 +18,7 @@ export const router = createRouter({
     {
       path: '/',
       name: 'accueil',
+      meta: { titre: 'Accueil' },
       component: () => import('../screens/AccueilQueVoulezVousFaire.vue'),
     },
     {
@@ -26,6 +27,7 @@ export const router = createRouter({
       // l'atteindre pour se connecter.
       path: '/connexion',
       name: 'connexion',
+      meta: { titre: 'Connexion' },
       component: () => import('../screens/Login.vue'),
     },
     {
@@ -33,16 +35,19 @@ export const router = createRouter({
       // 26/09/2026) : accessibles sans session, comme « Se connecter ».
       path: '/definir-mot-de-passe',
       name: 'definir-mot-de-passe',
+      meta: { titre: 'Choisir un mot de passe' },
       component: () => import('../screens/DefinirMotDePasse.vue'),
     },
     {
       path: '/mot-de-passe-oublie',
       name: 'mot-de-passe-oublie',
+      meta: { titre: 'Mot de passe oublié' },
       component: () => import('../screens/MotDePasseOublie.vue'),
     },
     {
       path: '/admin/utilisateurs',
       name: 'admin-utilisateurs',
+      meta: { titre: 'Gestion des comptes' },
       component: () => import('../screens/AdminUtilisateurs.vue'),
     },
     {
@@ -51,49 +56,58 @@ export const router = createRouter({
       // (`RouterLink :to="{ name: 'tableau-de-bord' }"`) restent valides.
       path: '/tableau-de-bord',
       name: 'tableau-de-bord',
+      meta: { titre: 'Mes projets' },
       component: () => import('../screens/TableauDeBord.vue'),
     },
     {
       path: '/projets/:projectId',
       name: 'fiche-projet',
+      meta: { titre: 'Projet' },
       component: () => import('../screens/FicheProjet.vue'),
       props: true,
     },
     {
       path: '/projets/:projectId/sections/:sectionId',
       name: 'editeur-section',
+      meta: { titre: 'Rédaction' },
       component: () => import('../screens/EditeurSection.vue'),
       props: true,
     },
     {
       path: '/projets/:projectId/assistant-livrable',
       name: 'assistant-creation-livrable',
+      meta: { titre: 'Nouveau livrable' },
       component: () => import('../screens/AssistantCreationLivrable.vue'),
       props: true,
     },
     {
       path: '/configuration',
       name: 'configuration-client',
+      meta: { titre: 'Connexions et serveurs' },
       component: () => import('../screens/ConfigurationClient.vue'),
     },
     {
       path: '/normes',
       name: 'bibliotheque-normes',
+      meta: { titre: 'Normes' },
       component: () => import('../screens/BibliothequeNormes.vue'),
     },
     {
       path: '/recherche',
       name: 'recherche-globale',
+      meta: { titre: 'Recherche' },
       component: () => import('../screens/RechercheGlobale.vue'),
     },
     {
       path: '/resolution-conflit',
       name: 'resolution-conflit',
+      meta: { titre: 'Résolution de conflit' },
       component: () => import('../screens/ResolutionConflit.vue'),
     },
     {
       path: '/clients',
       name: 'gestion-clients',
+      meta: { titre: 'Mes clients' },
       component: () => import('../screens/GestionClients.vue'),
     },
     {
@@ -101,148 +115,173 @@ export const router = createRouter({
       // branches (Architecture/Process/Procédures/Templates/Projets).
       path: '/clients/:clientId',
       name: 'fiche-client',
+      meta: { titre: 'Fiche client' },
       component: () => import('../screens/FicheClient.vue'),
       props: true,
     },
     {
       path: '/profil',
       name: 'profil',
+      meta: { titre: 'Profil' },
       component: () => import('../screens/Profil.vue'),
     },
     {
       path: '/parametres',
       name: 'parametres',
+      meta: { titre: 'Paramètres' },
       component: () => import('../screens/Parametres.vue'),
     },
     {
       path: '/clients/:clientId/process',
       name: 'gestion-process',
+      meta: { titre: 'Process' },
       component: () => import('../screens/Process.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/templates',
       name: 'templates-formulaires',
+      meta: { titre: 'Templates et formulaires' },
       component: () => import('../screens/TemplatesFormulaires.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/drive',
       name: 'configuration-drive',
+      meta: { titre: 'Configuration Drive' },
       component: () => import('../screens/ConfigurationDrive.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/ia',
       name: 'configuration-ia',
+      meta: { titre: 'Configuration IA' },
       component: () => import('../screens/ConfigurationIA.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/chat',
       name: 'panneau-chat',
+      meta: { titre: 'Assistant IA' },
       component: () => import('../screens/PanneauChat.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/strategie-qualification',
       name: 'assistant-strategie-qualification',
+      meta: { titre: 'Stratégie de qualification' },
       component: () => import('../screens/AssistantStrategieQualification.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/structure-systeme',
       name: 'structure-systeme',
+      meta: { titre: 'Structure du système' },
       component: () => import('../screens/StructureSysteme.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/suivi-periodicite',
       name: 'suivi-periodicite',
+      meta: { titre: 'Suivi de périodicité' },
       component: () => import('../screens/SuiviPeriodicite.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/impact-assessment',
       name: 'impact-assessment',
+      meta: { titre: 'Impact Assessment' },
       component: () => import('../screens/ImpactAssessment.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/csv-assessment',
       name: 'csv-assessment',
+      meta: { titre: 'CSV Assessment' },
       component: () => import('../screens/ComputerSystemAssessment.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/missions',
       name: 'liste-missions',
+      meta: { titre: 'Missions' },
       component: () => import('../screens/ListeMissions.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/missions/:missionId',
       name: 'mission-workspace',
+      meta: { titre: 'Mission' },
       component: () => import('../screens/MissionWorkspace.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/procedures',
       name: 'revue-structure-procedure',
+      meta: { titre: 'Procédures' },
       component: () => import('../screens/RevueStructureProcedure.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/tests',
       name: 'definition-tests',
+      meta: { titre: 'Définition des tests' },
       component: () => import('../screens/DefinitionTests.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/executions',
       name: 'execution-tests',
+      meta: { titre: 'Exécution des tests' },
       component: () => import('../screens/ExecutionTests.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/parametres-critiques',
       name: 'parametres-critiques',
+      meta: { titre: 'Paramètres critiques' },
       component: () => import('../screens/ParametresCritiques.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/ingestion-documentaire',
       name: 'source-intelligence',
+      meta: { titre: 'Connaissances' },
       component: () => import('../screens/SourceIntelligence.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/plans-livrable',
       name: 'content-plan',
+      meta: { titre: 'Plan de contenu' },
       component: () => import('../screens/ContentPlan.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/risk-assessment',
       name: 'risk-assessment-amdec',
+      meta: { titre: 'AMDEC' },
       component: () => import('../screens/RiskAssessmentAmdec.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/structure-systeme/:noeudId/dossier-vivant',
       name: 'dossier-vivant-actif',
+      meta: { titre: 'Dossier vivant' },
       component: () => import('../screens/DossierVivantActif.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/connecteurs-qms',
       name: 'configuration-connecteurs-qms',
+      meta: { titre: 'Connecteurs QMS' },
       component: () => import('../screens/ConfigurationConnecteursQMS.vue'),
       props: true,
     },
     {
       path: '/clients/:clientId/anomalies',
       name: 'journal-anomalies',
+      meta: { titre: "Journal d'anomalies" },
       component: () => import('../screens/JournalAnomalies.vue'),
       props: true,
     },
@@ -251,6 +290,7 @@ export const router = createRouter({
       // (audit UX du 25/09/2026).
       path: '/:cheminInconnu(.*)*',
       name: 'page-introuvable',
+      meta: { titre: 'Page introuvable' },
       component: () => import('../screens/PageIntrouvable.vue'),
     },
   ],
@@ -264,6 +304,8 @@ export const router = createRouter({
  * de "client actif" ne soit fabriqué côté domaine.
  */
 router.afterEach((to) => {
+  document.title =
+    typeof to.meta.titre === 'string' ? `${to.meta.titre} — ValidaPharm` : 'ValidaPharm'
   const clientId = to.params.clientId ?? to.query.clientId
   if (typeof clientId === 'string' && clientId.length > 0) {
     useClientActifStore().definirClientActif(clientId)
@@ -295,7 +337,7 @@ router.beforeEach(async (to) => {
     return { name: 'connexion', query: { redirect: to.fullPath } }
   }
   if (to.name === 'admin-utilisateurs' && !authStore.estAdmin) {
-    return { name: 'accueil' }
+    return { name: 'accueil', query: { acces: 'admin' } }
   }
   return true
 })

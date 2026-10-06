@@ -1178,6 +1178,9 @@ async function bootstrapAdmin(
   return corps
 }
 
+// Noms uniques : le Worker refuse deux clients actifs de même nom (audit UX entrée #7).
+let compteurClientDeTest = 0
+
 describe('routerRequete — vérification de connexion (/sante)', () => {
   test('GET /sante -> 200 { ok: true }, sans jeton (avant toute connexion)', async () => {
     const ctx = nouveauContexte()
@@ -1562,6 +1565,26 @@ describe('routerRequete — clients (D1 = source de vérité)', () => {
     expect(obtenirB.status).toBe(404)
   })
 
+  test('un client actif de même nom (casse, accents, espaces ignorés) est refusé en 409', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const premier = await requete(ctx, 'POST', '/clients', {
+      jeton: admin.jeton,
+      body: { name: 'Société Générale Pharma' },
+    })
+    expect(premier.status).toBe(201)
+
+    const doublon = await requete(ctx, 'POST', '/clients', {
+      jeton: admin.jeton,
+      body: { name: '  societe   generale PHARMA ' },
+    })
+    expect(doublon.status).toBe(409)
+    expect(doublon.corps.erreur).toBe('nom_deja_utilise')
+
+    const liste = await requete(ctx, 'GET', '/clients', { jeton: admin.jeton })
+    expect(liste.corps.clients).toHaveLength(1)
+  })
+
   test('un admin voit tous les clients de l’organisation, quel que soit le créateur', async () => {
     const ctx = nouveauContexte()
     const admin = await bootstrapAdmin(ctx)
@@ -1700,7 +1723,10 @@ describe('routerRequete — clients (D1 = source de vérité)', () => {
 
 describe('routerRequete — Structure Système (référentiel d’actifs, D1 = source de vérité)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -2066,7 +2092,10 @@ describe('routerRequete — Structure Système (référentiel d’actifs, D1 = s
 
 describe('routerRequete — ACFC (méthode configurable par client, Phase 4a du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -2215,7 +2244,10 @@ describe('routerRequete — ACFC (méthode configurable par client, Phase 4a du 
 
 describe('routerRequete — Parameter/ClassificationCriticiteParametre/CPP/CQA (Target Architecture §10, Phase 4b du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -2421,7 +2453,10 @@ describe('routerRequete — Parameter/ClassificationCriticiteParametre/CPP/CQA (
 
 describe('routerRequete — Impact Assessment / System Classification (F1 du catalogue §10, Phase 4c du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -2600,7 +2635,10 @@ describe('routerRequete — Impact Assessment / System Classification (F1 du cat
 
 describe('routerRequete — Computer System Assessment (F3 du catalogue §10, Phase 4c du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -2738,7 +2776,10 @@ describe('routerRequete — Computer System Assessment (F3 du catalogue §10, Ph
 
 describe('routerRequete — Risk Assessment / AMDEC (Target Architecture §10, Phase 4d du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -3067,7 +3108,10 @@ describe('routerRequete — Risk Assessment / AMDEC (Target Architecture §10, P
 
 describe('routerRequete — Process/FonctionActif/ManufacturingContext (Target Architecture §4/§5/§7, Phase 5a du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -3306,7 +3350,10 @@ describe('routerRequete — Process/FonctionActif/ManufacturingContext (Target A
 
 describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §10 famille H/I, Phase 5b du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -3587,7 +3634,10 @@ describe('routerRequete — QualityEvent/ReferenceQualityEvent (URS catalogue §
 
 describe('routerRequete — Requirement/TestObjective/TestCandidate/Test/Couverture (Target Architecture, domaine "Test", Phase 6a du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -4002,7 +4052,10 @@ describe('routerRequete — Requirement/TestObjective/TestCandidate/Test/Couvert
 
 describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (Target Architecture, domaine "Execution", Phase 6b du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -4450,7 +4503,10 @@ describe('routerRequete — Execution/ExecutionStep/Measurement/ExecutionEvent (
 
 describe('routerRequete — Evidence/EvidenceLocation/ProvenanceLink (Target Architecture, domaine "Evidence", Phase 6c du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -4758,7 +4814,10 @@ describe('routerRequete — Evidence/EvidenceLocation/ProvenanceLink (Target Arc
 
 describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/ExtractionItem/KnowledgeItem/Confirmation/KnowledgeRelation/Conflict (Target Architecture, domaines "Source Intelligence" et "Knowledge", Phase 7a du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -5133,7 +5192,10 @@ describe('routerRequete — Source/SourceLocation/SourceVersion/Extraction/Extra
 
 describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverable Engine", Phase 7b du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -5674,7 +5736,10 @@ describe('routerRequete — ContentPlan (Target Architecture, domaine "Deliverab
 
 describe('routerRequete — Integration (Target Architecture, domaine "Integration", Phase 7c du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -6106,7 +6171,10 @@ describe('routerRequete — Integration (Target Architecture, domaine "Integrati
 
 describe('routerRequete — Mission/Activity (Target Architecture, domaine "Work", Phase 8a du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -6503,7 +6571,10 @@ describe('routerRequete — Mission/Activity (Target Architecture, domaine "Work
 
 describe('routerRequete — ContextSnapshot (Target Architecture, domaine "Context Engine", Phase 8b du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -6732,7 +6803,10 @@ describe('routerRequete — ContextSnapshot (Target Architecture, domaine "Conte
 
 describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reasoning Engine", Phase 8c du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -7090,7 +7164,10 @@ describe('routerRequete — Reasoning Engine (Target Architecture, domaine "Reas
 
 describe('routerRequete — Procedure/ProcedureStep (cerveau procédural, Phase 9a du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -7385,7 +7462,10 @@ async function creerGabaritExportClient(
 
 describe("routerRequete — GabaritExportClient (gabarits d'export .docx personnalisés client, §4.3bis, Phase 9b du chantier de migration D1)", () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -7569,7 +7649,10 @@ describe("routerRequete — GabaritExportClient (gabarits d'export .docx personn
 
 describe('routerRequete — AiChatSessionLog (journal des sessions du panneau Chat, §4.4, Phase 9c du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -7720,7 +7803,10 @@ describe('routerRequete — AiChatSessionLog (journal des sessions du panneau Ch
 
 describe('routerRequete — ConnexionDrive / EtatMiroirDrive (miroir Drive par client, Phase 9d du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -7888,7 +7974,10 @@ describe('routerRequete — ConnexionDrive / EtatMiroirDrive (miroir Drive par c
 
 describe('routerRequete — ClientConfig (configuration IA par client, Phase 9f du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 
@@ -8012,7 +8101,10 @@ describe('routerRequete — ClientConfig (configuration IA par client, Phase 9f 
 
 describe('routerRequete — Organization/Workspace (Phase 2 du chantier de migration D1)', () => {
   async function creerClientDeTest(ctx: Contexte, jeton: string): Promise<string> {
-    const creation = await requete(ctx, 'POST', '/clients', { jeton, body: { name: 'Ferring' } })
+    const creation = await requete(ctx, 'POST', '/clients', {
+      jeton,
+      body: { name: `Ferring ${++compteurClientDeTest}` },
+    })
     return creation.corps.client.id
   }
 

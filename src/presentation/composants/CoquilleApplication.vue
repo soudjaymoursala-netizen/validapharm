@@ -10,7 +10,7 @@
 // première impression du produit et laissait deviner la navigation
 // complète avant authentification. `Login.vue` reste donc affiché seul,
 // pleine page, sans la coquille.
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BarreLaterale from './BarreLaterale.vue'
 import IconeSvg from './IconeSvg.vue'
@@ -25,6 +25,14 @@ const erreursGlobales = useErreursGlobalesStore()
 // disparaît de lui-même dès que le serveur répond à nouveau.
 function reessayer(): void {
   window.location.reload()
+}
+function allerAuContenu(): void {
+  const cible = document.querySelector<HTMLElement>(
+    '#contenu-principal main, #contenu-principal h1',
+  )
+  if (!cible) return
+  cible.setAttribute('tabindex', '-1')
+  cible.focus()
 }
 const ROUTES_SANS_BARRE = new Set(['connexion', 'definir-mot-de-passe', 'mot-de-passe-oublie'])
 const masquerSidebar = computed(() => ROUTES_SANS_BARRE.has(String(route.name)))
@@ -46,6 +54,7 @@ const cleEcran = computed(() => `${String(route.name)}:${JSON.stringify(route.pa
 // query dans toute l'app hors thème sombre). Refermé automatiquement à
 // chaque changement de route, comportement standard d'un tiroir mobile.
 const menuMobileOuvert = ref(false)
+const boutonMenu = ref<HTMLButtonElement | null>(null)
 watch(
   () => route.fullPath,
   () => {
@@ -54,12 +63,64 @@ watch(
     erreursGlobales.toutFermer()
   },
 )
+
+// Après un changement d'écran (pas d'un simple paramètre de requête, comme
+// la recherche), le focus passe au titre de la page : sinon il reste sur le
+// lien de la barre latérale et un lecteur d'écran n'annonce rien (audit UX
+// entrée #6, WCAG 2.4.3).
+watch(
+  () => route.path,
+  async (_nouveau, ancien) => {
+    if (!ancien) return
+    await nextTick()
+    const titre = document.querySelector<HTMLElement>('main h1, #contenu-principal h1')
+    if (!titre) return
+    titre.setAttribute('tabindex', '-1')
+    titre.focus({ preventScroll: true })
+  },
+)
+
+// Tiroir mobile (audit UX entrée #5, WCAG 2.4.3) : fermé, la navigation est
+// inerte (ses liens hors écran ne reçoivent plus le focus) ; ouvert, Échap
+// le referme et rend le focus au bouton.
+const ecranEtroit = ref(false)
+let requeteEtroite: MediaQueryList | null = null
+function majEcranEtroit(): void {
+  ecranEtroit.value = requeteEtroite?.matches ?? false
+}
+function surTouche(e: KeyboardEvent): void {
+  if (e.key === 'Escape' && menuMobileOuvert.value) {
+    menuMobileOuvert.value = false
+    boutonMenu.value?.focus()
+  }
+}
+onMounted(() => {
+  if (typeof window.matchMedia === 'function') {
+    requeteEtroite = window.matchMedia('(max-width: 768px)')
+    requeteEtroite.addEventListener?.('change', majEcranEtroit)
+    majEcranEtroit()
+  }
+  window.addEventListener('keydown', surTouche)
+})
+onBeforeUnmount(() => {
+  requeteEtroite?.removeEventListener?.('change', majEcranEtroit)
+  window.removeEventListener('keydown', surTouche)
+})
 </script>
 
 <template>
   <div class="coquille-application">
+    <a
+      v-if="!masquerSidebar"
+      href="#contenu-principal"
+      class="lien-evitement"
+      @click.prevent="allerAuContenu"
+    >
+      Aller au contenu
+    </a>
     <button
       v-if="!masquerSidebar"
+      ref="boutonMenu"
       type="button"
       class="coquille-application__bouton-menu"
       :aria-expanded="menuMobileOuvert"
@@ -68,15 +129,25 @@ watch(
     >
       <IconeSvg :nom="menuMobileOuvert ? 'fermer' : 'menu'" :taille="20" />
     </button>
+    <div v-if="!masquerSidebar" class="coquille-application__barre-mobile" aria-hidden="true">
+      <span class="coquille-application__titre-mobile">
+        {{ typeof route.meta.titre === 'string' ? route.meta.titre : 'ValidaPharm' }}
+      </span>
+    </div>
     <div
       v-if="!masquerSidebar && menuMobileOuvert"
       class="coquille-application__fond"
       aria-hidden="true"
       @click="menuMobileOuvert = false"
     />
-    <BarreLaterale v-if="!masquerSidebar" :ouverte="menuMobileOuvert" />
-    <div class="coquille-application__contenu">
+    <BarreLaterale
+      v-if="!masquerSidebar"
+      :ouverte="menuMobileOuvert"
+      :inert="ecranEtroit && !menuMobileOuvert"
+    />
+    <div id="contenu-principal" class="coquille-application__contenu">
       <p v-if="connectivite.serveurInjoignable" class="bandeau-serveur-injoignable" role="alert">
+        <IconeSvg nom="alerte-triangle" :taille="18" />
         Serveur injoignable : les données affichées peuvent être incomplètes ou vides à tort.
         N'enregistrez rien de nouveau avant le retour de la connexion.
         <button type="button" @click="reessayer">Réessayer</button>
@@ -143,7 +214,26 @@ watch(
   display: none;
 }
 
+.lien-evitement {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background-color: var(--vp-marque);
+  color: #fff;
+  transform: translateY(-120%);
+}
+
+.lien-evitement:focus {
+  transform: translateY(0);
+}
+
 .coquille-application__fond {
+  display: none;
+}
+
+.coquille-application__barre-mobile {
   display: none;
 }
 
@@ -175,6 +265,33 @@ watch(
   .coquille-application__bouton-menu:hover {
     color: var(--vp-marque);
     border-color: var(--vp-marque);
+  }
+
+  .coquille-application__barre-mobile {
+    display: flex;
+    align-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3.5rem;
+    z-index: 60;
+    padding-left: 4rem;
+    background-color: var(--vp-fond-carte);
+    border-bottom: 1px solid var(--vp-bordure);
+  }
+
+  .coquille-application__titre-mobile {
+    font-weight: var(--vp-poids-medium);
+    color: var(--vp-texte-principal);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bandeau-serveur-injoignable,
+  .erreurs-globales {
+    top: 3.5rem;
   }
 
   .coquille-application__fond {

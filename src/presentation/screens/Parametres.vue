@@ -63,10 +63,8 @@ const OPTIONS_POLICE: Array<{ valeur: PoliceAffichage; libelle: string }> = [
     </section>
 
     <p class="note-limite">
-      La langue de l'interface (actuellement français uniquement) et une densité d'affichage
-      réglable ne sont pas encore disponibles ici — à la différence de la langue d'un livrable
-      (réglable projet par projet), aucun mécanisme de traduction de l'interface n'existe encore
-      dans l'outil.
+      L'interface est disponible en français uniquement. La langue d'un livrable se règle projet par
+      projet.
     </p>
   </main>
 </template>

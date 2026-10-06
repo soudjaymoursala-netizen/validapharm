@@ -78,7 +78,7 @@ describe('Login — écran de connexion', () => {
     const wrapper = mount(Login, { global: { plugins: [router] } })
     await flushPromises()
 
-    expect(wrapper.text()).toContain("Aucun Worker d'authentification configuré")
+    expect(wrapper.text()).toContain('Serveur de connexion non configuré')
   })
 
   test('identifiants corrects redirige vers "/" et connecte le store', async () => {

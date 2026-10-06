@@ -14,6 +14,7 @@ import {
   type ResultatSynchronisation,
 } from '../stores/useSynchronisationStore'
 import IconeSvg from '../composants/IconeSvg.vue'
+import { pluriel } from '../i18n/pluriel'
 import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const projetsStore = useProjectsStore()
@@ -71,8 +72,8 @@ const messageSync = computed(() => {
       type: refuses.length > 0 ? 'erreur' : 'succes',
       texte:
         refuses.length > 0
-          ? `${dernierResultatSync.value.nbFichiers} fichier(s) récupéré(s), ${refuses.length} écarté(s) par sécurité :`
-          : `${dernierResultatSync.value.nbFichiers} fichier(s) synchronisé(s).`,
+          ? `${pluriel(dernierResultatSync.value.nbFichiers, 'fichier récupéré', 'fichiers récupérés')}, ${pluriel(refuses.length, 'écarté', 'écartés')} par sécurité :`
+          : `${pluriel(dernierResultatSync.value.nbFichiers, 'fichier synchronisé', 'fichiers synchronisés')}.`,
     }
   }
   if ('conflit' in dernierResultatSync.value && dernierResultatSync.value.conflit) {
@@ -183,7 +184,9 @@ function nomClient(clientId: string | null): string | null {
       <div>
         <h1>Tableau de bord</h1>
         <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
-        <p class="sous-titre">{{ projetsActifsAffiches.length }} projet(s) actif(s)</p>
+        <p class="sous-titre">
+          {{ pluriel(projetsActifsAffiches.length, 'projet actif', 'projets actifs') }}
+        </p>
       </div>
       <div class="actions-entete">
         <RouterLink class="bouton-secondaire" :to="{ name: 'gestion-clients' }">
@@ -350,7 +353,7 @@ function nomClient(clientId: string | null): string | null {
               nomClient(projet.client_id)
             }}</span>
           </span>
-          <span class="meta">{{ projet.sections.length }} section(s)</span>
+          <span class="meta">{{ pluriel(projet.sections.length, 'section', 'sections') }}</span>
           <IconeSvg nom="chevron-droit" :taille="16" class="liste-projets__fleche" />
         </RouterLink>
       </li>

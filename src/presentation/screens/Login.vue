@@ -4,7 +4,7 @@
 // « Configuration client » (Worker d'authentification à indiquer avant de
 // pouvoir se connecter), exige une session valide — voir la garde
 // `router.beforeEach` dans `router/index.ts`.
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useConnexionAuthentificationStore } from '../stores/useConnexionAuthentificationStore'
@@ -19,13 +19,15 @@ const email = ref('')
 const motDePasse = ref('')
 const enCours = ref(false)
 const erreur = ref<string | null>(null)
+const afficherMotDePasse = ref(false)
+const champMotDePasse = ref<HTMLInputElement | null>(null)
 
 const LIBELLES_ERREUR: Record<string, string> = {
   identifiants_invalides: 'Email ou mot de passe incorrect.',
   trop_de_tentatives:
     'Trop de tentatives de connexion échouées : réessayez dans 15 minutes ou contactez un administrateur.',
   relais_non_configure:
-    "Worker d'authentification non configuré — voir « Configuration client » ci-dessous.",
+    'Serveur de connexion non configuré sur cet appareil — utilisez le lien « Configurer » ci-dessus.',
   erreur_inconnue: 'Une erreur inattendue est survenue.',
 }
 
@@ -62,6 +64,11 @@ async function seConnecter(): Promise<void> {
     erreur.value = e instanceof Error ? e.message : 'Une erreur inattendue est survenue.'
   } finally {
     enCours.value = false
+    // Focus rendu au champ fautif (WCAG 3.3.1 / 2.4.3) : sinon il retombe sur <body>.
+    if (erreur.value) {
+      await nextTick()
+      champMotDePasse.value?.focus()
+    }
   }
 }
 </script>
@@ -76,7 +83,7 @@ async function seConnecter(): Promise<void> {
       <h1>Se connecter</h1>
 
       <p v-if="!connexionStore.connexion" class="bandeau-info" role="status">
-        Aucun Worker d'authentification configuré sur cet appareil.
+        Serveur de connexion non configuré sur cet appareil.
         <RouterLink :to="{ name: 'configuration-client' }">Configurer</RouterLink> avant de vous
         connecter.
       </p>
@@ -88,13 +95,25 @@ async function seConnecter(): Promise<void> {
         </label>
         <label>
           Mot de passe
-          <input v-model="motDePasse" type="password" required autocomplete="current-password" />
+          <input
+            ref="champMotDePasse"
+            v-model="motDePasse"
+            :type="afficherMotDePasse ? 'text' : 'password'"
+            required
+            autocomplete="current-password"
+            :aria-invalid="erreur ? 'true' : undefined"
+            :aria-describedby="erreur ? 'erreur-connexion' : undefined"
+          />
+        </label>
+        <label class="afficher-mot-de-passe">
+          <input v-model="afficherMotDePasse" type="checkbox" />
+          Afficher le mot de passe
         </label>
         <p v-if="route.query.expiree === '1' && !erreur" class="bandeau-info" role="status">
           Votre session a expiré ou a été fermée (mot de passe changé, compte modifié) :
           reconnectez-vous pour continuer.
         </p>
-        <p v-if="erreur" class="bandeau-erreur" role="alert">{{ erreur }}</p>
+        <p v-if="erreur" id="erreur-connexion" class="bandeau-erreur" role="alert">{{ erreur }}</p>
         <button type="submit" :disabled="enCours">
           {{ enCours ? 'Connexion…' : 'Se connecter' }}
         </button>
@@ -104,13 +123,21 @@ async function seConnecter(): Promise<void> {
       </form>
 
       <p class="rappel">
-        Aucune inscription libre — un administrateur crée votre compte (« Gestion des comptes »).
+        Aucune inscription libre — un administrateur crée votre compte (menu « Gestion des comptes
+        »). Mot de passe oublié : utilisez le lien ci-dessus.
       </p>
     </div>
   </main>
 </template>
 
 <style scoped>
+.afficher-mot-de-passe {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
 .lien-oubli {
   align-self: flex-start;
   color: var(--vp-marque);

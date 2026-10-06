@@ -394,6 +394,9 @@ function basculerEpinglage(outil: OutilClient): void {
       <span class="sidebar__utilisateur-nom">
         {{ authStore.utilisateur.prenom }} {{ authStore.utilisateur.nom }}
       </span>
+      <span class="sidebar__utilisateur-role">
+        {{ authStore.estAdmin ? 'Administrateur' : 'Utilisateur' }}
+      </span>
       <button type="button" class="sidebar__deconnexion" @click="seDeconnecter">
         Se déconnecter
       </button>
@@ -403,6 +406,8 @@ function basculerEpinglage(outil: OutilClient): void {
       <button
         type="button"
         :class="{ actif: modeStore.mode === 'expert' }"
+        :aria-pressed="modeStore.mode === 'expert'"
+        title="Mode Expert : tous les outils"
         @click="basculerMode('expert')"
       >
         Mode Expert
@@ -410,6 +415,8 @@ function basculerEpinglage(outil: OutilClient): void {
       <button
         type="button"
         :class="{ actif: modeStore.mode === 'assistant' }"
+        :aria-pressed="modeStore.mode === 'assistant'"
+        title="Mode Assistant : parcours guidé, outils avancés masqués"
         @click="basculerMode('assistant')"
       >
         Mode Assistant
@@ -615,8 +622,14 @@ function basculerEpinglage(outil: OutilClient): void {
   font-size: 0.72rem;
   text-decoration: none;
   cursor: pointer;
-  padding: 0;
+  padding: 0.3rem 0;
+  min-height: 1.75rem;
   transition: var(--vp-transition);
+}
+
+.sidebar__utilisateur-role {
+  font-size: 0.72rem;
+  color: var(--vp-texte-secondaire);
 }
 
 .sidebar__deconnexion:hover {
@@ -802,8 +815,17 @@ function basculerEpinglage(outil: OutilClient): void {
 }
 
 .sidebar__lien-epinglable:hover .sidebar__bouton-epingle,
+.sidebar__lien-epinglable:focus-within .sidebar__bouton-epingle,
+.sidebar__bouton-epingle:focus-visible,
 .sidebar__bouton-epingle--actif {
   opacity: 1;
+}
+
+/* Sans survol (tactile), le bouton d'épinglage serait introuvable. */
+@media (hover: none) {
+  .sidebar__bouton-epingle {
+    opacity: 1;
+  }
 }
 
 .sidebar__bouton-epingle:hover {

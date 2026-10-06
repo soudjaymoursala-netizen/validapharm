@@ -11,7 +11,7 @@ import { useSourceIntelligenceStore } from './useSourceIntelligenceStore'
 import { sectionWireVersDomaine } from './useSectionsStore'
 
 export type TypeResultatRecherche =
-  'client' | 'section' | 'document' | 'procedure' | 'process' | 'connaissance'
+  'client' | 'projet' | 'section' | 'document' | 'procedure' | 'process' | 'connaissance'
 
 export interface ResultatRecherche {
   type: TypeResultatRecherche
@@ -122,6 +122,16 @@ export const useRechercheGlobaleStore = defineStore('rechercheGlobale', () => {
         resultat.ok ? resultat.donnees.documentsProjet.map(documentProjetWireVersDomaine) : [],
       )
 
+      const resultatsProjets: ResultatRecherche[] = projetsDuClient
+        .filter((p) => correspondPourRecherche(requete, p.name))
+        .map((p) => ({
+          type: 'projet' as const,
+          id: p.id,
+          titre: p.name,
+          extrait: p.statut === 'archive' ? 'Projet archivé' : '',
+          route: { name: 'fiche-projet', params: { projectId: p.id } },
+        }))
+
       const nomProjet = (projectId: string) =>
         projetsDuClient.find((p) => p.id === projectId)?.name ?? projectId
 
@@ -176,6 +186,7 @@ export const useRechercheGlobaleStore = defineStore('rechercheGlobale', () => {
         }))
 
       return [
+        ...resultatsProjets,
         ...resultatsSections,
         ...resultatsDocuments,
         ...resultatsProcedures,

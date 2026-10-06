@@ -15,6 +15,7 @@ import {
   type TypeResultatRecherche,
 } from '../stores/useRechercheGlobaleStore'
 import IconeSvg, { type NomIcone } from '../composants/IconeSvg.vue'
+import { pluriel } from '../i18n/pluriel'
 
 defineOptions({ name: 'EcranRechercheGlobale' })
 
@@ -31,6 +32,7 @@ const resultatsClient = ref<ResultatRecherche[]>([])
 
 const LIBELLES_TYPE: Record<TypeResultatRecherche, string> = {
   client: 'Clients',
+  projet: 'Projets',
   section: 'Sections',
   document: 'Documents',
   procedure: 'Procédures',
@@ -40,6 +42,7 @@ const LIBELLES_TYPE: Record<TypeResultatRecherche, string> = {
 
 const ICONES_TYPE: Record<TypeResultatRecherche, NomIcone> = {
   client: 'utilisateur',
+  projet: 'dossier',
   section: 'reglettes',
   document: 'dossier',
   procedure: 'livre',
@@ -48,6 +51,7 @@ const ICONES_TYPE: Record<TypeResultatRecherche, NomIcone> = {
 }
 
 const ORDRE_TYPES: TypeResultatRecherche[] = [
+  'projet',
   'section',
   'document',
   'procedure',
@@ -96,8 +100,8 @@ onMounted(async () => {
     <h1>Recherche</h1>
     <p class="rappel">
       <template v-if="nomClientActif">
-        Sections, documents, procédures, process et connaissances du site « {{ nomClientActif }} » —
-        plus vos clients, pour changer de site.
+        Projets, sections, documents, procédures, process et connaissances du site «
+        {{ nomClientActif }} » — plus vos clients, pour changer de site.
       </template>
       <template v-else>
         Aucun site actif — seuls vos clients sont cherchables ici. Ouvrez la fiche d'un client pour
@@ -116,8 +120,13 @@ onMounted(async () => {
       />
     </label>
 
-    <p v-if="requete.trim() && !rechercheStore.enRecherche" class="compteur">
-      {{ totalResultats }} résultat(s)
+    <p
+      v-if="requete.trim() && !rechercheStore.enRecherche"
+      class="compteur"
+      role="status"
+      aria-live="polite"
+    >
+      {{ pluriel(totalResultats, 'résultat', 'résultats') }}
     </p>
 
     <section v-if="requete.trim().length === 0" class="etat-vide">
@@ -125,6 +134,7 @@ onMounted(async () => {
     </section>
     <section v-else-if="totalResultats === 0 && !rechercheStore.enRecherche" class="etat-vide">
       <p>Aucun résultat pour « {{ requete }} ».</p>
+      <p>Essayez le nom d'un client ou d'un projet, ou parcourez « Mes projets » dans le menu.</p>
     </section>
 
     <section v-for="groupe in resultatsParType" :key="groupe.type" class="groupe-resultats">

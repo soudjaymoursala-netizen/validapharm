@@ -2817,6 +2817,15 @@ async function gererListerClients(
   return reponseJson({ clients }, 200, entetes)
 }
 
+function normaliserNomClient(nom: string): string {
+  return nom
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
 async function gererCreerClient(
   request: Request,
   ctx: Contexte,
@@ -2833,6 +2842,15 @@ async function gererCreerClient(
   }>(request)
   if (!corps?.name || corps.name.trim().length === 0) {
     return reponseJson({ erreur: 'nom_obligatoire' }, 400, entetes)
+  }
+
+  // Doublon (audit UX entrée #7) : deux clients actifs au nom identique
+  // (casse, accents et espaces ignorés) seraient indiscernables dans les
+  // listes. Seuls les clients visibles de l'appelant sont comparés.
+  const nomNormalise = normaliserNomClient(corps.name)
+  const visibles = await ctx.clientsRepo.listerVisiblesPar(utilisateur)
+  if (visibles.some((c) => c.statut === 'actif' && normaliserNomClient(c.name) === nomNormalise)) {
+    return reponseJson({ erreur: 'nom_deja_utilise' }, 409, entetes)
   }
 
   const maintenant = horodatage()

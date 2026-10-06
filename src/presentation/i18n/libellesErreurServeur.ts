@@ -32,6 +32,7 @@ const LIBELLES: Record<string, string> = {
   texte_trop_volumineux: 'texte extrait trop volumineux (2 Mo au plus)',
   lot_trop_grand: 'trop d’éléments envoyés en une fois (500 au plus)',
   nom_obligatoire: 'le nom est obligatoire',
+  nom_deja_utilise: 'un client actif porte déjà ce nom',
   prenom_obligatoire: 'le prénom est obligatoire',
   titre_obligatoire: 'le titre est obligatoire',
   filename_obligatoire: 'le nom de fichier est obligatoire',

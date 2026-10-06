@@ -195,7 +195,7 @@ describe('GestionClients — archivage (§4.31 — vraie session)', () => {
 describe('GestionClients — échecs serveur/réseau non silencieux', () => {
   test('un échec métier à la création laisse le formulaire ouvert, le brouillon intact, avec un message', async () => {
     const clientsStore = useClientsStore(pinia)
-    clientsStore.creerClient = vi.fn().mockResolvedValue({ erreur: 'nom_deja_utilise' })
+    clientsStore.creerClient = vi.fn().mockResolvedValue({ erreur: 'code_inconnu' })
 
     const wrapper = mount(GestionClients, { global: { plugins: [routeurDeTest(), pinia] } })
     await flushPromises()
@@ -212,7 +212,7 @@ describe('GestionClients — échecs serveur/réseau non silencieux', () => {
     expect(
       wrapper.find<HTMLInputElement>('.formulaire-client input[type="text"]').element.value,
     ).toBe('Doublon SA')
-    expect(wrapper.find('.bandeau-erreur').text()).toContain('Échec (nom_deja_utilise)')
+    expect(wrapper.find('.bandeau-erreur').text()).toContain('Échec (code_inconnu)')
   })
 
   test('un Worker injoignable pendant un archivage affiche un message, ne déplace pas le client', async () => {
