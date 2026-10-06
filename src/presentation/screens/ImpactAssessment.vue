@@ -10,6 +10,7 @@
 // fabriquée par défaut, verdict strictement binaire
 // (Direct Impact / Not Direct Impact — pas de niveau "impact indirect").
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useImpactAssessmentStore } from '../stores/useImpactAssessmentStore'
 import { useStructureSystemeStore } from '../stores/useStructureSystemeStore'
@@ -19,7 +20,9 @@ import {
   evaluerVerdictImpactAssessment,
   methodeCompletementRepondue,
 } from '../../logique-metier/assessment/evaluerVerdictImpactAssessment'
-import { libelleVerdictImpact } from '../i18n/libellesVerdictQuestionnaire'
+import { libelleVerdictImpact, tonVerdictImpact } from '../i18n/libellesVerdictQuestionnaire'
+import { formaterDateFr } from '../i18n/formaterDate'
+import BadgeVerdict from '../composants/BadgeVerdict.vue'
 import { useEnvoiUnique } from '../composables/useEnvoiUnique'
 
 const props = defineProps<{ clientId: string }>()
@@ -28,6 +31,7 @@ const clientsStore = useClientsStore()
 const methodeStore = useImpactAssessmentStore()
 const structureStore = useStructureSystemeStore()
 
+const route = useRoute()
 const nomClient = ref<string | null>(null)
 const formulaireConfigOuvert = ref(false)
 const chargementInitial = ref(true)
@@ -39,6 +43,14 @@ onMounted(async () => {
     await methodeStore.charger(props.clientId)
     await structureStore.charger(props.clientId)
     if (!methodeStore.profilActif) formulaireConfigOuvert.value = true
+    // Arrivée depuis le Dossier vivant (constat 17) : actif prérempli.
+    if (typeof route.query.element === 'string') nomElement.value = route.query.element
+    if (
+      typeof route.query.noeud === 'string' &&
+      structureStore.noeuds.some((n) => n.id === route.query.noeud)
+    ) {
+      assetNodeIdSelectionne.value = route.query.noeud
+    }
   } finally {
     chargementInitial.value = false
   }
@@ -74,12 +86,61 @@ async function enregistrerNouvelleVersion(): Promise<void> {
   await envoyer(enregistrerNouvelleVersionSansGarde)
 }
 
+const erreurConfig = ref<string | null>(null)
+
+/** Nouvelle version préremplie avec la version active (constat 8). */
+function ouvrirNouvelleVersion(): void {
+  const actif = methodeStore.profilActif
+  if (actif) {
+    brouillonQuestions.splice(
+      0,
+      brouillonQuestions.length,
+      ...actif.questions.map((q) => q.texte.fr ?? ''),
+    )
+    brouillonSource.value = actif.source
+    brouillonOrigin.value = actif.origin
+  }
+  erreurConfig.value = null
+  formulaireConfigOuvert.value = true
+}
+
+/** Import d'un fichier texte, une question par ligne (constat 15, même outil que l'ACFC). */
+async function importerQuestionsTexte(evenement: Event): Promise<void> {
+  const champ = evenement.target as HTMLInputElement
+  const fichier = champ.files?.[0]
+  champ.value = ''
+  if (!fichier) return
+  const lignes = (await fichier.text())
+    .split(/\r?\n/)
+    .map((ligne) => ligne.trim())
+    .filter((ligne) => ligne.length > 0)
+  if (lignes.length > 0) brouillonQuestions.splice(0, brouillonQuestions.length, ...lignes)
+}
+
+const LIBELLES_ORIGINE: Record<OrigineMethodeImpactAssessment, string> = {
+  procedure_client: 'Procédure client',
+  defini_utilisateur: "Défini avec l'utilisateur",
+  baseline_validapharm: 'Baseline ValidaPharm',
+}
+
+const versionsMethode = computed(() =>
+  [...methodeStore.profils].sort((a, b) => b.created_at.localeCompare(a.created_at)),
+)
+
 async function enregistrerNouvelleVersionSansGarde(): Promise<void> {
   const questions = brouillonQuestions
     .map((texte) => texte.trim())
     .filter((texte) => texte.length > 0)
     .map((texte) => ({ texte }))
-  if (questions.length === 0 || brouillonSource.value.trim().length === 0) return
+  erreurConfig.value = null
+  if (brouillonSource.value.trim().length === 0) {
+    erreurConfig.value = 'Indiquez la source de la méthode (procédure, réunion…).'
+    return
+  }
+  if (questions.length === 0) {
+    erreurConfig.value = 'Saisissez au moins une question.'
+    return
+  }
 
   await methodeStore.creerNouvelleVersion(props.clientId, {
     questions,
@@ -149,6 +210,42 @@ function nouvelleEvaluation(): void {
   evaluationEnregistree.value = false
 }
 
+/** Historique lisible (constat 16) : date, auteur, élément, nœud, méthode, verdict. */
+const historique = computed(() =>
+  [...methodeStore.evaluations]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map((e) => ({
+      ...e,
+      auteur: e.audit_log[0]?.actor ?? '—',
+      noeud: structureStore.noeuds.find((n) => n.id === e.asset_node_id) ?? null,
+      questions: methodeStore.profils.find((p) => p.id === e.method_profile_id)?.questions ?? [],
+    })),
+)
+
+function libelleReponse(reponse: string | undefined): string {
+  return reponse ? (LIBELLES_REPONSE[reponse as ReponseQuestionOuiNon] ?? reponse) : '—'
+}
+
+/**
+ * « À compléter » : nouvelle évaluation préremplie (mêmes élément, nœud et
+ * réponses connues), seules les réponses « Inconnu » restent à donner — une
+ * nouvelle entrée, jamais une modification de l'ancienne (constat 16).
+ */
+function reevaluer(id: string): void {
+  const e = methodeStore.evaluations.find((x) => x.id === id)
+  if (!e) return
+  nouvelleEvaluation()
+  nomElement.value = e.nom_element
+  assetNodeIdSelectionne.value = e.asset_node_id ?? ''
+  const questionsActives = new Set(methodeStore.profilActif?.questions.map((q) => q.id) ?? [])
+  for (const [question, reponse] of Object.entries(e.reponses)) {
+    if (reponse !== 'inconnu' && questionsActives.has(question)) {
+      reponses[question] = reponse as ReponseQuestionOuiNon
+    }
+  }
+  window.scrollTo?.({ top: 0, behavior: 'smooth' })
+}
+
 function recharger(): void {
   window.location.reload()
 }
@@ -156,7 +253,12 @@ function recharger(): void {
 
 <template>
   <main class="impact-assessment">
-    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
+    <RouterLink
+      :to="{ name: 'fiche-client', params: { clientId: props.clientId } }"
+      class="lien-retour"
+    >
+      {{ nomClient ?? 'Fiche client' }}
+    </RouterLink>
     <h1>Impact Assessment / System Classification — {{ nomClient ?? props.clientId }}</h1>
     <p class="bandeau-disclaimer">Aide à la décision, non une décision de classification.</p>
     <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
@@ -177,6 +279,10 @@ function recharger(): void {
           mot.
         </p>
         <form class="formulaire" @submit.prevent="enregistrerNouvelleVersion">
+          <p v-if="methodeStore.profilActif" class="rappel">
+            Prérempli avec la version {{ methodeStore.profilActif.version }} : corrigez ce qui doit
+            l'être. La version actuelle reste conservée telle quelle.
+          </p>
           <label
             >Source (ex. "Procédure interne QD-00098219", "Défini avec le client le ...")
             <input v-model="brouillonSource" type="text" required />
@@ -191,6 +297,10 @@ function recharger(): void {
           </label>
           <fieldset class="questions-config">
             <legend>Questions (une par ligne, mot pour mot)</legend>
+            <label class="bouton-fichier">
+              Importer un fichier texte (une question par ligne)
+              <input type="file" accept="text/plain,.txt" @change="importerQuestionsTexte" />
+            </label>
             <div
               v-for="(_, index) in brouillonQuestions"
               :key="index"
@@ -200,6 +310,7 @@ function recharger(): void {
                 v-model="brouillonQuestions[index]"
                 type="text"
                 :placeholder="`Question ${index + 1}`"
+                :aria-label="`Question ${index + 1}`"
               />
               <button
                 type="button"
@@ -211,6 +322,7 @@ function recharger(): void {
             </div>
             <button type="button" @click="ajouterLigneQuestion">+ Ajouter une question</button>
           </fieldset>
+          <p v-if="erreurConfig" class="bandeau-erreur" role="alert">{{ erreurConfig }}</p>
           <div class="actions">
             <button
               v-if="methodeStore.profilActif"
@@ -225,15 +337,35 @@ function recharger(): void {
       </section>
 
       <template v-else>
-        <section class="bloc-evaluation">
-          <h2>
-            Évaluation — {{ methodeStore.profilActif.source }} ({{
-              methodeStore.profilActif.version
-            }})
-          </h2>
-          <button type="button" class="lien-config" @click="formulaireConfigOuvert = true">
-            Configurer une nouvelle version des questions
+        <details class="methode-active">
+          <summary>
+            Méthode {{ methodeStore.profilActif.version }} — source :
+            {{ methodeStore.profilActif.source }}
+          </summary>
+          <dl>
+            <dt>Origine</dt>
+            <dd>{{ LIBELLES_ORIGINE[methodeStore.profilActif.origin] }}</dd>
+            <dt>En vigueur depuis</dt>
+            <dd>{{ formaterDateFr(methodeStore.profilActif.effective_date) }}</dd>
+          </dl>
+          <ol>
+            <li v-for="q in methodeStore.profilActif.questions" :key="q.id">{{ q.texte.fr }}</li>
+          </ol>
+          <template v-if="versionsMethode.length > 1">
+            <p class="rappel">Versions précédentes (conservées, jamais modifiées) :</p>
+            <ul>
+              <li v-for="v in versionsMethode.slice(1)" :key="v.id">
+                {{ v.version }} — {{ v.source }} ({{ formaterDateFr(v.effective_date) }})
+              </li>
+            </ul>
+          </template>
+          <button type="button" class="lien-config" @click="ouvrirNouvelleVersion">
+            Corriger ou compléter : nouvelle version préremplie
           </button>
+        </details>
+
+        <section class="bloc-evaluation">
+          <h2>Évaluation</h2>
           <label class="nom-element">
             Système évalué
             <input
@@ -254,10 +386,10 @@ function recharger(): void {
           </label>
           <ul class="liste-questions">
             <li v-for="question in methodeStore.profilActif.questions" :key="question.id">
-              <p class="texte-question">{{ question.texte.fr }}</p>
               <!-- Figé une fois l'évaluation enregistrée : le verdict affiché
                    doit toujours être celui enregistré (audit UX du 26/09/2026). -->
-              <div class="reponses-question" role="radiogroup" :aria-label="question.texte.fr">
+              <fieldset class="reponses-question">
+                <legend class="texte-question">{{ question.texte.fr }}</legend>
                 <label v-for="opt in ['oui', 'non', 'inconnu', 'sans_objet'] as const" :key="opt">
                   <input
                     v-model="reponses[question.id]"
@@ -268,12 +400,12 @@ function recharger(): void {
                   />
                   {{ LIBELLES_REPONSE[opt] }}
                 </label>
-              </div>
+              </fieldset>
             </li>
           </ul>
           <p v-if="complet" class="resultat-partiel" role="status">
             Verdict :
-            <strong>{{ libelleVerdictImpact(verdict) }}</strong>
+            <BadgeVerdict :ton="tonVerdictImpact(verdict)" :texte="libelleVerdictImpact(verdict)" />
           </p>
           <p v-if="complet && verdict === null" class="rappel">
             Aucune réponse « Oui » et au moins une réponse « Inconnu » : pas de verdict tant que
@@ -294,18 +426,88 @@ function recharger(): void {
           <button v-if="evaluationEnregistree" type="button" @click="nouvelleEvaluation">
             Nouvelle évaluation
           </button>
+          <!-- Enchaînement de la démarche (constat 17) : un système à impact
+               direct passe à l'évaluation de criticité, nœud prérempli. -->
+          <p v-if="evaluationEnregistree && verdict === 'impact_direct'" class="etape-suivante">
+            Étape suivante :
+            <RouterLink
+              :to="{
+                name: 'assistant-strategie-qualification',
+                params: { clientId: props.clientId },
+                query: {
+                  element: nomElement,
+                  ...(assetNodeIdSelectionne ? { noeud: assetNodeIdSelectionne } : {}),
+                },
+              }"
+            >
+              évaluer la criticité (ACFC) de ce système
+            </RouterLink>
+          </p>
         </section>
       </template>
     </template>
 
-    <section v-if="methodeStore.evaluations.length > 0" class="bloc-historique">
+    <section v-if="historique.length > 0" class="bloc-historique">
       <h2>Évaluations enregistrées</h2>
-      <ul>
-        <li v-for="e in methodeStore.evaluations" :key="e.id">
-          {{ e.nom_element }} —
-          {{ libelleVerdictImpact(e.verdict) }}
-        </li>
-      </ul>
+      <div class="table-defilante">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Auteur</th>
+              <th scope="col">Système</th>
+              <th scope="col">Nœud</th>
+              <th scope="col">Méthode</th>
+              <th scope="col">Verdict</th>
+              <th scope="col"><span class="visuellement-masque">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="e in historique" :key="e.id">
+              <td>{{ formaterDateFr(e.created_at) }}</td>
+              <td>{{ e.auteur }}</td>
+              <td>
+                <details>
+                  <summary>{{ e.nom_element }}</summary>
+                  <ul class="reponses-detail">
+                    <li v-for="q in e.questions" :key="q.id">
+                      {{ q.texte.fr }} : {{ libelleReponse(e.reponses[q.id]) }}
+                    </li>
+                  </ul>
+                </details>
+              </td>
+              <td>
+                <RouterLink
+                  v-if="e.noeud"
+                  :to="{
+                    name: 'dossier-vivant-actif',
+                    params: { clientId: props.clientId, noeudId: e.noeud.id },
+                  }"
+                >
+                  {{ e.noeud.name }}
+                </RouterLink>
+                <template v-else>—</template>
+              </td>
+              <td>{{ e.method_profile_version }}</td>
+              <td>
+                <BadgeVerdict
+                  :ton="tonVerdictImpact(e.verdict)"
+                  :texte="libelleVerdictImpact(e.verdict)"
+                />
+              </td>
+              <td>
+                <button
+                  v-if="e.verdict === null && methodeStore.profilActif"
+                  type="button"
+                  @click="reevaluer(e.id)"
+                >
+                  Réévaluer (nouvelle entrée)
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   </main>
 </template>
@@ -317,7 +519,7 @@ function recharger(): void {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 40rem;
+  max-width: 56rem;
 }
 
 .bandeau-disclaimer {
@@ -447,5 +649,74 @@ button:disabled {
 .confirmation {
   color: var(--vp-marque);
   font-weight: 600;
+}
+.methode-active {
+  border: 1px solid var(--vp-bordure);
+  border-radius: var(--vp-rayon);
+  padding: 0.75rem 1rem;
+}
+
+.methode-active summary {
+  cursor: pointer;
+  font-weight: var(--vp-poids-semibold);
+}
+
+.methode-active dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+}
+
+.methode-active dd {
+  margin: 0;
+}
+
+.reponses-question {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.reponses-question legend {
+  padding: 0;
+  margin-bottom: 0.35rem;
+}
+
+.table-defilante {
+  overflow-x: auto;
+}
+
+.table-defilante table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.table-defilante th,
+.table-defilante td {
+  border-bottom: 1px solid var(--vp-bordure);
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.reponses-detail {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.etape-suivante {
+  margin: 0;
+  font-weight: var(--vp-poids-medium);
+}
+
+.visuellement-masque {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 </style>

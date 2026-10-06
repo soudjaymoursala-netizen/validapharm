@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'vitest'
 import {
+  COMPLEXITES,
+  conclusionStrategie,
+  VERSION_GRILLE_STRATEGIE,
   calculerIpr,
   refusBornesAmdec,
   verdictAcfc,
@@ -7,6 +10,10 @@ import {
   verdictRisque,
 } from '../../../workers/auth-worker/src/verdictsEvaluation'
 import { evaluerVerdictACFC } from '../acfc/evaluerVerdictACFC'
+import {
+  VERSION_GRILLE_STRATEGIE_QUALIFICATION,
+  determinerConclusion,
+} from '../strategie-qualification/grilleDecision'
 import { calculerIPR } from '../moteur-calcul/calculerIPR'
 import { messageBornesAmdec } from '../risque/bornesMethodeAmdec'
 import { evaluerVerdictRiskAssessment } from '../risque/evaluerVerdictRiskAssessment'
@@ -85,5 +92,20 @@ describe('parité navigateur / serveur des verdicts', () => {
         messageBornesAmdec(min, max, seuil) === null,
       )
     }
+  })
+})
+
+describe('parité front/Worker — conclusion de stratégie ACFC', () => {
+  test('même grille, même version, toutes les combinaisons', () => {
+    expect(VERSION_GRILLE_STRATEGIE).toBe(VERSION_GRILLE_STRATEGIE_QUALIFICATION)
+    for (const verdict of ['critique', 'non_critique'] as const) {
+      for (const complexite of COMPLEXITES) {
+        expect(conclusionStrategie(verdict, complexite)).toBe(
+          determinerConclusion(verdict, complexite),
+        )
+      }
+      expect(conclusionStrategie(verdict, null)).toBeNull()
+    }
+    expect(conclusionStrategie(null, 'catalogue')).toBeNull()
   })
 })

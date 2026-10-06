@@ -52,7 +52,7 @@ export class D1ImpactAssessmentRepo implements ImpactAssessmentRepo {
         `INSERT INTO method_profiles_impact_assessment
           (id, client_id, version, effective_date, source, origin, questions, decision_rule, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO NOTHING`,
+         ON CONFLICT DO NOTHING`,
       )
       .bind(
         p.id,

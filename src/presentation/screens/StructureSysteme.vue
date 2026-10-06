@@ -390,6 +390,17 @@ async function creerNoeudSansGarde(): Promise<void> {
 }
 
 const parentChoisi = reactive<Record<string, string>>({})
+// Le sélecteur « Nouveau parent » part du parent actuel, jamais d'un champ
+// vide qui laisserait croire à un nœud racine (constat 12).
+watch(
+  () => structureStore.noeuds,
+  (noeuds) => {
+    for (const noeud of noeuds) {
+      if (parentChoisi[noeud.id] === undefined) parentChoisi[noeud.id] = noeud.parent_id ?? ''
+    }
+  },
+  { immediate: true, deep: true },
+)
 
 async function reparenter(...args: Parameters<typeof reparenterSansGarde>): Promise<void> {
   await envoyer(() => reparenterSansGarde(...args))
@@ -405,6 +416,7 @@ async function reparenterSansGarde(noeud: AssetNode): Promise<void> {
         : 'Reparentage refusé.'
   } else {
     reparentageEnErreur[noeud.id] = ''
+    parentChoisi[noeud.id] = nouveauParentId ?? ''
   }
 }
 
@@ -422,16 +434,86 @@ function nomNoeud(id: string | null): string {
   return structureStore.noeuds.find((n) => n.id === id)?.name ?? id
 }
 
-const noeudsAffiches = computed(() =>
-  [...structureStore.noeuds].sort((a, b) => a.name.localeCompare(b.name)),
+/**
+ * Arbre en profondeur d'abord (racines puis enfants, chaque fratrie par
+ * nom) avec la profondeur de chaque nœud — la hiérarchie Site → Ligne →
+ * Équipement se lit directement (constat 12 : liste plate alphabétique).
+ * Un nœud dont le parent est introuvable est rangé parmi les racines.
+ */
+const noeudsArbre = computed(() => {
+  const noeuds = structureStore.noeuds
+  const ids = new Set(noeuds.map((n) => n.id))
+  const enfants = new Map<string | null, AssetNode[]>()
+  for (const n of noeuds) {
+    const parent = n.parent_id && ids.has(n.parent_id) ? n.parent_id : null
+    enfants.set(parent, [...(enfants.get(parent) ?? []), n])
+  }
+  const resultat: Array<AssetNode & { profondeur: number }> = []
+  const vus = new Set<string>()
+  const parcourir = (parent: string | null, profondeur: number) => {
+    const fratrie = [...(enfants.get(parent) ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+    for (const n of fratrie) {
+      if (vus.has(n.id)) continue
+      vus.add(n.id)
+      resultat.push({ ...n, profondeur })
+      parcourir(n.id, profondeur + 1)
+    }
+  }
+  parcourir(null, 0)
+  return resultat
+})
+const noeudsAffiches = noeudsArbre
+
+/** Libellé du niveau (« Équipement »), jamais la clé brute (constat 12). */
+function libelleNiveau(cle: string): string {
+  return structureStore.schema?.levels.find((l) => l.key === cle)?.label.fr ?? cle
+}
+
+/** Option de liste indentée selon la profondeur, pour choisir un parent dans l'arbre. */
+function libelleOption(n: { name: string; code: string; profondeur: number }): string {
+  return `${'\u00a0\u00a0'.repeat(n.profondeur)}${n.profondeur > 0 ? '└ ' : ''}${n.name} (${n.code})`
+}
+
+/**
+ * Code proposé selon le motif de numérotation du niveau (constat 18 : le
+ * motif n'avait aucun effet) — `{n}` devient le numéro suivant parmi les
+ * codes existants de ce motif. Jamais imposé : le champ reste modifiable.
+ */
+function codePropose(cleNiveau: string): string {
+  const motif = structureStore.schema?.levels.find((l) => l.key === cleNiveau)?.numbering_pattern
+  if (!motif || !motif.includes('{n}')) return ''
+  const [avant, apres] = motif.split('{n}') as [string, string]
+  const echapper = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const forme = new RegExp(`^${echapper(avant)}(\\d+)${echapper(apres)}$`)
+  const max = structureStore.noeuds.reduce((m, n) => {
+    const correspondance = forme.exec(n.code)
+    return correspondance ? Math.max(m, Number(correspondance[1])) : m
+  }, 0)
+  return `${avant}${max + 1}${apres}`
+}
+let dernierCodePropose = ''
+watch(
+  () => brouillonNoeud.level_key,
+  (cle) => {
+    // Ne remplace jamais un code saisi à la main.
+    if (brouillonNoeud.code !== '' && brouillonNoeud.code !== dernierCodePropose) return
+    dernierCodePropose = codePropose(cle)
+    brouillonNoeud.code = dernierCodePropose
+  },
 )
 </script>
 
 <template>
   <main class="structure-systeme">
-    <RouterLink :to="{ name: 'gestion-clients' }" class="lien-retour">Clients</RouterLink>
+    <RouterLink
+      :to="{ name: 'fiche-client', params: { clientId: props.clientId } }"
+      class="lien-retour"
+    >
+      {{ nomClient ?? 'Fiche client' }}
+    </RouterLink>
     <div class="entete">
-      <h1>Structure Système — {{ nomClient ?? props.clientId }}</h1>
+      <!-- « Architecture » dans la barre latérale : même nom ici (constat 14). -->
+      <h1>Architecture (Structure Système) — {{ nomClient ?? props.clientId }}</h1>
       <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
       <RouterLink
         :to="{ name: 'suivi-periodicite', params: { clientId: props.clientId } }"
@@ -446,35 +528,68 @@ const noeudsAffiches = computed(() =>
       <ul class="liste-niveaux">
         <li v-for="niveau in structureStore.schema?.levels ?? []" :key="niveau.key">
           <template v-if="niveauEnEdition === niveau.key">
-            <input v-model="brouillonEditionNiveau.key" type="text" placeholder="Clé" />
-            <input v-model="brouillonEditionNiveau.libelleFr" type="text" placeholder="Libellé" />
+            <input
+              v-model="brouillonEditionNiveau.key"
+              type="text"
+              placeholder="Clé"
+              aria-label="Clé du niveau"
+            />
+            <input
+              v-model="brouillonEditionNiveau.libelleFr"
+              type="text"
+              placeholder="Libellé"
+              aria-label="Libellé du niveau"
+            />
             <input
               v-model="brouillonEditionNiveau.numbering_pattern"
               type="text"
               placeholder="Motif de numérotation"
+              aria-label="Motif de numérotation"
             />
-            <button type="button" @click="enregistrerEditionNiveau(niveau.key)">Enregistrer</button>
+            <button
+              type="button"
+              :aria-label="`Enregistrer le niveau ${niveau.label.fr}`"
+              @click="enregistrerEditionNiveau(niveau.key)"
+            >
+              Enregistrer
+            </button>
             <button type="button" @click="annulerEditionNiveau">Annuler</button>
           </template>
           <template v-else>
             <span>{{ niveau.label.fr }} ({{ niveau.key }})</span>
-            <button type="button" @click="demarrerEditionNiveau(niveau)">Modifier</button>
-            <button type="button" @click="supprimerNiveau(niveau.key)">Supprimer</button>
+            <span v-if="niveau.numbering_pattern" class="meta">
+              codes {{ niveau.numbering_pattern }}
+            </span>
+            <button
+              type="button"
+              :aria-label="`Modifier le niveau ${niveau.label.fr}`"
+              @click="demarrerEditionNiveau(niveau)"
+            >
+              Modifier
+            </button>
+            <button
+              type="button"
+              :aria-label="`Supprimer le niveau ${niveau.label.fr}`"
+              @click="supprimerNiveau(niveau.key)"
+            >
+              Supprimer
+            </button>
           </template>
         </li>
       </ul>
       <p v-if="erreurNiveau" class="erreur" role="alert">{{ erreurNiveau }}</p>
       <form class="formulaire" @submit.prevent="ajouterNiveau">
+        <p class="legende-obligatoire"><span aria-hidden="true">*</span> champ obligatoire</p>
         <label>
-          Clé du niveau
+          <span>Clé du niveau <span class="obligatoire" aria-hidden="true">*</span></span>
           <input v-model="brouillonNiveau.key" type="text" required placeholder="ex. site" />
         </label>
         <label>
-          Libellé
+          <span>Libellé <span class="obligatoire" aria-hidden="true">*</span></span>
           <input v-model="brouillonNiveau.libelleFr" type="text" required placeholder="ex. Site" />
         </label>
         <label>
-          Motif de numérotation
+          Motif de numérotation (« {n} » = numéro suivant, ex. S-{n} → S-1, S-2…)
           <input v-model="brouillonNiveau.numbering_pattern" type="text" placeholder="ex. S-{n}" />
         </label>
         <div class="actions">
@@ -561,8 +676,9 @@ const noeudsAffiches = computed(() =>
       <h2>Nœuds du référentiel</h2>
 
       <form class="formulaire" @submit.prevent="creerNoeud">
+        <p class="legende-obligatoire"><span aria-hidden="true">*</span> champ obligatoire</p>
         <label>
-          Niveau
+          <span>Niveau <span class="obligatoire" aria-hidden="true">*</span></span>
           <select v-model="brouillonNoeud.level_key" required>
             <option value="" disabled>— choisir —</option>
             <option
@@ -575,18 +691,22 @@ const noeudsAffiches = computed(() =>
           </select>
         </label>
         <label>
-          Nom
+          <span>Nom <span class="obligatoire" aria-hidden="true">*</span></span>
           <input v-model="brouillonNoeud.name" type="text" required />
         </label>
         <label>
-          Code (unique pour ce client)
+          <span
+            >Code, unique pour ce client <span class="obligatoire" aria-hidden="true">*</span></span
+          >
           <input v-model="brouillonNoeud.code" type="text" required />
         </label>
         <label>
           Nœud parent
           <select v-model="brouillonNoeud.parent_id">
             <option value="">— racine —</option>
-            <option v-for="n in noeudsAffiches" :key="n.id" :value="n.id">{{ n.name }}</option>
+            <option v-for="n in noeudsArbre" :key="n.id" :value="n.id">
+              {{ libelleOption(n) }}
+            </option>
           </select>
         </label>
         <div class="actions">
@@ -601,14 +721,24 @@ const noeudsAffiches = computed(() =>
         }}
       </p>
 
-      <ul class="liste-noeuds">
-        <li v-for="noeud in noeudsAffiches" :key="noeud.id">
+      <ul class="liste-noeuds" aria-label="Arborescence des nœuds">
+        <li
+          v-for="noeud in noeudsArbre"
+          :key="noeud.id"
+          class="noeud-arbre"
+          :style="{ '--profondeur': noeud.profondeur }"
+        >
           <div class="ligne-noeud">
+            <span v-if="noeud.profondeur > 0" class="branche" aria-hidden="true">└</span>
             <strong>{{ noeud.name }}</strong>
-            <span class="meta">({{ noeud.code }}, {{ noeud.level_key }})</span>
-            <span class="meta">parent : {{ nomNoeud(noeud.parent_id) }}</span>
-            <span v-if="echeanceDepassee(noeud)" class="badge-alerte" role="alert">
-              ⚠ échéance de requalification dépassée
+            <span class="meta">{{ noeud.code }} · {{ libelleNiveau(noeud.level_key) }}</span>
+            <span class="visuellement-masque">
+              , niveau {{ noeud.profondeur + 1 }}, parent : {{ nomNoeud(noeud.parent_id) }}
+            </span>
+            <!-- Simple texte, jamais role="alert" : une alerte par ligne était
+                 annoncée à chaque rendu (constat 22). -->
+            <span v-if="echeanceDepassee(noeud)" class="badge-alerte">
+              ⚠ Échéance de requalification dépassée
             </span>
             <RouterLink
               :to="{
@@ -621,17 +751,27 @@ const noeudsAffiches = computed(() =>
             </RouterLink>
           </div>
           <div class="reparentage">
-            <select v-model="parentChoisi[noeud.id]">
-              <option value="">— racine —</option>
-              <option
-                v-for="n in noeudsAffiches.filter((c) => c.id !== noeud.id)"
-                :key="n.id"
-                :value="n.id"
-              >
-                {{ n.name }}
-              </option>
-            </select>
-            <button type="button" @click="reparenter(noeud)">Reparenter</button>
+            <label>
+              Nouveau parent
+              <select v-model="parentChoisi[noeud.id]">
+                <option value="">— racine —</option>
+                <option
+                  v-for="n in noeudsArbre.filter((c) => c.id !== noeud.id)"
+                  :key="n.id"
+                  :value="n.id"
+                >
+                  {{ libelleOption(n) }}
+                </option>
+              </select>
+            </label>
+            <button
+              type="button"
+              :disabled="(parentChoisi[noeud.id] || null) === noeud.parent_id"
+              :aria-label="`Reparenter ${noeud.name}`"
+              @click="reparenter(noeud)"
+            >
+              Reparenter
+            </button>
           </div>
           <p v-if="reparentageEnErreur[noeud.id]" class="erreur" role="alert">
             {{ reparentageEnErreur[noeud.id] }}
@@ -657,7 +797,13 @@ const noeudsAffiches = computed(() =>
               Échéance
               <input v-model="periodiciteEcheance[noeud.id]" type="date" />
             </label>
-            <button type="button" @click="enregistrerQualification(noeud)">Enregistrer</button>
+            <button
+              type="button"
+              :aria-label="`Enregistrer la qualification de ${noeud.name}`"
+              @click="enregistrerQualification(noeud)"
+            >
+              Enregistrer
+            </button>
           </div>
         </li>
       </ul>
@@ -836,14 +982,61 @@ select {
 
 .reparentage {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
+.reparentage label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85em;
+  min-width: 0;
+}
+
+.reparentage select {
+  max-width: 100%;
+}
+
+/* Contraste ≥ 4,5:1 (constat 22 : 4,41:1 auparavant). */
 .badge-alerte {
-  color: var(--vp-statut-requalification-en-retard);
-  font-size: 0.8em;
+  color: var(--vp-danger);
+  font-size: 0.85em;
   font-weight: 600;
+}
+
+.noeud-arbre {
+  margin-left: calc(var(--profondeur, 0) * 1.5rem);
+}
+
+.branche {
+  color: var(--vp-texte-secondaire);
+}
+
+.legende-obligatoire {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--vp-texte-secondaire);
+}
+
+.obligatoire {
+  color: var(--vp-danger);
+}
+
+.visuellement-masque {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 40rem) {
+  .noeud-arbre {
+    margin-left: calc(var(--profondeur, 0) * 0.75rem);
+  }
 }
 
 .lien-dossier-vivant {

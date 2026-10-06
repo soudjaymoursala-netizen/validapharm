@@ -4637,3 +4637,102 @@ confirmer par un utilisateur.
 
 Reste pour la PR « entrée et administration » : bouton de menu flottant
 qui recouvre le contenu à 375 px (point 25), avec le tiroir mobile.
+
+> **(05/10/2026)** PR #101 fusionnée (`094b914`, squash) après CI verte ;
+> branche réalignée sur `main`.
+
+### 43.3 PR évaluations
+
+Points du rapport `ux-evaluations.md` restant après le §40 (les points 1,
+2 et 9 et une partie des points 4 et 5 y étaient déjà traités).
+
+**Migration D1 `0030_unicite_versions_methode_conclusion_acfc.sql`**
+(décision « vérifier puis appliquer », complétée le 05/10/2026 par
+l'ajout des colonnes de conclusion ACFC, accepté par l'utilisateur) :
+- index uniques (client, version) sur `method_profiles_acfc`,
+  `method_profiles_impact_assessment`, `method_profiles_risk_assessment` ;
+- `evaluations_acfc` : colonnes facultatives `complexite`, `conclusion`,
+  `version_grille`.
+
+**À appliquer en production avant la fusion** : le Worker de cette PR
+écrit ces colonnes ; sans la migration, l'enregistrement d'une évaluation
+ACFC échouerait. Ordre : revérifier qu'aucun doublon (client, version)
+n'existe (requêtes de contrôle du §43), appliquer la migration, puis
+fusionner. Le connecteur Cloudflare n'était pas disponible dans la
+session du 05/10/2026 (autorisation à renouveler, prise en compte au
+démarrage d'une nouvelle session) : la PR reste ouverte d'ici là.
+
+**Serveur** :
+- Création d'une version de méthode : insertion ignorée si la version est
+  déjà prise (index unique), le serveur le constate et renvoie 409
+  `conflit_version` au lieu d'un faux succès (création simultanée).
+- Évaluation ACFC : `complexite` (catalogue / spécifique) acceptée ; la
+  conclusion est calculée par le serveur avec sa copie de la grille de
+  décision (`conclusionStrategie`, `VERSION_GRILLE_STRATEGIE`, test de
+  parité avec `grilleDecision.ts`) ; conclusion envoyée différente → 409
+  `conclusion_incoherente`. Sans complexité ou sans verdict : aucune
+  conclusion, jamais devinée.
+
+**Écrans** :
+- **Badge de verdict** commun (`BadgeVerdict.vue` : icône + texte +
+  couleur ; « à compléter » en pointillés) sur l'ACFC, l'Impact, l'AMDEC
+  et le Dossier vivant.
+- **ACFC** : enregistrement placé après la complexité (la conclusion
+  part avec l'évaluation) ; ce qui manque est dit près du bouton ;
+  complexité figée après enregistrement ; tableau « Évaluations
+  enregistrées » (date, élément, nœud, méthode, verdict, conclusion) ;
+  bloc repliable « Méthode vN » (origine, date, questions, versions
+  précédentes) ; nouvelle version **préremplie** ; erreurs de
+  configuration expliquées ; arrivée depuis l'Impact ou le Dossier
+  vivant avec système et nœud préremplis ; après un verdict « critique »,
+  lien vers l'AMDEC.
+- **Impact Assessment** : `h1` en double supprimé ; même bloc méthode,
+  nouvelle version préremplie, import `.txt` ; vrais groupes radio ;
+  historique en tableau (date, auteur, système avec réponses dépliables,
+  nœud, méthode, verdict) ; « Réévaluer (nouvelle entrée) » sur une
+  évaluation à compléter, préremplie sauf les réponses « Inconnu » ;
+  après « Direct Impact », lien vers l'ACFC préremplie.
+- **AMDEC** : rappel « Échelle 1–5 · seuil d'action IPR ≥ 40 » ; bloc
+  méthode et nouvelle version préremplie ; libellés « (1–5, facultative) »
+  ; IPR et verdict calculés pendant la saisie ; note hors échelle refusée
+  par un message français (plus l'infobulle native en anglais) ; lignes
+  en tableau (S, O, D, IPR, verdict, puis S′, O′, D′, IPR′, verdict′) avec
+  détail dépliable ; action résiduelle avec libellés, champs requis,
+  erreur propre à chaque ligne et case « Définitif ».
+- **Dossier vivant** : badge « Requalification en retard de N jours » /
+  « Échéance dans N jours » ; niveau en toutes lettres ; chaîne technique
+  « ISO-01 → est contrôlé par → PLC-01 » avec liens ; chaque évaluation
+  est un lien, avec badge ; AMDEC « IPR initial 45 (Action requise) →
+  IPR résiduel 10 (Acceptable) » ; conclusion de stratégie ACFC ;
+  « Évaluer cet actif : Impact · ACFC · CSV · AMDEC » (nœud prérempli) ;
+  blocs « Paramètres rattachés » (classification, CPP) et « Fonctions
+  portées » (avec leurs processus).
+- **Structure Système** : arbre indenté (racines puis enfants), libellé
+  du niveau, sélecteur « Nouveau parent » libellé et initialisé sur le
+  parent actuel, options indentées, noms accessibles uniques
+  (« Reparenter {nom} », « Enregistrer la qualification de {nom} »,
+  « Modifier le niveau {libellé} ») ; code proposé selon le motif (`{n}`
+  = numéro suivant) ; champs obligatoires marqués ; badge d'échéance
+  sans `role="alert"` et au contraste corrigé ; titre « Architecture
+  (Structure Système) » comme dans la barre latérale.
+- **Suivi de périodicité** : dates françaises, pluriels justes, badges au
+  contraste ≥ 4,5:1. **CSV Assessment** : champs manquants listés près du
+  bouton. Retour « ← {client} » vers la fiche client sur les écrans
+  d'évaluation ; « Client actif » au lieu de « Site actif ».
+
+**Vérification** : lint, typage, format et build propres ; 178 fichiers,
+1 652 tests (+ conclusion et 409 côté Worker, parité de la grille,
+conclusion enregistrée et historique ACFC, réévaluation Impact, AMDEC
+échelle/IPR/hors échelle/confirmation, Dossier vivant retard et AMDEC,
+arbre et code proposé). **Vérifié en réel** (migration 0030 appliquée sur
+une D1 locale jetable : 3 index uniques et 3 colonnes présents ; Worker et
+front locaux, Chromium) : versions v1 puis v2 ; Dossier vivant « en
+retard de 264 jours » ; ACFC préremplie depuis le Dossier vivant,
+complexité exigée, conclusion « IQ+OQ+PQ » relue après rechargement ;
+AMDEC aperçu « 45 Action requise », 7 refusé en français, confirmation
+exigée, ligne « 45 → 10 Acceptable » ; Dossier vivant avec conclusion et
+AMDEC détaillée ; arbre « Site Nord > Ligne A > Isolateur ISO-01 », code
+proposé « EQ-2 » ; aucun débordement à 375 px ; aucune erreur console.
+
+Reste (mineur) : astérisques des champs obligatoires de l'écran
+Paramètres critiques ; historique CSV sous forme de tableau.

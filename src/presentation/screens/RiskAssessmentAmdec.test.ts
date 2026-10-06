@@ -17,6 +17,7 @@ function routeurDeTest() {
     history: createMemoryHistory(),
     routes: [
       { path: '/clients', name: 'gestion-clients', component: { template: '<div />' } },
+      { path: '/clients/:clientId', name: 'fiche-client', component: { template: '<div />' } },
       {
         path: '/clients/:clientId/risk-assessment',
         name: 'risk-assessment-amdec',
@@ -115,8 +116,8 @@ describe('RiskAssessmentAmdec', () => {
     expect(ligne?.verdictInitial).toBe('acceptable') // 30 < seuil 50
 
     // Action résiduelle — jamais déduite, toujours une saisie explicite
-    await attendreQue(() => wrapper.find('.carte-evaluation .ligne-formulaire').exists())
-    const zoneAction = wrapper.find('.carte-evaluation .ligne-formulaire')
+    await attendreQue(() => wrapper.find('.formulaire-residuel').exists())
+    const zoneAction = wrapper.find('.formulaire-residuel')
     const inputsTexteAction = zoneAction.findAll('input[type="text"]')
     await inputsTexteAction[0]?.setValue('Ajouter une sonde de contrôle')
     await inputsTexteAction[1]?.setValue('Responsable Qualité')
@@ -124,7 +125,12 @@ describe('RiskAssessmentAmdec', () => {
     await inputsNombreAction[0]?.setValue(5)
     await inputsNombreAction[1]?.setValue(1)
     await inputsNombreAction[2]?.setValue(2)
-    await zoneAction.find('button').trigger('click')
+    // Sans la confirmation « définitif », rien ne part (constat 11).
+    await zoneAction.trigger('submit.prevent')
+    await attendreQue(() => zoneAction.find('.bandeau-erreur').exists())
+    expect(zoneAction.find('.bandeau-erreur').text()).toContain('Cochez la confirmation')
+    await zoneAction.find('input[type="checkbox"]').setValue(true)
+    await zoneAction.trigger('submit.prevent')
     await attendreQue(
       async () =>
         (await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID))[0]?.iprResiduel !== null,
@@ -136,8 +142,9 @@ describe('RiskAssessmentAmdec', () => {
 
     // La recommandation et le responsable saisis doivent rester visibles une
     // fois l'action résiduelle enregistrée, pas seulement persistés en base.
-    await attendreQue(() => wrapper.find('.carte-evaluation').text().includes('Ajouter une sonde'))
-    expect(wrapper.find('.carte-evaluation').text()).toContain('Responsable Qualité')
+    await attendreQue(() => wrapper.find('.table-amdec').text().includes('Ajouter une sonde'))
+    expect(wrapper.find('.table-amdec').text()).toContain('Responsable Qualité')
+    expect(wrapper.find('.table-amdec').text()).toContain('Acceptable')
   })
 
   test('créer une ligne AMDEC sans profil configuré est refusé (garde-fou)', async () => {
@@ -210,7 +217,7 @@ describe('RiskAssessmentAmdec — mutations non vérifiées', () => {
     await attendreQue(
       async () => (await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID)).length > 0,
     )
-    await attendreQue(() => wrapper.find('.carte-evaluation .ligne-formulaire').exists())
+    await attendreQue(() => wrapper.find('.formulaire-residuel').exists())
 
     // Reproduit une ligne AMDEC supprimée entre-temps sur un autre poste —
     // avant ce correctif, le clic sur « Enregistrer l'action résiduelle »
@@ -218,11 +225,59 @@ describe('RiskAssessmentAmdec — mutations non vérifiées', () => {
     const riskStore = useRiskAssessmentStore()
     riskStore.enregistrerActionResiduelle = vi.fn().mockResolvedValue({ erreur: 'introuvable' })
 
-    const zoneAction = wrapper.find('.carte-evaluation .ligne-formulaire')
-    await zoneAction.find('button').trigger('click')
-    await attendreQue(() => wrapper.find('.bandeau-erreur').exists())
+    const zoneAction = wrapper.find('.formulaire-residuel')
+    const champsTexte = zoneAction.findAll('input[type="text"]')
+    await champsTexte[0]?.setValue('Action')
+    const notes = zoneAction.findAll('input[type="number"]')
+    for (const n of notes) await n.setValue(1)
+    await zoneAction.find('input[type="checkbox"]').setValue(true)
+    await zoneAction.trigger('submit.prevent')
+    await attendreQue(() => zoneAction.find('.bandeau-erreur').exists())
 
-    expect(wrapper.find('.bandeau-erreur').text()).toContain('introuvable')
+    expect(zoneAction.find('.bandeau-erreur').text()).toContain('introuvable')
     expect((await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID))[0]?.iprResiduel).toBeNull()
+  })
+
+  test('rappel de l’échelle, IPR calculé en direct et note hors échelle refusée en français', async () => {
+    const maintenant = new Date().toISOString()
+    await ctx.riskAssessmentRepo.creerProfil({
+      id: 'profil-amdec',
+      clientId: CLIENT_ID,
+      version: 'v1',
+      effectiveDate: maintenant,
+      source: 'Processus_AMDEC.xlsx',
+      origin: 'procedure_client',
+      echelleMin: 1,
+      echelleMax: 5,
+      seuilAction: 40,
+      createdAt: maintenant,
+    })
+    const wrapper = mount(RiskAssessmentAmdec, {
+      props: { clientId: CLIENT_ID },
+      global: { plugins: [routeurDeTest()] },
+    })
+    await attendreQue(() => wrapper.find('.bloc-nouvelle-ligne form').exists())
+    expect(wrapper.find('.rappel-echelle').text()).toContain(
+      "Échelle 1–5 · seuil d'action IPR ≥ 40",
+    )
+
+    const form = wrapper.find('.bloc-nouvelle-ligne form')
+    const texte = form.findAll('input[type="text"]')
+    await texte[0]?.setValue('Remplissage')
+    await texte[1]?.setValue('Bouchon mal serti')
+    const notes = form.findAll('input[type="number"]')
+    await notes[0]?.setValue(5)
+    await notes[1]?.setValue(3)
+    await notes[2]?.setValue(3)
+    expect(wrapper.find('.apercu-ipr').text()).toContain('45')
+    expect(wrapper.find('.apercu-ipr').text()).toContain('Action requise')
+
+    await notes[2]?.setValue(7)
+    await form.trigger('submit.prevent')
+    await attendreQue(() => form.find('.bandeau-erreur').exists())
+    expect(form.find('.bandeau-erreur').text()).toBe(
+      'Chaque note doit être un nombre entier entre 1 et 5.',
+    )
+    expect(await ctx.riskAssessmentRepo.listerEvaluations(CLIENT_ID)).toHaveLength(0)
   })
 })

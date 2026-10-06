@@ -25,6 +25,9 @@ function ligneVersEvaluation(l: Record<string, unknown>): EvaluationACFCEnregist
     nomElement: l.nom_element as string,
     reponses: JSON.parse(l.reponses as string),
     verdict: l.verdict as string | null,
+    complexite: (l.complexite as string | null | undefined) ?? null,
+    conclusion: (l.conclusion as string | null | undefined) ?? null,
+    versionGrille: (l.version_grille as string | null | undefined) ?? null,
     auditLog: JSON.parse(l.audit_log as string),
     createdAt: l.created_at as string,
     updatedAt: l.updated_at as string,
@@ -48,7 +51,7 @@ export class D1AcfcRepo implements ACFCRepo {
         `INSERT INTO method_profiles_acfc
           (id, client_id, version, effective_date, source, origin, questions, decision_rule, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO NOTHING`,
+         ON CONFLICT DO NOTHING`,
       )
       .bind(
         p.id,
@@ -77,8 +80,9 @@ export class D1AcfcRepo implements ACFCRepo {
       .prepare(
         `INSERT INTO evaluations_acfc
           (id, client_id, method_profile_id, method_profile_version, asset_node_id, nom_element,
-           reponses, verdict, audit_log, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           reponses, verdict, complexite, conclusion, version_grille, audit_log, created_at,
+           updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO NOTHING`,
       )
       .bind(
@@ -90,6 +94,9 @@ export class D1AcfcRepo implements ACFCRepo {
         e.nomElement,
         JSON.stringify(e.reponses),
         e.verdict,
+        e.complexite ?? null,
+        e.conclusion ?? null,
+        e.versionGrille ?? null,
         JSON.stringify(e.auditLog),
         e.createdAt,
         e.updatedAt,

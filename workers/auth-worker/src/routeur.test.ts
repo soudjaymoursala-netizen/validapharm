@@ -966,6 +966,7 @@ interface EvaluationACFCJson {
   nomElement: string
   reponses: Record<string, string>
   verdict: string | null
+  conclusion?: string | null
   auditLog: { timestamp: string; actor: string; action: string }[]
   createdAt: string
   updatedAt: string
@@ -11143,6 +11144,65 @@ describe('verdicts d’évaluation recalculés par le serveur (audit du 25/09/20
     })
     expect(indetermine.status).toBe(201)
     expect(indetermine.corps.evaluation.verdict).toBeNull()
+  })
+
+  test('ACFC : la conclusion de stratégie est enregistrée, toujours celle de la grille du serveur', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    const profil = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: PROFIL_ACFC,
+    })
+    const base = {
+      methodProfileId: profil.corps.profil.id,
+      methodProfileVersion: profil.corps.profil.version,
+      nomElement: 'Autoclave A1',
+      reponses: { 'q-1': 'oui', 'q-2': 'non' },
+    }
+    const envoyer = (body: Record<string, unknown>) =>
+      requete(ctx, 'POST', `/clients/${clientId}/acfc/evaluations`, { jeton, body })
+
+    const enregistree = await envoyer({ ...base, complexite: 'specifique' })
+    expect(enregistree.status).toBe(201)
+    expect(enregistree.corps.evaluation).toMatchObject({
+      verdict: 'critique',
+      complexite: 'specifique',
+      conclusion: 'iq_oq_pq',
+      versionGrille: '0.2.0-provisoire',
+    })
+    const relue = await requete(ctx, 'GET', `/clients/${clientId}/acfc`, { jeton })
+    expect(relue.corps.evaluations[0]?.conclusion).toBe('iq_oq_pq')
+
+    const falsifiee = await envoyer({ ...base, complexite: 'catalogue', conclusion: 'iq' })
+    expect(falsifiee.status).toBe(409)
+    expect(falsifiee.corps).toEqual({ erreur: 'conclusion_incoherente', conclusion: 'iq_oq' })
+
+    const horsListe = await envoyer({ ...base, complexite: 'enorme' })
+    expect([horsListe.status, horsListe.corps.erreur]).toEqual([400, 'corps_invalide'])
+
+    // Sans complexité (ou sans verdict) : aucune conclusion, jamais devinée.
+    const sansComplexite = await envoyer(base)
+    expect(sansComplexite.corps.evaluation).toMatchObject({ conclusion: null, versionGrille: null })
+  })
+
+  test('méthodes : deux créations simultanées ne produisent jamais deux fois la même version', async () => {
+    const { ctx, jeton, clientId } = await preparer()
+    await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, { jeton, body: PROFIL_ACFC })
+    // Simule la course : la seconde requête n'a pas encore vu la première.
+    const lister = ctx.acfcRepo.listerProfils.bind(ctx.acfcRepo)
+    let premierAppel = true
+    ctx.acfcRepo.listerProfils = async (id: string) => {
+      if (premierAppel) {
+        premierAppel = false
+        return []
+      }
+      return lister(id)
+    }
+    const doublon = await requete(ctx, 'POST', `/clients/${clientId}/acfc/profils`, {
+      jeton,
+      body: PROFIL_ACFC,
+    })
+    expect([doublon.status, doublon.corps.erreur]).toEqual([409, 'conflit_version'])
+    expect((await lister(clientId)).map((p) => p.version)).toEqual(['v1'])
   })
 
   test('ACFC : méthode inconnue, autre version, réponse hors méthode ou nœud d’un autre client refusés', async () => {

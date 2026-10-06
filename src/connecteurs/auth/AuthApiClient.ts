@@ -134,6 +134,9 @@ export interface EvaluationACFCWire {
   nomElement: string
   reponses: Record<string, string>
   verdict: string | null
+  complexite?: string | null
+  conclusion?: string | null
+  versionGrille?: string | null
   auditLog: { timestamp: string; actor: string; action: string }[]
   createdAt: string
   updatedAt: string
@@ -155,6 +158,8 @@ export interface SaisieCreationEvaluationAcfcWire {
   nomElement: string
   reponses: Record<string, string>
   verdict: string | null
+  complexite?: string | null
+  conclusion?: string | null
 }
 
 export interface ParameterWire {

@@ -477,7 +477,7 @@ function basculerEpinglage(outil: OutilClient): void {
             initialesClient || '?'
           }}</span>
           <div class="sidebar__badge-client-texte">
-            <span class="sidebar__badge-client-libelle">Site actif</span>
+            <span class="sidebar__badge-client-libelle">Client actif</span>
             <span class="sidebar__badge-client-nom">{{
               nomClientActif ?? clientActifStore.clientActifId
             }}</span>
