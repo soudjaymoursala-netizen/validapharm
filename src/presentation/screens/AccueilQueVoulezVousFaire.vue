@@ -112,7 +112,7 @@ const cartes: CarteAction[] = [
     route: { name: 'gestion-clients' },
   },
   {
-    titre: 'Configurer la connexion GitHub',
+    titre: 'Configurer les connexions',
     description: 'Dépôt de données, jeton — nécessaire pour synchroniser et récupérer.',
     icone: 'engrenage',
     route: { name: 'configuration-client' },

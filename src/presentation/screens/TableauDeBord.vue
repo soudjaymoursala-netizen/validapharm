@@ -182,7 +182,7 @@ function nomClient(clientId: string | null): string | null {
   <main class="tableau-de-bord">
     <header>
       <div>
-        <h1>Tableau de bord</h1>
+        <h1>Mes projets</h1>
         <p v-if="erreurEnvoi" class="bandeau-erreur" role="alert">{{ erreurEnvoi }}</p>
         <p class="sous-titre">
           {{ pluriel(projetsActifsAffiches.length, 'projet actif', 'projets actifs') }}
@@ -195,7 +195,7 @@ function nomClient(clientId: string | null): string | null {
         </RouterLink>
         <RouterLink class="bouton-secondaire" :to="{ name: 'configuration-client' }">
           <IconeSvg nom="engrenage" :taille="15" />
-          Configuration
+          Connexions
         </RouterLink>
         <button
           type="button"
@@ -615,6 +615,18 @@ button {
 .liste-projets__nom {
   font-weight: var(--vp-poids-semibold);
   color: var(--vp-texte-principal);
+}
+
+@media (max-width: 480px) {
+  .liste-projets__lien {
+    flex-wrap: wrap;
+  }
+
+  .liste-projets__lien .meta {
+    order: 3;
+    flex-basis: 100%;
+    padding-left: 2.6rem;
+  }
 }
 
 .liste-projets__client {

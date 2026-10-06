@@ -100,7 +100,7 @@ describe('AccueilQueVoulezVousFaire — cartes d’action', () => {
 
     expect(wrapper.text()).toContain('Que voulez-vous faire ?')
     expect(wrapper.text()).toContain('Gérer mes clients')
-    expect(wrapper.text()).toContain('Configurer la connexion GitHub')
+    expect(wrapper.text()).toContain('Configurer les connexions')
   })
 })
 

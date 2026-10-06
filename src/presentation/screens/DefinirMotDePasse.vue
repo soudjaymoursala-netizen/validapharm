@@ -100,7 +100,9 @@ async function definir(): Promise<void> {
             required
             minlength="8"
             autocomplete="new-password"
+            aria-describedby="regle-mot-de-passe"
           />
+          <small id="regle-mot-de-passe">8 caractères minimum.</small>
         </label>
         <label>
           Confirmez le mot de passe

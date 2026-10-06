@@ -4780,8 +4780,27 @@ ignorés).
 pluriel). **Non vérifié dans un navigateur réel** (aucun parcours
 Chromium à 375 px dans cette PR).
 
-**Reste (hors de cette PR)** : fil d'Ariane et gabarit de page commun
-(#18), icônes distinctes (#13), configuration « Connexions & serveurs »
-(#12), règles de mot de passe affichées (#21), accueil en grille (#25),
-ligne projet mobile (#23).
+**Suite (PR « entrée et administration », second lot, 06/10/2026)** : PR
+précédente fusionnée (#103, CI verte). Ce lot :
+- page « Configuration » renommée **« Connexions et serveurs »** (menu,
+  titre, bouton du tableau de bord, carte de l'accueil) ; écran
+  « Tableau de bord » titré **« Mes projets »**, comme le menu ;
+- URL de relais et de Worker d'authentification : doivent commencer par
+  `http(s)://` (`localhost:8787` n'était plus refusé) ;
+- règle « 8 caractères minimum » affichée sous les champs de mot de passe,
+  discordance signalée en direct sur le profil ;
+- ligne projet du tableau de bord lisible à 375 px ;
+- tiroir mobile : ombre grise permanente supprimée (seulement ouvert),
+  « × » ne recouvre plus le logo ; en-tête de « Mes clients » à 375 px.
+
+**Vérifié dans Chromium** (Worker local + D1 jetable avec les 30
+migrations, 375 px) : URL sans schéma refusée ; focus sur le mot de passe
+avec `aria-invalid` après un échec ; titres d'onglet par route ; tiroir
+fermé `inert`, Échap le referme et rend le focus au bouton ; focus sur le
+`<h1>` après navigation ; premier Tab sur le contenu de la page ; création
+d'un client → ouverture de sa fiche ; doublon → message en français ;
+aucun débordement horizontal, aucune erreur de page.
+
+**Reste** : fil d'Ariane et gabarit de page commun (#18), icônes
+distinctes (#13), accueil en grille (#25).
 

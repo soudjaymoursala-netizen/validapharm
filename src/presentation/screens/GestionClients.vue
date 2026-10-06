@@ -272,7 +272,15 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   margin-bottom: 1.5rem;
+}
+
+@media (max-width: 480px) {
+  header .lien-retour {
+    flex-basis: 100%;
+  }
 }
 
 /* `.bouton-principal` seulement (jamais un `button` nu) : un `button`

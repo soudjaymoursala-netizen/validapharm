@@ -10,7 +10,7 @@
 // réel — les deux endpoints (`/auth/me` PATCH, `/auth/change-password`)
 // et le store (`useAuthStore.modifierProfil`/`changerMotDePasse`)
 // existaient déjà, sans écran pour les consommer.
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useAuthStore } from '../stores/useAuthStore'
 
 defineOptions({ name: 'EcranProfil' })
@@ -62,6 +62,11 @@ const motDePasseActuel = ref('')
 const nouveauMotDePasse = ref('')
 const confirmationNouveauMotDePasse = ref('')
 const erreurMotDePasse = ref<string | null>(null)
+const discordanceEnDirect = computed(
+  () =>
+    confirmationNouveauMotDePasse.value.length > 0 &&
+    nouveauMotDePasse.value !== confirmationNouveauMotDePasse.value,
+)
 const changementMotDePasseEnCours = ref(false)
 const confirmationMotDePasseAffichee = ref(false)
 
@@ -153,7 +158,9 @@ async function changerMotDePasse(): Promise<void> {
             required
             minlength="8"
             autocomplete="new-password"
+            aria-describedby="regle-mot-de-passe"
           />
+          <small id="regle-mot-de-passe">8 caractères minimum.</small>
         </label>
         <label>
           Confirmer le nouveau mot de passe
@@ -165,6 +172,9 @@ async function changerMotDePasse(): Promise<void> {
             autocomplete="new-password"
           />
         </label>
+        <p v-if="discordanceEnDirect" class="bandeau-erreur" role="status">
+          La confirmation ne correspond pas au nouveau mot de passe.
+        </p>
         <p v-if="erreurMotDePasse" class="bandeau-erreur" role="alert">{{ erreurMotDePasse }}</p>
         <div class="actions">
           <button type="submit" :disabled="changementMotDePasseEnCours">
