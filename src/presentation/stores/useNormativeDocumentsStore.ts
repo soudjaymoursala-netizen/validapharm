@@ -106,7 +106,7 @@ function wireVersDomaine(wire: DocumentNormatifWire): NormativeDocument {
     filename: wire.filename,
     source: wire.source as SourceDocumentNormatif,
     source_ref: wire.sourceRef,
-    extracted_text: wire.extractedText,
+    extracted_text: wire.extractedText ?? '',
     has_binary_content: wire.hasBinaryContent,
     mime_type: wire.mimeType,
     uploaded_at: wire.uploadedAt,
@@ -141,6 +141,60 @@ function wireVersDomaine(wire: DocumentNormatifWire): NormativeDocument {
 export const useNormativeDocumentsStore = defineStore('normativeDocuments', () => {
   const documents = ref<NormativeDocument[]>([])
   const enChargement = ref(false)
+  /** Documents dont le texte extrait est déjà en mémoire (la liste du serveur ne l'embarque pas). */
+  const textesCharges = new Set<string>()
+
+  function versDomaine(wire: DocumentNormatifWire): NormativeDocument {
+    if (wire.extractedText !== undefined) textesCharges.add(wire.id)
+    else textesCharges.delete(wire.id)
+    return wireVersDomaine(wire)
+  }
+
+  /**
+   * Charge à la demande le texte extrait des documents qui ne l'ont pas
+   * encore (§42.4 : la liste ne l'embarque plus). Lève une erreur au lieu
+   * de laisser un texte vide : un prompt IA ne doit jamais citer une norme
+   * dont le texte n'a pas pu être lu.
+   */
+  async function chargerTextes(ids?: readonly string[]): Promise<void> {
+    const cibles = documents.value.filter(
+      (d) => (ids ? ids.includes(d.id) : true) && !textesCharges.has(d.id),
+    )
+    if (cibles.length === 0) return
+    const authStore = useAuthStore()
+    const api = await authStore.client()
+    if (!api || !authStore.jeton) {
+      throw new Error("Relais d'authentification non configuré (Configuration client).")
+    }
+    const jeton = authStore.jeton
+    const resultats = await Promise.all(
+      cibles.map(async (d) => ({
+        id: d.id,
+        resultat: await api.obtenirTexteDocumentNormatif(jeton, d.id),
+      })),
+    )
+    const echec = resultats.find((r) => !r.resultat.ok)
+    if (echec && !echec.resultat.ok) {
+      throw new Error(
+        `Impossible de lire le texte d'une norme : ${libelleErreurServeur(echec.resultat.erreur)}`,
+      )
+    }
+    const textes = new Map(
+      resultats.flatMap((r) =>
+        r.resultat.ok ? [[r.id, r.resultat.donnees.extractedText] as const] : [],
+      ),
+    )
+    documents.value = documents.value.map((d) =>
+      textes.has(d.id) ? { ...d, extracted_text: textes.get(d.id) ?? '' } : d,
+    )
+    for (const id of textes.keys()) textesCharges.add(id)
+  }
+
+  /** Texte extrait d'un seul document (consultation), chargé si besoin. */
+  async function obtenirTexte(id: string): Promise<string> {
+    await chargerTextes([id])
+    return documents.value.find((d) => d.id === id)?.extracted_text ?? ''
+  }
 
   /**
    * Envoie au serveur les documents capturés depuis l'ancienne table
@@ -186,7 +240,7 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
         // Nouvel essai au prochain chargement — ne bloque jamais l'affichage normal.
       }
       const resultat = await api.listerDocumentsNormatifs(authStore.jeton)
-      documents.value = resultat.ok ? resultat.donnees.documents.map(wireVersDomaine) : []
+      documents.value = resultat.ok ? resultat.donnees.documents.map(versDomaine) : []
     } finally {
       enChargement.value = false
     }
@@ -210,7 +264,7 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     const resultat = await api.creerDocumentNormatif(authStore.jeton, saisie)
     if (!resultat.ok)
       throw new Error(`Échec de l'import : ${libelleErreurServeur(resultat.erreur)}`)
-    const document = wireVersDomaine(resultat.donnees.document)
+    const document = versDomaine(resultat.donnees.document)
     documents.value = [...documents.value, document]
     return document
   }
@@ -388,7 +442,7 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     const resultat = await api.renommerDocumentNormatif(authStore.jeton, documentId, nouveauTitre)
     if (!resultat.ok)
       throw new Error(`Échec du renommage : ${libelleErreurServeur(resultat.erreur)}`)
-    const document = wireVersDomaine(resultat.donnees.document)
+    const document = versDomaine(resultat.donnees.document)
     documents.value = documents.value.map((d) => (d.id === documentId ? document : d))
   }
 
@@ -443,7 +497,7 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     )
     if (!resultat.ok)
       throw new Error(`Échec de la réparation : ${libelleErreurServeur(resultat.erreur)}`)
-    const documentRepare = wireVersDomaine(resultat.donnees.document)
+    const documentRepare = versDomaine(resultat.donnees.document)
     documents.value = documents.value.map((d) => (d.id === documentId ? documentRepare : d))
   }
 
@@ -513,6 +567,8 @@ export const useNormativeDocumentsStore = defineStore('normativeDocuments', () =
     documents,
     enChargement,
     charger,
+    chargerTextes,
+    obtenirTexte,
     importerDepuisFichier,
     listerFichiersGitHub,
     importerDepuisGitHub,

@@ -140,6 +140,7 @@ interface EntreeAuditJson {
 // une forme précise).
 interface CorpsReponse {
   erreur: string
+  extractedText: string
   /** Réponse relayée du relais IA (`/relais-ia`). */
   texte: string
   lienActivation: string
@@ -9250,7 +9251,24 @@ describe('routerRequete — documents normatifs (Bibliothèque de normes)', () =
 
     const liste = await requete(ctx, 'GET', '/documents-normatifs', { jeton: admin.jeton })
     expect(liste.corps.documents).toHaveLength(1)
-    expect(liste.corps.documents[0]?.extractedText).toBe('Contenu du guide.')
+    // La liste n'embarque plus le texte (§42.4) : il se lit à la demande.
+    expect(Object.keys(liste.corps.documents[0] ?? {})).not.toContain('extractedText')
+    const texte = await requete(ctx, 'GET', `/documents-normatifs/${corps.document.id}/texte`, {
+      jeton: admin.jeton,
+    })
+    expect(texte.status).toBe(200)
+    expect(texte.corps.extractedText).toBe('Contenu du guide.')
+  })
+
+  test('texte d’un document : 401 sans session, 404 pour un document inconnu', async () => {
+    const ctx = nouveauContexte()
+    const admin = await bootstrapAdmin(ctx)
+    const sansSession = await requete(ctx, 'GET', '/documents-normatifs/x/texte', {})
+    expect(sansSession.status).toBe(401)
+    const inconnu = await requete(ctx, 'GET', '/documents-normatifs/inconnu/texte', {
+      jeton: admin.jeton,
+    })
+    expect(inconnu.status).toBe(404)
   })
 
   test('création avec contenu binaire (téléversement) -> contenu relu identique via /contenu', async () => {

@@ -9,6 +9,7 @@ import {
   type PoliceAffichage,
   type ThemeAffichage,
 } from '../stores/usePreferencesAffichageStore'
+import FilAriane from '../composants/FilAriane.vue'
 
 defineOptions({ name: 'EcranParametres' })
 const store = usePreferencesAffichageStore()
@@ -27,6 +28,9 @@ const OPTIONS_POLICE: Array<{ valeur: PoliceAffichage; libelle: string }> = [
 
 <template>
   <main class="parametres">
+    <FilAriane
+      :elements="[{ libelle: 'Accueil', to: { name: 'accueil' } }, { libelle: 'Paramètres' }]"
+    />
     <h1>Paramètres</h1>
     <p class="rappel">Préférences d'affichage de cet appareil — jamais une donnée de projet.</p>
 
@@ -72,7 +76,7 @@ const OPTIONS_POLICE: Array<{ valeur: PoliceAffichage; libelle: string }> = [
 <style scoped>
 .parametres {
   padding: 2.5rem;
-  max-width: 40rem;
+  max-width: var(--vp-largeur-page);
   margin: 0 auto;
   font-family: var(--vp-police);
   display: flex;

@@ -4804,3 +4804,42 @@ aucun débordement horizontal, aucune erreur de page.
 **Reste** : fil d'Ariane et gabarit de page commun (#18), icônes
 distinctes (#13), accueil en grille (#25).
 
+### 43.5 Reste du §40.4 : texte des normes à la demande, gabarit commun, icônes, accueil
+
+**Serveur (aucune migration)** : `GET /documents-normatifs` ne renvoie plus
+`extractedText` (§42.4, audit d'intégrité m4) ; le texte se lit via
+`GET /documents-normatifs/:id/texte` (404 si le document n'existe pas).
+La création, le renommage et la réparation d'un seul document renvoient
+toujours le texte.
+
+**Front** : `useNormativeDocumentsStore.chargerTextes()` / `obtenirTexte(id)`
+chargent le texte à la demande et **échouent plutôt que de laisser un texte
+vide** : l'éditeur de section charge les textes avant de construire le
+prompt (une norme n'est jamais citée sans son texte), la Bibliothèque de
+normes les charge à « Consulter ».
+
+**Interface** :
+- `FilAriane.vue` remplace les boutons « retour » (cibles incohérentes) sur
+  Clients, Comptes, Connexions et serveurs, Profil, Paramètres, Recherche et
+  Mes projets ; variables `--vp-largeur-page` (44 rem) et
+  `--vp-largeur-page-large` (62 rem) : mêmes position et largeur partout.
+- Icônes distinctes : `mallette` (clients), `groupe` (comptes), `cle`
+  (connexions) ; « Vue d'ensemble » d'un site prend l'icône `oeil`.
+- Accueil : grille 2×2 sans trou (1 colonne sous 720 px), carte « Gérer mes
+  clients » retirée (doublon du bloc), carte « Configurer les connexions »
+  affichée seulement si la connexion GitHub n'est pas configurée.
+- Barre latérale : avatar, nom (lien vers le profil) et rôle sur deux lignes,
+  message `role="status"` au changement de mode, titre focalisé sans cadre
+  parasite après navigation.
+- Mes clients : chevron indiquant que la ligne ouvre la fiche.
+
+**Vérification** : typage, lint, format et build propres ; 1 660 tests (+ route
+`/texte`, liste sans texte, `aria-pressed`/message de mode, fil d'Ariane).
+**Vérifié dans Chromium** (Worker local, 1280 px et 375 px) : cinq écrans au
+même gabarit, fil d'Ariane, grille d'accueil, barre latérale, message de
+mode, aucun débordement ni erreur de page. Le chargement des textes de
+normes n'a pas été exercé dans un navigateur (tests unitaires et Worker).
+
+**Reste** : ouverture d'un `.docx` exporté dans Word, à confirmer par un
+utilisateur (LibreOffice inutilisable dans le conteneur).
+

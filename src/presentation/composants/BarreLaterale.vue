@@ -34,6 +34,10 @@ const clientActifStore = useClientActifStore()
 const clientsStore = useClientsStore()
 const modeStore = useModeAffichageStore()
 const authStore = useAuthStore()
+const initialesUtilisateur = computed(() => {
+  const u = authStore.utilisateur
+  return u ? `${u.prenom.charAt(0)}${u.nom.charAt(0)}`.toUpperCase() : ''
+})
 const epinglageStore = useEpinglageStore()
 const router = useRouter()
 
@@ -196,7 +200,7 @@ const GROUPES_OUTILS_CLIENT = (clientId: string): GroupeOutils[] => [
     outils: [
       {
         nom: 'Vue d’ensemble',
-        icone: 'utilisateur',
+        icone: 'oeil',
         route: { name: 'fiche-client', params: { clientId } },
         guide: true,
       },
@@ -355,8 +359,18 @@ const groupesOutilsClientActif = computed<GroupeOutils[] | null>(() => {
     .filter((groupe) => groupe.outils.length > 0)
 })
 
+// Retour au changement de mode (audit UX entrée #17) : passer en Assistant
+// masquait des outils sans le dire.
+const messageMode = ref<string | null>(null)
+let minuterieMessageMode: ReturnType<typeof setTimeout> | undefined
 function basculerMode(nouveauMode: ModeAffichage): void {
   modeStore.definirMode(nouveauMode)
+  messageMode.value =
+    nouveauMode === 'assistant'
+      ? 'Mode Assistant : parcours guidé, les outils avancés sont masqués.'
+      : 'Mode Expert : tous les outils sont affichés.'
+  clearTimeout(minuterieMessageMode)
+  minuterieMessageMode = setTimeout(() => (messageMode.value = null), 5000)
 }
 
 /** Id d'épinglage stable pour un outil du site actif — dépend du client, un même outil épinglé pour deux clients différents reste deux raccourcis distincts. */
@@ -391,11 +405,14 @@ function basculerEpinglage(outil: OutilClient): void {
     </div>
 
     <div v-if="authStore.utilisateur" class="sidebar__utilisateur">
-      <span class="sidebar__utilisateur-nom">
-        {{ authStore.utilisateur.prenom }} {{ authStore.utilisateur.nom }}
-      </span>
-      <span class="sidebar__utilisateur-role">
-        {{ authStore.estAdmin ? 'Administrateur' : 'Utilisateur' }}
+      <span class="sidebar__avatar" aria-hidden="true">{{ initialesUtilisateur }}</span>
+      <span class="sidebar__utilisateur-identite">
+        <RouterLink :to="{ name: 'profil' }" class="sidebar__utilisateur-nom">
+          {{ authStore.utilisateur.prenom }} {{ authStore.utilisateur.nom }}
+        </RouterLink>
+        <span class="sidebar__utilisateur-role">
+          {{ authStore.estAdmin ? 'Administrateur' : 'Utilisateur' }}
+        </span>
       </span>
       <button type="button" class="sidebar__deconnexion" @click="seDeconnecter">
         Se déconnecter
@@ -422,6 +439,8 @@ function basculerEpinglage(outil: OutilClient): void {
         Mode Assistant
       </button>
     </div>
+
+    <p v-if="messageMode" class="sidebar__message-mode" role="status">{{ messageMode }}</p>
 
     <form class="sidebar__recherche" @submit.prevent="lancerRecherche">
       <IconeSvg nom="recherche" :taille="15" />
@@ -457,11 +476,11 @@ function basculerEpinglage(outil: OutilClient): void {
           Guides &amp; normes
         </RouterLink>
         <RouterLink v-if="modeStore.mode === 'expert'" :to="{ name: 'configuration-client' }">
-          <IconeSvg nom="engrenage" :taille="16" />
+          <IconeSvg nom="cle" :taille="16" />
           Connexions et serveurs
         </RouterLink>
         <RouterLink v-if="authStore.estAdmin" :to="{ name: 'admin-utilisateurs' }">
-          <IconeSvg nom="utilisateur" :taille="16" />
+          <IconeSvg nom="groupe" :taille="16" />
           Gestion des comptes
         </RouterLink>
       </div>
@@ -469,7 +488,7 @@ function basculerEpinglage(outil: OutilClient): void {
       <div class="sidebar__groupe">
         <p class="sidebar__titre-groupe">Mon travail</p>
         <RouterLink :to="{ name: 'gestion-clients' }">
-          <IconeSvg nom="utilisateur" :taille="16" />
+          <IconeSvg nom="mallette" :taille="16" />
           Mes clients
         </RouterLink>
         <RouterLink :to="{ name: 'tableau-de-bord' }">
@@ -598,14 +617,35 @@ function basculerEpinglage(outil: OutilClient): void {
 
 .sidebar__utilisateur {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.25rem 0.5rem;
   padding: 0 0.5rem;
   margin-bottom: 0.75rem;
 }
 
+.sidebar__message-mode {
+  margin: -0.75rem 0.5rem 0.75rem;
+  font-size: 0.72rem;
+  color: var(--vp-texte-secondaire);
+}
+
+.sidebar__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background-color: var(--vp-marque-fond-leger);
+  color: var(--vp-marque);
+  font-size: 0.7rem;
+  font-weight: var(--vp-poids-semibold);
+}
+
 .sidebar__utilisateur-nom {
+  text-decoration: none;
   font-size: 0.8rem;
   font-weight: var(--vp-poids-medium);
   color: var(--vp-texte-principal);
@@ -625,6 +665,19 @@ function basculerEpinglage(outil: OutilClient): void {
   padding: 0.3rem 0;
   min-height: 1.75rem;
   transition: var(--vp-transition);
+}
+
+.sidebar__utilisateur-identite {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar__utilisateur .sidebar__deconnexion {
+  flex-basis: 100%;
+  text-align: left;
+  padding-left: 2.25rem;
 }
 
 .sidebar__utilisateur-role {

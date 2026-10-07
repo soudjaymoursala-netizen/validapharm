@@ -16,6 +16,7 @@ function routeurDeTest() {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
+      { path: '/', name: 'accueil', component: { template: '<div />' } },
       { path: '/tableau-de-bord', name: 'tableau-de-bord', component: { template: '<div />' } },
       {
         path: '/configuration',

@@ -492,9 +492,12 @@ describe('useNormativeDocumentsStore — migration des documents locaux (pré-se
     expect(store.documents).toHaveLength(1)
     expect(store.documents[0]).toMatchObject({
       titre: 'Norme historique',
-      extracted_text: 'Texte historique',
       has_binary_content: true,
     })
+    // La liste ne porte plus le texte : il se charge à la demande.
+    expect(store.documents[0]?.extracted_text).toBe('')
+    await store.chargerTextes()
+    expect(store.documents[0]?.extracted_text).toBe('Texte historique')
   })
 
   test('charger() sans document en attente : aucun appel superflu, comportement inchangé', async () => {

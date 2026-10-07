@@ -18,6 +18,7 @@ import {
   useConnexionRelaisIAStore,
   type ResultatTestConnexionRelaisIA,
 } from '../stores/useConnexionRelaisIAStore'
+import FilAriane from '../composants/FilAriane.vue'
 
 const authStore = useAuthStore()
 
@@ -221,7 +222,12 @@ async function testerConnexionAuthentification(): Promise<void> {
 
 <template>
   <main class="configuration-client">
-    <RouterLink :to="{ name: 'tableau-de-bord' }" class="lien-retour">Tableau de bord</RouterLink>
+    <FilAriane
+      :elements="[
+        { libelle: 'Accueil', to: { name: 'accueil' } },
+        { libelle: 'Connexions et serveurs' },
+      ]"
+    />
     <h1>Connexions et serveurs</h1>
 
     <section class="bloc-github">
@@ -408,12 +414,13 @@ async function testerConnexionAuthentification(): Promise<void> {
 
 <style scoped>
 .configuration-client {
-  padding: 2rem;
+  padding: 2.5rem;
   font-family: var(--vp-police);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 32rem;
+  max-width: var(--vp-largeur-page);
+  margin: 0 auto;
 }
 
 .rappel {

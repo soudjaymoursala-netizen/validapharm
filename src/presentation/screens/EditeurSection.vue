@@ -864,6 +864,8 @@ async function genererBrouillon(): Promise<void> {
   erreurGeneration.value = null
   enGeneration.value = true
   try {
+    // La liste des normes n'embarque plus leur texte : on le charge avant de construire le prompt.
+    await normativeDocumentsStore.chargerTextes()
     const estFournisseurCloud = (configStore.config?.ai_provider ?? 'claude') !== 'local'
     const { principal, local } = construireAdaptateursIA({
       estFournisseurCloud,
