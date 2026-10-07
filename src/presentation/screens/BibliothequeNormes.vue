@@ -446,9 +446,10 @@ function fermerApercu(): void {
  * `extracted_text` existe). Jamais utilisé si le fichier d'origine est
  * disponible (`voirDocumentOriginal` le préfère).
  */
-function voirTexteExtrait(document: { titre: string; extracted_text: string }): void {
+async function voirTexteExtrait(document: { id: string; titre: string }): Promise<void> {
   fermerApercu()
-  const blob = new Blob([document.extracted_text], { type: 'text/plain;charset=utf-8' })
+  const texte = await documentsStore.obtenirTexte(document.id)
+  const blob = new Blob([texte], { type: 'text/plain;charset=utf-8' })
   apercu.value = { url: URL.createObjectURL(blob), titre: document.titre }
 }
 

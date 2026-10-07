@@ -52,7 +52,8 @@ export interface DocumentNormatifWire {
   filename: string
   source: string
   sourceRef: string | null
-  extractedText: string
+  /** Absent des listes : à charger à la demande (`obtenirTexteDocumentNormatif`). */
+  extractedText?: string
   mimeType: string
   hasBinaryContent: boolean
   uploadedAt: string
@@ -3583,6 +3584,14 @@ export class AuthApiClient {
     jeton: string,
   ): Promise<ResultatApi<{ documents: DocumentNormatifWire[] }>> {
     return this.requete('GET', '/documents-normatifs', { jeton })
+  }
+
+  /** Texte extrait d'un document : chargé à la demande, la liste ne l'embarque pas. */
+  obtenirTexteDocumentNormatif(
+    jeton: string,
+    id: string,
+  ): Promise<ResultatApi<{ extractedText: string }>> {
+    return this.requete('GET', `/documents-normatifs/${id}/texte`, { jeton })
   }
 
   /** Corps `multipart/form-data` (jamais JSON) — le texte extrait et le contenu binaire éventuel peuvent être volumineux, jamais adaptés à un `JSON.stringify`. */

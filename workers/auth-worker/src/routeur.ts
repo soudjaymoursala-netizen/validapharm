@@ -2203,6 +2203,15 @@ async function routerRequeteInterne(request: Request, ctx: Contexte): Promise<Re
   if (chemin === '/documents-normatifs/diagnostiquer' && request.method === 'POST') {
     return gererDiagnostiquerContenuDocumentsNormatifs(request, ctx, entetes)
   }
+  const matchTexteDocumentNormatif = chemin.match(/^\/documents-normatifs\/([^/]+)\/texte$/)
+  if (matchTexteDocumentNormatif && request.method === 'GET') {
+    return gererObtenirTexteDocumentNormatif(
+      request,
+      ctx,
+      entetes,
+      matchTexteDocumentNormatif[1] as string,
+    )
+  }
   const matchContenuDocumentNormatif = chemin.match(/^\/documents-normatifs\/([^/]+)\/contenu$/)
   if (matchContenuDocumentNormatif && request.method === 'GET') {
     return gererObtenirContenuDocumentNormatif(
@@ -11462,7 +11471,8 @@ interface DocumentNormatifWire {
   filename: string
   source: string
   sourceRef: string | null
-  extractedText: string
+  /** Absent des listes (texte volumineux) : à demander à `GET /documents-normatifs/:id/texte`. */
+  extractedText?: string
   mimeType: string
   hasBinaryContent: boolean
   uploadedAt: string
@@ -11478,12 +11488,8 @@ interface CorpsCreationDocumentNormatif {
   mimeType?: string
 }
 
-/** Assemble la réponse complète (métadonnées D1 + texte extrait R2) — jamais le contenu binaire, récupéré séparément via `/contenu` pour ne pas alourdir la liste. */
-async function assemblerDocumentNormatif(
-  ctx: Contexte,
-  d: DocumentNormatifEnregistre,
-): Promise<DocumentNormatifWire> {
-  const texte = await ctx.stockageBinaireRepo.lire(cleTexteDocument(d.id))
+/** Métadonnées seules (D1) : la liste n'embarque plus le texte extrait (audit d'intégrité m4, §42.4). */
+function assemblerMetadonneesDocumentNormatif(d: DocumentNormatifEnregistre): DocumentNormatifWire {
   return {
     id: d.id,
     category: d.category,
@@ -11491,12 +11497,42 @@ async function assemblerDocumentNormatif(
     filename: d.filename,
     source: d.source,
     sourceRef: d.sourceRef,
-    extractedText: texte ? new TextDecoder().decode(texte.contenu) : '',
     mimeType: d.mimeType,
     hasBinaryContent: d.hasBinaryContent,
     uploadedAt: d.uploadedAt,
     uploadedBy: d.uploadedBy,
   }
+}
+
+/** Réponse à un seul document (création, renommage, réparation) : métadonnées + texte extrait (R2) — jamais le contenu binaire, récupéré séparément via `/contenu`. */
+async function assemblerDocumentNormatif(
+  ctx: Contexte,
+  d: DocumentNormatifEnregistre,
+): Promise<DocumentNormatifWire> {
+  const texte = await ctx.stockageBinaireRepo.lire(cleTexteDocument(d.id))
+  return {
+    ...assemblerMetadonneesDocumentNormatif(d),
+    extractedText: texte ? new TextDecoder().decode(texte.contenu) : '',
+  }
+}
+
+async function gererObtenirTexteDocumentNormatif(
+  request: Request,
+  ctx: Contexte,
+  entetes: Record<string, string>,
+  id: string,
+): Promise<Response> {
+  const utilisateur = await authentifier(request, ctx)
+  if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
+
+  const document = await ctx.documentsNormatifsRepo.parId(id)
+  if (!document) return reponseJson({ erreur: 'introuvable' }, 404, entetes)
+  const texte = await ctx.stockageBinaireRepo.lire(cleTexteDocument(id))
+  return reponseJson(
+    { extractedText: texte ? new TextDecoder().decode(texte.contenu) : '' },
+    200,
+    entetes,
+  )
 }
 
 async function gererListerDocumentsNormatifs(
@@ -11508,8 +11544,11 @@ async function gererListerDocumentsNormatifs(
   if (!utilisateur) return reponseJson({ erreur: 'non_authentifie' }, 401, entetes)
 
   const metadonnees = await ctx.documentsNormatifsRepo.lister()
-  const documents = await Promise.all(metadonnees.map((d) => assemblerDocumentNormatif(ctx, d)))
-  return reponseJson({ documents }, 200, entetes)
+  return reponseJson(
+    { documents: metadonnees.map(assemblerMetadonneesDocumentNormatif) },
+    200,
+    entetes,
+  )
 }
 
 async function gererCreerDocumentNormatif(
