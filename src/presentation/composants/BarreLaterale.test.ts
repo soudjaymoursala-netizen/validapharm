@@ -228,6 +228,27 @@ describe('BarreLaterale — bascule Mode Expert / Assistant', () => {
     expect(localStorage.getItem('validapharm.mode_affichage')).toBe('assistant')
   })
 
+  test('expose l’état par aria-pressed et annonce le changement de mode', async () => {
+    const router = routeurDeTest()
+    await router.push('/')
+    const wrapper = mount(BarreLaterale, { global: { plugins: [router] } })
+
+    const boutons = wrapper.findAll('button')
+    const expert = boutons.find((b) => b.text() === 'Mode Expert')
+    const assistant = boutons.find((b) => b.text() === 'Mode Assistant')
+    expect(expert?.attributes('aria-pressed')).toBe('true')
+    expect(assistant?.attributes('aria-pressed')).toBe('false')
+    expect(wrapper.find('.sidebar__message-mode').exists()).toBe(false)
+
+    await assistant?.trigger('click')
+
+    expect(assistant?.attributes('aria-pressed')).toBe('true')
+    expect(expert?.attributes('aria-pressed')).toBe('false')
+    const message = wrapper.find('.sidebar__message-mode')
+    expect(message.attributes('role')).toBe('status')
+    expect(message.text()).toContain('Mode Assistant')
+  })
+
   test('Mode Assistant restreint réellement la navigation au parcours guidé', async () => {
     useClientActifStore().definirClientActif('client-1')
     const router = routeurDeTest()

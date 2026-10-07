@@ -23,6 +23,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import type { Project } from '../../logique-metier/domaine/types'
 import { useClientActifStore } from '../stores/useClientActifStore'
+import { useConnexionGitHubStore } from '../stores/useConnexionGitHubStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import { useEpinglageStore, type RaccourciEpingle } from '../stores/useEpinglageStore'
 import { useProjectsStore } from '../stores/useProjectsStore'
@@ -38,6 +39,7 @@ const sectionsStore = useSectionsStore()
 const sourceIntelligenceStore = useSourceIntelligenceStore()
 
 const route = useRoute()
+const connexionGitHubStore = useConnexionGitHubStore()
 const chargementTermine = ref(false)
 const erreurChargementClients = ref<string | null>(null)
 const nbInformationsAValider = ref(0)
@@ -60,6 +62,7 @@ onMounted(async () => {
   // laissé toute la grille bloquée en chargement sur un rejet non
   // rattrapé.
   await projetsStore.chargerProjets()
+  await connexionGitHubStore.charger().catch(() => undefined)
   try {
     await clientsStore.chargerClients()
   } catch (e) {
@@ -104,20 +107,21 @@ interface CarteAction {
   route: { name: string; params?: Record<string, string> }
 }
 
-const cartes: CarteAction[] = [
-  {
-    titre: 'Gérer mes clients',
-    description: 'Ajouter un client, configurer ses outils (Structure Système, IA, Drive).',
-    icone: 'utilisateur',
-    route: { name: 'gestion-clients' },
-  },
-  {
-    titre: 'Configurer les connexions',
-    description: 'Dépôt de données, jeton — nécessaire pour synchroniser et récupérer.',
-    icone: 'engrenage',
-    route: { name: 'configuration-client' },
-  },
-]
+// Les clients ont déjà leur bloc plus haut : seule la configuration manquante
+// justifie une carte, affichée comme une alerte contextuelle (audit UX
+// entrée #25) et non comme une action permanente.
+const cartes = computed<CarteAction[]>(() =>
+  connexionGitHubStore.connexion
+    ? []
+    : [
+        {
+          titre: 'Configurer les connexions',
+          description: 'Dépôt de données, jeton — nécessaire pour synchroniser et récupérer.',
+          icone: 'cle',
+          route: { name: 'configuration-client' },
+        },
+      ],
+)
 
 function ouvrirRaccourci(raccourci: RaccourciEpingle): {
   name: string
@@ -263,7 +267,7 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
       </section>
     </div>
 
-    <div class="accueil__cartes">
+    <div v-if="cartes.length > 0" class="accueil__cartes">
       <RouterLink
         v-for="carte in cartes"
         :key="carte.titre"
@@ -381,9 +385,15 @@ function ouvrirRaccourci(raccourci: RaccourciEpingle): {
 
 .accueil__grille {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+@media (max-width: 720px) {
+  .accueil__grille {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .accueil__bloc {

@@ -12,6 +12,7 @@
 // existaient déjà, sans écran pour les consommer.
 import { computed, reactive, ref } from 'vue'
 import { useAuthStore } from '../stores/useAuthStore'
+import FilAriane from '../composants/FilAriane.vue'
 
 defineOptions({ name: 'EcranProfil' })
 const authStore = useAuthStore()
@@ -103,7 +104,9 @@ async function changerMotDePasse(): Promise<void> {
 
 <template>
   <main class="profil">
-    <RouterLink :to="{ name: 'accueil' }" class="lien-retour">Accueil</RouterLink>
+    <FilAriane
+      :elements="[{ libelle: 'Accueil', to: { name: 'accueil' } }, { libelle: 'Profil' }]"
+    />
     <h1>Mon profil</h1>
 
     <section v-if="authStore.utilisateur" class="bloc">
@@ -197,7 +200,7 @@ async function changerMotDePasse(): Promise<void> {
 <style scoped>
 .profil {
   padding: 2.5rem;
-  max-width: 36rem;
+  max-width: var(--vp-largeur-page);
   margin: 0 auto;
   font-family: var(--vp-police);
   display: flex;

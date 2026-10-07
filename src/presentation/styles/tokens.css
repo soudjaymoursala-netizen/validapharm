@@ -107,6 +107,10 @@
   /* État sémantique générique (ajouté v20) — succès/attention/danger/info
      hors du domaine qualification_status ci-dessous, ex. bandeaux
      d'erreur, garde-fous, confirmations. */
+  /* Largeurs de page normalisées (audit UX entrée #18). */
+  --vp-largeur-page: 44rem;
+  --vp-largeur-page-large: 62rem;
+
   --vp-succes: #15803d;
   --vp-succes-fond-leger: #ecfdf3;
   --vp-attention: #b45309;
@@ -302,6 +306,13 @@ textarea:focus-visible {
 :focus-visible {
   outline: 2px solid var(--vp-marque) !important;
   outline-offset: 2px;
+}
+
+/* Titre focalisé par programme après un changement d'écran
+   (`CoquilleApplication.vue`) : cible non interactive, annoncée par les
+   lecteurs d'écran, sans cadre visuel parasite. */
+h1[tabindex='-1']:focus-visible {
+  outline: none !important;
 }
 
 /* Base par défaut des champs et boutons (Phase 41) : plusieurs écrans plus

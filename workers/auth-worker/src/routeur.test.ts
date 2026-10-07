@@ -140,6 +140,7 @@ interface EntreeAuditJson {
 // une forme précise).
 interface CorpsReponse {
   erreur: string
+  extractedText: string
   /** Réponse relayée du relais IA (`/relais-ia`). */
   texte: string
   lienActivation: string
@@ -9251,7 +9252,7 @@ describe('routerRequete — documents normatifs (Bibliothèque de normes)', () =
     const liste = await requete(ctx, 'GET', '/documents-normatifs', { jeton: admin.jeton })
     expect(liste.corps.documents).toHaveLength(1)
     // La liste n'embarque plus le texte (§42.4) : il se lit à la demande.
-    expect(liste.corps.documents[0]).not.toHaveProperty('extractedText')
+    expect(Object.keys(liste.corps.documents[0] ?? {})).not.toContain('extractedText')
     const texte = await requete(ctx, 'GET', `/documents-normatifs/${corps.document.id}/texte`, {
       jeton: admin.jeton,
     })

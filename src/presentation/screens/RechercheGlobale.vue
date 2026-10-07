@@ -16,6 +16,7 @@ import {
 } from '../stores/useRechercheGlobaleStore'
 import IconeSvg, { type NomIcone } from '../composants/IconeSvg.vue'
 import { pluriel } from '../i18n/pluriel'
+import FilAriane from '../composants/FilAriane.vue'
 
 defineOptions({ name: 'EcranRechercheGlobale' })
 
@@ -41,7 +42,7 @@ const LIBELLES_TYPE: Record<TypeResultatRecherche, string> = {
 }
 
 const ICONES_TYPE: Record<TypeResultatRecherche, NomIcone> = {
-  client: 'utilisateur',
+  client: 'mallette',
   projet: 'dossier',
   section: 'reglettes',
   document: 'dossier',
@@ -97,6 +98,9 @@ onMounted(async () => {
 
 <template>
   <main class="recherche-globale">
+    <FilAriane
+      :elements="[{ libelle: 'Accueil', to: { name: 'accueil' } }, { libelle: 'Recherche' }]"
+    />
     <h1>Recherche</h1>
     <p class="rappel">
       <template v-if="nomClientActif">
@@ -158,7 +162,7 @@ onMounted(async () => {
 <style scoped>
 .recherche-globale {
   padding: 2.5rem;
-  max-width: 44rem;
+  max-width: var(--vp-largeur-page);
   margin: 0 auto;
   font-family: var(--vp-police);
   display: flex;

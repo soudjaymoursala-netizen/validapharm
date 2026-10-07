@@ -18,6 +18,8 @@ import ModaleSuppressionDefinitive from '../composants/ModaleSuppressionDefiniti
 import { useAuthStore } from '../stores/useAuthStore'
 import { useClientsStore } from '../stores/useClientsStore'
 import type { Client, SecteurClient } from '../../logique-metier/domaine/types'
+import FilAriane from '../composants/FilAriane.vue'
+import IconeSvg from '../composants/IconeSvg.vue'
 
 const router = useRouter()
 const store = useClientsStore()
@@ -148,7 +150,9 @@ async function confirmerSuppressionDefinitive(
 <template>
   <main class="gestion-clients">
     <header>
-      <RouterLink :to="{ name: 'accueil' }" class="lien-retour">Accueil</RouterLink>
+      <FilAriane
+        :elements="[{ libelle: 'Accueil', to: { name: 'accueil' } }, { libelle: 'Mes clients' }]"
+      />
       <h1>Mes clients</h1>
       <button
         type="button"
@@ -214,6 +218,7 @@ async function confirmerSuppressionDefinitive(
           <span v-if="client.secteur" class="badge-secteur">{{
             LIBELLES_SECTEUR[client.secteur]
           }}</span>
+          <IconeSvg nom="chevron-droit" :taille="16" class="lien-client__fleche" />
         </RouterLink>
         <button type="button" class="bouton-archiver" @click="clientAArchiver = client">
           Archiver
@@ -263,9 +268,10 @@ async function confirmerSuppressionDefinitive(
 
 <style scoped>
 .gestion-clients {
-  padding: 2rem;
+  padding: 2.5rem;
   font-family: var(--vp-police);
-  max-width: 32rem;
+  max-width: var(--vp-largeur-page);
+  margin: 0 auto;
 }
 
 header {
@@ -277,10 +283,8 @@ header {
   margin-bottom: 1.5rem;
 }
 
-@media (max-width: 480px) {
-  header .lien-retour {
-    flex-basis: 100%;
-  }
+header :deep(.fil-ariane) {
+  flex-basis: 100%;
 }
 
 /* `.bouton-principal` seulement (jamais un `button` nu) : un `button`
@@ -369,7 +373,16 @@ header {
   text-decoration: none;
 }
 
-.lien-client:hover .nom-client {
+.lien-client:hover .lien-client__fleche {
+  margin-left: auto;
+  color: var(--vp-texte-secondaire);
+}
+
+.lien-client:hover .lien-client__fleche {
+  color: var(--vp-marque);
+}
+
+.nom-client {
   color: var(--vp-marque);
 }
 

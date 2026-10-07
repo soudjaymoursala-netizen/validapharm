@@ -99,7 +99,8 @@ describe('AccueilQueVoulezVousFaire — cartes d’action', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Que voulez-vous faire ?')
-    expect(wrapper.text()).toContain('Gérer mes clients')
+    // « Mes clients » a déjà son bloc : plus de carte en doublon.
+    expect(wrapper.text()).not.toContain('Gérer mes clients')
     expect(wrapper.text()).toContain('Configurer les connexions')
   })
 })

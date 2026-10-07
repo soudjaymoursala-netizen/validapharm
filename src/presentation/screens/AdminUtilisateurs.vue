@@ -9,6 +9,7 @@ import { onMounted, reactive, ref } from 'vue'
 import type { UtilisateurWire } from '../../connecteurs/auth/AuthApiClient'
 import { libelleErreurServeur } from '../i18n/libellesErreurServeur'
 import { useAuthStore } from '../stores/useAuthStore'
+import FilAriane from '../composants/FilAriane.vue'
 
 const authStore = useAuthStore()
 const utilisateurs = ref<UtilisateurWire[]>([])
@@ -209,7 +210,12 @@ async function copierLien(): Promise<void> {
 
 <template>
   <main class="admin-utilisateurs">
-    <RouterLink :to="{ name: 'accueil' }" class="lien-retour">Accueil</RouterLink>
+    <FilAriane
+      :elements="[
+        { libelle: 'Accueil', to: { name: 'accueil' } },
+        { libelle: 'Gestion des comptes' },
+      ]"
+    />
     <header>
       <h1>Gestion des comptes</h1>
       <button
@@ -357,9 +363,10 @@ async function copierLien(): Promise<void> {
 }
 
 .admin-utilisateurs {
-  padding: 2rem;
+  padding: 2.5rem;
   font-family: var(--vp-police);
-  max-width: 40rem;
+  max-width: var(--vp-largeur-page);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 1rem;

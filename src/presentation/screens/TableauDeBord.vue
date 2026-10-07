@@ -16,6 +16,7 @@ import {
 import IconeSvg from '../composants/IconeSvg.vue'
 import { pluriel } from '../i18n/pluriel'
 import { useEnvoiUnique } from '../composables/useEnvoiUnique'
+import FilAriane from '../composants/FilAriane.vue'
 
 const projetsStore = useProjectsStore()
 const clientsStore = useClientsStore()
@@ -180,6 +181,9 @@ function nomClient(clientId: string | null): string | null {
 
 <template>
   <main class="tableau-de-bord">
+    <FilAriane
+      :elements="[{ libelle: 'Accueil', to: { name: 'accueil' } }, { libelle: 'Mes projets' }]"
+    />
     <header>
       <div>
         <h1>Mes projets</h1>
@@ -190,11 +194,11 @@ function nomClient(clientId: string | null): string | null {
       </div>
       <div class="actions-entete">
         <RouterLink class="bouton-secondaire" :to="{ name: 'gestion-clients' }">
-          <IconeSvg nom="utilisateur" :taille="15" />
+          <IconeSvg nom="mallette" :taille="15" />
           Clients
         </RouterLink>
         <RouterLink class="bouton-secondaire" :to="{ name: 'configuration-client' }">
-          <IconeSvg nom="engrenage" :taille="15" />
+          <IconeSvg nom="cle" :taille="15" />
           Connexions
         </RouterLink>
         <button
@@ -395,7 +399,7 @@ function nomClient(clientId: string | null): string | null {
 <style scoped>
 .tableau-de-bord {
   padding: 2.5rem;
-  max-width: 60rem;
+  max-width: var(--vp-largeur-page-large);
   margin: 0 auto;
   font-family: var(--vp-police);
   display: flex;
